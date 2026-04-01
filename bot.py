@@ -1,10 +1,12 @@
+import os
 import asyncio
 import logging
+
+from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from dotenv import load_dotenv
-import os
+from handlers.common import router
 
 # Загружаем скрытые настройки из .evn
 load_dotenv()
@@ -21,11 +23,13 @@ bot = Bot(
 )
 
 # Диспетчер — это "мозг", который обрабатывает входящие события. То есть проверяет
-# входящие команды по типу /start, и помогает с FSM
+# входящие команды по типу /start, и помогает с FSM. Так же мы создали блокнот который хранит данные на моем компе, позже сделаю Redis
 dp = Dispatcher()
 
 
 async def main():
+    # Запускаем все роутеры
+    dp.include_router(router)
     # Запускаем "прослушку" обновлений от Telegram
     print("Bot started...")
     await dp.start_polling(bot)
