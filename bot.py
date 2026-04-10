@@ -6,7 +6,8 @@ from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from handlers.common import router
+from handlers.common import common_router
+from handlers.store import store_router
 
 # Загружаем скрытые настройки из .evn
 load_dotenv()
@@ -29,7 +30,9 @@ dp = Dispatcher()
 
 async def main():
     # Запускаем все роутеры
-    dp.include_router(router)
+    dp.include_router(common_router)
+    dp.include_router(store_router)
+
     # Запускаем "прослушку" обновлений от Telegram
     print("Bot started...")
     await dp.start_polling(bot)

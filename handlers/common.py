@@ -6,10 +6,10 @@ from aiogram.utils.keyboard import ReplyKeyboardBuilder
 
 from states.register import RegisterState
 
-router = Router()  # Роутер собирает хендлеры в одну кучу
+common_router = Router()  # Роутер собирает хендлеры в одну кучу
 
 
-@router.message(Command("start"))
+@common_router.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
 
     # Как только юзер жмет старт мы чистим всю его прошлую историю
