@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <title>Добавить магазин</title>
+    <meta charset="utf-8" />
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --sheet-height: 128px;
+            --sheet-radius: 18px;
+            --radius-md: 10px;
+            --radius-sm: 8px;
+            --surface: rgba(255, 255, 255, 0.96);
+            --surface-strong: rgba(255, 255, 255, 0.99);
+            --border: rgba(15, 23, 42, 0.08);
+            --border-strong: rgba(15, 23, 42, 0.12);
+            --text-main: #0f172a;
+            --text-soft: #475569;
+            --text-muted: #94a3b8;
+            --accent: #111827;
+            --accent-soft: rgba(15, 23, 42, 0.04);
+            --shadow: 0 18px 48px rgba(15, 23, 42, 0.14);
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+            overscroll-behavior: none;
+        }
+
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: var(--text-main);
+            background: #edf1f5;
+        }
+
+        #map {
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+        }
+
+        .leaflet-container {
+            background: #edf1f5;
+        }
+
+        .map-credits {
+            position: fixed;
+            left: 8px;
+            bottom: calc(var(--sheet-height) + env(safe-area-inset-bottom) + 6px);
+            z-index: 450;
+            font-size: 10px;
+            line-height: 1;
+            letter-spacing: 0.01em;
+            color: rgba(15, 23, 42, 0.3);
+            pointer-events: none;
+            transition: bottom 220ms ease;
+        }
+
+        .bottom-sheet {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1200;
+            padding: 0 12px calc(12px + env(safe-area-inset-bottom));
+            pointer-events: none;
+        }
+
+        .sheet-card {
+            height: var(--sheet-height);
+            display: grid;
+            grid-template-rows: auto auto minmax(0, 1fr);
+            gap: 10px;
+            padding: 10px 12px 12px;
+            border-radius: var(--sheet-radius);
+            border: 1px solid var(--border);
+            background: var(--surface);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(22px);
+            pointer-events: auto;
+            overflow: hidden;
+            transition: height 220ms ease;
+        }
+
+        .sheet-card.is-dragging {
+            transition: none;
+        }
+
+        .sheet-header {
+            display: flex;
+            justify-content: center;
+            padding-top: 2px;
+            cursor: grab;
+            touch-action: none;
+            user-select: none;
+        }
+
+        .sheet-header:active {
+            cursor: grabbing;
+        }
+
+        .sheet-handle {
+            width: 34px;
+            height: 4px;
+            border-radius: 999px;
+            background: rgba(148, 163, 184, 0.82);
+        }
+
+        .search-form {
+            flex: 0 0 auto;
+        }
+
+        .search-field {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-height: 52px;
+            padding: 0 14px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+            background: var(--surface-strong);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+        }
+
+        .search-field:focus-within {
+            border-color: rgba(15, 23, 42, 0.16);
+            box-shadow:
+                0 0 0 4px rgba(15, 23, 42, 0.04),
+                inset 0 1px 0 rgba(255, 255, 255, 0.92);
+        }
+
+        .search-icon {
+            width: 18px;
+            height: 18px;
+            color: #64748b;
+            flex: 0 0 auto;
+        }
+
+        #search-input {
+            width: 100%;
+            border: 0;
+            padding: 0;
+            background: transparent;
+            color: var(--text-main);
+            font-size: 16px;
+            line-height: 1.4;
+            outline: none;
+        }
+
+        #search-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        #search-input::-webkit-search-cancel-button,
+        #search-input::-webkit-search-decoration,
+        #search-input::-webkit-search-results-button,
+        #search-input::-webkit-search-results-decoration {
+            display: none;
+        }
+
+        .sheet-content {
+            min-height: 0;
+            display: grid;
+            align-content: start;
+        }
+
+        .results-shell {
+            min-height: 0;
+            opacity: 0;
+            max-height: 0;
+            overflow: hidden;
+            pointer-events: none;
+            transform: translateY(-6px);
+            transition:
+                opacity 180ms ease,
+                max-height 220ms ease,
+                transform 180ms ease;
+        }
+
+        .results-shell.is-visible {
+            opacity: 1;
+            max-height: 360px;
+            pointer-events: auto;
+            transform: translateY(0);
+        }
+
+        .results {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            max-height: 100%;
+            overflow-y: auto;
+        }
+
+        .result-item {
+            width: 100%;
+            padding: 12px 4px;
+            appearance: none;
+            border: 0;
+            border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+            background: transparent;
+            color: inherit;
+            text-align: left;
+            cursor: pointer;
+            opacity: 0;
+            transform: translateY(6px);
+            animation: suggestion-in 180ms ease forwards;
+            transition: background 160ms ease, padding 160ms ease;
+        }
+
+        .result-item:first-child,
+        .result-skeleton:first-child {
+            border-top: 1px solid rgba(15, 23, 42, 0.08);
+        }
+
+        .result-item:hover,
+        .result-item.active {
+            padding-left: 8px;
+            padding-right: 8px;
+            background: var(--accent-soft);
+            border-radius: var(--radius-sm);
+        }
+
+        .result-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-main);
+            line-height: 1.4;
+        }
+
+        .result-subtitle {
+            margin-top: 4px;
+            font-size: 13px;
+            color: var(--text-soft);
+            line-height: 1.45;
+        }
+
+        .search-empty {
+            padding: 8px 4px 2px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .result-skeleton {
+            height: 46px;
+            border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+            background:
+                linear-gradient(
+                    90deg,
+                    rgba(148, 163, 184, 0.08) 0%,
+                    rgba(148, 163, 184, 0.18) 50%,
+                    rgba(148, 163, 184, 0.08) 100%
+                );
+            background-size: 200% 100%;
+            animation: shimmer 1.15s linear infinite;
+        }
+
+        .selection-panel {
+            opacity: 0;
+            max-height: 0;
+            overflow: hidden;
+            pointer-events: none;
+            transform: translateY(10px);
+            transition:
+                opacity 180ms ease,
+                max-height 220ms ease,
+                transform 180ms ease;
+        }
+
+        .selection-panel.is-visible {
+            opacity: 1;
+            max-height: 220px;
+            pointer-events: auto;
+            transform: translateY(0);
+        }
+
+        .selection-card {
+            display: grid;
+            gap: 12px;
+            padding-top: 4px;
+            border-top: 1px solid rgba(15, 23, 42, 0.08);
+        }
+
+        .selection-title {
+            font-size: 15px;
+            font-weight: 600;
+            line-height: 1.4;
+            color: var(--text-main);
+        }
+
+        .selection-address {
+            margin-top: 4px;
+            font-size: 13px;
+            line-height: 1.5;
+            color: var(--text-soft);
+        }
+
+        .confirm-btn {
+            width: 100%;
+            min-height: 48px;
+            border: 0;
+            border-radius: var(--radius-md);
+            background: var(--accent);
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 160ms ease, transform 160ms ease;
+        }
+
+        .confirm-btn:active {
+            transform: translateY(1px);
+        }
+
+        .confirm-btn:disabled {
+            cursor: not-allowed;
+            opacity: 0.55;
+        }
+
+        .selected-marker {
+            background: transparent;
+            border: 0;
+        }
+
+        .selected-marker__pin {
+            position: relative;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 4px solid #ffffff;
+            background: #111827;
+            box-shadow: 0 12px 22px rgba(15, 23, 42, 0.22);
+        }
+
+        .selected-marker__pin::after {
+            content: "";
+            position: absolute;
+            left: 50%;
+            top: 100%;
+            width: 2px;
+            height: 12px;
+            background: #111827;
+            border-radius: 999px;
+            transform: translateX(-50%);
+        }
+
+        @keyframes suggestion-in {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes shimmer {
+            0% {
+                background-position: 200% 0;
+            }
+
+            100% {
+                background-position: -200% 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="map-credits">&copy; OpenStreetMap, CARTO</div>
+
+    <div class="bottom-sheet">
+        <div class="sheet-card" id="sheet-card">
+            <div class="sheet-header" id="sheet-header">
+                <div class="sheet-handle"></div>
+            </div>
+
+            <form class="search-form" id="search-form">
+                <label class="search-field" for="search-input">
+                    <svg
+                        class="search-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                    >
+                        <circle cx="11" cy="11" r="6.5"></circle>
+                        <path d="M16 16l5 5"></path>
+                    </svg>
+                    <input
+                        id="search-input"
+                        type="search"
+                        autocomplete="street-address"
+                        autocapitalize="none"
+                        autocorrect="off"
+                        enterkeyhint="search"
+                        spellcheck="false"
+                    />
+                </label>
+                <button type="submit" hidden aria-hidden="true"></button>
+            </form>
+
+            <div class="sheet-content">
+                <div class="results-shell" id="results-shell">
+                    <div class="results" id="search-results"></div>
+                    <div class="search-empty" id="search-empty" hidden></div>
+                </div>
+
+                <div class="selection-panel" id="selection-panel">
+                    <div class="selection-card">
+                        <div>
+                            <div class="selection-title" id="selection-title"></div>
+                            <div class="selection-address" id="selection-address"></div>
+                        </div>
+                        <button id="confirm" class="confirm-btn" type="button" disabled></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram?.WebApp;
+        tg?.disableVerticalSwipes?.();
+        tg?.expand();
+        tg?.ready?.();
+        tg?.setBackgroundColor?.("#edf1f5");
+        tg?.setHeaderColor?.("#ffffff");
+
+        const languageCode = tg?.initDataUnsafe?.user?.language_code || "ru";
+        const isUz = languageCode.toLowerCase().startsWith("uz");
+        document.documentElement.lang = isUz ? "uz" : "ru";
+
+        const labels = {
+            searchPlaceholder: isUz ? "Manzilni qidiring" : "Найти адрес",
+            confirmButton: isUz ? "Manzilni tasdiqlash" : "Подтвердить адрес",
+            nothingFound: isUz ? "Hech narsa topilmadi" : "Ничего не найдено"
+        };
+
+        const UZBEKISTAN_BOUNDS = L.latLngBounds(
+            [37.1722, 55.9966],
+            [45.5901, 73.2317]
+        );
+        const TASHKENT_CENTER = [41.3111, 69.2797];
+        const DEFAULT_ZOOM = 12;
+
+        const searchForm = document.getElementById("search-form");
+        const searchInput = document.getElementById("search-input");
+        const resultsShell = document.getElementById("results-shell");
+        const searchResults = document.getElementById("search-results");
+        const searchEmpty = document.getElementById("search-empty");
+        const selectionPanel = document.getElementById("selection-panel");
+        const selectionTitle = document.getElementById("selection-title");
+        const selectionAddress = document.getElementById("selection-address");
+        const confirmButton = document.getElementById("confirm");
+        const sheetCard = document.getElementById("sheet-card");
+        const sheetHeader = document.getElementById("sheet-header");
+
+        searchInput.placeholder = labels.searchPlaceholder;
+        confirmButton.textContent = labels.confirmButton;
+
+        const selectedMarkerIcon = L.divIcon({
+            className: "selected-marker",
+            html: '<div class="selected-marker__pin"></div>',
+            iconSize: [20, 34],
+            iconAnchor: [10, 30]
+        });
+
+        const map = L.map("map", {
+            attributionControl: false,
+            zoomControl: false,
+            minZoom: 6,
+            maxZoom: 19,
+            maxBounds: UZBEKISTAN_BOUNDS.pad(0.06),
+            maxBoundsViscosity: 1.0,
+            preferCanvas: true
+        }).setView(TASHKENT_CENTER, DEFAULT_ZOOM);
+
+        L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+            subdomains: "abcd"
+        }).addTo(map);
+
+        let userMarker = null;
+        let lastMarkerLatLng = null;
+        let activeSearchSelection = null;
+        let searchAbortController = null;
+        let searchToken = 0;
+        let searchDebounceTimer = null;
+        let dragState = null;
+        let pendingMapResize = null;
+        let sheetHeight = 128;
+        let snapPoints = [];
+        let lastExpandedPanel = null;
+
+        function getLanguagePreference() {
+            return isUz ? "uz,ru" : "ru,uz";
+        }
+
+        function isInsideUzbekistan(latlng) {
+            return UZBEKISTAN_BOUNDS.contains(L.latLng(Number(latlng.lat), Number(latlng.lng)));
+        }
+
+        function scheduleMapResize() {
+            if (pendingMapResize) {
+                cancelAnimationFrame(pendingMapResize);
+            }
+
+            pendingMapResize = requestAnimationFrame(() => {
+                map.invalidateSize({
+                    pan: false,
+                    debounceMoveend: true
+                });
+                pendingMapResize = null;
+            });
+        }
+
+        function buildSnapPoints() {
+            const viewportHeight = window.innerHeight;
+            const peek = Math.max(124, Math.min(132, Math.round(viewportHeight * 0.17)));
+            const medium = Math.max(
+                324,
+                Math.min(Math.round(viewportHeight * 0.47), viewportHeight - 190)
+            );
+            const full = Math.min(
+                viewportHeight - 12,
+                Math.max(medium + 110, Math.round(viewportHeight * 0.84))
+            );
+
+            snapPoints = [peek, medium, full];
+        }
+
+        function clamp(value, min, max) {
+            return Math.min(Math.max(value, min), max);
+        }
+
+        function setSheetHeight(nextHeight, { animate = true } = {}) {
+            const minHeight = snapPoints[0];
+            const maxHeight = snapPoints[snapPoints.length - 1];
+            sheetHeight = clamp(Math.round(nextHeight), minHeight, maxHeight);
+            sheetCard.classList.toggle("is-dragging", !animate);
+            document.documentElement.style.setProperty("--sheet-height", `${sheetHeight}px`);
+            scheduleMapResize();
+        }
+
+        function hideResultsShell() {
+            resultsShell.classList.remove("is-visible");
+            searchResults.innerHTML = "";
+            searchEmpty.hidden = true;
+            searchEmpty.textContent = "";
+        }
+
+        function showResultsShell() {
+            resultsShell.classList.add("is-visible");
+            lastExpandedPanel = "search";
+        }
+
+        function clearSearchSelectionState() {
+            activeSearchSelection = null;
+            selectionTitle.textContent = "";
+            selectionAddress.textContent = "";
+            confirmButton.disabled = true;
+            selectionPanel.classList.remove("is-visible");
+        }
+
+        function showSelectionPanel(selection, { snap = true } = {}) {
+            if (!selection) {
+                return;
+            }
+
+            activeSearchSelection = selection;
+            selectionTitle.textContent = selection.title || selection.display_name;
+            selectionAddress.textContent = selection.display_name;
+            confirmButton.disabled = false;
+            selectionPanel.classList.add("is-visible");
+            lastExpandedPanel = "selection";
+
+            if (snap) {
+                snapSheet(snapPoints[1]);
+            }
+        }
+
+        function hideSelectionPanel({ keepSelection = true } = {}) {
+            selectionPanel.classList.remove("is-visible");
+            confirmButton.disabled = true;
+
+            if (!keepSelection) {
+                clearSearchSelectionState();
+            }
+        }
+
+        function ensureMarker(latlng) {
+            if (userMarker) {
+                userMarker.setLatLng(latlng);
+                return;
+            }
+
+            userMarker = L.marker(latlng, {
+                draggable: true,
+                icon: selectedMarkerIcon
+            }).addTo(map);
+
+            userMarker.on("dragstart", () => {
+                hideResultsShell();
+                clearSearchSelectionState();
+            });
+
+            userMarker.on("dragend", () => {
+                const position = userMarker.getLatLng();
+
+                if (!isInsideUzbekistan(position)) {
+                    userMarker.setLatLng(lastMarkerLatLng || TASHKENT_CENTER);
+                    return;
+                }
+
+                lastMarkerLatLng = position;
+                clearSearchSelectionState();
+                snapSheet(snapPoints[0]);
+            });
+
+            userMarker.on("click", () => {
+                if (!activeSearchSelection) {
+                    return;
+                }
+
+                hideResultsShell();
+                showSelectionPanel(activeSearchSelection);
+            });
+        }
+
+        function placeMarker(latlng) {
+            const normalized = L.latLng(Number(latlng.lat), Number(latlng.lng));
+            if (!isInsideUzbekistan(normalized)) {
+                return;
+            }
+
+            lastMarkerLatLng = normalized;
+            ensureMarker(normalized);
+        }
+
+        function renderLoadingState() {
+            searchEmpty.hidden = true;
+            searchEmpty.textContent = "";
+            searchResults.innerHTML = `
+                <div class="result-skeleton"></div>
+                <div class="result-skeleton"></div>
+                <div class="result-skeleton"></div>
+            `;
+            showResultsShell();
+        }
+
+        function renderEmptyState() {
+            searchResults.innerHTML = "";
+            searchEmpty.textContent = labels.nothingFound;
+            searchEmpty.hidden = false;
+            showResultsShell();
+        }
+
+        function renderSearchResults(results) {
+            searchEmpty.hidden = true;
+            searchEmpty.textContent = "";
+
+            if (!results.length) {
+                renderEmptyState();
+                return;
+            }
+
+            searchResults.innerHTML = "";
+
+            results.forEach((item, index) => {
+                const coords = L.latLng(Number(item.lat), Number(item.lon));
+                const resultItem = document.createElement("button");
+                resultItem.type = "button";
+                resultItem.className = "result-item";
+                resultItem.style.animationDelay = `${index * 18}ms`;
+                resultItem.innerHTML = `
+                    <div class="result-title">${escapeHtml(item.title || item.display_name)}</div>
+                    <div class="result-subtitle">${escapeHtml(item.subtitle || item.display_name)}</div>
+                `;
+
+                resultItem.addEventListener("click", () => {
+                    searchResults.querySelectorAll(".result-item").forEach(node => {
+                        node.classList.remove("active");
+                    });
+                    resultItem.classList.add("active");
+                    selectSuggestion(item, coords);
+                });
+
+                searchResults.appendChild(resultItem);
+            });
+
+            showResultsShell();
+        }
+
+        function escapeHtml(value) {
+            return String(value).replace(/[&<>"']/g, symbol => {
+                const entities = {
+                    "&": "&amp;",
+                    "<": "&lt;",
+                    ">": "&gt;",
+                    '"': "&quot;",
+                    "'": "&#39;"
+                };
+
+                return entities[symbol];
+            });
+        }
+
+        async function requestSearchResults(query, signal) {
+            const params = new URLSearchParams({
+                q: query,
+                lang: getLanguagePreference()
+            });
+
+            const response = await fetch(`/api/geocode/search?${params.toString()}`, {
+                credentials: "same-origin",
+                signal
+            });
+
+            if (!response.ok) {
+                throw new Error(`Search request failed with status ${response.status}`);
+            }
+
+            const data = await response.json();
+            return Array.isArray(data.items) ? data.items : [];
+        }
+
+        async function searchAddress(query) {
+            const trimmed = query.trim();
+
+            if (trimmed.length < 2) {
+                hideResultsShell();
+                return;
+            }
+
+            if (searchAbortController) {
+                searchAbortController.abort();
+            }
+
+            const currentSearchToken = ++searchToken;
+            searchAbortController = new AbortController();
+            renderLoadingState();
+            hideSelectionPanel();
+            snapSheet(snapPoints[1]);
+
+            try {
+                const results = await requestSearchResults(
+                    trimmed,
+                    searchAbortController.signal
+                );
+
+                if (currentSearchToken !== searchToken) {
+                    return;
+                }
+
+                renderSearchResults(results);
+            } catch (error) {
+                if (error.name === "AbortError") {
+                    return;
+                }
+
+                renderEmptyState();
+            }
+        }
+
+        function debounceSearch() {
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = setTimeout(() => {
+                searchAddress(searchInput.value);
+            }, 170);
+        }
+
+        function selectSuggestion(item, coords) {
+            placeMarker(coords);
+            activeSearchSelection = item;
+            searchInput.value = item.title || item.display_name;
+
+            map.setView(coords, Math.max(map.getZoom(), 16), {
+                animate: true,
+                duration: 0.32
+            });
+
+            hideResultsShell();
+            showSelectionPanel(item);
+            searchInput.blur();
+        }
+
+        function snapSheet(targetHeight) {
+            const snappedHeight = snapPoints.reduce((closest, point) => {
+                return Math.abs(point - targetHeight) < Math.abs(closest - targetHeight)
+                    ? point
+                    : closest;
+            }, snapPoints[0]);
+
+            setSheetHeight(snappedHeight);
+            syncPanelStateAfterSnap(snappedHeight);
+        }
+
+        function syncPanelStateAfterSnap(snappedHeight) {
+            const isCollapsed = snappedHeight === snapPoints[0];
+
+            if (isCollapsed) {
+                if (resultsShell.classList.contains("is-visible")) {
+                    hideResultsShell();
+                }
+                if (selectionPanel.classList.contains("is-visible")) {
+                    hideSelectionPanel({ keepSelection: true });
+                }
+                return;
+            }
+
+            if (
+                !resultsShell.classList.contains("is-visible")
+                && !selectionPanel.classList.contains("is-visible")
+            ) {
+                if (lastExpandedPanel === "selection" && activeSearchSelection) {
+                    showSelectionPanel(activeSearchSelection, { snap: false });
+                    return;
+                }
+
+                if (lastExpandedPanel === "search" && searchInput.value.trim().length >= 2) {
+                    searchAddress(searchInput.value);
+                }
+            }
+        }
+
+        function resetSheetHeight() {
+            buildSnapPoints();
+            snapSheet(sheetHeight);
+        }
+
+        function startSheetDrag(event) {
+            if (event.target.closest("input, button")) {
+                return;
+            }
+
+            dragState = {
+                startY: event.clientY,
+                startHeight: sheetHeight
+            };
+
+            sheetHeader.setPointerCapture?.(event.pointerId);
+            sheetCard.classList.add("is-dragging");
+        }
+
+        function moveSheetDrag(event) {
+            if (!dragState) {
+                return;
+            }
+
+            const delta = dragState.startY - event.clientY;
+            setSheetHeight(dragState.startHeight + delta, { animate: false });
+        }
+
+        function endSheetDrag(event) {
+            if (!dragState) {
+                return;
+            }
+
+            sheetHeader.releasePointerCapture?.(event.pointerId);
+            dragState = null;
+            sheetCard.classList.remove("is-dragging");
+            snapSheet(sheetHeight);
+        }
+
+        resetSheetHeight();
+
+        searchForm.addEventListener("submit", event => {
+            event.preventDefault();
+            clearTimeout(searchDebounceTimer);
+            searchAddress(searchInput.value);
+        });
+
+        searchInput.addEventListener("focus", () => {
+            if (searchInput.value.trim().length >= 2) {
+                searchAddress(searchInput.value);
+                return;
+            }
+
+            if (activeSearchSelection) {
+                snapSheet(snapPoints[1]);
+            } else {
+                snapSheet(snapPoints[0]);
+            }
+        });
+
+        searchInput.addEventListener("input", () => {
+            const query = searchInput.value.trim();
+
+            if (!query) {
+                clearTimeout(searchDebounceTimer);
+                if (searchAbortController) {
+                    searchAbortController.abort();
+                }
+                hideResultsShell();
+                if (!selectionPanel.classList.contains("is-visible")) {
+                    snapSheet(snapPoints[0]);
+                }
+                return;
+            }
+
+            debounceSearch();
+        });
+
+        searchInput.addEventListener("search", () => {
+            if (!searchInput.value.trim()) {
+                hideResultsShell();
+                snapSheet(snapPoints[0]);
+            }
+        });
+
+        map.on("click", event => {
+            const coords = event.latlng;
+
+            if (!isInsideUzbekistan(coords)) {
+                return;
+            }
+
+            placeMarker(coords);
+            clearSearchSelectionState();
+            hideResultsShell();
+            searchInput.blur();
+            snapSheet(snapPoints[0]);
+        });
+
+        confirmButton.addEventListener("click", () => {
+            if (!activeSearchSelection || !lastMarkerLatLng) {
+                return;
+            }
+
+            tg?.sendData?.(JSON.stringify({
+                lat: lastMarkerLatLng.lat,
+                lng: lastMarkerLatLng.lng,
+                address: activeSearchSelection.display_name
+            }));
+            tg?.close?.();
+        });
+
+        sheetHeader.addEventListener("pointerdown", startSheetDrag);
+        window.addEventListener("pointermove", moveSheetDrag);
+        window.addEventListener("pointerup", endSheetDrag);
+        window.addEventListener("pointercancel", endSheetDrag);
+        window.addEventListener("resize", resetSheetHeight);
+    </script>
+</body>
+</html>

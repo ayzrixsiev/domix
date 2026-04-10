@@ -17,7 +17,9 @@ async def start_add_store(message: types.Message, state: FSMContext):
                 [
                     types.KeyboardButton(
                         text="📍 Открыть карту",
-                        web_app=types.WebAppInfo(url="ТВОЙ_URL_ЗДЕСЬ"),
+                        web_app=types.WebAppInfo(
+                            url="https://jeep-prepay-penholder.ngrok-free.dev/map"  # Сервер вызывает API эндпоинты
+                        ),
                     )
                 ]
             ],

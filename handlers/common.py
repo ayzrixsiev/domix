@@ -36,7 +36,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
     await state.set_state(RegisterState.waiting_for_language)
 
 
-@router.message(
+@common_router.message(
     RegisterState.waiting_for_language, F.text.in_(["Русский 🇷🇺", "O'zbekcha 🇺🇿"])
 )
 async def language_selected(message: types.Message, state: FSMContext):
@@ -67,7 +67,7 @@ async def language_selected(message: types.Message, state: FSMContext):
     await state.set_state(RegisterState.waiting_for_phone)
 
 
-@router.message(RegisterState.waiting_for_phone)
+@common_router.message(RegisterState.waiting_for_phone)
 async def process_contact(message: types.Message, state: FSMContext):
 
     user_data = (
