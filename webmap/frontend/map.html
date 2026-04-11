@@ -435,8 +435,11 @@
     const isUz = langCode.startsWith("uz");
 
     const i18n = {
-        placeholder:   isUz ? "Manzilni qidiring..."  : "Найти адрес...",
-        confirmButton: isUz ? "Manzilni tasdiqlash"   : "Подтвердить адрес",
+        placeholder:      isUz ? "Manzilni qidiring..."  : "Найти адрес...",
+        confirmButton:    isUz ? "Manzilni tasdiqlash"   : "Подтвердить адрес",
+        addressUnknown:   isUz ? "Manzil aniqlanmadi"   : "Адрес не определен",
+        addressLoading:   isUz ? "Manzil aniqlanmoqda..." : "Определение адреса...",
+        addressLoadingHint: isUz ? "Iltimos kuting..." : "Пожалуйста, подождите...",
     };
 
     const TASHKENT = [41.3111, 69.2797];
@@ -636,14 +639,49 @@
     }
 
     function showSelectionPanel(item) {
-        selectionTitle.textContent = item.title || item.display_name;
-        selectionAddr.textContent  = item.display_name;
+        selectionTitle.textContent = item.title || item.display_name || i18n.addressUnknown;
+        selectionAddr.textContent  = item.display_name || i18n.addressUnknown;
+        selectionPanel.classList.add("is-visible");
+    }
+
+    function showLoadingSelection() {
+        activeSelection = null;
+        selectionTitle.textContent = i18n.addressLoading;
+        selectionAddr.textContent  = i18n.addressLoadingHint;
         selectionPanel.classList.add("is-visible");
     }
 
     function hideSelectionPanel() {
         activeSelection = null;
         selectionPanel.classList.remove("is-visible");
+    }
+
+    async function reverseGeocode(latlng) {
+        const url = `/api/geocode/reverse?lat=${encodeURIComponent(latlng.lat)}&lon=${encodeURIComponent(latlng.lng)}&lang=${isUz ? "uz,ru" : "ru,uz"}`;
+        const res = await fetch(url, { credentials: "same-origin" });
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data?.item || null;
+    }
+
+    let reverseRequestId = 0;
+
+    async function selectMarkerPoint(latlng) {
+        const requestId = ++reverseRequestId;
+        showLoadingSelection();
+        snapTo(snapPoints[1]);
+
+        const item = await reverseGeocode(latlng);
+        if (requestId !== reverseRequestId) return;
+
+        activeSelection = item || {
+            lat: latlng.lat,
+            lon: latlng.lng,
+            display_name: i18n.addressUnknown,
+            title: i18n.addressUnknown,
+        };
+
+        showSelectionPanel(activeSelection);
     }
 
     function selectResult(item) {
@@ -732,23 +770,22 @@
         doSearch(searchInput.value);
     });
 
-    map.on("click", e => {
+    map.on("click", async e => {
         if (!UZ_BOUNDS.contains(e.latlng)) return;
         placeMarker(e.latlng);
         hideResults();
-        hideSelectionPanel();
         searchInput.blur();
-        snapTo(snapPoints[0]);
+        await selectMarkerPoint(e.latlng);
     });
 
     confirmBtn.addEventListener("click", () => {
-        if (!activeSelection || !lastMarkerLatLng) return;
+        if (!activeSelection || activeSelection.lat == null || activeSelection.lon == null) return;
+
         tg?.sendData?.(JSON.stringify({
-            lat: lastMarkerLatLng.lat,
-            lng: lastMarkerLatLng.lng,
-            address: activeSelection.display_name,
+            lat: Number(activeSelection.lat),
+            lon: Number(activeSelection.lon),
+            address: String(activeSelection.display_name || i18n.addressUnknown),
         }));
-        tg?.close?.();
     });
 
     buildSnaps();

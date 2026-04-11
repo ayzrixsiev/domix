@@ -1,7 +1,3 @@
-"""
-server.py — FastAPI сервер для Domix Map Mini App
-"""
-
 import os
 import logging
 from fastapi import FastAPI, Query
@@ -10,9 +6,9 @@ from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 try:
-    from .geocoding import search_places
+    from .geocoding import reverse_place, search_places
 except ImportError:
-    from geocoding import search_places
+    from geocoding import reverse_place, search_places
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger(__name__)
@@ -56,6 +52,25 @@ async def geocode_search(
     items = await search_places(q, lang)
     LOGGER.info("Search results: %d items for q=%r", len(items), q)
     return {"items": items}
+
+
+@app.get("/api/geocode/reverse")
+async def geocode_reverse(
+    lat: float = Query(..., description="Широта для обратного геокодирования"),
+    lon: float = Query(..., description="Долгота для обратного геокодирования"),
+    lang: str = Query(default="ru,uz", description="Языки ответа"),
+):
+    LOGGER.info("Reverse geocode request: lat=%r lon=%r lang=%r", lat, lon, lang)
+    item = await reverse_place(lat, lon, lang)
+    if not item:
+        item = {
+            "lat": lat,
+            "lon": lon,
+            "display_name": "",
+            "title": "",
+            "subtitle": "",
+        }
+    return {"item": item}
 
 
 if __name__ == "__main__":

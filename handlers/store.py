@@ -5,7 +5,7 @@ from states.store import AddStoreState
 store_router = Router()
 
 
-# Кнопка которая откроает карту чтобы выбрать магазин из нее
+# Кнопка которая откроает карту чтобы выбрать магазин
 @store_router.message(F.text.in_(["➕ Добавить магазин", "➕ Do'kon qo'shish"]))
 async def start_add_store(message: types.Message, state: FSMContext):
     await state.set_state(AddStoreState.waiting_for_location)

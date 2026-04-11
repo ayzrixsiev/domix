@@ -277,6 +277,26 @@ def _normalize_search_item(item: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _normalize_reverse_item(item: dict[str, Any]) -> dict[str, Any] | None:
+    display_name = str(item.get("display_name", "")).strip()
+    if not display_name:
+        return None
+
+    try:
+        lat = float(item["lat"])
+        lon = float(item["lon"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+    return {
+        "lat": lat,
+        "lon": lon,
+        "display_name": display_name,
+        "title": _build_title(item),
+        "subtitle": _build_subtitle(item),
+    }
+
+
 # ---------------------------------------------------------------------------
 # ГЛАВНАЯ ФУНКЦИЯ
 # ---------------------------------------------------------------------------
@@ -339,3 +359,24 @@ async def search_places(query: str, accept_language: str) -> list[dict[str, Any]
             break
 
     return normalized_results[:8]
+
+
+async def reverse_place(lat: float, lon: float, accept_language: str) -> dict[str, Any] | None:
+    """Возвращает строку адреса по координатам через Nominatim reverse."""
+    try:
+        payload = await asyncio.to_thread(
+            _fetch_json,
+            "/reverse",
+            {
+                "format": "jsonv2",
+                "addressdetails": 1,
+                "lat": lat,
+                "lon": lon,
+                "accept-language": accept_language or "ru,uz",
+            },
+        )
+    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as error:
+        LOGGER.warning("Reverse geocoding failed for %r,%r: %s", lat, lon, error)
+        return None
+
+    return _normalize_reverse_item(payload)
