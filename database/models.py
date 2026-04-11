@@ -14,12 +14,14 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(
         primary_key=True
-    )  # Уникальный показатель одного юзера
+    )  # Для всей внутренней логики и связей между таблицами.
     # Индекс на tg_id критически важен для скорости
     tg_id: Mapped[int] = mapped_column(
         BigInteger, unique=True, index=True
-    )  # ТГ айди, важен для скорости
-    username: Mapped[str | None] = mapped_column(String(32))  # ТГ юзер
+    )  # ТГ айди, важен для скорости, чтобы найти юзера, когда он пишет боту
+    username: Mapped[str | None] = mapped_column(
+        String(32)
+    )  # ТГ юзер, для менеджеров и поддержки
     full_name: Mapped[str | None] = mapped_column(String(128))  # Полное имя
     language: Mapped[str] = mapped_column(
         String(2), server_default="ru"
@@ -54,3 +56,4 @@ class Store(Base):
 
     # Составной индекс для быстрого поиска по координатам (Гео-флоат)
     __table_args__ = (Index("ix_store_location", "lat", "lon"),)
+    # Postgres создает «сортированную карту» координат. Он мгновенно отсекает 99% магазинов, которые не попадают в диапазон, и выдает результат за миллисекунды.
