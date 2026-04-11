@@ -42,23 +42,16 @@
             font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             color: var(--text-main);
             background: #e8f0e8;
-            /* Prevent body scroll — map handles its own touch events */
             touch-action: none;
         }
-
-        /* ------------------------------------------------------------------ */
-        /* MAP                                                                  */
-        /* ------------------------------------------------------------------ */
 
         #map {
             position: fixed;
             inset: 0;
             z-index: 1;
-            /* Allow map to handle its own gestures — CRITICAL for no-drag conflict */
             touch-action: pan-x pan-y;
         }
 
-        /* Hide Leaflet attribution — replace with our own subtle version */
         .leaflet-control-attribution {
             display: none !important;
         }
@@ -75,9 +68,6 @@
             letter-spacing: 0.01em;
         }
 
-        /* ------------------------------------------------------------------ */
-        /* BOTTOM SHEET                                                         */
-        /* ------------------------------------------------------------------ */
 
         .bottom-sheet {
             position: fixed;
@@ -85,7 +75,6 @@
             right: 0;
             bottom: 0;
             z-index: 1200;
-            /* Only the sheet card gets pointer events */
             pointer-events: none;
         }
 
@@ -100,17 +89,12 @@
             pointer-events: auto;
             overflow: hidden;
             transition: height 240ms cubic-bezier(0.32, 0.72, 0, 1);
-            /* CRITICAL: prevent map drag from triggering sheet drag */
             touch-action: none;
         }
 
         .sheet-card.is-dragging {
             transition: none;
         }
-
-        /* ------------------------------------------------------------------ */
-        /* SHEET HEADER — only this area triggers drag                         */
-        /* ------------------------------------------------------------------ */
 
         .sheet-header {
             flex: 0 0 auto;
@@ -134,9 +118,6 @@
             background: rgba(148, 163, 184, 0.6);
         }
 
-        /* ------------------------------------------------------------------ */
-        /* SEARCH                                                               */
-        /* ------------------------------------------------------------------ */
 
         .search-wrap {
             flex: 0 0 auto;
@@ -182,15 +163,10 @@
             color: var(--text-muted);
         }
 
-        /* Hide browser search decorations */
         #search-input::-webkit-search-cancel-button,
         #search-input::-webkit-search-decoration {
             display: none;
         }
-
-        /* ------------------------------------------------------------------ */
-        /* RESULTS DROPDOWN                                                     */
-        /* ------------------------------------------------------------------ */
 
         .sheet-content {
             flex: 1;
@@ -225,14 +201,13 @@
             max-height: 380px;
         }
 
-        /* Each result row */
         .result-item {
             display: block;
             width: 100%;
             padding: 11px 10px;
             border: 0;
             border-radius: var(--radius-sm);
-            background: rgba(148, 163, 184, 0.07);  /* subtle light gray */
+            background: rgba(148, 163, 184, 0.07);
             color: inherit;
             text-align: left;
             cursor: pointer;
@@ -250,7 +225,6 @@
 
         .result-item:hover,
         .result-item:focus-visible {
-            /* slightly darker hover */
             background: rgba(148, 163, 184, 0.16);
             outline: none;
         }
@@ -273,7 +247,6 @@
             line-height: 1.4;
         }
 
-        /* Skeleton loading */
         .result-skeleton {
             height: 54px;
             border-radius: var(--radius-sm);
@@ -288,10 +261,6 @@
             background-size: 200% 100%;
             animation: shimmer 1.2s linear infinite;
         }
-
-        /* ------------------------------------------------------------------ */
-        /* SELECTION PANEL (shown after picking a result)                      */
-        /* ------------------------------------------------------------------ */
 
         .selection-panel {
             opacity: 0;
@@ -359,9 +328,6 @@
             opacity: 0.88;
         }
 
-        /* ------------------------------------------------------------------ */
-        /* MAP MARKER                                                           */
-        /* ------------------------------------------------------------------ */
 
         .selected-marker {
             background: transparent;
@@ -391,10 +357,6 @@
             margin-top: 1px;
         }
 
-        /* ------------------------------------------------------------------ */
-        /* ANIMATIONS                                                           */
-        /* ------------------------------------------------------------------ */
-
         @keyframes suggestion-in {
             to { opacity: 1; transform: translateY(0); }
         }
@@ -414,15 +376,12 @@
     <div class="bottom-sheet">
         <div class="sheet-card" id="sheet-card">
 
-            <!-- DRAG HANDLE — only this triggers sheet drag -->
             <div class="sheet-header" id="sheet-header">
                 <div class="sheet-handle"></div>
             </div>
 
-            <!-- SEARCH INPUT -->
             <div class="search-wrap">
                 <label class="search-field" for="search-input">
-                    <!-- Thin, professional search icon -->
                     <svg class="search-icon" viewBox="0 0 20 20" fill="none"
                          stroke="currentColor" stroke-width="1.6"
                          stroke-linecap="round" stroke-linejoin="round"
@@ -442,15 +401,12 @@
                 </label>
             </div>
 
-            <!-- SHEET CONTENT: results OR selection panel -->
             <div class="sheet-content" id="sheet-content">
 
-                <!-- Search results dropdown -->
                 <div class="results-shell" id="results-shell">
                     <div class="results-list" id="search-results"></div>
                 </div>
 
-                <!-- Address confirmation panel — only shown after selection -->
                 <div class="selection-panel" id="selection-panel">
                     <div class="selection-card">
                         <div class="selection-divider"></div>
@@ -467,9 +423,7 @@
     </div>
 
     <script>
-    // -----------------------------------------------------------------------
-    // TELEGRAM WEBAPP INIT
-    // -----------------------------------------------------------------------
+
     const tg = window.Telegram?.WebApp;
     tg?.disableVerticalSwipes?.();
     tg?.expand?.();
@@ -485,15 +439,8 @@
         confirmButton: isUz ? "Manzilni tasdiqlash"   : "Подтвердить адрес",
     };
 
-    // -----------------------------------------------------------------------
-    // CONSTANTS
-    // -----------------------------------------------------------------------
     const TASHKENT = [41.3111, 69.2797];
     const UZ_BOUNDS = L.latLngBounds([37.1722, 55.9966], [45.5901, 73.2317]);
-
-    // -----------------------------------------------------------------------
-    // DOM REFS
-    // -----------------------------------------------------------------------
     const searchInput    = document.getElementById("search-input");
     const resultsShell   = document.getElementById("results-shell");
     const searchResults  = document.getElementById("search-results");
@@ -508,9 +455,6 @@
     searchInput.placeholder = i18n.placeholder;
     confirmBtn.textContent  = i18n.confirmButton;
 
-    // -----------------------------------------------------------------------
-    // MAP SETUP
-    // -----------------------------------------------------------------------
     const map = L.map("map", {
         attributionControl: false,
         zoomControl: false,
@@ -519,40 +463,28 @@
         maxBounds: UZ_BOUNDS.pad(0.08),
         maxBoundsViscosity: 1.0,
         preferCanvas: true,
-        // These are important for preventing gesture conflicts with the sheet
         tap: true,
         dragging: true,
     }).setView(TASHKENT, 13);
 
     // CartoDB Voyager — colorful, modern, free (with attribution)
-    // Much better than light_all: has green parks, blue water, colored roads
     L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
         subdomains: "abcd",
         maxZoom: 19,
     }).addTo(map);
 
-    // -----------------------------------------------------------------------
-    // CRITICAL: Prevent map touch events from bubbling to the sheet drag
-    // Without this, panning the map can accidentally trigger sheet movement
-    // -----------------------------------------------------------------------
     const mapContainer = map.getContainer();
 
     mapContainer.addEventListener("touchstart", e => {
-        // Stop touch from reaching window-level pointer handlers
         e.stopPropagation();
     }, { passive: true });
 
     mapContainer.addEventListener("pointerdown", e => {
-        // Only stop if the touch is directly on the map (not on the sheet)
         if (e.target === mapContainer || mapContainer.contains(e.target)) {
-            // Don't let map touches trigger sheet drag
             e.stopPropagation();
         }
     }, { capture: false });
 
-    // -----------------------------------------------------------------------
-    // MARKER
-    // -----------------------------------------------------------------------
     const markerIcon = L.divIcon({
         className: "selected-marker",
         html: '<div class="selected-marker__pin"></div>',
@@ -562,7 +494,7 @@
 
     let userMarker      = null;
     let lastMarkerLatLng = null;
-    let activeSelection  = null;  // currently selected place object
+    let activeSelection  = null;
 
     function placeMarker(latlng) {
         const ll = L.latLng(latlng);
@@ -579,16 +511,12 @@
                     return;
                 }
                 lastMarkerLatLng = pos;
-                // Dragging marker clears the confirmed selection
                 hideSelectionPanel();
                 hideResults();
             });
         }
     }
 
-    // -----------------------------------------------------------------------
-    // SHEET HEIGHT SYSTEM
-    // -----------------------------------------------------------------------
     let sheetHeight    = 100;
     let snapPoints     = [];
     let dragState      = null;
@@ -610,11 +538,9 @@
         sheetHeight = clamp(Math.round(h), min, max);
         sheetCard.classList.toggle("is-dragging", !animate);
         document.documentElement.style.setProperty("--sheet-height", `${sheetHeight}px`);
-        // Update credits position
         if (mapCredits) {
             mapCredits.style.bottom = `${sheetHeight + 8}px`;
         }
-        // Tell Leaflet map size changed
         if (rafResize) cancelAnimationFrame(rafResize);
         rafResize = requestAnimationFrame(() => {
             map.invalidateSize({ pan: false });
@@ -628,15 +554,11 @@
             snapPoints[0]
         );
         setSheetHeight(snapped, true);
-        // If snapping to peek (collapsed), hide any open panels
         if (snapped === snapPoints[0]) {
             hideResults();
         }
     }
 
-    // -----------------------------------------------------------------------
-    // DRAG — ONLY from sheet-header element
-    // -----------------------------------------------------------------------
     function onHeaderPointerDown(e) {
         if (e.target.closest("input, button")) return;
         dragState = { startY: e.clientY, startH: sheetHeight };
@@ -659,22 +581,15 @@
         snapTo(sheetHeight);
     }
 
-    // Attach drag ONLY to header, not map
     sheetHeader.addEventListener("pointerdown", onHeaderPointerDown);
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
     window.addEventListener("pointercancel", onPointerUp);
 
-    // -----------------------------------------------------------------------
-    // SEARCH STATE
-    // -----------------------------------------------------------------------
     let searchController = null;
     let searchToken      = 0;
     let debounceTimer    = null;
 
-    // -----------------------------------------------------------------------
-    // RESULTS UI
-    // -----------------------------------------------------------------------
     function escapeHtml(s) {
         return String(s).replace(/[&<>"']/g, c => ({
             "&": "&amp;", "<": "&lt;", ">": "&gt;",
@@ -700,7 +615,6 @@
         searchResults.innerHTML = "";
 
         if (!items.length) {
-            // Show NOTHING on empty — per requirements
             hideResults();
             return;
         }
@@ -721,9 +635,6 @@
         resultsShell.classList.add("is-visible");
     }
 
-    // -----------------------------------------------------------------------
-    // SELECTION — shown only when user picks a result
-    // -----------------------------------------------------------------------
     function showSelectionPanel(item) {
         selectionTitle.textContent = item.title || item.display_name;
         selectionAddr.textContent  = item.display_name;
@@ -738,26 +649,19 @@
     function selectResult(item) {
         const coords = L.latLng(Number(item.lat), Number(item.lon));
 
-        // Place marker and fly to location
         placeMarker(coords);
         map.setView(coords, Math.max(map.getZoom(), 16), { animate: true, duration: 0.4 });
 
-        // Update search input with selected name (no re-search)
         searchInput.value = item.title || item.display_name;
         searchInput.blur();
 
-        // Show address card — confirm button appears
         activeSelection = item;
         hideResults();
         showSelectionPanel(item);
 
-        // Snap sheet to medium height to show the card
         snapTo(snapPoints[1]);
     }
 
-    // -----------------------------------------------------------------------
-    // SEARCH
-    // -----------------------------------------------------------------------
     async function doSearch(query) {
         const q = query.trim();
         if (q.length < 2) {
@@ -765,13 +669,11 @@
             return;
         }
 
-        // Cancel previous request
         searchController?.abort();
         const token = ++searchToken;
         searchController = new AbortController();
 
         showSkeletons();
-        // Expand sheet to show results
         if (sheetHeight < snapPoints[1]) snapTo(snapPoints[1]);
 
         try {
@@ -781,7 +683,7 @@
                 { signal: searchController.signal, credentials: "same-origin" }
             );
 
-            if (token !== searchToken) return; // stale response
+            if (token !== searchToken) return;
             if (!res.ok) { hideResults(); return; }
 
             const data = await res.json();
@@ -790,7 +692,6 @@
             renderResults(Array.isArray(data.items) ? data.items : []);
         } catch (err) {
             if (err.name === "AbortError") return;
-            // On error: show nothing (per requirements — no error messages)
             hideResults();
         }
     }
@@ -800,9 +701,6 @@
         debounceTimer = setTimeout(() => doSearch(searchInput.value), 200);
     }
 
-    // -----------------------------------------------------------------------
-    // INPUT EVENTS
-    // -----------------------------------------------------------------------
     searchInput.addEventListener("input", () => {
         const q = searchInput.value.trim();
 
@@ -815,7 +713,6 @@
             return;
         }
 
-        // Typing clears the confirmed selection
         hideSelectionPanel();
         debounceSearch();
     });
@@ -829,16 +726,12 @@
         }
     });
 
-    // Handle "search" button on mobile keyboard
     document.querySelector(".search-wrap").addEventListener("submit", e => {
         e.preventDefault();
         clearTimeout(debounceTimer);
         doSearch(searchInput.value);
     });
 
-    // -----------------------------------------------------------------------
-    // MAP CLICK — place marker without confirm button
-    // -----------------------------------------------------------------------
     map.on("click", e => {
         if (!UZ_BOUNDS.contains(e.latlng)) return;
         placeMarker(e.latlng);
@@ -848,9 +741,6 @@
         snapTo(snapPoints[0]);
     });
 
-    // -----------------------------------------------------------------------
-    // CONFIRM BUTTON
-    // -----------------------------------------------------------------------
     confirmBtn.addEventListener("click", () => {
         if (!activeSelection || !lastMarkerLatLng) return;
         tg?.sendData?.(JSON.stringify({
@@ -861,9 +751,6 @@
         tg?.close?.();
     });
 
-    // -----------------------------------------------------------------------
-    // INIT
-    // -----------------------------------------------------------------------
     buildSnaps();
     setSheetHeight(snapPoints[0], false);
     window.addEventListener("resize", () => {
