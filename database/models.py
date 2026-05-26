@@ -14,23 +14,22 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(
         primary_key=True
-    )  # Для всей внутренней логики и связей между таблицами.
-    # Индекс на tg_id критически важен для скорости
+    )  # All data entities will be referinng to this column using this id
     tg_id: Mapped[int] = mapped_column(
         BigInteger, unique=True, index=True
-    )  # ТГ айди, важен для скорости, чтобы найти юзера, когда он пишет боту
+    )  # Save a tg id of users for faster verification
     username: Mapped[str | None] = mapped_column(
         String(32)
-    )  # ТГ юзер, для менеджеров и поддержки
-    full_name: Mapped[str | None] = mapped_column(String(128))  # Полное имя
+    )  # Additional info about user (@username)
+    full_name: Mapped[str | None] = mapped_column(String(128))
     language: Mapped[str] = mapped_column(
         String(2), server_default="ru"
-    )  # Язык выбранный юзером
+    )  # Language chosen by the user to interact with the bot
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now()
-    )  # Время когда регался
+    )  # Time when user registered
 
-    # Связь: Один пользователь может иметь много магазинов
+    # One-to-many relationship, one use rcan have many stores
     stores: Mapped[List["Store"]] = relationship(
         back_populates="owner", cascade="all, delete-orphan"
     )
@@ -42,18 +41,20 @@ class Store(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(
         String(100), index=True
-    )  # Индекс для поиска по названию
+    )  # Index to search a shop by it's name
     address: Mapped[str] = mapped_column(Text)
 
-    # Координаты для карты
+    # Coordinates for the map
     lat: Mapped[float] = mapped_column(Float)
     lon: Mapped[float] = mapped_column(Float)
 
+    # Id of the owner user, shop is deleted if user is deleted
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    # This is a navigation shortcut. We can access all the attributes of the user through the store and vice versa
     owner: Mapped["User"] = relationship(back_populates="stores")
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
-    # Составной индекс для быстрого поиска по координатам (Гео-флоат)
+    # Composite index for high performance stores look up in a certain territory
+    # It creates a B-Tree which helps us ignore unecessary stores and do not waste time traversing through the whole table, which gives us answer in millis
     __table_args__ = (Index("ix_store_location", "lat", "lon"),)
-    # Postgres создает «сортированную карту» координат. Он мгновенно отсекает 99% магазинов, которые не попадают в диапазон, и выдает результат за миллисекунды.

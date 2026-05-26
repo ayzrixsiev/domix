@@ -6,16 +6,16 @@ from aiogram.utils.keyboard import ReplyKeyboardBuilder
 
 from states.register import RegisterState
 
-common_router = Router()  # Роутер собирает хендлеры в одну кучу
+common_router = Router()  # Common router, combines all the routers into one place
 
 
 @common_router.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
 
-    # Как только юзер жмет старт мы чистим всю его прошлую историю
+    # As soon as user presses start, we clean up his previous history
     await state.clear()
 
-    # Создаем кнопку выбора языка
+    # Button for picking a language
     builder = ReplyKeyboardBuilder()
     builder.row(
         types.KeyboardButton(text="Русский 🇷🇺"),
@@ -32,7 +32,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
         reply_markup=builder.as_markup(resize_keyboard=True),
     )
 
-    # Меняем state в FSM
+    # Change the state in FSM
     await state.set_state(RegisterState.waiting_for_language)
 
 
