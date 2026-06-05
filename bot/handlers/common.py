@@ -4,15 +4,16 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
 
-from states.register import RegisterState
+from statesFSM.register import RegisterState
 
 common_router = Router()  # Common router, combines all the routers into one place
 
 
+# Initial detector, event listener
 @common_router.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
 
-    # As soon as user presses start, we clean up his previous history
+    # As soon as user presses start, we clean up his previous history (FSM)
     await state.clear()
 
     # Button for picking a language
@@ -36,13 +37,14 @@ async def cmd_start(message: types.Message, state: FSMContext):
     await state.set_state(RegisterState.waiting_for_language)
 
 
+# Language pick
 @common_router.message(
     RegisterState.waiting_for_language, F.text.in_(["Русский 🇷🇺", "O'zbekcha 🇺🇿"])
 )
 async def language_selected(message: types.Message, state: FSMContext):
-    # Временно сохраняем какой язык выбрали чтобы после проверить и выдать текст
+    # Temporarily saving the language to communicate with the user with convinient language
     lang = "ru" if "Русский" in message.text else "uz"
-    # Обновляем FSM данные этого конкретного юзера, это его личный блокнот
+    # Update FSM data for this particular user
     await state.update_data(chosen_lang=lang)
 
     builder = ReplyKeyboardBuilder()
@@ -72,12 +74,12 @@ async def process_contact(message: types.Message, state: FSMContext):
 
     user_data = (
         await state.get_data()
-    )  # Весь наш блокнот о юзере мы сохраняем в user_data
+    )  # All data about user is stored into the user_data
     lang = user_data.get(
         "chosen_lang"
-    )  # Вытаскиваем из блокнота строку о выбранном юзером языке
+    )  # And our of this user data we are extracting chosen language
 
-    # Проверяем как пришел номер телефона, с помощью кнопки или вручную текстом
+    # Check how we got the phone number, via button or text
     if message.contact:
         phone_number = message.contact.phone_number
     else:
@@ -85,22 +87,22 @@ async def process_contact(message: types.Message, state: FSMContext):
 
     phone_number = "".join(filter(str.isdigit, phone_number))
 
-    # Добавляем плюс, если его нет
+    # Add + if it's missing
     if not phone_number.startswith("+"):
-        # Если юзер ввел 998..., превращаем в +998...
+        # If user entered 998..., cast into +998...
         if phone_number.startswith("998"):
             phone_number = f"+{phone_number}"
         else:
-            # Если ввел без кода страны, например 901234567
+            # If number is without country number 901234567
             phone_number = f"+998{phone_number}"
 
-    # Валидация через Regex (формат Узбекистана: +998 XX XXX XX XX)
-    # \+998 — начало с +998
-    # \d{9} — ровно 9 цифр после кода страны
+    # Validate using Regex (Uzbekistan format: +998 XX XXX XX XX)
+    # \+998 — starts with +998
+    # \d{9} — exactly 9 numbers after country code
     uz_phone_regex = r"^\+998\d{9}$"
 
     if re.match(uz_phone_regex, phone_number):
-        # Если номер верный, сохраняем его в FSM
+        # If number is correct save it (info about user)
         await state.update_data(phone=phone_number)
 
         success_text = (
@@ -110,13 +112,13 @@ async def process_contact(message: types.Message, state: FSMContext):
         )
         await message.answer(
             success_text, reply_markup=types.ReplyKeyboardRemove()
-        )  # Выводим текст и убираем кнопки
+        )  # Print the text and clear the buttons
 
-        # В БУДУЩЕМ: Здесь будет проверка в БД (найден/не найден)
+        # In the future we will be checking whether the user is in db
         await show_main_profile(message, state)
 
     else:
-        # Если номер не прошел проверку
+        # If number did not pass validation
         fail_text = (
             "Неверный формат номера. Пожалуйста, отправьте номер кнопкой или введите вручную: +998XXXXXXXXX."
             if lang == "ru"
@@ -153,5 +155,5 @@ async def show_main_profile(message: types.Message, state: FSMContext):
 
     await message.answer(msg, reply_markup=builder.as_markup(resize_keyboard=True))
 
-    # Очищаем состояние регистрации, так как она завершена
+    # Clearing registration state, since it is finished
     await state.set_state(None)

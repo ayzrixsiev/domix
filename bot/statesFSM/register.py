@@ -1,7 +1,7 @@
 from aiogram.fsm.state import StatesGroup, State
 
 
-# Класс который группирует все FSM states в регистрации
+# Class that group all the FSM states for registration
 class RegisterState(StatesGroup):
 
     waiting_for_language = State()

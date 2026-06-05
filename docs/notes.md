@@ -1,35 +1,9 @@
-## handlers/ (Обработчики) 
-Несет в себе код реагирующий на действия юзера. К примеру: Добавить магазин на карте
+## bot/handlers
+This folder contains code which is responsible for reposnding to user interactions/commands. For example: Adding a store.
 
+## bot/statesFSM
+This is an implementation of FSM states for each event, like registration, adding store, editing store and etc. FSM is "long-term memory." By default, the bot "forgets" the user immediately after a response. FSM helps the bot remember: "Aha, this user is currently entering the store name; after their message, this is the object name."
+Example: States/store_states.py (list of steps: wait for address -> wait for photo -> wait for phone number).
 
-
-## keyboards/ (Клавиатуры)
-Созданные кнопки для интерфейса
-
-
-
-## states/ (Машина состояний / FSM)
-Это "краткосрочная память". По умолчанию бот "забывает" юзера сразу после ответа. FSM помогает боту помнить: "Ага, этот юзер сейчас в процессе ввода названия магазина, следующее его сообщение — это имя объекта".
-Пример: states/store_states.py (список этапов: ждем адрес -> ждем фото -> ждем телефон).
-
-
-
-## database/ (База данных)
-Таблицы базы данных написанных на SQLAlchemy 
-
-
-
-## services/ (Сервисы и Логика)
-Это "мозги". Сюда мы выносим тяжелую логику, которая не касается напрямую Telegram.
-Пример: services/excel_parser.py — здесь будет pandas, который читает файлы. Бот просто передает файл этому сервису и ждет результат.
-
-
-
-## middlewares/ (Посредники)
-Это "фильтры-контролеры". Код, который выполняется до того, как сообщение попадет в handler.
-Пример: Проверка, не забанен ли юзер, или автоматическое обновление времени последнего входа в БД.
-
-
-
-## utils/ (Утилиты)
-Вспомогательные инструменты. Пример: utils/geocoder.py — функции для превращения координат в адрес через geopy.
+## database
+SQLAlchemy objects

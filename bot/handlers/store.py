@@ -1,11 +1,11 @@
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
-from states.store import AddStoreState
+from statesFSM.store import AddStoreState
 
 store_router = Router()
 
 
-# Кнопка которая откроает карту чтобы выбрать магазин
+# Button which opens up a map
 @store_router.message(F.text.in_(["➕ Добавить магазин", "➕ Do'kon qo'shish"]))
 async def start_add_store(message: types.Message, state: FSMContext):
     await state.set_state(AddStoreState.waiting_for_location)
