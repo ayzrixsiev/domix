@@ -5,6 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
 
 from statesFSM.register import RegisterState
+from database.requests import set_user
 
 common_router = Router()  # Common router, combines all the routers into one place
 
@@ -46,6 +47,25 @@ async def language_selected(message: types.Message, state: FSMContext):
     lang = "ru" if "Русский" in message.text else "uz"
     # Update FSM data for this particular user
     await state.update_data(chosen_lang=lang)
+
+    name_prompt = (
+        "Пожалуйста, введите ваше имя и фамилию:"
+        if lang == "ru"
+        else "Iltimos, ism va familiyangizni kiriting:"
+    )
+
+    await message.answer(name_prompt, reply_markup=types.ReplyKeyboardRemove())
+
+    await state.set_state(RegisterState.waiting_for_full_name)
+
+
+# Full name processing
+@common_router.message(RegisterState.waiting_for_full_name)
+async def process_full_name(message: types.Message, state: FSMContext):
+    await state.update_data(full_name=message.text)
+
+    user_data = await state.get_data()
+    lang = user_data.get("chosen_lang")
 
     builder = ReplyKeyboardBuilder()
     builder.row(
@@ -94,7 +114,7 @@ async def process_contact(message: types.Message, state: FSMContext):
             phone_number = f"+{phone_number}"
         else:
             # If number is without country number 901234567
-            phone_number = f"+998{phone_number}"
+            phone_number = f"+{phone_number}"
 
     # Validate using Regex (Uzbekistan format: +998 XX XXX XX XX)
     # \+998 — starts with +998
@@ -104,6 +124,14 @@ async def process_contact(message: types.Message, state: FSMContext):
     if re.match(uz_phone_regex, phone_number):
         # If number is correct save it (info about user)
         await state.update_data(phone=phone_number)
+
+        # Write the data directly down to PostgreSQL using your manually gathered FSM name
+        await set_user(
+            tg_id=message.from_user.id,
+            username=message.from_user.username,
+            full_name=user_data.get("full_name"),
+            language=lang,
+        )
 
         success_text = (
             f"Отлично! Номер {phone_number} подтвержден.\nПереходим в ваш профиль..."

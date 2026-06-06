@@ -29,7 +29,8 @@ class User(Base):
         DateTime, server_default=func.now()
     )  # Time when user registered
 
-    # One-to-many relationship, one use rcan have many stores
+    # One-to-many relationship, one user can have many stores. We use this relationship to be able to target certain store and delete it,
+    # without any need to remove a whole user. It also helps us go through Stores using user table, like: stores.owner.full_name
     stores: Mapped[List["Store"]] = relationship(
         back_populates="owner", cascade="all, delete-orphan"
     )
@@ -48,7 +49,7 @@ class Store(Base):
     lat: Mapped[float] = mapped_column(Float)
     lon: Mapped[float] = mapped_column(Float)
 
-    # Id of the owner user, shop is deleted if user is deleted
+    # Hold a value of id column from User table, when a user is deleted, all stores holding this value will be removed as well
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     # This is a navigation shortcut. We can access all the attributes of the user through the store and vice versa
     owner: Mapped["User"] = relationship(back_populates="stores")
