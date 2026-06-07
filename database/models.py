@@ -1,6 +1,15 @@
 from datetime import datetime
 from typing import List
-from sqlalchemy import BigInteger, String, Float, Text, DateTime, ForeignKey, Index
+from sqlalchemy import (
+    Integer,
+    BigInteger,
+    String,
+    Float,
+    Text,
+    DateTime,
+    ForeignKey,
+    Index,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -55,7 +64,28 @@ class Store(Base):
     owner: Mapped["User"] = relationship(back_populates="stores")
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    products: Mapped[List["Product"]] = relationship(
+        back_populates="store", cascade="all, delete-orphan"
+    )
 
     # Composite index for high performance stores look up in a certain territory
     # It creates a B-Tree which helps us ignore unecessary stores and do not waste time traversing through the whole table, which gives us answer in millis
     __table_args__ = (Index("ix_store_location", "lat", "lon"),)
+
+
+class Product(Base):
+    __tablename__ = "products"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    # Mapping columns directly to your Excel structure
+    article: Mapped[str | None] = mapped_column(String(50))  # Артикул
+    category: Mapped[str] = mapped_column(String(100), index=True)  # Категория
+    name: Mapped[str] = mapped_column(String(255), index=True)  # Наименование товара
+    quantity: Mapped[int] = mapped_column(Integer, default=0)  # Кол-во(шт)
+    price: Mapped[float] = mapped_column(Float)  # Цена за ед.
+    warehouse: Mapped[str | None] = mapped_column(String(100))  # Склад
+
+    # Connection to the Store table
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"))
+    store: Mapped["Store"] = relationship(back_populates="products")
