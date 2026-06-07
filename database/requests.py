@@ -1,5 +1,6 @@
+import pandas as pd
 from database.engine import session_factory
-from database.models import User, Store
+from database.models import User, Store, Product
 from sqlalchemy import select, update, delete
 
 
@@ -88,4 +89,41 @@ async def delete_store(store_id: int):
     async with session_factory() as session:
         query = delete(Store).where(Store.id == store_id)
         await session.execute(query)
+        await session.commit()
+
+
+# Add products to the store
+async def add_products_from_dataframe(store_id: int, df: pd.DataFrame):
+    """
+    Parses a dataframe and bulk inserts the products into the specified store.
+    """
+    async with session_factory() as session:
+        # Fill empty cells (NaN) with safe default values to prevent database constraint errors
+        df = df.fillna(
+            {
+                "Артикул": "",
+                "Категория": "Без категории",
+                "Наименование товара": "Без названия",
+                "Кол-во(шт)": 0,
+                "Цена за ед.": 0.0,
+                "Склад": "",
+            }
+        )
+
+        products = []
+        for _, row in df.iterrows():
+            products.append(
+                Product(
+                    store_id=store_id,
+                    article=str(row["Артикул"]),
+                    category=str(row["Категория"]),
+                    name=str(row["Наименование товара"]),
+                    quantity=int(row["Кол-во(шт)"]),
+                    price=float(row["Цена за ед."]),
+                    warehouse=str(row["Склад"]),
+                )
+            )
+
+        # Bulk insert all rows efficiently
+        session.add_all(products)
         await session.commit()
