@@ -2,6 +2,7 @@ from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from statesFSM.store import AddStoreState
 from database.requests import add_store
+from bot.handlers.common import show_main_profile
 
 store_router = Router()
 
@@ -118,6 +119,7 @@ async def process_store_name(message: types.Message, state: FSMContext):
         )
 
     await message.answer(success_text, parse_mode="Markdown")
+    await show_main_profile(message, state)
 
     # Clear only the store creation FSM state since the workflow is fully completed
     # This leaves 'chosen_lang' intact inside the FSM data dictionary for future use
