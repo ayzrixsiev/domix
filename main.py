@@ -7,7 +7,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from bot.handlers.common import common_router
-from bot.handlers.store import store_router
+from bot.handlers.stores import store_router
 
 # Loading hidden data from .env
 load_dotenv()
