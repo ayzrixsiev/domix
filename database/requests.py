@@ -94,19 +94,16 @@ async def delete_store(store_id: int):
 
 # Add products to the store
 async def add_products_from_dataframe(store_id: int, df: pd.DataFrame):
-    """
-    Parses a dataframe and bulk inserts the products into the specified store.
-    """
     async with session_factory() as session:
-        # Fill empty cells (NaN) with safe default values to prevent database constraint errors
+        # Fill empty cells with safe default values to prevent database constraint errors
         df = df.fillna(
             {
                 "Артикул": "",
                 "Категория": "Без категории",
                 "Наименование товара": "Без названия",
-                "Кол-во(шт)": 0,
-                "Цена за ед.": 0.0,
-                "Склад": "",
+                "Цена (сум)": 0.0,
+                "Единица измерения": "шт",
+                "Наличие": "Есть",
             }
         )
 
@@ -118,12 +115,11 @@ async def add_products_from_dataframe(store_id: int, df: pd.DataFrame):
                     article=str(row["Артикул"]),
                     category=str(row["Категория"]),
                     name=str(row["Наименование товара"]),
-                    quantity=int(row["Кол-во(шт)"]),
-                    price=float(row["Цена за ед."]),
-                    warehouse=str(row["Склад"]),
+                    price=float(row["Цена (сум)"]),
+                    unit=str(row["Единица измерения"]),
+                    availability=str(row["Наличие"]),
                 )
             )
 
-        # Bulk insert all rows efficiently
         session.add_all(products)
         await session.commit()

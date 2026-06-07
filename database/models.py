@@ -76,16 +76,19 @@ class Store(Base):
 class Product(Base):
     __tablename__ = "products"
 
+    # Excel file structure
     id: Mapped[int] = mapped_column(primary_key=True)
-
-    # Mapping columns directly to your Excel structure
     article: Mapped[str | None] = mapped_column(String(50))  # Артикул
     category: Mapped[str] = mapped_column(String(100), index=True)  # Категория
     name: Mapped[str] = mapped_column(String(255), index=True)  # Наименование товара
-    quantity: Mapped[int] = mapped_column(Integer, default=0)  # Кол-во(шт)
-    price: Mapped[float] = mapped_column(Float)  # Цена за ед.
-    warehouse: Mapped[str | None] = mapped_column(String(100))  # Склад
+    price: Mapped[float] = mapped_column(Float)  # Цена (сум)
+    unit: Mapped[str] = mapped_column(
+        String(20), default="шт"
+    )  # Единица измерения (шт/кг/м²)
+    availability: Mapped[str] = mapped_column(
+        String(50), default="Есть"
+    )  # Наличие (Есть/Под заказ/Нет)
 
-    # Connection to the Store table
+    # Connection to the one unique store
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"))
     store: Mapped["Store"] = relationship(back_populates="products")

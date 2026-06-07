@@ -58,11 +58,11 @@ async def process_store_selection(callback: types.CallbackQuery, state: FSMConte
     prompt = (
         "Отправьте файл Excel (.xlsx) с заполненными товарами.\n\n"
         "Убедитесь, что колонки называются так:\n"
-        "Артикул | Категория | Наименование товара | Кол-во(шт) | Цена за ед. | Склад"
+        "Артикул | Категория | Наименование товара | Цена (сум) | Единица измерения | Наличие"
         if lang == "ru"
         else "To'ldirilgan Excel (.xlsx) faylini yuboring.\n\n"
         "Ustunlar quyidagicha nomlanganiga ishonch hosil qiling:\n"
-        "Артикул | Категория | Наименование товара | Кол-во(шт) | Цена за ед. | Склад"
+        "Артикул | Категория | Наименование товара | Цена (сум) | Единица измерения | Наличие"
     )
 
     await callback.message.answer(prompt)
@@ -116,7 +116,13 @@ async def process_excel_file(message: types.Message, state: FSMContext):
         df = pd.read_excel(file_stream)
 
         # Verify critical columns exist
-        required_columns = ["Категория", "Наименование товара", "Цена за ед."]
+        required_columns = [
+            "Категория",
+            "Наименование товара",
+            "Цена (сум)",
+            "Единица измерения",
+            "Наличие",
+        ]
         missing_columns = [col for col in required_columns if col not in df.columns]
 
         if missing_columns:
