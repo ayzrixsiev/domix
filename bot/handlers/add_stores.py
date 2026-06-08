@@ -1,22 +1,21 @@
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
-from statesFSM.store import AddStoreState
+from aiogram.types import ReplyKeyboardRemove
+from bot.statesFSM.store import AddStoreState
 from database.requests import add_store
-from bot.handlers.common import show_main_profile
+from bot.handlers.register import show_main_profile
 
 store_router = Router()
 
 
-@store_router.message(F.text.in_(["➕ Добавить магазин", "➕ Do'kon qo'shish"]))
-async def start_add_store(message: types.Message, state: FSMContext):
-    # 1. Fetch the user's data from the FSM scratchpad
+# Store address from map
+@store_router.callback_query(F.data == "menu_add_store")
+async def start_add_store(callback: types.CallbackQuery, state: FSMContext):
     user_data = await state.get_data()
-    lang = user_data.get("chosen_lang", "ru")  # Fallback to 'ru' if not found
+    lang = user_data.get("chosen_lang", "ru")
 
-    # 2. Put the user into the waiting state for location
     await state.set_state(AddStoreState.waiting_for_location)
 
-    # 3. Deliver localized map instructions
     if lang == "ru":
         text = (
             "📍 **Шаг 1: Укажите расположение магазина**\n\n"
@@ -36,44 +35,42 @@ async def start_add_store(message: types.Message, state: FSMContext):
             "4. **'Tanlangan joylashuvni yuborish'** tugmasini bosing."
         )
 
-    await message.answer(text, parse_mode="Markdown")
+    # Edit the main menu message in place
+    await callback.message.edit_text(text, parse_mode="Markdown")
+    await callback.answer()
 
 
+# Store address in the form of text
 @store_router.message(AddStoreState.waiting_for_location, F.location)
 async def process_native_location(message: types.Message, state: FSMContext):
     lat = message.location.latitude
     lon = message.location.longitude
 
-    # Save coordinates to our temporary FSM scratchpad
     await state.update_data(lat=lat, lon=lon)
 
-    # Fetch language again to reply correctly
     user_data = await state.get_data()
     lang = user_data.get("chosen_lang", "ru")
 
     if lang == "ru":
         reply_text = (
-            "✅ **Координаты получены!\n\n"
+            "✅ **Координаты получены!**\n\n"
             "Теперь отправьте текстовый адрес вашего магазина (например: *Ташкент, Чиланзар-2, ул. Гагарина, 14*):"
         )
     else:
         reply_text = (
-            "✅ **Koordinatalar qabul qilindi!\n\n"
+            "✅ **Koordinatalar qabul qilindi!**\n\n"
             "Endi do'koningizning matnli manzilini yuboring (masalan: *Toshkent, Chilonzor-2, Gagarin ko'chasi, 14-uy*):"
         )
 
     await message.answer(reply_text, parse_mode="Markdown")
-
-    # Move the user to the next logical step
     await state.set_state(AddStoreState.waiting_for_address)
 
 
+# Store name
 @store_router.message(AddStoreState.waiting_for_address)
 async def process_store_address(message: types.Message, state: FSMContext):
-    # Save address to our temporary FSM scratchpad
     await state.update_data(address=message.text)
 
-    # Fetch language again to reply correctly
     user_data = await state.get_data()
     lang = user_data.get("chosen_lang", "ru")
 
@@ -83,22 +80,16 @@ async def process_store_address(message: types.Message, state: FSMContext):
         reply_text = "Endi do'koningizning nomini yuboring:"
 
     await message.answer(reply_text, parse_mode="Markdown")
-
-    # Move the user to the next step to gather the mandatory database address field
     await state.set_state(AddStoreState.waiting_for_name)
 
 
-# Store name processing
 @store_router.message(AddStoreState.waiting_for_name)
 async def process_store_name(message: types.Message, state: FSMContext):
-    # Save name to our temporary FSM scratchpad
     await state.update_data(name=message.text)
 
-    # Fetch all gathered puzzle pieces from our FSM scratchpad
     user_data = await state.get_data()
     lang = user_data.get("chosen_lang", "ru")
 
-    # Execute the database write operation now that all NOT NULL constraints are satisfied
     await add_store(
         tg_id=message.from_user.id,
         name=user_data.get("name"),
@@ -119,8 +110,7 @@ async def process_store_name(message: types.Message, state: FSMContext):
         )
 
     await message.answer(success_text, parse_mode="Markdown")
-    await show_main_profile(message, state)
 
-    # Clear only the store creation FSM state since the workflow is fully completed
-    # This leaves 'chosen_lang' intact inside the FSM data dictionary for future use
+    # This will send a clean new inline menu right underneath the success text
+    await show_main_profile(message, state)
     await state.set_state(None)

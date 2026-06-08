@@ -5,25 +5,30 @@ from sqlalchemy import select, update, delete
 
 
 # Add user
-async def set_user(tg_id: int, username: str, full_name: str, language: str):
-    """
-    Saves a user to the database if they don't exist,
-    or updates their fields if they already exist.
-    """
+async def set_user(
+    tg_id: int, phone_number: str, username: str, full_name: str, language: str
+):
+
     async with session_factory() as session:
+        # Look if user with this tg id already exists
         query = select(User).where(User.tg_id == tg_id)
         result = await session.execute(query)
         user = result.scalar_one_or_none()
 
-        if not user:
+        if not user:  # Add enw user if does not exists
             new_user = User(
-                tg_id=tg_id, username=username, full_name=full_name, language=language
+                tg_id=tg_id,
+                phone_number=phone_number,
+                username=username,
+                full_name=full_name,
+                language=language,
             )
             session.add(new_user)
             await session.commit()
             return new_user
-        else:
+        else:  # In case there are any changes, update them
             user.username = username
+            user.phone_number = phone_number
             user.full_name = full_name
             user.language = language
             await session.commit()
@@ -32,44 +37,38 @@ async def set_user(tg_id: int, username: str, full_name: str, language: str):
 
 # Add store
 async def add_store(tg_id: int, name: str, address: str, lat: float, lon: float):
-    """
-    Fetches the internal database ID of the user using their tg_id,
-    then saves the complete store profile.
-    """
+
     async with session_factory() as session:
-        # Find the internal user.id using the external tg_id
-        user_query = select(User.id).where(User.tg_id == tg_id)
-        user_result = await session.execute(user_query)
-        internal_owner_id = user_result.scalar()
+        # Fetch the user id to set up owner_id column in store and make it a child to the user
+        query = select(User.id).where(User.tg_id == tg_id)
+        result = await session.execute(query)
+        owner_id = result.scalar()
 
-        if not internal_owner_id:
-            raise ValueError("User not found in database.")
+        if not owner_id:
+            raise ("User not found in database")
 
-        # Create the complete store with all required fields
         new_store = Store(
-            name=name, address=address, lat=lat, lon=lon, owner_id=internal_owner_id
+            name=name, address=address, lat=lat, lon=lon, owner_id=owner_id
         )
         session.add(new_store)
         await session.commit()
 
 
-# Edit store
+# View user stores
 async def get_user_stores(tg_id: int):
-    """
-    Fetches all stores owned by a specific Telegram user ID.
-    """
-    async with session_factory() as session:
-        # We find the user first, then load their related stores via relationship
-        query = select(User).where(User.tg_id == tg_id)
-        result = await session.execute(query)
-        user = result.scalar_one_or_none()
-
-        if user:
-            # Accessing the relationship shortcut we established earlier
-            return user.stores
-        return []
+    async with (
+        session_factory() as session
+    ):  # Fixed: changed async_session to session_factory
+        # Query stores directly by looking up the owner's auto-incrementing ID
+        stmt = select(Store).where(
+            Store.owner_id
+            == select(User.id).where(User.tg_id == tg_id).scalar_subquery()
+        )
+        result = await session.execute(stmt)
+        return result.scalars().all()
 
 
+# Edit store
 async def update_store(store_id: int, **kwargs):
     """
     Dynamically updates specified fields of a store by its internal ID.

@@ -2,20 +2,25 @@ from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from statesFSM.delete_store import DeleteStoreState
+from bot.statesFSM.delete_store import DeleteStoreState
 from database.requests import get_user_stores, delete_store
-from bot.handlers.common import show_main_profile
+from bot.handlers.register import show_main_profile
 
 mgmt_router = Router()
 
 
 # View stores
-@mgmt_router.message(F.text.in_(["🏢 Мои магазины", "🏢 Mening do'konlarim"]))
-async def process_view_stores(message: types.Message, state: FSMContext):
+@mgmt_router.callback_query(F.data == "menu_view_stores")
+async def process_view_stores(callback: types.CallbackQuery, state: FSMContext):
     user_data = await state.get_data()
     lang = user_data.get("chosen_lang", "ru")
 
-    stores = await get_user_stores(message.from_user.id)
+    stores = await get_user_stores(callback.from_user.id)
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text="↩️ Назад" if lang == "ru" else "↩️ Orqaga",
+        callback_data="go_to_main_menu",
+    )
 
     if not stores:
         text = (
@@ -23,11 +28,10 @@ async def process_view_stores(message: types.Message, state: FSMContext):
             if lang == "ru"
             else "Sizda hali qo'shilgan do'konlar mavjud emas."
         )
-        await message.answer(text)
-        await show_main_profile(message, state)
+        await callback.message.edit_text(text, reply_markup=builder.as_markup())
+        await callback.answer()
         return
 
-    # Loop through and build a clean structural list of all owned stores
     response_lines = []
     if lang == "ru":
         response_lines.append("<b>🏢 Список ваших магазинов:</b>\n")
@@ -47,19 +51,20 @@ async def process_view_stores(message: types.Message, state: FSMContext):
             )
 
     full_text = "\n".join(response_lines)
-    await message.answer(full_text)
 
-    # Return user directly back to the navigation dashboard options
-    await show_main_profile(message, state)
+    # Edit message to show the list alongside the back button
+    await callback.message.edit_text(full_text, reply_markup=builder.as_markup())
+    await callback.answer()
 
 
 # Delete store
-@mgmt_router.message(F.text.in_(["🗑 Удалить", "🗑 O'chirish"]))
-async def start_delete_store(message: types.Message, state: FSMContext):
+@mgmt_router.callback_query(F.data == "menu_delete_store")
+async def start_delete_store(callback: types.CallbackQuery, state: FSMContext):
     user_data = await state.get_data()
     lang = user_data.get("chosen_lang", "ru")
 
-    stores = await get_user_stores(message.from_user.id)
+    stores = await get_user_stores(callback.from_user.id)
+    builder = InlineKeyboardBuilder()
 
     if not stores:
         text = (
@@ -67,14 +72,22 @@ async def start_delete_store(message: types.Message, state: FSMContext):
             if lang == "ru"
             else "Sizda o'chirish uchun do'konlar mavjud emas."
         )
-        await message.answer(text)
-        await show_main_profile(message, state)
+        builder.button(
+            text="↩️ Назад" if lang == "ru" else "↩️ Orqaga",
+            callback_data="go_to_main_menu",
+        )
+        await callback.message.edit_text(text, reply_markup=builder.as_markup())
+        await callback.answer()
         return
 
-    # Build dynamic inline layout tracking store database keys
-    builder = InlineKeyboardBuilder()
+    # Build dynamic list of targets
     for store in stores:
         builder.button(text=store.name, callback_data=f"del_sid_{store.id}")
+
+    builder.button(
+        text="❌ Отмена" if lang == "ru" else "❌ Bekor qilish",
+        callback_data="go_to_main_menu",
+    )
     builder.adjust(1)
 
     prompt = (
@@ -83,10 +96,12 @@ async def start_delete_store(message: types.Message, state: FSMContext):
         else "Butunlay o'chirish uchun do'konni tanlang:"
     )
 
-    await message.answer(prompt, reply_markup=builder.as_markup())
+    await callback.message.edit_text(prompt, reply_markup=builder.as_markup())
     await state.set_state(DeleteStoreState.selecting_store)
+    await callback.answer()
 
 
+# Processing store deletion via callback execution
 @mgmt_router.callback_query(
     DeleteStoreState.selecting_store, F.data.startswith("del_sid_")
 )
@@ -96,19 +111,16 @@ async def process_delete_store(callback: types.CallbackQuery, state: FSMContext)
     user_data = await state.get_data()
     lang = user_data.get("chosen_lang", "ru")
 
-    # Execute transaction to database
     await delete_store(store_id)
 
-    # Clean the inline panel completely to prevent double clicks
-    await callback.message.delete()
-
     success = (
-        "Магазин был успешно удален!"
+        "Магазин успешно удален!"
         if lang == "ru"
         else "Do'kon muvaffaqiyatli o'chirildi!"
     )
-    await callback.message.answer(success)
 
-    # Draw profile options back up and reset operational states
-    await show_main_profile(callback.message, state)
-    await state.set_state(None)
+    # Send a quick native notification popup at the top of their screen
+    await callback.answer(text=success, show_alert=True)
+
+    # Immediately transform the current window back to the clean main menu hub
+    await show_main_profile(callback, state)

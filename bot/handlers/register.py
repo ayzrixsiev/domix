@@ -2,22 +2,19 @@ import re
 from aiogram import Router, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.utils.keyboard import ReplyKeyboardBuilder
+from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 
-from statesFSM.register import RegisterState
+from bot.statesFSM.register import RegisterState
 from database.requests import set_user
 
-common_router = Router()  # Common router, combines all the routers into one place
+common_router = Router()
 
 
 # Initial detector, event listener
 @common_router.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
-
-    # As soon as user presses start, we clean up his previous history (FSM)
     await state.clear()
 
-    # Button for picking a language
     builder = ReplyKeyboardBuilder()
     builder.row(
         types.KeyboardButton(text="Русский 🇷🇺"),
@@ -33,8 +30,6 @@ async def cmd_start(message: types.Message, state: FSMContext):
         f"Davom etish uchun iltimos, tilni tanlang.",
         reply_markup=builder.as_markup(resize_keyboard=True),
     )
-
-    # Change the state in FSM
     await state.set_state(RegisterState.waiting_for_language)
 
 
@@ -43,9 +38,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
     RegisterState.waiting_for_language, F.text.in_(["Русский 🇷🇺", "O'zbekcha 🇺🇿"])
 )
 async def language_selected(message: types.Message, state: FSMContext):
-    # Temporarily saving the language to communicate with the user with convinient language
     lang = "ru" if "Русский" in message.text else "uz"
-    # Update FSM data for this particular user
     await state.update_data(chosen_lang=lang)
 
     name_prompt = (
@@ -53,9 +46,7 @@ async def language_selected(message: types.Message, state: FSMContext):
         if lang == "ru"
         else "Iltimos, ism va familiyangizni kiriting:"
     )
-
     await message.answer(name_prompt, reply_markup=types.ReplyKeyboardRemove())
-
     await state.set_state(RegisterState.waiting_for_full_name)
 
 
@@ -83,23 +74,15 @@ async def process_full_name(message: types.Message, state: FSMContext):
         if lang == "ru"
         else "Ro'yxatdan o'tish uchun telefon raqamingizni yuboring, ushbu formatda +99899123456."
     )
-
     await message.answer(text, reply_markup=builder.as_markup(resize_keyboard=True))
-
     await state.set_state(RegisterState.waiting_for_phone)
 
 
 @common_router.message(RegisterState.waiting_for_phone)
 async def process_contact(message: types.Message, state: FSMContext):
+    user_data = await state.get_data()
+    lang = user_data.get("chosen_lang")
 
-    user_data = (
-        await state.get_data()
-    )  # All data about user is stored into the user_data
-    lang = user_data.get(
-        "chosen_lang"
-    )  # And our of this user data we are extracting chosen language
-
-    # Check how we got the phone number, via button or text
     if message.contact:
         phone_number = message.contact.phone_number
     else:
@@ -107,27 +90,19 @@ async def process_contact(message: types.Message, state: FSMContext):
 
     phone_number = "".join(filter(str.isdigit, phone_number))
 
-    # Add + if it's missing
     if not phone_number.startswith("+"):
-        # If user entered 998..., cast into +998...
-        if phone_number.startswith("998"):
-            phone_number = f"+{phone_number}"
-        else:
-            # If number is without country number 901234567
-            phone_number = f"+{phone_number}"
+        phone_number = (
+            f"+{phone_number}" if phone_number.startswith("998") else f"+{phone_number}"
+        )
 
-    # Validate using Regex (Uzbekistan format: +998 XX XXX XX XX)
-    # \+998 — starts with +998
-    # \d{9} — exactly 9 numbers after country code
     uz_phone_regex = r"^\+998\d{9}$"
 
     if re.match(uz_phone_regex, phone_number):
-        # If number is correct save it (info about user)
         await state.update_data(phone=phone_number)
 
-        # Write the data directly down to PostgreSQL using your manually gathered FSM name
         await set_user(
             tg_id=message.from_user.id,
+            phone_number=phone_number,
             username=message.from_user.username,
             full_name=user_data.get("full_name"),
             language=lang,
@@ -138,15 +113,13 @@ async def process_contact(message: types.Message, state: FSMContext):
             if lang == "ru"
             else f"Ajoyib! {phone_number} raqami tasdiqlandi.\nProfilingizga o'tilmoqda..."
         )
-        await message.answer(
-            success_text, reply_markup=types.ReplyKeyboardRemove()
-        )  # Print the text and clear the buttons
 
-        # In the future we will be checking whether the user is in db
+        # Drops the reply buttons panel down completely
+        await message.answer(success_text, reply_markup=types.ReplyKeyboardRemove())
+
+        # Launch inline layout profile choice
         await show_main_profile(message, state)
-
     else:
-        # If number did not pass validation
         fail_text = (
             "Неверный формат номера. Пожалуйста, отправьте номер кнопкой или введите вручную: +998XXXXXXXXX."
             if lang == "ru"
@@ -155,33 +128,77 @@ async def process_contact(message: types.Message, state: FSMContext):
         await message.answer(fail_text)
 
 
-async def show_main_profile(message: types.Message, state: FSMContext):
+# Main menu
+async def show_main_profile(
+    event: types.Message | types.CallbackQuery, state: FSMContext
+):
     data = await state.get_data()
-    lang = data.get("chosen_lang")
+    lang = data.get("chosen_lang", "uz")
 
-    builder = ReplyKeyboardBuilder()
+    builder = InlineKeyboardBuilder()
     if lang == "ru":
-        builder.row(types.KeyboardButton(text="➕ Добавить магазин"))
         builder.row(
-            types.KeyboardButton(text="📝 Редактировать"),
-            types.KeyboardButton(text="🗑 Удалить"),
+            types.InlineKeyboardButton(
+                text="➕ Добавить магазин", callback_data="menu_add_store"
+            )
         )
-        builder.row(types.KeyboardButton(text="📦 Добавить товары"))
-        builder.row(types.KeyboardButton(text="🏢 Мои магазины"))
-        msg = "<b>Ваш профиль</b>\nМагазинов добавлено: 0\n\nЧто хотите сделать?"
+        builder.row(
+            types.InlineKeyboardButton(
+                text="📝 Редактировать", callback_data="menu_edit_store"
+            ),
+            types.InlineKeyboardButton(
+                text="🗑 Удалить", callback_data="menu_delete_store"
+            ),
+        )
+        builder.row(
+            types.InlineKeyboardButton(
+                text="📦 Добавить товары", callback_data="menu_add_products"
+            )
+        )
+        builder.row(
+            types.InlineKeyboardButton(
+                text="🏢 Мои магазины", callback_data="menu_view_stores"
+            )
+        )
+        msg = "<b>Ваш профиль</b>\n\nЧто хотите сделать?"
     else:
-        builder.row(types.KeyboardButton(text="➕ Do'kon qo'shish"))
         builder.row(
-            types.KeyboardButton(text="📝 Tahrirlash"),
-            types.KeyboardButton(text="🗑 O'chirish"),
+            types.InlineKeyboardButton(
+                text="➕ Do'kon qo'shish", callback_data="menu_add_store"
+            )
         )
-        builder.row(types.KeyboardButton(text="📦 Mahsulot qo'shish"))
-        builder.row(types.KeyboardButton(text="🏢 Mening do'konlarim"))
-        msg = (
-            "<b>Sizning profilingiz</b>\nQo'shilgan do'konlar: 0\n\nNima qilmoqchisiz?"
+        builder.row(
+            types.InlineKeyboardButton(
+                text="📝 Tahrirlash", callback_data="menu_edit_store"
+            ),
+            types.InlineKeyboardButton(
+                text="🗑 O'chirish", callback_data="menu_delete_store"
+            ),
         )
+        builder.row(
+            types.InlineKeyboardButton(
+                text="📦 Mahsulot qo'shish", callback_data="menu_add_products"
+            )
+        )
+        builder.row(
+            types.InlineKeyboardButton(
+                text="🏢 Mening do'konlarim", callback_data="menu_view_stores"
+            )
+        )
+        msg = "<b>Sizning profilingiz</b>\n\nNima qilmoqchisiz?"
 
-    await message.answer(msg, reply_markup=builder.as_markup(resize_keyboard=True))
+    # Switch display pattern based on structural event type
+    if isinstance(event, types.CallbackQuery):
+        await event.message.edit_text(msg, reply_markup=builder.as_markup())
+        await event.answer()
+    else:
+        await event.answer(msg, reply_markup=builder.as_markup())
 
-    # Clearing registration state, since it is finished
     await state.set_state(None)
+
+
+@common_router.callback_query(F.data == "go_to_main_menu")
+async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext):
+    """Catch-all for 'Back' actions across your entire application."""
+    await state.clear()
+    await show_main_profile(callback, state)

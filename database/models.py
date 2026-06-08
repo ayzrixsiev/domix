@@ -24,6 +24,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(
         primary_key=True
     )  # All data entities will be referinng to this column using this id
+    phone_number: Mapped[str] = mapped_column(String(20), unique=True)
     tg_id: Mapped[int] = mapped_column(
         BigInteger, unique=True, index=True
     )  # Save a tg id of users for faster verification
