@@ -9,51 +9,62 @@ class FloatingBottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(34),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-          child: Container(
-            height: 74,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [
-                  Color.fromRGBO(255, 255, 255, 0.88),
-                  Color.fromRGBO(255, 255, 255, 0.66),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-              borderRadius: BorderRadius.circular(34),
-              border: Border.all(
-                color: const Color.fromRGBO(255, 255, 255, 0.92),
-                width: 1.4,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color.fromRGBO(15, 23, 42, 0.18),
-                  blurRadius: 28,
-                  offset: const Offset(0, 14),
-                ),
-                BoxShadow(
-                  color: const Color.fromRGBO(255, 255, 255, 0.72),
-                  blurRadius: 1,
-                  offset: const Offset(0, -1),
-                ),
-              ],
+      padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(34),
+          boxShadow: [
+            BoxShadow(
+              color: const Color.fromRGBO(15, 23, 42, 0.20),
+              blurRadius: 34,
+              spreadRadius: -4,
+              offset: const Offset(0, 14),
             ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  _buildNavItem(Icons.home_rounded, 'Главная', true),
-                  _buildNavItem(LucideIcons.search, 'Поиск', false),
-                  _buildNavItem(LucideIcons.map, 'Карта', false),
-                  _buildNavItem(LucideIcons.message_square, 'Сообщения', false),
-                  _buildNavItem(LucideIcons.user, 'Профиль', false),
-                ],
+            BoxShadow(
+              color: const Color.fromRGBO(15, 23, 42, 0.08),
+              blurRadius: 18,
+              spreadRadius: -8,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(34),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 26, sigmaY: 26),
+            child: Container(
+              height: 72,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [
+                    Color.fromRGBO(255, 255, 255, 0.72),
+                    Color.fromRGBO(255, 255, 255, 0.52),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+                borderRadius: BorderRadius.circular(34),
+                border: Border.all(
+                  color: const Color.fromRGBO(255, 255, 255, 0.92),
+                  width: 1.4,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _buildNavItem(Icons.home_rounded, 'Главная', true),
+                    _buildNavItem(LucideIcons.search, 'Поиск', false),
+                    _buildNavItem(LucideIcons.map, 'Карта', false),
+                    _buildNavItem(
+                      LucideIcons.message_square,
+                      'Сообщения',
+                      false,
+                    ),
+                    _buildNavItem(LucideIcons.user, 'Профиль', false),
+                  ],
+                ),
               ),
             ),
           ),

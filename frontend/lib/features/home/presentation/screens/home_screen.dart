@@ -38,7 +38,7 @@ class HomeScreen extends StatelessWidget {
                     InfiniteShopCarousel(),
                     SizedBox(height: 16),
                     PopularCategoriesGrid(),
-                    SizedBox(height: 8),
+                    SizedBox(height: 16),
                     ShopsNearbyGrid(),
                     SizedBox(height: 100),
                   ],
