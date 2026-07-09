@@ -12,39 +12,7 @@ class HomeHeader extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppColors.primaryOrange, Color(0xFFFF8E3C)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryOrange.withAlpha(77),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: const Row(
-              children: [
-                Icon(LucideIcons.boxes, color: Colors.white, size: 20),
-                SizedBox(width: 8),
-                Text(
-                  'DOMIX',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          const _DomixBrandButton(),
           Row(
             children: [
               Container(
@@ -99,6 +67,89 @@ class HomeHeader extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _DomixBrandButton extends StatefulWidget {
+  const _DomixBrandButton();
+
+  @override
+  State<_DomixBrandButton> createState() => _DomixBrandButtonState();
+}
+
+class _DomixBrandButtonState extends State<_DomixBrandButton> {
+  bool _isPressed = false;
+
+  void _setPressed(bool value) {
+    if (_isPressed == value) return;
+
+    setState(() {
+      _isPressed = value;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final borderRadius = BorderRadius.circular(14);
+
+    return Semantics(
+      button: true,
+      label: 'DOMIX',
+      child: AnimatedScale(
+        scale: _isPressed ? 1.08 : 1,
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOutCubic,
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: borderRadius,
+          child: Ink(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppColors.primaryOrange, Color(0xFFFF8E3C)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: borderRadius,
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryOrange.withAlpha(77),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: InkWell(
+              onTap: () {},
+              onTapDown: (_) => _setPressed(true),
+              onTapUp: (_) => _setPressed(false),
+              onTapCancel: () => _setPressed(false),
+              borderRadius: borderRadius,
+              splashColor: Colors.white.withAlpha(28),
+              highlightColor: Colors.white.withAlpha(18),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(LucideIcons.boxes, color: Colors.white, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'DOMIX',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -1,11 +1,12 @@
 import 'package:device_preview/device_preview.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:frontend/features/home/presentation/screens/home_screen.dart';
+import 'package:frontend/features/app_shell/presentation/screens/app_shell_screen.dart';
 
 void main() {
   runApp(
     DevicePreview(
-      enabled: true, // Switch to false to view full screen without device frame
+      enabled: !kReleaseMode,
       builder: (context) => const DomixApp(),
     ),
   );
@@ -19,9 +20,8 @@ class DomixApp extends StatelessWidget {
     return MaterialApp(
       title: 'Domix',
       debugShowCheckedModeBanner: false,
-      
+
       // Device Preview configuration hooks
-      useInheritedMediaQuery: true,
       locale: DevicePreview.locale(context),
       builder: DevicePreview.appBuilder,
       
@@ -32,7 +32,7 @@ class DomixApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFFF8F9FA),
       ),
       
-      home: const HomeScreen(),
+      home: const AppShellScreen(),
     );
   }
 }
