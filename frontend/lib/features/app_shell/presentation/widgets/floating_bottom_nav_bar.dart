@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 
@@ -24,54 +22,89 @@ class FloatingBottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      minimum: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-      child: DecoratedBox(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+      child: Container(
+        height: 76,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(34),
-          boxShadow: const [
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          // Uniform, single-color border only — safe with borderRadius.
+          border: Border.all(
+            color: const Color(0xFFEDEEF1),
+            width: 1,
+          ),
+          boxShadow: [
+            // Wide, soft ambient shadow for elevation.
             BoxShadow(
-              color: Color.fromRGBO(15, 23, 42, 0.18),
-              blurRadius: 32,
-              spreadRadius: -4,
-              offset: Offset(0, 14),
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 24,
+              offset: const Offset(0, 10),
+            ),
+            // Tight shadow for grounding, so it doesn't look like it's floating too high.
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
             ),
           ],
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(34),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
-            child: Container(
-              height: 72,
-              decoration: BoxDecoration(
-                color: const Color.fromRGBO(255, 255, 255, 0.64),
-                borderRadius: BorderRadius.circular(34),
-                border: Border.all(
-                  color: const Color.fromRGBO(255, 255, 255, 0.82),
-                  width: 1.2,
+        child: Stack(
+          children: [
+            AnimatedAlign(
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment(
+                items.length == 1
+                    ? 0
+                    : -1 + (2 * currentIndex) / (items.length - 1),
+                0,
+              ),
+              child: FractionallySizedBox(
+                widthFactor: 1 / items.length,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppColors.primaryOrange,
+                          AppColors.primaryOrange.withOpacity(0.85),
+                        ],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primaryOrange.withOpacity(0.35),
+                          blurRadius: 14,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-              child: Row(
-                children: [
-                  for (var index = 0; index < items.length; index++)
-                    _NavButton(
-                      item: items[index],
-                      isActive: index == currentIndex,
-                      onTap: () => onItemSelected(index),
-                    ),
-                ],
-              ),
             ),
-          ),
+            Row(
+              children: [
+                for (var index = 0; index < items.length; index++)
+                  _NavButton(
+                    item: items[index],
+                    isActive: index == currentIndex,
+                    onTap: () => onItemSelected(index),
+                  ),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _NavButton extends StatelessWidget {
+class _NavButton extends StatefulWidget {
   const _NavButton({
     required this.item,
     required this.isActive,
@@ -83,52 +116,61 @@ class _NavButton extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_NavButton> createState() => _NavButtonState();
+}
+
+class _NavButtonState extends State<_NavButton> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    final itemColor = isActive
-        ? AppColors.primaryOrange
-        : const Color(0xFF667085);
+    final itemColor = widget.isActive ? Colors.white : const Color(0xFF98A2B3);
 
     return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6),
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(22),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(22),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              height: 56,
-              decoration: BoxDecoration(
-                color: isActive
-                    ? const Color.fromRGBO(255, 111, 0, 0.14)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(22),
-                border: isActive
-                    ? Border.all(
-                        color: const Color.fromRGBO(255, 111, 0, 0.18),
-                      )
-                    : null,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(item.icon, color: itemColor, size: 22),
-                  const SizedBox(height: 4),
-                  Text(
-                    item.label,
-                    style: TextStyle(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          scale: _pressed ? 0.90 : 1.0,
+          child: SizedBox(
+            height: 76,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AnimatedScale(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutBack,
+                  scale: widget.isActive ? 1.08 : 1.0,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    child: Icon(
+                      widget.item.icon,
+                      key: ValueKey(widget.isActive),
                       color: itemColor,
-                      fontSize: 10,
-                      fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
+                      size: 22,
                     ),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 180),
+                  style: TextStyle(
+                    color: itemColor,
+                    fontSize: 10,
+                    fontWeight: widget.isActive ? FontWeight.w700 : FontWeight.w600,
+                  ),
+                  child: Text(
+                    widget.item.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),

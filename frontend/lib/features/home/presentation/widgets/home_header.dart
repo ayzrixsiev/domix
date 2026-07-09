@@ -14,11 +14,13 @@ class HomeHeader extends StatelessWidget {
         children: [
           const _DomixBrandButton(),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
+                constraints: const BoxConstraints(minHeight: 40),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
-                  vertical: 8,
+                  vertical: 10,
                 ),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceWhite,
@@ -26,11 +28,12 @@ class HomeHeader extends StatelessWidget {
                   border: Border.all(color: Colors.grey.shade200),
                 ),
                 child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Icon(
                       LucideIcons.map_pin,
                       color: AppColors.primaryOrange,
-                      size: 16,
+                      size: 18,
                     ),
                     SizedBox(width: 6),
                     Text(
@@ -52,16 +55,19 @@ class HomeHeader extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Container(
-                padding: const EdgeInsets.all(10),
+                constraints: const BoxConstraints(minHeight: 40, minWidth: 40),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceWhite,
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.grey.shade200),
                 ),
-                child: const Icon(
-                  LucideIcons.bell,
-                  color: AppColors.textDark,
-                  size: 20,
+                child: const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Icon(
+                    LucideIcons.bell,
+                    color: AppColors.textDark,
+                    size: 20,
+                  ),
                 ),
               ),
             ],
@@ -98,9 +104,9 @@ class _DomixBrandButtonState extends State<_DomixBrandButton> {
       button: true,
       label: 'DOMIX',
       child: AnimatedScale(
-        scale: _isPressed ? 1.08 : 1,
-        duration: const Duration(milliseconds: 140),
-        curve: Curves.easeOutCubic,
+        scale: _isPressed ? 1.06 : 1,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
         child: Material(
           color: Colors.transparent,
           borderRadius: borderRadius,
@@ -126,22 +132,23 @@ class _DomixBrandButtonState extends State<_DomixBrandButton> {
               onTapUp: (_) => _setPressed(false),
               onTapCancel: () => _setPressed(false),
               borderRadius: borderRadius,
-              splashColor: Colors.white.withAlpha(28),
-              highlightColor: Colors.white.withAlpha(18),
+              splashColor: Colors.white.withAlpha(24),
+              highlightColor: Colors.white.withAlpha(14),
               child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Icon(LucideIcons.boxes, color: Colors.white, size: 20),
+                    Icon(LucideIcons.boxes, color: Colors.white, size: 18),
                     SizedBox(width: 8),
                     Text(
                       'DOMIX',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: 1.2,
+                        letterSpacing: 1.1,
                       ),
                     ),
                   ],
