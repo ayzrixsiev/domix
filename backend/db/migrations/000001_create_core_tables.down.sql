@@ -1,0 +1,4 @@
+DROP INDEX IF EXISTS idx_shops_location;
+DROP TABLE IF EXISTS products;
+DROP TABLE IF EXISTS shops;
+DROP TABLE IF EXISTS users;
