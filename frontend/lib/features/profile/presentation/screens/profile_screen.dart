@@ -22,8 +22,9 @@ enum ProfileAccountState {
 }
 
 class ProfileViewState {
-  const ProfileViewState.guest({this.initials = 'АП'})
+  const ProfileViewState.guest()
     : state = ProfileAccountState.guest,
+      initials = '',
       fullName = 'Гость',
       phoneNumber = '';
 
@@ -174,23 +175,25 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _buildGuestHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         const _ProfileAvatar(
-          initials: 'АП',
-          size: 78,
+          icon: CupertinoIcons.person_fill,
+          size: 72,
           backgroundColor: Color(0xFFFFEEDD),
           textColor: _kPrimaryOrangeDark,
         ),
-        const SizedBox(height: 18),
-        const Text(
-          'Гость',
-          style: TextStyle(
-            color: _kTextPrimary,
-            fontSize: 27,
-            height: 1.1,
-            fontWeight: FontWeight.w800,
+        const SizedBox(width: 16),
+        const Expanded(
+          child: Text(
+            'Гость',
+            style: TextStyle(
+              color: _kTextPrimary,
+              fontSize: 22,
+              height: 1.16,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
       ],
@@ -563,13 +566,18 @@ class _MenuRow extends StatelessWidget {
 
 class _ProfileAvatar extends StatelessWidget {
   const _ProfileAvatar({
-    required this.initials,
+    this.initials,
+    this.icon,
     required this.size,
     required this.backgroundColor,
     required this.textColor,
-  });
+  }) : assert(
+         initials != null || icon != null,
+         'Provide either initials or icon',
+       );
 
-  final String initials;
+  final String? initials;
+  final IconData? icon;
   final double size;
   final Color backgroundColor;
   final Color textColor;
@@ -592,15 +600,17 @@ class _ProfileAvatar extends StatelessWidget {
           ),
         ],
       ),
-      child: Text(
-        initials,
-        style: TextStyle(
-          color: textColor,
-          fontSize: size * 0.32,
-          height: 1,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
+      child: icon != null
+          ? Icon(icon, size: size * 0.42, color: textColor)
+          : Text(
+              initials!,
+              style: TextStyle(
+                color: textColor,
+                fontSize: size * 0.32,
+                height: 1,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
     );
   }
 }
