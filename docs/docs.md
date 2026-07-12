@@ -25,3 +25,17 @@ erDiagram
         owner_id int FK "Refers and holds user.id"
         timestamp created_at
     }
+```
+
+### Auth via telegram bot
+1. User presses "Verify through telegram" button in flutter app.
+2. Flutter app generates a unique session id (https://t.me/domix_manager_bot?start=session_12345)
+- The phone detects the t.me link and automatically opens the native Telegram app directly to our bot.
+- The Telegram app hides the ?start=session_investor_99 part from the UI, but it saves it in memory.
+- When the user taps the big "Start" button at the bottom of the chat, Telegram automatically formats a hidden command and fires it to your Go backend via the ngrok webhook:
+"/start session_investor_99"
+
+
+
+### Things to fix.
+1. After registration through telegram completes, user can keep spamming /start and phone number button, we need to fix that.
