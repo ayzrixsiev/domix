@@ -11,16 +11,16 @@ type SessionData struct {
 	Token  string `json:"token,omitempty"` // JWT token here
 }
 
-// SessionManager stores active login attempts in RAM
+// blueprint of data during active session
 type SessionManager struct {
-	// maps telegram ChatID -> SessionID (e.g., 12345678 -> "session_89123")
+	// maps telegram ChatID -> SessionID (e.g., 12345678 -> "session_12345")
 	chatToSession sync.Map
 
-	// aps SessionID -> SessionData (e.g., "session_89123" -> {Status: "pending"})
+	// maps SessionID -> SessionData (e.g., "session_12345" -> {Status: "pending"})
 	sessions sync.Map
 }
 
-// NewSessionManager initializes our RAM storage
+// initialize our active session blueprint data and hand over it's address
 func NewSessionManager() *SessionManager {
 	return &SessionManager{}
 }

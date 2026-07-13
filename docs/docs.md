@@ -31,10 +31,10 @@ erDiagram
 1. User presses "Verify through telegram" button in flutter app.
 2. Flutter app generates a unique session id (https://t.me/domix_manager_bot?start=session_12345)
 - The phone detects the t.me link and automatically opens the native Telegram app directly to our bot.
-- The Telegram app hides the ?start=session_investor_99 part from the UI, but it saves it in memory.
-- When the user taps the big "Start" button at the bottom of the chat, Telegram automatically formats a hidden command and fires it to your Go backend via the ngrok webhook:
-"/start session_investor_99"
-
+- The Telegram app hides the ?start=session_12345 part from the UI, but it saves it in memory.
+- When the user taps the "Start" button at the bottom of the chat, Telegram automatically formats a hidden command and fires it to our Go backend via the ngrok webhook:
+"/start session_12345"
+- Our backend gets chatid and session id, after user sends phone number to our telegram bot, telegram sends chatid and phone number and this way we can identify from which chat we got the phone number and wanted flutter app.
 
 
 ### Things to fix.
