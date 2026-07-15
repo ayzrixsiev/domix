@@ -39,3 +39,4 @@ erDiagram
 
 ### Things to fix.
 1. After registration through telegram completes, user can keep spamming /start and phone number button, we need to fix that.
+2. How to handle role separation in app between shop owner and normal user.

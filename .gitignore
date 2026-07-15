@@ -1,3 +1,10 @@
 .env
 .vscode
 build/
+
+# Ignore nested Flutter build & cache files
+tools/flutter/.dart_tool/
+tools/flutter/build/
+tools/flutter/.flutter-plugins
+tools/flutter/.flutter-plugins-dependencies
+tools/flutter/.packages
