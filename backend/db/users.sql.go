@@ -1,55 +1,123 @@
-/*
-sqlc built ready to use go functions out of raw sql queries from user.sql
-*/
-
 package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// SIGN UP
+// sign up
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (name, phone)
-VALUES ($1, $2)
-RETURNING id, name, phone, created_at, updated_at
+INSERT INTO users (name, phone, telegram_chat_id, role)
+VALUES ($1, $2, $3, $4)
+RETURNING id, name, phone, telegram_chat_id, role, created_at, updated_at
 `
-
-// several arguments defined inside struct
+// blueprint for createUser sql query
 type CreateUserParams struct {
-	Name  string `json:"name"`
-	Phone string `json:"phone"`
+	Name           pgtype.Text `json:"name"`
+	Phone          string      `json:"phone"`
+	TelegramChatID pgtype.Int8 `json:"telegram_chat_id"`
+	Role           string      `json:"role"`
 }
 
-// q *Queries lets CreateUser action to interact with the db, ctx arg watches whether user is connected to the internet during sign up
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, createUser, arg.Name, arg.Phone) // connects to the db using pgx/v5, drops $1 and 2$ args to the createUser sql query
-	var i User // initialize data struct defined in models.go
-	err := row.Scan( // get the whole returning data from postgresql table when user created and save it in backend - User struct i
+// blueprint for the user returned after createUser sql query to save in backend
+type CreateUserRow struct {
+	ID             int64              `json:"id"`
+	Name           pgtype.Text        `json:"name"`
+	Phone          string             `json:"phone"`
+	TelegramChatID pgtype.Int8        `json:"telegram_chat_id"`
+	Role           string             `json:"role"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+// insert a user and save in backend
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
+	row := q.db.QueryRow(ctx, createUser,
+		arg.Name,
+		arg.Phone,
+		arg.TelegramChatID,
+		arg.Role,
+	)
+	var i CreateUserRow
+	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Phone,
+		&i.TelegramChatID,
+		&i.Role,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-
-// LOG IN
+// log in
 const getUserByPhone = `-- name: GetUserByPhone :one
-SELECT id, name, phone, created_at, updated_at 
+SELECT id, name, phone, telegram_chat_id, role, created_at, updated_at 
 FROM users 
 WHERE phone = $1
 `
 
-func (q *Queries) GetUserByPhone(ctx context.Context, phone string) (User, error) {
+type GetUserByPhoneRow struct {
+	ID             int64              `json:"id"`
+	Name           pgtype.Text        `json:"name"`
+	Phone          string             `json:"phone"`
+	TelegramChatID pgtype.Int8        `json:"telegram_chat_id"`
+	Role           string             `json:"role"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetUserByPhone(ctx context.Context, phone string) (GetUserByPhoneRow, error) {
 	row := q.db.QueryRow(ctx, getUserByPhone, phone)
-	var i User
+	var i GetUserByPhoneRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Phone,
+		&i.TelegramChatID,
+		&i.Role,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateUserRoleAndChat = `-- name: UpdateUserRoleAndChat :one
+UPDATE users
+SET telegram_chat_id = $2,
+    role = $3,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, name, phone, telegram_chat_id, role, created_at, updated_at
+`
+
+type UpdateUserRoleAndChatParams struct {
+	ID             int64       `json:"id"`
+	TelegramChatID pgtype.Int8 `json:"telegram_chat_id"`
+	Role           string      `json:"role"`
+}
+
+type UpdateUserRoleAndChatRow struct {
+	ID             int64              `json:"id"`
+	Name           pgtype.Text        `json:"name"`
+	Phone          string             `json:"phone"`
+	TelegramChatID pgtype.Int8        `json:"telegram_chat_id"`
+	Role           string             `json:"role"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) UpdateUserRoleAndChat(ctx context.Context, arg UpdateUserRoleAndChatParams) (UpdateUserRoleAndChatRow, error) {
+	row := q.db.QueryRow(ctx, updateUserRoleAndChat, arg.ID, arg.TelegramChatID, arg.Role)
+	var i UpdateUserRoleAndChatRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Phone,
+		&i.TelegramChatID,
+		&i.Role,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
