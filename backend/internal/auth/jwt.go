@@ -24,10 +24,11 @@ func GenerateJWT(userID int64, phone string, role string, secretKey string) (str
 		Phone:  phone,
 		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(30 * 24 * time.Hour)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    "domix_backend",
-		},
+            // jwt token lives 1 year, 0 months, and 0 days
+            ExpiresAt: jwt.NewNumericDate(time.Now().AddDate(1, 0, 0)),
+            IssuedAt:  jwt.NewNumericDate(time.Now()),
+            Issuer:    "domix_backend",
+        },
 	}
 
 	// 2. create the token using the HMAC SHA-256 signing algorithm
