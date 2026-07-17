@@ -11,13 +11,52 @@ const Color _kDanger = Color(0xFFB42318);
 const Color _kDangerSoft = Color(0xFFFEF0EE);
 const Color _kCardBorder = Color(0xFFF2F4F7);
 
+// ==========================================
+// 1. LOCALIZATION ENGINE (RU & UZ)
+// ==========================================
+enum AppLanguage {
+  ru('Русский', 'ru'),
+  uz("O'zbekcha", 'uz');
+
+  const AppLanguage(this.displayName, this.code);
+  final String displayName;
+  final String code;
+}
+
+class _LocalizedStrings {
+  final AppLanguage lang;
+  _LocalizedStrings(this.lang);
+
+  bool get isRu => lang == AppLanguage.ru;
+
+  String get loginTitle => isRu ? 'Войти в аккаунт' : 'Hisobga kirish';
+  String get loginSubtitle => isRu
+      ? 'Находите магазины, сравнивайте предложения и развивайте свой бизнес!'
+      : "Do'konlarni toping, takliflarni solishtiring va biznesingizni rivojlantiring!";
+  String get loginButton => isRu
+      ? 'Войти / Зарегистрироваться'
+      : "Kirish / Ro'yxatdan o'tish";
+
+  String get vendorBadge => isRu ? 'Продавец' : 'Sotuvchi';
+  String get manageShops =>
+      isRu ? 'Управление магазинами' : "Do'konlarni boshqarish";
+  String get favorites => isRu ? 'Избранное' : 'Tanlanganlar';
+  String get languageSettings => isRu ? 'Язык приложения' : 'Ilova tili';
+  String get support => isRu ? 'Поддержка' : "Qo'llab-quvvatlash";
+  String get logout => isRu ? 'Выйти из аккаунта' : 'Hisobdan chiqish';
+  String get selectLanguage => isRu ? 'Выберите язык' : 'Tilni tanlang';
+  String get version => isRu ? 'Domix • версия 1.0.0' : 'Domix • 1.0.0 versiyasi';
+}
+
+// ==========================================
+// 2. PROFILE STATE & MODELS
+// ==========================================
 enum ProfileAccountState {
   guest('StateGUEST'),
   client('StateCLIENT'),
   vendor('StateVENDOR');
 
   const ProfileAccountState(this.apiCode);
-
   final String apiCode;
 }
 
@@ -25,7 +64,7 @@ class ProfileViewState {
   const ProfileViewState.guest()
     : state = ProfileAccountState.guest,
       initials = '',
-      fullName = 'Гость',
+      fullName = '',
       phoneNumber = '';
 
   const ProfileViewState.client({
@@ -50,54 +89,185 @@ class ProfileViewState {
   bool get isVendor => state == ProfileAccountState.vendor;
 }
 
-class ProfileScreen extends StatelessWidget {
+// ==========================================
+// 3. MAIN SCREEN WIDGET
+// ==========================================
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
     super.key,
     this.profile = const ProfileViewState.guest(),
+    this.initialLanguage = AppLanguage.ru,
     this.showScaffold = true,
     this.bottomPadding = 36,
     this.onLoginTap,
-    this.onCreateShopTap,
     this.onManageShopTap,
-    this.onAddProductTap,
+    this.onFavoritesTap,
     this.onSupportTap,
     this.onLogoutTap,
+    this.onLanguageChanged,
   });
 
   final ProfileViewState profile;
+  final AppLanguage initialLanguage;
   final bool showScaffold;
   final double bottomPadding;
   final VoidCallback? onLoginTap;
-  final VoidCallback? onCreateShopTap;
   final VoidCallback? onManageShopTap;
-  final VoidCallback? onAddProductTap;
+  final VoidCallback? onFavoritesTap;
   final VoidCallback? onSupportTap;
   final VoidCallback? onLogoutTap;
+  final ValueChanged<AppLanguage>? onLanguageChanged;
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  late AppLanguage _currentLang;
+  late _LocalizedStrings _strings;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentLang = widget.initialLanguage;
+    _strings = _LocalizedStrings(_currentLang);
+  }
+
+  void _updateLanguage(AppLanguage newLang) {
+    setState(() {
+      _currentLang = newLang;
+      _strings = _LocalizedStrings(_currentLang);
+    });
+    widget.onLanguageChanged?.call(newLang);
+  }
+
+  void _showLanguagePicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: _kDivider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  _strings.selectLanguage,
+                  style: const TextStyle(
+                    color: _kTextPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                for (final lang in AppLanguage.values)
+                  _LanguageOptionTile(
+                    language: lang,
+                    isSelected: lang == _currentLang,
+                    onTap: () {
+                      Navigator.pop(context);
+                      _updateLanguage(lang);
+                    },
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final body = SafeArea(
       child: ListView(
         physics: const BouncingScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(20, 8, 20, bottomPadding),
+        padding: EdgeInsets.fromLTRB(20, 16, 20, widget.bottomPadding),
         children: [
-          _buildHeaderCard(),
-          SizedBox(height: profile.isVendor ? 28 : 20),
-          if (!profile.isVendor) ...[
-            _buildActionCard(),
-            const SizedBox(height: 28),
+          // 1. HEADER OR LOGIN PROMPT (No dummy guest banner anymore!)
+          if (widget.profile.isGuest) ...[
+            _buildGuestLoginHeroCard(),
+            const SizedBox(height: 24),
+          ] else ...[
+            _buildAccountHeaderCard(),
+            const SizedBox(height: 24),
           ],
-          _buildMenuLabel(),
-          const SizedBox(height: 10),
-          _MenuGroupCard(rows: _buildMenuRows()),
-          const SizedBox(height: 28),
+
+          // 2. PRIMARY ACTIONS GROUP (Shops & Favorites)
+          if (!widget.profile.isGuest) ...[
+            _MenuGroupCard(
+              rows: [
+                if (widget.profile.isVendor)
+                  _MenuRowData(
+                    icon: CupertinoIcons.bag,
+                    title: _strings.manageShops,
+                    onTap: widget.onManageShopTap,
+                  ),
+                _MenuRowData(
+                  icon: CupertinoIcons.heart,
+                  title: _strings.favorites,
+                  onTap: widget.onFavoritesTap,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // 3. SETTINGS & SUPPORT GROUP
+          _MenuGroupCard(
+            rows: [
+              if (widget.profile.isGuest)
+                _MenuRowData(
+                  icon: CupertinoIcons.heart,
+                  title: _strings.favorites,
+                  onTap: widget.onFavoritesTap,
+                ),
+              _MenuRowData(
+                icon: CupertinoIcons.globe,
+                title: '${_strings.languageSettings} (${_currentLang.displayName})',
+                onTap: _showLanguagePicker,
+              ),
+              _MenuRowData(
+                icon: CupertinoIcons.chat_bubble_2,
+                title: _strings.support,
+                onTap: widget.onSupportTap,
+              ),
+              if (!widget.profile.isGuest)
+                _MenuRowData(
+                  icon: CupertinoIcons.square_arrow_right,
+                  title: _strings.logout,
+                  textColor: _kDanger,
+                  iconColor: _kDanger,
+                  iconBackground: _kDangerSoft,
+                  onTap: widget.onLogoutTap,
+                ),
+            ],
+          ),
+
+          const SizedBox(height: 32),
           Center(
             child: Text(
-              'Domix • версия 1.0.0',
+              _strings.version,
               style: TextStyle(
-                color: _kTextMuted.withOpacity(0.55),
+                color: _kTextMuted.withOpacity(0.6),
                 fontSize: 12,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -105,62 +275,184 @@ class ProfileScreen extends StatelessWidget {
       ),
     );
 
-    if (!showScaffold) {
+    if (!widget.showScaffold) {
       return ColoredBox(color: _kSoftSurface, child: body);
     }
 
     return Scaffold(backgroundColor: _kSoftSurface, body: body);
   }
 
-  Widget _buildMenuLabel() {
-    return const Padding(
-      padding: EdgeInsets.only(left: 4),
-      child: Text(
-        'ЕЩЁ',
-        style: TextStyle(
-          color: Color(0xFF98A2B3),
-          fontSize: 12,
-          letterSpacing: 0.8,
-          fontWeight: FontWeight.w700,
-        ),
+  // --- WIDGET BUILDERS ---
+
+  Widget _buildGuestLoginHeroCard() {
+    return _ProfileCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                height: 52,
+                width: 52,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF0E3),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Icon(
+                  CupertinoIcons.person_crop_circle_badge_checkmark,
+                  color: _kPrimaryOrange,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _strings.loginTitle,
+                      style: const TextStyle(
+                        color: _kTextPrimary,
+                        fontSize: 19,
+                        height: 1.2,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _strings.loginSubtitle,
+                      style: const TextStyle(
+                        color: _kTextMuted,
+                        fontSize: 13.5,
+                        height: 1.4,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 22),
+          _ProfileButton(
+            label: _strings.loginButton,
+            onTap: widget.onLoginTap,
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildHeaderCard() {
+  Widget _buildAccountHeaderCard() {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: _kCardBorder),
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [Color(0xFFFFF8F2), Colors.white],
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(24),
         child: Stack(
           clipBehavior: Clip.none,
           children: [
             Positioned(
-              top: -70,
-              right: -50,
-              child: _decorativeBlob(200, _kPrimaryOrange.withOpacity(0.08)),
-            ),
-            Positioned(
-              bottom: -60,
-              left: -40,
-              child: _decorativeBlob(140, _kPrimaryOrange.withOpacity(0.05)),
+              top: -60,
+              right: -40,
+              child: _decorativeBlob(180, _kPrimaryOrange.withOpacity(0.08)),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(22, 26, 22, 26),
-              child: profile.isGuest
-                  ? _buildGuestHeader()
-                  : _buildAccountHeader(),
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  _ProfileAvatar(
+                    initials: widget.profile.initials,
+                    size: 68,
+                    backgroundColor: const Color(0xFFFFEEDD),
+                    textColor: _kPrimaryOrangeDark,
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (widget.profile.isVendor)
+                          Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [
+                              Text(
+                                widget.profile.fullName,
+                                style: const TextStyle(
+                                  color: _kTextPrimary,
+                                  fontSize: 20,
+                                  height: 1.15,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              _buildVendorBadge(),
+                            ],
+                          )
+                        else
+                          Text(
+                            widget.profile.fullName,
+                            style: const TextStyle(
+                              color: _kTextPrimary,
+                              fontSize: 20,
+                              height: 1.15,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        const SizedBox(height: 6),
+                        Text(
+                          widget.profile.phoneNumber,
+                          style: const TextStyle(
+                            color: _kTextMuted,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVendorBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: _kPrimaryOrange,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        _strings.vendorBadge,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          height: 1.1,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.2,
         ),
       ),
     );
@@ -173,283 +465,62 @@ class ProfileScreen extends StatelessWidget {
       decoration: BoxDecoration(shape: BoxShape.circle, color: color),
     );
   }
+}
 
-  Widget _buildGuestHeader() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        const _ProfileAvatar(
-          icon: CupertinoIcons.person_fill,
-          size: 72,
-          backgroundColor: Color(0xFFFFEEDD),
-          textColor: _kPrimaryOrangeDark,
-        ),
-        const SizedBox(width: 16),
-        const Expanded(
-          child: Text(
-            'Гость',
-            style: TextStyle(
-              color: _kTextPrimary,
-              fontSize: 22,
-              height: 1.16,
-              fontWeight: FontWeight.w800,
+// ==========================================
+// 4. HELPER COMPONENTS & TILES
+// ==========================================
+class _LanguageOptionTile extends StatelessWidget {
+  const _LanguageOptionTile({
+    required this.language,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final AppLanguage language;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFFFFF0E3) : _kSoftSurface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected ? _kPrimaryOrangeDark : Colors.transparent,
+              width: 1.5,
             ),
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAccountHeader() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        _ProfileAvatar(
-          initials: profile.initials,
-          size: 72,
-          backgroundColor: const Color(0xFFFFEEDD),
-          textColor: _kPrimaryOrangeDark,
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              if (profile.isVendor)
-                Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: [
-                    Text(
-                      profile.fullName,
-                      style: const TextStyle(
-                        color: _kTextPrimary,
-                        fontSize: 21,
-                        height: 1.16,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    _buildVendorBadge(),
-                  ],
-                )
-              else
-                Text(
-                  profile.fullName,
-                  style: const TextStyle(
-                    color: _kTextPrimary,
-                    fontSize: 22,
-                    height: 1.16,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              const SizedBox(height: 6),
               Text(
-                profile.phoneNumber,
-                style: const TextStyle(
-                  color: _kTextMuted,
-                  fontSize: 14,
-                  height: 1.25,
-                  fontWeight: FontWeight.w500,
+                language.displayName,
+                style: TextStyle(
+                  color: isSelected ? _kPrimaryOrangeDark : _kTextPrimary,
+                  fontSize: 16,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                 ),
               ),
+              if (isSelected)
+                const Icon(
+                  CupertinoIcons.checkmark_alt_circle_fill,
+                  color: _kPrimaryOrangeDark,
+                  size: 22,
+                ),
             ],
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildVendorBadge() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: _kPrimaryOrange,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: const Text(
-        'Продавец',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          height: 1,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.2,
-        ),
       ),
     );
-  }
-
-  Widget _buildActionCard() {
-    if (profile.isGuest) {
-      return _ProfileCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  height: 46,
-                  width: 46,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF0E3),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Icon(
-                    CupertinoIcons.lock_shield,
-                    color: _kPrimaryOrange,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Войти в аккаунт',
-                        style: TextStyle(
-                          color: _kTextPrimary,
-                          fontSize: 17,
-                          height: 1.2,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      SizedBox(height: 6),
-                      Text(
-                        'Сохраняйте избранное и отслеживайте заказы',
-                        style: TextStyle(
-                          color: _kTextMuted,
-                          fontSize: 13.5,
-                          height: 1.35,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            _ProfileButton(
-              label: 'Войти / Зарегистрироваться',
-              onTap: onLoginTap,
-            ),
-          ],
-        ),
-      );
-    }
-
-    return _ProfileCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                height: 46,
-                width: 46,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF0E3),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(
-                  CupertinoIcons.bag_badge_plus,
-                  color: _kPrimaryOrange,
-                  size: 23,
-                ),
-              ),
-              const SizedBox(width: 14),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Зарабатывайте с Domix',
-                      style: TextStyle(
-                        color: _kTextPrimary,
-                        fontSize: 18,
-                        height: 1.2,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    SizedBox(height: 6),
-                    Text(
-                      'Откройте свой магазин строительных материалов',
-                      style: TextStyle(
-                        color: _kTextMuted,
-                        fontSize: 14,
-                        height: 1.35,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          _ProfileButton(label: 'Создать магазин', onTap: onCreateShopTap),
-        ],
-      ),
-    );
-  }
-
-  List<_MenuRowData> _buildMenuRows() {
-    switch (profile.state) {
-      case ProfileAccountState.guest:
-        return [
-          _MenuRowData(
-            icon: CupertinoIcons.chat_bubble_2,
-            title: 'Поддержка',
-            onTap: onSupportTap,
-          ),
-        ];
-      case ProfileAccountState.client:
-        return [
-          _MenuRowData(
-            icon: CupertinoIcons.chat_bubble_2,
-            title: 'Поддержка',
-            onTap: onSupportTap,
-          ),
-          _MenuRowData(
-            icon: CupertinoIcons.square_arrow_right,
-            title: 'Выйти из аккаунта',
-            textColor: _kDanger,
-            iconColor: _kDanger,
-            iconBackground: _kDangerSoft,
-            onTap: onLogoutTap,
-          ),
-        ];
-      case ProfileAccountState.vendor:
-        return [
-          _MenuRowData(
-            icon: CupertinoIcons.bag,
-            title: 'Управление магазином',
-            onTap: onManageShopTap,
-          ),
-          _MenuRowData(
-            icon: CupertinoIcons.plus_circle,
-            title: 'Добавить новый товар',
-            onTap: onAddProductTap,
-          ),
-          _MenuRowData(
-            icon: CupertinoIcons.chat_bubble_2,
-            title: 'Поддержка',
-            onTap: onSupportTap,
-          ),
-          _MenuRowData(
-            icon: CupertinoIcons.square_arrow_right,
-            title: 'Выйти из аккаунта',
-            textColor: _kDanger,
-            iconColor: _kDanger,
-            iconBackground: _kDangerSoft,
-            onTap: onLogoutTap,
-          ),
-        ];
-    }
   }
 }
 
@@ -485,9 +556,9 @@ class _MenuGroupCard extends StatelessWidget {
         border: Border.all(color: _kCardBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -521,7 +592,7 @@ class _MenuRow extends StatelessWidget {
       child: InkWell(
         onTap: data.onTap ?? () {},
         child: Container(
-          height: 64,
+          height: 62,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
             border: isLast
@@ -531,13 +602,13 @@ class _MenuRow extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                height: 40,
-                width: 40,
+                height: 38,
+                width: 38,
                 decoration: BoxDecoration(
                   color: resolvedIconBg,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(data.icon, color: resolvedIconColor, size: 20),
+                child: Icon(data.icon, color: resolvedIconColor, size: 19),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -545,16 +616,15 @@ class _MenuRow extends StatelessWidget {
                   data.title,
                   style: TextStyle(
                     color: resolvedTextColor,
-                    fontSize: 15.5,
-                    height: 1.2,
+                    fontSize: 15,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
               Icon(
                 CupertinoIcons.chevron_forward,
-                color: resolvedTextColor.withOpacity(0.35),
-                size: 17,
+                color: resolvedTextColor.withOpacity(0.3),
+                size: 16,
               ),
             ],
           ),
@@ -567,17 +637,12 @@ class _MenuRow extends StatelessWidget {
 class _ProfileAvatar extends StatelessWidget {
   const _ProfileAvatar({
     this.initials,
-    this.icon,
     required this.size,
     required this.backgroundColor,
     required this.textColor,
-  }) : assert(
-         initials != null || icon != null,
-         'Provide either initials or icon',
-       );
+  });
 
   final String? initials;
-  final IconData? icon;
   final double size;
   final Color backgroundColor;
   final Color textColor;
@@ -591,26 +656,23 @@ class _ProfileAvatar extends StatelessWidget {
       decoration: BoxDecoration(
         color: backgroundColor,
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 3),
+        border: Border.all(color: Colors.white, width: 2.5),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.06),
-            blurRadius: 12,
+            blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: icon != null
-          ? Icon(icon, size: size * 0.42, color: textColor)
-          : Text(
-              initials!,
-              style: TextStyle(
-                color: textColor,
-                fontSize: size * 0.32,
-                height: 1,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
+      child: Text(
+        initials ?? '',
+        style: TextStyle(
+          color: textColor,
+          fontSize: size * 0.35,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }
@@ -629,11 +691,11 @@ class _ProfileCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: _kCardBorder),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Color.fromRGBO(15, 23, 42, 0.06),
-            blurRadius: 24,
-            offset: Offset(0, 12),
+            color: const Color(0xFF0F172A).withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -666,7 +728,6 @@ class _ProfileButton extends StatelessWidget {
             style: const TextStyle(
               color: Colors.white,
               fontSize: 16,
-              height: 1.2,
               fontWeight: FontWeight.w800,
             ),
           ),
