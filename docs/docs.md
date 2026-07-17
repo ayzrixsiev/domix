@@ -41,7 +41,7 @@ erDiagram
     }
 ```
 
-### Auth via telegram bot
+### Auth via telegram bot backend flow
 1. User presses create account in flutter app then he is prompted to choose to pick a role (show owner or customer) and write down his name first and family name, after it he presses "Verify through telegram" button.
 2. Flutter app hits http point api/auth/init and sends a json containing gathered info: role, name.
 3. Our backend receives this json data and generates random sessionID, after that using SessionManager's sync map called sessions, it links this sessionID with SessionData, like this:
@@ -57,10 +57,16 @@ sm.sessions.Store(sessionID, SessionData{
 5. Our backend using SessionManager's sync map called chatToSession, connects that sessionID with chatID, and this way we know who's phone number we will get from this particular chat.
 6. After that we prompt a user to send his phone number, once he does that, telegram sends chatID along side his phone number to our backend, we check whether the user exists (if yes we check whether his role changed and edit it if needed), if he does we log in, if no we sign him up and generate jwt token and send it to the flutter app.
 
+### Auth via telegram bot flluter flow:
+1. frontend/lib/features/profile/data/auth_service.dart - file that contains code for initializing handshake with go backend. It sends collected data to the backend, does polling to check the status of a login ticket and stores JWT and role inside user's hardware encrypted storage.
+2. frontend/lib/features/profile/presentation/controllers/auth_controller.dart - file that orchestrates thw whole auth process, by initialozing authService, initializing handshake with backend, setting up pollling and timer for it, based on the incoming output dictation how to render the page in profile section.
+
 ### Things to fix.
 1. After registration through telegram completes, user can keep spamming /start and phone number button, we need to fix that.
-2. How to handle role separation in app between shop owner and normal user.
-3. Make jwt token live longer - one year
+2. ~~How to handle role separation in app between shop owner and normal user.~~
+3. ~~Make jwt token live longer - one year~~
 
-### RESET DB FOR TESTING LOCALLY
-TRUNCATE TABLE users RESTART IDENTITY CASCADE;
+### LOCAL TESTING
+TRUNCATE TABLE users RESTART IDENTITY CASCADE; - restore db
+flutter run -d linux - run flutter frontend
+flutter run --dart-define-from-file=env.json

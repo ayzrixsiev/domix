@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import '../controllers/auth_controller.dart';
 
 const Color _kPrimaryOrange = Color(0xFFFF6F00);
 const Color _kPrimaryOrangeDark = Color(0xFFE65D00);
@@ -11,9 +12,7 @@ const Color _kDanger = Color(0xFFB42318);
 const Color _kDangerSoft = Color(0xFFFEF0EE);
 const Color _kCardBorder = Color(0xFFF2F4F7);
 
-// ==========================================
-// 1. LOCALIZATION ENGINE (RU & UZ)
-// ==========================================
+// 1. localization engine for russian and uzbek languages
 enum AppLanguage {
   ru('Русский', 'ru'),
   uz("O'zbekcha", 'uz');
@@ -43,14 +42,12 @@ class _LocalizedStrings {
   String get favorites => isRu ? 'Избранное' : 'Tanlanganlar';
   String get languageSettings => isRu ? 'Язык приложения' : 'Ilova tili';
   String get support => isRu ? 'Поддержка' : "Qo'llab-quvvatlash";
-  String get logout => isRu ? 'Выйти из аккаунта' : 'Hisobdan chiqish';
+  String get logout => isRu ? 'Выйти из аккаунта' : 'Akkauntdan chiqish';
   String get selectLanguage => isRu ? 'Выберите язык' : 'Tilni tanlang';
-  String get version => isRu ? 'Domix • версия 1.0.0' : 'Domix • 1.0.0 versiyasi';
+  String get version => isRu ? 'Domix • 1.0.0' : 'Domix • 1.0.0';
 }
 
-// ==========================================
-// 2. PROFILE STATE & MODELS
-// ==========================================
+// 2. profile state and account type models
 enum ProfileAccountState {
   guest('StateGUEST'),
   client('StateCLIENT'),
@@ -89,9 +86,7 @@ class ProfileViewState {
   bool get isVendor => state == ProfileAccountState.vendor;
 }
 
-// ==========================================
-// 3. MAIN SCREEN WIDGET
-// ==========================================
+// 3. main interactive screen widget
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
     super.key,
@@ -125,14 +120,35 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   late AppLanguage _currentLang;
   late _LocalizedStrings _strings;
+  
+  // controller instance to manage login state and backend polling
+  late final AuthController _authController;
 
   @override
   void initState() {
     super.initState();
     _currentLang = widget.initialLanguage;
     _strings = _LocalizedStrings(_currentLang);
+
+    // initialize controller and bind state listener to repaint screen on login
+    _authController = AuthController();
+    _authController.addListener(_onAuthStateChanged);
   }
 
+  // trigger ui repaint when backend login state changes
+  void _onAuthStateChanged() {
+    if (mounted) setState(() {});
+  }
+
+  // remove listener and kill polling timer to prevent memory leaks
+  @override
+  void dispose() {
+    _authController.removeListener(_onAuthStateChanged);
+    _authController.dispose(); 
+    super.dispose();
+  }
+
+  // update interface language and notify parent layout
   void _updateLanguage(AppLanguage newLang) {
     setState(() {
       _currentLang = newLang;
@@ -141,6 +157,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     widget.onLanguageChanged?.call(newLang);
   }
 
+  // open bottom modal sheet to select between russian and uzbek
   void _showLanguagePicker() {
     showModalBottomSheet(
       context: context,
@@ -193,27 +210,117 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // open modal sheet to collect user name and role before launching telegram
+  void _showLoginBottomSheet(BuildContext context) {
+    final nameController = TextEditingController();
+    String selectedRole = 'customer';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Регистрация / Ro'yxatdan o'tish",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: nameController,
+                decoration: InputDecoration(
+                  labelText: "Ваше имя и фамилия / Ismingiz va familiyangiz",
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: ChoiceChip(
+                      label: const Text("Покупатель / Xaridor"),
+                      selected: selectedRole == 'customer',
+                      onSelected: (val) => setModalState(() => selectedRole = 'customer'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ChoiceChip(
+                      label: const Text("Продавец / Sotuvchi"),
+                      selected: selectedRole == 'shop_owner',
+                      onSelected: (val) => setModalState(() => selectedRole = 'shop_owner'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF6F00),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    
+                    // trigger backend authorization and switch app to telegram bot
+                    _authController.startTelegramLogin(
+                      name: nameController.text.trim().isEmpty ? "Domix User" : nameController.text.trim(),
+                      role: selectedRole,
+                      onSuccess: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Добро пожаловать в Domix! 🎉")),
+                        );
+                      },
+                    );
+                  },
+                  child: const Text(
+                    "Продолжить в Telegram", 
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // read active profile state directly from our live controller
+    final currentProfile = _authController.profileState;
+
     final body = SafeArea(
       child: ListView(
         physics: const BouncingScrollPhysics(),
         padding: EdgeInsets.fromLTRB(20, 16, 20, widget.bottomPadding),
         children: [
-          // 1. HEADER OR LOGIN PROMPT (No dummy guest banner anymore!)
-          if (widget.profile.isGuest) ...[
+          // render guest hero prompt if unauthenticated, otherwise render user account header
+          if (currentProfile.isGuest) ...[
             _buildGuestLoginHeroCard(),
             const SizedBox(height: 24),
           ] else ...[
-            _buildAccountHeaderCard(),
+            _buildAccountHeaderCard(currentProfile),
             const SizedBox(height: 24),
           ],
 
-          // 2. PRIMARY ACTIONS GROUP (Shops & Favorites)
-          if (!widget.profile.isGuest) ...[
+          // primary action links for shops and favorites using original outline icons
+          if (!currentProfile.isGuest) ...[
             _MenuGroupCard(
               rows: [
-                if (widget.profile.isVendor)
+                if (currentProfile.isVendor)
                   _MenuRowData(
                     icon: CupertinoIcons.bag,
                     title: _strings.manageShops,
@@ -229,10 +336,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 16),
           ],
 
-          // 3. SETTINGS & SUPPORT GROUP
+          // app settings, language switcher, support, and dynamic logout button
           _MenuGroupCard(
             rows: [
-              if (widget.profile.isGuest)
+              if (currentProfile.isGuest)
                 _MenuRowData(
                   icon: CupertinoIcons.heart,
                   title: _strings.favorites,
@@ -248,14 +355,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 title: _strings.support,
                 onTap: widget.onSupportTap,
               ),
-              if (!widget.profile.isGuest)
+              if (!currentProfile.isGuest)
                 _MenuRowData(
                   icon: CupertinoIcons.square_arrow_right,
                   title: _strings.logout,
                   textColor: _kDanger,
                   iconColor: _kDanger,
                   iconBackground: _kDangerSoft,
-                  onTap: widget.onLogoutTap,
+                  onTap: () => _authController.logout(),
                 ),
             ],
           ),
@@ -282,8 +389,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(backgroundColor: _kSoftSurface, body: body);
   }
 
-  // --- WIDGET BUILDERS ---
-
+  // guest hero card prompting unauthenticated users to log in
   Widget _buildGuestLoginHeroCard() {
     return _ProfileCard(
       child: Column(
@@ -293,16 +399,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                height: 52,
-                width: 52,
+                height: 48,
+                width: 48,
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF0E3),
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Icon(
-                  CupertinoIcons.person_crop_circle_badge_checkmark,
+                  CupertinoIcons.lock_shield,
                   color: _kPrimaryOrange,
-                  size: 28,
+                  size: 24,
                 ),
               ),
               const SizedBox(width: 16),
@@ -337,14 +443,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 22),
           _ProfileButton(
             label: _strings.loginButton,
-            onTap: widget.onLoginTap,
+            onTap: () => _showLoginBottomSheet(context),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAccountHeaderCard() {
+  // gradient profile header card showing user initials, name, and phone
+  Widget _buildAccountHeaderCard(ProfileViewState profile) {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -379,7 +486,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   _ProfileAvatar(
-                    initials: widget.profile.initials,
+                    initials: profile.initials,
                     size: 68,
                     backgroundColor: const Color(0xFFFFEEDD),
                     textColor: _kPrimaryOrangeDark,
@@ -389,14 +496,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (widget.profile.isVendor)
+                        if (profile.isVendor)
                           Wrap(
                             crossAxisAlignment: WrapCrossAlignment.center,
                             spacing: 8,
                             runSpacing: 6,
                             children: [
                               Text(
-                                widget.profile.fullName,
+                                profile.fullName,
                                 style: const TextStyle(
                                   color: _kTextPrimary,
                                   fontSize: 20,
@@ -409,7 +516,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           )
                         else
                           Text(
-                            widget.profile.fullName,
+                            profile.fullName,
                             style: const TextStyle(
                               color: _kTextPrimary,
                               fontSize: 20,
@@ -419,7 +526,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         const SizedBox(height: 6),
                         Text(
-                          widget.profile.phoneNumber,
+                          profile.phoneNumber,
                           style: const TextStyle(
                             color: _kTextMuted,
                             fontSize: 14,
@@ -438,6 +545,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // badge indicating the user is an active shop vendor
   Widget _buildVendorBadge() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -458,6 +566,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // visual background circle decoration for header cards
   Widget _decorativeBlob(double size, Color color) {
     return Container(
       width: size,
@@ -467,9 +576,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-// ==========================================
-// 4. HELPER COMPONENTS & TILES
-// ==========================================
+// 4. helper components and interactive tiles
 class _LanguageOptionTile extends StatelessWidget {
   const _LanguageOptionTile({
     required this.language,
@@ -608,7 +715,7 @@ class _MenuRow extends StatelessWidget {
                   color: resolvedIconBg,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(data.icon, color: resolvedIconColor, size: 19),
+                child: Icon(data.icon, color: resolvedIconColor, size: 20),
               ),
               const SizedBox(width: 14),
               Expanded(
