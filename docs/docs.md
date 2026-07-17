@@ -67,6 +67,6 @@ sm.sessions.Store(sessionID, SessionData{
 3. ~~Make jwt token live longer - one year~~
 
 ### LOCAL TESTING
-TRUNCATE TABLE users RESTART IDENTITY CASCADE; - restore db
-flutter run -d linux - run flutter frontend
+TRUNCATE TABLE users RESTART IDENTITY CASCADE;
+ngrok http 8080
 flutter run --dart-define-from-file=env.json

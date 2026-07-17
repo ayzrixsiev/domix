@@ -39,12 +39,36 @@ class _LocalizedStrings {
   String get vendorBadge => isRu ? 'Продавец' : 'Sotuvchi';
   String get manageShops =>
       isRu ? 'Управление магазинами' : "Do'konlarni boshqarish";
+  String get innerManageStores =>
+      isRu ? 'Настройка и статистика' : 'Sozlamalar va statistika';
+  String get addStore =>
+      isRu ? 'Добавить новый магазин' : "Yangi do'kon qo'shish";
+  String get backButton => isRu ? 'Назад в профиль' : 'Profilga qaytish';
   String get favorites => isRu ? 'Избранное' : 'Tanlanganlar';
   String get languageSettings => isRu ? 'Язык приложения' : 'Ilova tili';
   String get support => isRu ? 'Поддержка' : "Qo'llab-quvvatlash";
   String get logout => isRu ? 'Выйти из аккаунта' : 'Akkauntdan chiqish';
   String get selectLanguage => isRu ? 'Выберите язык' : 'Tilni tanlang';
   String get version => isRu ? 'Domix • 1.0.0' : 'Domix • 1.0.0';
+
+  // localized texts for the login bottom sheet modal
+  String get registerTitle =>
+      isRu ? 'Регистрация в Domix' : "Domix'ga ro'yxatdan o'tish";
+  String get registerSubtitle => isRu
+      ? 'Выберите тип аккаунта для продолжения'
+      : "Davom etish uchun hisob turini tanlang";
+  String get nameInputLabel =>
+      isRu ? 'Имя и фамилия' : "Ism va familiyangiz";
+  String get roleCustomer => isRu ? 'Покупатель' : "Xaridor";
+  String get roleCustomerSub =>
+      isRu ? 'Покупки и заказы' : "Xaridlar va buyurtmalar";
+  String get roleVendor => isRu ? 'Продавец' : "Sotuvchi";
+  String get roleVendorSub =>
+      isRu ? 'Мой магазин' : "Mening do'konim";
+  String get continueTelegram =>
+      isRu ? 'Продолжить в Telegram' : "Telegram orqali kirish";
+  String get welcomeMessage =>
+      isRu ? 'Добро пожаловать в Domix! 🎉' : "Domix'ga xush kelibsiz! 🎉";
 }
 
 // 2. profile state and account type models
@@ -96,6 +120,8 @@ class ProfileScreen extends StatefulWidget {
     this.bottomPadding = 36,
     this.onLoginTap,
     this.onManageShopTap,
+    this.onAddStoreTap,
+    this.onBecomeVendorTap,
     this.onFavoritesTap,
     this.onSupportTap,
     this.onLogoutTap,
@@ -108,6 +134,8 @@ class ProfileScreen extends StatefulWidget {
   final double bottomPadding;
   final VoidCallback? onLoginTap;
   final VoidCallback? onManageShopTap;
+  final VoidCallback? onAddStoreTap;
+  final VoidCallback? onBecomeVendorTap;
   final VoidCallback? onFavoritesTap;
   final VoidCallback? onSupportTap;
   final VoidCallback? onLogoutTap;
@@ -120,6 +148,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   late AppLanguage _currentLang;
   late _LocalizedStrings _strings;
+  bool _showShopsSubMenu = false;
   
   // controller instance to manage login state and backend polling
   late final AuthController _authController;
@@ -220,73 +249,172 @@ class _ProfileScreenState extends State<ProfileScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => Padding(
-          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          padding: EdgeInsets.fromLTRB(
+            22,
+            16,
+            22,
+            MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                "Регистрация / Ro'yxatdan o'tish",
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: nameController,
-                decoration: InputDecoration(
-                  labelText: "Ваше имя и фамилия / Ismingiz va familiyangiz",
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+              // top drag handle bar for modern ios feel
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4.5,
+                  decoration: BoxDecoration(
+                    color: _kDivider,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
                 ),
               ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: ChoiceChip(
-                      label: const Text("Покупатель / Xaridor"),
-                      selected: selectedRole == 'customer',
-                      onSelected: (val) => setModalState(() => selectedRole = 'customer'),
+              const SizedBox(height: 20),
+              Text(
+                _strings.registerTitle,
+                style: const TextStyle(
+                  color: _kTextPrimary,
+                  fontSize: 21,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _strings.registerSubtitle,
+                style: const TextStyle(
+                  color: _kTextMuted,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 20),
+              // styled text input with filled background and subtle borders
+              TextField(
+                controller: nameController,
+                style: const TextStyle(
+                  color: _kTextPrimary,
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w600,
+                ),
+                decoration: InputDecoration(
+                  labelText: _strings.nameInputLabel,
+                  labelStyle: const TextStyle(
+                    color: _kTextMuted,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFFF1F5F9),
+                  prefixIcon: const Icon(
+                    CupertinoIcons.person_fill,
+                    color: _kTextMuted,
+                    size: 20,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(
+                      color: _kPrimaryOrange,
+                      width: 1.5,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ChoiceChip(
-                      label: const Text("Продавец / Sotuvchi"),
-                      selected: selectedRole == 'shop_owner',
-                      onSelected: (val) => setModalState(() => selectedRole = 'shop_owner'),
-                    ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              // two interactive selection cards for customer vs vendor
+              Row(
+                children: [
+                  _RoleSelectionCard(
+                    icon: CupertinoIcons.cart_fill,
+                    title: _strings.roleCustomer,
+                    subtitle: _strings.roleCustomerSub,
+                    isSelected: selectedRole == 'customer',
+                    onTap: () => setModalState(() => selectedRole = 'customer'),
+                  ),
+                  const SizedBox(width: 14),
+                  _RoleSelectionCard(
+                    icon: CupertinoIcons.building_2_fill,
+                    title: _strings.roleVendor,
+                    subtitle: _strings.roleVendorSub,
+                    isSelected: selectedRole == 'shop_owner',
+                    onTap: () =>
+                        setModalState(() => selectedRole = 'shop_owner'),
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
-              SizedBox(
+              const SizedBox(height: 26),
+              // elevated primary submit button with icon and subtle shadow
+              Container(
                 width: double.infinity,
-                height: 52,
+                height: 54,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _kPrimaryOrange.withOpacity(0.28),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF6F00),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    backgroundColor: _kPrimaryOrange,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
                   onPressed: () {
                     Navigator.pop(ctx);
-                    
+
                     // trigger backend authorization and switch app to telegram bot
                     _authController.startTelegramLogin(
-                      name: nameController.text.trim().isEmpty ? "Domix User" : nameController.text.trim(),
+                      name: nameController.text.trim().isEmpty
+                          ? "Domix User"
+                          : nameController.text.trim(),
                       role: selectedRole,
                       onSuccess: () {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Добро пожаловать в Domix! 🎉")),
+                          SnackBar(
+                            content: Text(_strings.welcomeMessage),
+                            backgroundColor: _kTextPrimary,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
                         );
                       },
                     );
                   },
-                  child: const Text(
-                    "Продолжить в Telegram", 
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        CupertinoIcons.paperplane_fill,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        _strings.continueTelegram,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -316,35 +444,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 24),
           ],
 
-          // primary action links for shops and favorites using original outline icons
-          if (!currentProfile.isGuest) ...[
-            _MenuGroupCard(
-              rows: [
-                if (currentProfile.isVendor)
+          // render navigation layers dynamically based on vendor submenu drill-down selection
+          if (currentProfile.isVendor) ...[
+            if (!_showShopsSubMenu) ...[
+              // primary layout entry point for authenticated store owners
+              _MenuGroupCard(
+                rows: [
                   _MenuRowData(
                     icon: CupertinoIcons.bag,
                     title: _strings.manageShops,
+                    onTap: () => setState(() => _showShopsSubMenu = true),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ] else ...[
+              // inner operational navigation group containing manage and creation options
+              _MenuGroupCard(
+                rows: [
+                  _MenuRowData(
+                    icon: CupertinoIcons.arrow_left,
+                    title: _strings.backButton,
+                    textColor: _kPrimaryOrangeDark,
+                    iconColor: _kPrimaryOrangeDark,
+                    iconBackground: const Color(0xFFFFF0E3),
+                    onTap: () => setState(() => _showShopsSubMenu = false),
+                  ),
+                  _MenuRowData(
+                    icon: CupertinoIcons.slider_horizontal_3,
+                    title: _strings.innerManageStores,
                     onTap: widget.onManageShopTap,
                   ),
-                _MenuRowData(
-                  icon: CupertinoIcons.heart,
-                  title: _strings.favorites,
-                  onTap: widget.onFavoritesTap,
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
+                  _MenuRowData(
+                    icon: CupertinoIcons.plus_square,
+                    title: _strings.addStore,
+                    onTap: widget.onAddStoreTap,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
           ],
 
-          // app settings, language switcher, support, and dynamic logout button
+          // standard operations card showing basic options for customers
           _MenuGroupCard(
             rows: [
-              if (currentProfile.isGuest)
-                _MenuRowData(
-                  icon: CupertinoIcons.heart,
-                  title: _strings.favorites,
-                  onTap: widget.onFavoritesTap,
-                ),
+              _MenuRowData(
+                icon: CupertinoIcons.heart,
+                title: _strings.favorites,
+                onTap: widget.onFavoritesTap,
+              ),
               _MenuRowData(
                 icon: CupertinoIcons.globe,
                 title: '${_strings.languageSettings} (${_currentLang.displayName})',
@@ -362,7 +511,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   textColor: _kDanger,
                   iconColor: _kDanger,
                   iconBackground: _kDangerSoft,
-                  onTap: () => _authController.logout(),
+                  onTap: () {
+                    setState(() => _showShopsSubMenu = false);
+                    _authController.logout();
+                  },
                 ),
             ],
           ),
@@ -481,7 +633,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: _decorativeBlob(180, _kPrimaryOrange.withOpacity(0.08)),
             ),
             Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(24),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -491,40 +643,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     backgroundColor: const Color(0xFFFFEEDD),
                     textColor: _kPrimaryOrangeDark,
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 18),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (profile.isVendor)
-                          Wrap(
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: 8,
-                            runSpacing: 6,
-                            children: [
-                              Text(
-                                profile.fullName,
-                                style: const TextStyle(
-                                  color: _kTextPrimary,
-                                  fontSize: 20,
-                                  height: 1.15,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              _buildVendorBadge(),
-                            ],
-                          )
-                        else
-                          Text(
-                            profile.fullName,
-                            style: const TextStyle(
-                              color: _kTextPrimary,
-                              fontSize: 20,
-                              height: 1.15,
-                              fontWeight: FontWeight.w800,
-                            ),
+                        if (profile.isVendor) ...[
+                          _buildVendorBadge(),
+                          const SizedBox(height: 6),
+                        ],
+                        Text(
+                          profile.fullName,
+                          style: const TextStyle(
+                            color: _kTextPrimary,
+                            fontSize: 20,
+                            height: 1.2,
+                            fontWeight: FontWeight.w800,
                           ),
-                        const SizedBox(height: 6),
+                        ),
+                        const SizedBox(height: 4),
                         Text(
                           profile.phoneNumber,
                           style: const TextStyle(
@@ -553,15 +691,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
         color: _kPrimaryOrange,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(
-        _strings.vendorBadge,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          height: 1.1,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.2,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            CupertinoIcons.checkmark_seal_fill,
+            color: Colors.white,
+            size: 12,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            _strings.vendorBadge,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              height: 1.1,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.2,
+          ),
         ),
+        ],
       ),
     );
   }
@@ -624,6 +773,87 @@ class _LanguageOptionTile extends StatelessWidget {
                   size: 22,
                 ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// custom interactive role selection card for the login modal sheet
+class _RoleSelectionCard extends StatelessWidget {
+  const _RoleSelectionCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+            decoration: BoxDecoration(
+              color: isSelected ? const Color(0xFFFFF0E3) : _kSoftSurface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isSelected ? _kPrimaryOrange : _kCardBorder,
+                width: isSelected ? 1.8 : 1,
+              ),
+              boxShadow: isSelected
+                  ? [
+                      BoxShadow(
+                        color: _kPrimaryOrange.withOpacity(0.12),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  color: isSelected ? _kPrimaryOrangeDark : _kTextMuted,
+                  size: 26,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: _kTextPrimary,
+                    fontSize: 14.5,
+                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: isSelected ? _kPrimaryOrangeDark : _kTextMuted,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
