@@ -37,13 +37,13 @@ class FloatingBottomNavBar extends StatelessWidget {
           boxShadow: [
             // Wide, soft ambient shadow for elevation.
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withValues(alpha: 0.08),
               blurRadius: 24,
               offset: const Offset(0, 10),
             ),
             // Tight shadow for grounding, so it doesn't look like it's floating too high.
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 4,
               offset: const Offset(0, 1),
             ),
@@ -72,12 +72,12 @@ class FloatingBottomNavBar extends StatelessWidget {
                         end: Alignment.bottomRight,
                         colors: [
                           AppColors.primaryOrange,
-                          AppColors.primaryOrange.withOpacity(0.85),
+                          AppColors.primaryOrange.withValues(alpha: 0.85),
                         ],
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primaryOrange.withOpacity(0.35),
+                          color: AppColors.primaryOrange.withValues(alpha: 0.35),
                           blurRadius: 14,
                           offset: const Offset(0, 6),
                         ),

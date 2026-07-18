@@ -1,13 +1,34 @@
 import 'package:device_preview/device_preview.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:frontend/features/app_shell/presentation/screens/app_shell_screen.dart';
+import 'features/profile/presentation/controllers/auth_controller.dart';
+import 'features/stores/presentation/controllers/stores_controller.dart';
+import 'features/products/presentation/controllers/products_controller.dart';
 
-void main() {
+void main() async {
+  // wake up flutter engine drivers to read hardware encrypted storage before drawing ui
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // initialize all controllers before running the app
+  // explicitly await initialization to ensure storage/data is ready before ui renders
+  final authController = AuthController();
+  await authController.checkExistingLogin();
+  final storesController = StoresController();
+  final productsController = ProductsController();
+
   runApp(
     DevicePreview(
       enabled: !kReleaseMode,
-      builder: (context) => const DomixApp(),
+      builder: (context) => MultiProvider(
+        providers: [
+          ChangeNotifierProvider.value(value: authController),      // make all
+          ChangeNotifierProvider.value(value: storesController),    // UI components
+          ChangeNotifierProvider.value(value: productsController),  // to listen to these controllers using notifyListener()
+        ],
+        child: const DomixApp(),
+      ),
     ),
   );
 }
@@ -21,11 +42,10 @@ class DomixApp extends StatelessWidget {
       title: 'Domix',
       debugShowCheckedModeBanner: false,
 
-      // Device Preview configuration hooks
+      // device preview configuration hooks
       locale: DevicePreview.locale(context),
       builder: DevicePreview.appBuilder,
       
-      // Clean Light Theme matching your UI design
       theme: ThemeData(
         brightness: Brightness.light,
         useMaterial3: true,

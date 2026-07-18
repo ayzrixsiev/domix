@@ -65,6 +65,8 @@ sm.sessions.Store(sessionID, SessionData{
 1. After registration through telegram completes, user can keep spamming /start and phone number button, we need to fix that.
 2. ~~How to handle role separation in app between shop owner and normal user.~~
 3. ~~Make jwt token live longer - one year~~
+4. Auth security improvement - two token strategy set up.
+5. CLEAN UP THE SYSTEM FROM DEV PACKAGES LIKE DEVICE PREVIEW IN FLUTTER.
 
 ### LOCAL TESTING
 TRUNCATE TABLE users RESTART IDENTITY CASCADE;

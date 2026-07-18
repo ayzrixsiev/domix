@@ -8,13 +8,13 @@ import (
 	"time"
 )
 
-// SessionData holds the real-time login state for flutter to poll
+// holds the real-time login data and it's state
 type SessionData struct {
 	Status    string    `json:"status"`          // "pending", "success", or "not_found"
 	Name      string    `json:"name,omitempty"`
-	Role      string    `json:"role,omitempty"`  // "customer" or "shop_owner"
+	Role      string    `json:"role,omitempty"`
 	Phone     string    `json:"phone,omitempty"`
-	Token     string    `json:"token,omitempty"` // JWT token here
+	Token     string    `json:"token,omitempty"`
 	CreatedAt time.Time `json:"-"`               // we use - to hide this internal timestamp from json response
 }
 
@@ -71,53 +71,59 @@ func (sm *SessionManager) GetPendingSession(chatID int64) (sessionID string, nam
 	}
 	sID := val.(string)
 
-	// FIXED: Changed sm.session to sm.sessions (plural) and used sFound :=
 	sessionVal, sFound := sm.sessions.Load(sID)
 	if !sFound {
 		return sID, "", "customer", false
 	}
 
 	data := sessionVal.(SessionData)
-	// FIXED: Added missing comma between data.Name and data.Role
+
 	return sID, data.Name, data.Role, true
 }
 
-// CompleteSession creates jwt token and requires userID for it
+// func that creates jwt token and return SessionData struct with full info
 func (sm *SessionManager) CompleteSession(chatID int64, userID int64, phone string, role string, jwtSecret string) (string, error) {
-	// 1. find which Flutter session belongs to this Telegram chat
+	// find which Flutter session belongs to this Telegram chat
 	val, exists := sm.chatToSession.Load(chatID)
 	if !exists {
-		return "", errors.New("no active flutter session found for this chat ID")
+		return "", errors.New("No active flutter session found for this chat ID")
 	}
 	sessionID := val.(string)
 
-	// 2. generate a real, cryptographically signed JWT token!
+	var existingName string
+    if sessionVal, sFound := sm.sessions.Load(sessionID); sFound {
+        existingName = sessionVal.(SessionData).Name
+    }
+
+	// generate jwt token
 	jwt, err := GenerateJWT(userID, phone, role, jwtSecret)
 	if err != nil {
 		return "", err
 	}
 
-	// 3. mark the session as SUCCESS with the real token
+	// mark session as success
 	sm.sessions.Store(sessionID, SessionData{
 		Status:    "success",
-		Role:      role, // FIXED: Added role preservation here
+		Name:      existingName,
+		Role:      role,
 		Phone:     phone,
 		Token:     jwt,
 		CreatedAt: time.Now(),
 	})
 
-	// 4. clean up the chat mapping so it cannot be re-used
+	// clean up the chat mapping so it cannot be re-used
 	sm.chatToSession.Delete(chatID)
 
 	return sessionID, nil
 }
 
-// GetStatus is called by Flutter every 2 seconds via GET /api/auth/status to see whether user logged successfully
+// func is called by flutter every 2 seconds via GET /api/auth/status to see whether user logged successfully
 func (sm *SessionManager) GetStatus(sessionID string) SessionData {
 	val, exists := sm.sessions.Load(sessionID)
 	if !exists {
 		return SessionData{Status: "not_found"}
 	}
+	// return the whole SessionData strcut filled with info
 	return val.(SessionData)
 }
 

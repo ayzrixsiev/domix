@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../controllers/auth_controller.dart';
 
 const Color _kPrimaryOrange = Color(0xFFFF6F00);
@@ -150,31 +151,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late _LocalizedStrings _strings;
   bool _showShopsSubMenu = false;
   
-  // controller instance to manage login state and backend polling
-  late final AuthController _authController;
-
   @override
   void initState() {
     super.initState();
     _currentLang = widget.initialLanguage;
     _strings = _LocalizedStrings(_currentLang);
-
-    // initialize controller and bind state listener to repaint screen on login
-    _authController = AuthController();
-    _authController.addListener(_onAuthStateChanged);
-  }
-
-  // trigger ui repaint when backend login state changes
-  void _onAuthStateChanged() {
-    if (mounted) setState(() {});
-  }
-
-  // remove listener and kill polling timer to prevent memory leaks
-  @override
-  void dispose() {
-    _authController.removeListener(_onAuthStateChanged);
-    _authController.dispose(); 
-    super.dispose();
   }
 
   // update interface language and notify parent layout
@@ -360,7 +341,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: _kPrimaryOrange.withOpacity(0.28),
+                      color: _kPrimaryOrange.withValues(alpha: 0.28),
                       blurRadius: 16,
                       offset: const Offset(0, 6),
                     ),
@@ -378,7 +359,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Navigator.pop(ctx);
 
                     // trigger backend authorization and switch app to telegram bot
-                    _authController.startTelegramLogin(
+                    final authController = Provider.of<AuthController>(context, listen: false);
+                    authController.startTelegramLogin(
                       name: nameController.text.trim().isEmpty
                           ? "Domix User"
                           : nameController.text.trim(),
@@ -427,8 +409,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // read active profile state directly from our live controller
-    final currentProfile = _authController.profileState;
+    // read active profile state directly from provided auth controller
+    final authController = Provider.of<AuthController>(context);
+    final currentProfile = authController.profileState;
 
     final body = SafeArea(
       child: ListView(
@@ -513,7 +496,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   iconBackground: _kDangerSoft,
                   onTap: () {
                     setState(() => _showShopsSubMenu = false);
-                    _authController.logout();
+                    Provider.of<AuthController>(context, listen: false).logout();
                   },
                 ),
             ],
@@ -524,7 +507,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Text(
               _strings.version,
               style: TextStyle(
-                color: _kTextMuted.withOpacity(0.6),
+                color: _kTextMuted.withValues(alpha: 0.6),
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
@@ -534,11 +517,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
 
-    if (!widget.showScaffold) {
-      return ColoredBox(color: _kSoftSurface, child: body);
-    }
+    // base scaffold
+    final scaffold = widget.showScaffold
+        ? Scaffold(backgroundColor: _kSoftSurface, body: body)
+        : ColoredBox(color: _kSoftSurface, child: body);
 
-    return Scaffold(backgroundColor: _kSoftSurface, body: body);
+    // stack overlays: error banner and loading indicator
+    return Stack(
+      children: [
+        scaffold,
+        if (authController.errorMessage != null)
+          Positioned(
+            left: 12,
+            right: 12,
+            top: 20,
+            child: Material(
+              elevation: 6,
+              borderRadius: BorderRadius.circular(12),
+              color: _kDangerSoft,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Text(
+                  authController.errorMessage ?? '',
+                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ),
+        if (authController.isLoading)
+          const Positioned.fill(
+            child: ColoredBox(
+              color: Color.fromRGBO(15, 23, 42, 0.3),
+              child: Center(child: _LoadingWidget()),
+            ),
+          ),
+      ],
+    );
   }
 
   // guest hero card prompting unauthenticated users to log in
@@ -616,7 +630,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -630,7 +644,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Positioned(
               top: -60,
               right: -40,
-              child: _decorativeBlob(180, _kPrimaryOrange.withOpacity(0.08)),
+              child: _decorativeBlob(180, _kPrimaryOrange.withValues(alpha: 0.08)),
             ),
             Padding(
               padding: const EdgeInsets.all(24),
@@ -817,7 +831,7 @@ class _RoleSelectionCard extends StatelessWidget {
               boxShadow: isSelected
                   ? [
                       BoxShadow(
-                        color: _kPrimaryOrange.withOpacity(0.12),
+                        color: _kPrimaryOrange.withValues(alpha: 0.12),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -893,7 +907,7 @@ class _MenuGroupCard extends StatelessWidget {
         border: Border.all(color: _kCardBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -960,7 +974,7 @@ class _MenuRow extends StatelessWidget {
               ),
               Icon(
                 CupertinoIcons.chevron_forward,
-                color: resolvedTextColor.withOpacity(0.3),
+                color: resolvedTextColor.withValues(alpha: 0.3),
                 size: 16,
               ),
             ],
@@ -996,7 +1010,7 @@ class _ProfileAvatar extends StatelessWidget {
         border: Border.all(color: Colors.white, width: 2.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -1030,7 +1044,7 @@ class _ProfileCard extends StatelessWidget {
         border: Border.all(color: _kCardBorder),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.04),
+            color: const Color(0xFF0F172A).withValues(alpha: 0.04),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1069,6 +1083,42 @@ class _ProfileButton extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// simple modern loading widget used as overlay
+class _LoadingWidget extends StatelessWidget {
+  const _LoadingWidget();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 120,
+      height: 120,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: const [
+          SizedBox(
+            width: 44,
+            height: 44,
+            child: CircularProgressIndicator(strokeWidth: 3.5),
+          ),
+          SizedBox(height: 12),
+          Text('loading...', style: TextStyle(fontWeight: FontWeight.w700)),
+        ],
       ),
     );
   }

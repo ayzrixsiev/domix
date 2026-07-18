@@ -76,7 +76,7 @@ func main() {
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		w.Header().Set("Content-Type", "application/json")
 
-		// connection permission (flutter knocks the door of golang)
+		// connection permission (flutter knocks to the door of golang)
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
