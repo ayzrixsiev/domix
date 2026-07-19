@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -53,11 +54,8 @@ class _LocalizedStrings {
   String get version => isRu ? 'Domix • 1.0.0' : 'Domix • 1.0.0';
 
   // localized texts for the login bottom sheet modal
-  String get registerTitle =>
-      isRu ? 'Регистрация в Domix' : "Domix'ga ro'yxatdan o'tish";
-  String get registerSubtitle => isRu
-      ? 'Выберите тип аккаунта для продолжения'
-      : "Davom etish uchun hisob turini tanlang";
+  String get registerTitle => isRu ? 'Регистрация' : "Ro'yxatdan o'tish";
+  String get registerSubtitle => '';
   String get nameInputLabel =>
       isRu ? 'Имя и фамилия' : "Ism va familiyangiz";
   String get roleCustomer => isRu ? 'Покупатель' : "Xaridor";
@@ -70,6 +68,21 @@ class _LocalizedStrings {
       isRu ? 'Продолжить в Telegram' : "Telegram orqali kirish";
   String get welcomeMessage =>
       isRu ? 'Добро пожаловать в Domix! 🎉' : "Domix'ga xush kelibsiz! 🎉";
+
+  String get authWaitingTitle =>
+      isRu ? 'Ожидание Telegram' : 'Telegram kutilmoqda';
+  String get authWaitingDesc => isRu
+      ? 'Пожалуйста, перейдите в Telegram, нажмите /start и поделитесь номером.'
+      : "Iltimos, Telegram botga o'ting, /start tugmasini bosing va raqamni ulashing.";
+  String get timerLabel =>
+      isRu ? 'Время на подтверждение:' : 'Tasdiqlash uchun vaqt:';
+  String get retryButton =>
+      isRu ? 'Попробовать снова' : 'Qayta urinish';
+  String get cancelButton =>
+      isRu ? 'Отменить' : 'Bekor qilish';
+  String get timeoutError => isRu
+      ? 'Время ожидания истекло. Попробуйте снова.'
+      : 'Kutish vaqti tugadi. Qayta urinib ko\'ring.';
 }
 
 // 2. profile state and account type models
@@ -256,24 +269,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              Text(
-                _strings.registerTitle,
-                style: const TextStyle(
-                  color: _kTextPrimary,
-                  fontSize: 21,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.3,
+              Center(
+                child: Text(
+                  _strings.registerTitle,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: _kTextPrimary,
+                    fontSize: 21,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                _strings.registerSubtitle,
-                style: const TextStyle(
-                  color: _kTextMuted,
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w500,
+              if (_strings.registerSubtitle.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Center(
+                  child: Text(
+                    _strings.registerSubtitle,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: _kTextMuted,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ),
-              ),
+              ],
               const SizedBox(height: 20),
               // styled text input with filled background and subtle borders
               TextField(
@@ -356,6 +377,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   onPressed: () {
+                    // THREAD SAFETY SHIELD: WE CAPTURE THE MESSENGER SYNCHRONOUSLY BEFORE POPPING THE MODAL OR ENTERING AN ASYNC GAP!
+                    final scaffoldMessenger = ScaffoldMessenger.of(context);
                     Navigator.pop(ctx);
 
                     // trigger backend authorization and switch app to telegram bot
@@ -366,7 +389,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           : nameController.text.trim(),
                       role: selectedRole,
                       onSuccess: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        // THIS SNACKBAR IS NOW SAFE FROM CONTEXT-UNMOUNT CRASHES EVEN 2 MINUTES LATER!
+                        scaffoldMessenger.showSnackBar(
                           SnackBar(
                             content: Text(_strings.welcomeMessage),
                             backgroundColor: _kTextPrimary,
@@ -526,7 +550,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Stack(
       children: [
         scaffold,
-        if (authController.errorMessage != null)
+        if (authController.errorMessage != null && !authController.isLoading)
           Positioned(
             left: 12,
             right: 12,
@@ -544,11 +568,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           ),
+        
         if (authController.isLoading)
-          const Positioned.fill(
+          Positioned.fill(
             child: ColoredBox(
-              color: Color.fromRGBO(15, 23, 42, 0.3),
-              child: Center(child: _LoadingWidget()),
+              color: const Color.fromRGBO(15, 23, 42, 0.4),
+              child: Center(
+                child: _TelegramAuthOverlay(
+                  authController: authController,
+                  strings: _strings,
+                  onRetry: () => _showLoginBottomSheet(context),
+                  onCancel: () => authController.logout(),
+                ),
+              ),
             ),
           ),
       ],
@@ -722,8 +754,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               height: 1.1,
               fontWeight: FontWeight.w800,
               letterSpacing: 0.2,
+            ),
           ),
-        ),
         ],
       ),
     );
@@ -735,6 +767,175 @@ class _ProfileScreenState extends State<ProfileScreen> {
       width: size,
       height: size,
       decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+    );
+  }
+}
+
+class _TelegramAuthOverlay extends StatefulWidget {
+  const _TelegramAuthOverlay({
+    required this.authController,
+    required this.strings,
+    required this.onRetry,
+    required this.onCancel,
+  });
+
+  final AuthController authController;
+  final _LocalizedStrings strings;
+  final VoidCallback onRetry;
+  final VoidCallback onCancel;
+
+  @override
+  State<_TelegramAuthOverlay> createState() => _TelegramAuthOverlayState();
+}
+
+class _TelegramAuthOverlayState extends State<_TelegramAuthOverlay> {
+  Timer? _timer;
+  int _secondsRemaining = 120;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_secondsRemaining > 0) {
+        setState(() => _secondsRemaining--);
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  String _formatTime(int seconds) {
+    final mins = (seconds ~/ 60).toString().padLeft(2, '0');
+    final secs = (seconds % 60).toString().padLeft(2, '0');
+    return '$mins:$secs';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasTimedOut = _secondsRemaining == 0 || widget.authController.errorMessage != null;
+
+    return Container(
+      width: MediaQuery.of(context).size.width * 0.85,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 30,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!hasTimedOut) ...[
+            const SizedBox(
+              width: 52,
+              height: 52,
+              child: CircularProgressIndicator(
+                strokeWidth: 4,
+                color: _kPrimaryOrange,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              widget.strings.authWaitingTitle,
+              style: const TextStyle(
+                color: _kTextPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              widget.strings.authWaitingDesc,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: _kTextMuted,
+                fontSize: 13.5,
+                height: 1.4,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF0E3),
+                borderRadius: BorderRadius.circular(99),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(CupertinoIcons.timer, color: _kPrimaryOrangeDark, size: 18),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${widget.strings.timerLabel} ${_formatTime(_secondsRemaining)}',
+                    style: const TextStyle(
+                      color: _kPrimaryOrangeDark,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            Container(
+              width: 56,
+              height: 56,
+              decoration: const BoxDecoration(
+                color: _kDangerSoft,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                CupertinoIcons.exclamationmark_triangle_fill,
+                color: _kDanger,
+                size: 28,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              widget.authController.errorMessage ?? widget.strings.timeoutError,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: _kTextPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 24),
+            _ProfileButton(
+              label: widget.strings.retryButton,
+              onTap: () {
+                widget.onCancel();
+                widget.onRetry();
+              },
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: widget.onCancel,
+              child: Text(
+                widget.strings.cancelButton,
+                style: const TextStyle(
+                  color: _kTextMuted,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -941,7 +1142,7 @@ class _MenuRow extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: data.onTap ?? () {},
+        onTap: data.onTap,
         child: Container(
           height: 62,
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1067,7 +1268,7 @@ class _ProfileButton extends StatelessWidget {
       color: _kPrimaryOrange,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        onTap: onTap ?? () {},
+        onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Container(
           height: 52,
@@ -1083,42 +1284,6 @@ class _ProfileButton extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-// simple modern loading widget used as overlay
-class _LoadingWidget extends StatelessWidget {
-  const _LoadingWidget();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 120,
-      height: 120,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
-          SizedBox(
-            width: 44,
-            height: 44,
-            child: CircularProgressIndicator(strokeWidth: 3.5),
-          ),
-          SizedBox(height: 12),
-          Text('loading...', style: TextStyle(fontWeight: FontWeight.w700)),
-        ],
       ),
     );
   }

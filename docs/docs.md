@@ -61,8 +61,8 @@ sm.sessions.Store(sessionID, SessionData{
 1. frontend/lib/features/profile/data/auth_service.dart - file that contains code for initializing handshake with go backend. It sends collected data to the backend, does polling to check the status of a login ticket and stores JWT and role inside user's hardware encrypted storage.
 2. frontend/lib/features/profile/presentation/controllers/auth_controller.dart - file that orchestrates thw whole auth process, by initialozing authService, initializing handshake with backend, setting up pollling and timer for it, based on the incoming output dictation how to render the page in profile section.
 
-### Things to fix.
-1. After registration through telegram completes, user can keep spamming /start and phone number button, we need to fix that.
+### Things to fix and work on
+1. ~~After registration through telegram completes, user can keep spamming /start and phone number button, we need to fix that.~~
 2. ~~How to handle role separation in app between shop owner and normal user.~~
 3. ~~Make jwt token live longer - one year~~
 4. Auth security improvement - two token strategy set up.

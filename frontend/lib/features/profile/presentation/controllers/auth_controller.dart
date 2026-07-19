@@ -19,7 +19,6 @@ class AuthController extends ChangeNotifier {
   
   bool _isPolling = false;
   bool _isLoading = false;
-  Timer? _pollingTimer;
   String? _errorMessage;
   
   // holds current ui state for the profilescreen
@@ -166,13 +165,13 @@ class AuthController extends ChangeNotifier {
 
   void _cancelPolling() {
     _isPolling = false;
-    _pollingTimer?.cancel();
-    _pollingTimer = null;
   }
 
   // wipe local storage and reset interface back to guest state
   Future<void> logout() async {
     _cancelPolling();
+    _isLoading = false;
+    _errorMessage = null;
     await _authService.logout();
     _profileState = const ProfileViewState.guest();
     notifyListeners();
