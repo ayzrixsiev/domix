@@ -1,9 +1,9 @@
-import 'dart:convert';                                                  // convert data into json
+import 'dart:convert';
 import 'dart:async';
 import 'package:http/http.dart' as http;
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';    // to save jwt in the user's phone
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-// container to hold the data send by backend
+// blueprint container to hold the data send by backend
 class AuthInitResult {
   final String sessionId;
   final String telegramUrl;
@@ -43,7 +43,8 @@ class AuthService {
   static const _phoneKey = 'domix_user_phone';
 
   // exponential backoff with jitter for network retries
-  // returns delay in milliseconds for the nth attempt (0-indexed)
+  // we give a backend a nap to recover in case server fails, without constantly calling for it within short period of time
+  // initial wait before another call is 200, and then it gets doubled until 5000 (5 seconds)
   static Duration _calculateBackoff(int attempt) {
     const baseDelayMs = 200;
     const maxDelayMs = 5000;
@@ -51,7 +52,7 @@ class AuthService {
     // exponential: 200ms, 400ms, 800ms, 1600ms, 5000ms (capped)
     final delayMs = (baseDelayMs * (1 << attempt)).clamp(0, maxDelayMs);
     
-    // small random jitter to prevent thundering herd
+    // small random jitter to prevent thundering herd - all users calling backend at the same time after small crush, it is going to crush server again
     final jitterMs = (delayMs * 0.1 * (0.5 + (DateTime.now().millisecond % 100) / 100)).toInt();
     
     return Duration(milliseconds: delayMs + jitterMs);
@@ -67,7 +68,7 @@ class AuthService {
     
     while (true) {
       try {
-        return await operation();
+        return await operation(); // run the function which is wrappeed by _executeWithRetry wrapper
       } catch (e) {
         attempt++;
         
@@ -76,7 +77,7 @@ class AuthService {
           throw Exception('$operationName failed after $maxAttempts attempts: $e');
         }
         
-        // wait before retrying with exponential backoff
+        // pause/wait before retrying the wrapped function with exponential backoff logic
         final delay = _calculateBackoff(attempt - 1);
         await Future.delayed(delay);
       }
