@@ -157,7 +157,6 @@ class AuthController extends ChangeNotifier {
         // max attempts reached or was not successful
         _isPolling = false;
         _isLoading = false;
-        _errorMessage = "Время ожидания входа истекло / Kirish vaqti tugadi";
         notifyListeners();
       }
     }();

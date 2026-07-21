@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
+import 'package:frontend/core/localization/language_provider.dart';
 
 class SearchAndLikeBar extends StatelessWidget {
   const SearchAndLikeBar({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final strings = Provider.of<LanguageProvider>(context).strings;
+
     return Row(
       children: [
         Expanded(
@@ -19,12 +23,12 @@ class SearchAndLikeBar extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                Icon(Icons.search, color: AppColors.textGrey, size: 22),
+                const Icon(Icons.search, color: AppColors.textGrey, size: 22),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Поиск...',
-                    style: TextStyle(color: AppColors.textGrey, fontSize: 15),
+                    strings.searchHint,
+                    style: const TextStyle(color: AppColors.textGrey, fontSize: 15),
                   ),
                 ),
               ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:frontend/core/localization/language_provider.dart';
 import '../controllers/stores_controller.dart';
 
 // simple placeholder stores screen to visualize controller usage
@@ -10,9 +11,10 @@ class StoresScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     // get stores controller from DI
     final controller = Provider.of<StoresController>(context);
+    final strings = Provider.of<LanguageProvider>(context).strings;
     
     return Scaffold(
-      appBar: AppBar(title: const Text('stores')),
+      appBar: AppBar(title: Text(strings.storesTitle)),
       body: FutureBuilder(
         future: Future(() async {
           // load stores on first build
@@ -26,7 +28,7 @@ class StoresScreen extends StatelessWidget {
             builder: (context, _) {
               if (controller.isLoading) return const Center(child: CircularProgressIndicator());
               return ListView(
-                children: controller.stores.map((s) => ListTile(title: Text(s['name'] ?? 'store'))).toList(),
+                children: controller.stores.map((s) => ListTile(title: Text(s['name'] ?? strings.storeFallback))).toList(),
               );
             },
           );

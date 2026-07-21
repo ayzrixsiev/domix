@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
+import 'package:frontend/core/localization/language_provider.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 
 class InfiniteShopCarousel extends StatelessWidget {
@@ -7,6 +9,7 @@ class InfiniteShopCarousel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final strings = Provider.of<LanguageProvider>(context).strings;
     final shops = [
       {
         'name': 'СтройМастер',
@@ -40,13 +43,13 @@ class InfiniteShopCarousel extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Популярные магазины',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textDark),
+            Text(
+              strings.popularShops,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textDark),
             ),
             TextButton(
               onPressed: () {},
-              child: const Text('Смотреть все →', style: TextStyle(color: AppColors.primaryOrange, fontWeight: FontWeight.w600)),
+              child: Text(strings.viewAll, style: const TextStyle(color: AppColors.primaryOrange, fontWeight: FontWeight.w600)),
             ),
           ],
         ),

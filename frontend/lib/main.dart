@@ -1,7 +1,9 @@
 import 'package:device_preview/device_preview.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/app_shell/presentation/screens/app_shell_screen.dart';
 import 'features/profile/presentation/controllers/auth_controller.dart';
 import 'features/stores/presentation/controllers/stores_controller.dart';
@@ -23,6 +25,7 @@ void main() async {
       enabled: !kReleaseMode,
       builder: (context) => MultiProvider(
         providers: [
+          ChangeNotifierProvider(create: (_) => LanguageProvider()),
           ChangeNotifierProvider.value(value: authController),      // make all
           ChangeNotifierProvider.value(value: storesController),    // UI components
           ChangeNotifierProvider.value(value: productsController),  // to listen to these controllers using notifyListener()
@@ -43,9 +46,17 @@ class DomixApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
 
       // device preview configuration hooks
-      locale: DevicePreview.locale(context),
       builder: DevicePreview.appBuilder,
-      
+      locale: Provider.of<LanguageProvider>(context).locale,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('ru'),
+        Locale('uz'),
+      ],
       theme: ThemeData(
         brightness: Brightness.light,
         useMaterial3: true,

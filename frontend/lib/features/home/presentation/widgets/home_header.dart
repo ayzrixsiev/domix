@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
+import 'package:frontend/core/localization/language_provider.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 
 class HomeHeader extends StatelessWidget {
@@ -7,6 +9,8 @@ class HomeHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final strings = Provider.of<LanguageProvider>(context).strings;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
@@ -27,25 +31,25 @@ class HomeHeader extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: Colors.grey.shade200),
                 ),
-                child: const Row(
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Icon(
+                    const Icon(
                       LucideIcons.map_pin,
                       color: AppColors.primaryOrange,
                       size: 18,
                     ),
-                    SizedBox(width: 6),
+                    const SizedBox(width: 6),
                     Text(
-                      'Ташкент',
-                      style: TextStyle(
+                      strings.cityName,
+                      style: const TextStyle(
                         color: AppColors.textDark,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    SizedBox(width: 4),
-                    Icon(
+                    const SizedBox(width: 4),
+                    const Icon(
                       LucideIcons.chevron_down,
                       color: AppColors.textGrey,
                       size: 14,

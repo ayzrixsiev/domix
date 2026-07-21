@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
+import 'package:frontend/core/localization/language_provider.dart';
 
 class SearchScreen extends StatelessWidget {
   const SearchScreen({super.key, this.showScaffold = true, this.bottomPadding = 36});
@@ -9,15 +11,17 @@ class SearchScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final strings = Provider.of<LanguageProvider>(context).strings;
+
     final body = SafeArea(
       bottom: false,
       child: Container(
         color: AppColors.background,
         padding: EdgeInsets.fromLTRB(16, 24, 16, bottomPadding),
-        child: const Center(
+        child: Center(
           child: Text(
-            'Search screen coming soon',
-            style: TextStyle(fontSize: 16, color: AppColors.textGrey),
+            strings.searchComingSoon,
+            style: const TextStyle(fontSize: 16, color: AppColors.textGrey),
           ),
         ),
       ),

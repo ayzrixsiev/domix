@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:frontend/core/localization/app_localizations.dart';
+import 'package:frontend/core/localization/language_provider.dart';
 import '../controllers/auth_controller.dart';
 
 const Color _kPrimaryOrange = Color(0xFFFF6F00);
@@ -14,76 +16,6 @@ const Color _kDanger = Color(0xFFB42318);
 const Color _kDangerSoft = Color(0xFFFEF0EE);
 const Color _kCardBorder = Color(0xFFF2F4F7);
 
-// 1. localization engine for russian and uzbek languages
-enum AppLanguage {
-  ru('Русский', 'ru'),
-  uz("O'zbekcha", 'uz');
-
-  const AppLanguage(this.displayName, this.code);
-  final String displayName;
-  final String code;
-}
-
-class _LocalizedStrings {
-  final AppLanguage lang;
-  _LocalizedStrings(this.lang);
-
-  bool get isRu => lang == AppLanguage.ru;
-
-  String get loginTitle => isRu ? 'Войти в аккаунт' : 'Hisobga kirish';
-  String get loginSubtitle => isRu
-      ? 'Находите магазины, сравнивайте предложения и развивайте свой бизнес!'
-      : "Do'konlarni toping, takliflarni solishtiring va biznesingizni rivojlantiring!";
-  String get loginButton => isRu
-      ? 'Войти / Зарегистрироваться'
-      : "Kirish / Ro'yxatdan o'tish";
-
-  String get vendorBadge => isRu ? 'Продавец' : 'Sotuvchi';
-  String get manageShops =>
-      isRu ? 'Управление магазинами' : "Do'konlarni boshqarish";
-  String get innerManageStores =>
-      isRu ? 'Настройка и статистика' : 'Sozlamalar va statistika';
-  String get addStore =>
-      isRu ? 'Добавить новый магазин' : "Yangi do'kon qo'shish";
-  String get backButton => isRu ? 'Назад в профиль' : 'Profilga qaytish';
-  String get favorites => isRu ? 'Избранное' : 'Tanlanganlar';
-  String get languageSettings => isRu ? 'Язык приложения' : 'Ilova tili';
-  String get support => isRu ? 'Поддержка' : "Qo'llab-quvvatlash";
-  String get logout => isRu ? 'Выйти из аккаунта' : 'Akkauntdan chiqish';
-  String get selectLanguage => isRu ? 'Выберите язык' : 'Tilni tanlang';
-  String get version => isRu ? 'Domix • 1.0.0' : 'Domix • 1.0.0';
-
-  // localized texts for the login bottom sheet modal
-  String get registerTitle => isRu ? 'Регистрация' : "Ro'yxatdan o'tish";
-  String get registerSubtitle => '';
-  String get nameInputLabel =>
-      isRu ? 'Имя и фамилия' : "Ism va familiyangiz";
-  String get roleCustomer => isRu ? 'Покупатель' : "Xaridor";
-  String get roleCustomerSub =>
-      isRu ? 'Покупки и заказы' : "Xaridlar va buyurtmalar";
-  String get roleVendor => isRu ? 'Продавец' : "Sotuvchi";
-  String get roleVendorSub =>
-      isRu ? 'Мой магазин' : "Mening do'konim";
-  String get continueTelegram =>
-      isRu ? 'Продолжить в Telegram' : "Telegram orqali kirish";
-  String get welcomeMessage =>
-      isRu ? 'Добро пожаловать в Domix! 🎉' : "Domix'ga xush kelibsiz! 🎉";
-
-  String get authWaitingTitle =>
-      isRu ? 'Ожидание Telegram' : 'Telegram kutilmoqda';
-  String get authWaitingDesc => isRu
-      ? 'Пожалуйста, перейдите в Telegram, нажмите /start и поделитесь номером.'
-      : "Iltimos, Telegram botga o'ting, /start tugmasini bosing va raqamni ulashing.";
-  String get timerLabel =>
-      isRu ? 'Время на подтверждение:' : 'Tasdiqlash uchun vaqt:';
-  String get retryButton =>
-      isRu ? 'Попробовать снова' : 'Qayta urinish';
-  String get cancelButton =>
-      isRu ? 'Отменить' : 'Bekor qilish';
-  String get timeoutError => isRu
-      ? 'Время ожидания истекло. Попробуйте снова.'
-      : 'Kutish vaqti tugadi. Qayta urinib ko\'ring.';
-}
 
 // 2. profile state and account type models
 enum ProfileAccountState {
@@ -129,7 +61,6 @@ class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
     super.key,
     this.profile = const ProfileViewState.guest(),
-    this.initialLanguage = AppLanguage.ru,
     this.showScaffold = true,
     this.bottomPadding = 36,
     this.onLoginTap,
@@ -139,11 +70,9 @@ class ProfileScreen extends StatefulWidget {
     this.onFavoritesTap,
     this.onSupportTap,
     this.onLogoutTap,
-    this.onLanguageChanged,
   });
 
   final ProfileViewState profile;
-  final AppLanguage initialLanguage;
   final bool showScaffold;
   final double bottomPadding;
   final VoidCallback? onLoginTap;
@@ -153,31 +82,23 @@ class ProfileScreen extends StatefulWidget {
   final VoidCallback? onFavoritesTap;
   final VoidCallback? onSupportTap;
   final VoidCallback? onLogoutTap;
-  final ValueChanged<AppLanguage>? onLanguageChanged;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  late AppLanguage _currentLang;
-  late _LocalizedStrings _strings;
   bool _showShopsSubMenu = false;
-  
-  @override
-  void initState() {
-    super.initState();
-    _currentLang = widget.initialLanguage;
-    _strings = _LocalizedStrings(_currentLang);
-  }
 
-  // update interface language and notify parent layout
+  AppLocalizations get _strings =>
+      Provider.of<LanguageProvider>(context).strings;
+
+  AppLanguage get _currentLang =>
+      Provider.of<LanguageProvider>(context).language;
+
   void _updateLanguage(AppLanguage newLang) {
-    setState(() {
-      _currentLang = newLang;
-      _strings = _LocalizedStrings(_currentLang);
-    });
-    widget.onLanguageChanged?.call(newLang);
+    Provider.of<LanguageProvider>(context, listen: false)
+        .updateLanguage(newLang);
   }
 
   // open bottom modal sheet to select between russian and uzbek
@@ -780,7 +701,7 @@ class _TelegramAuthOverlay extends StatefulWidget {
   });
 
   final AuthController authController;
-  final _LocalizedStrings strings;
+  final AppLocalizations strings;
   final VoidCallback onRetry;
   final VoidCallback onCancel;
 
@@ -1142,7 +1063,7 @@ class _MenuRow extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: data.onTap,
+        onTap: data.onTap ?? () {},
         child: Container(
           height: 62,
           padding: const EdgeInsets.symmetric(horizontal: 16),

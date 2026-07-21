@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
+import 'package:frontend/core/localization/language_provider.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 
 class PopularCategoriesGrid extends StatelessWidget {
@@ -7,6 +9,7 @@ class PopularCategoriesGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final strings = Provider.of<LanguageProvider>(context).strings;
     final categories = [
       {
         'name': 'Бетон',
@@ -64,9 +67,9 @@ class PopularCategoriesGrid extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Популярные товары',
-              style: TextStyle(
+            Text(
+              strings.popularProducts,
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: AppColors.textDark,
@@ -74,9 +77,9 @@ class PopularCategoriesGrid extends StatelessWidget {
             ),
             TextButton(
               onPressed: () {},
-              child: const Text(
-                'Все →',
-                style: TextStyle(
+              child: Text(
+                strings.seeAll,
+                style: const TextStyle(
                   color: AppColors.primaryOrange,
                   fontWeight: FontWeight.w600,
                 ),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
+import 'package:frontend/core/localization/language_provider.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 
 class ShopsNearbyGrid extends StatelessWidget {
@@ -7,6 +9,7 @@ class ShopsNearbyGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final strings = Provider.of<LanguageProvider>(context).strings;
     final nearbyShops = [
       {
         'name': 'СантехОпт',
@@ -49,9 +52,9 @@ class ShopsNearbyGrid extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Магазины рядом с вами',
-          style: TextStyle(
+        Text(
+          strings.shopsNearbyTitle,
+          style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
             color: AppColors.textDark,

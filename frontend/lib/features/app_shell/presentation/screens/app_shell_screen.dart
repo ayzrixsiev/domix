@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
+import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
+import 'package:frontend/core/localization/app_localizations.dart';
+import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/app_shell/presentation/widgets/floating_bottom_nav_bar.dart';
 import 'package:frontend/features/home/presentation/screens/home_screen.dart';
 import 'package:frontend/features/map/presentation/screens/map_screen.dart';
@@ -18,12 +21,12 @@ class AppShellScreen extends StatefulWidget {
 class _AppShellScreenState extends State<AppShellScreen> {
   static const _bottomPadding = 96.0;
 
-  static const _navItems = [
-    ShellNavItem(icon: LucideIcons.house, label: 'Главная'),
-    ShellNavItem(icon: LucideIcons.search, label: 'Поиск'),
-    ShellNavItem(icon: LucideIcons.map_pin, label: 'Карта'),
-    ShellNavItem(icon: LucideIcons.message_square, label: 'Сообщения'),
-    ShellNavItem(icon: LucideIcons.user, label: 'Профиль'),
+  List<ShellNavItem> _buildNavItems(AppLocalizations strings) => [
+    ShellNavItem(icon: LucideIcons.house, label: strings.homeTab),
+    ShellNavItem(icon: LucideIcons.search, label: strings.searchTab),
+    ShellNavItem(icon: LucideIcons.map_pin, label: strings.mapTab),
+    ShellNavItem(icon: LucideIcons.message_square, label: strings.messagesTab),
+    ShellNavItem(icon: LucideIcons.user, label: strings.profileTab),
   ];
 
   final _pages = [
@@ -46,11 +49,14 @@ class _AppShellScreenState extends State<AppShellScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final strings = Provider.of<LanguageProvider>(context).strings;
+    final navItems = _buildNavItems(strings);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       extendBody: true,
       bottomNavigationBar: FloatingBottomNavBar(
-        items: _navItems,
+        items: navItems,
         currentIndex: _currentIndex,
         onItemSelected: _selectTab,
       ),
