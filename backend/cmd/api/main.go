@@ -283,16 +283,35 @@ func main() {
                 finalUserID = existingUser.ID
                 finalRole = existingUser.Role
 
-                // upgrade role if an existing customer is logging in to add a store
-                if existingUser.Role == "customer" && requestedRole == "shop_owner" {
-                    log.Printf("Upgrading user ID %d from customer to shop_owner", existingUser.ID)
-                    updatedUser, updateErr := queries.UpdateUserRoleAndChat(context.Background(), db.UpdateUserRoleAndChatParams{
+                // role can only be upgraded customer -> shop_owner here (never demoted back down)
+                roleChanged := existingUser.Role == "customer" && requestedRole == "shop_owner"
+                // name can be updated either way, whenever what they typed this time differs from what's stored
+                nameChanged := name != "" && name != existingUser.Name.String
+
+                if roleChanged || nameChanged {
+                    newRole := existingUser.Role
+                    if roleChanged {
+                        log.Printf("Upgrading user ID %d from customer to shop_owner", existingUser.ID)
+                        newRole = "shop_owner"
+                    }
+
+                    newName := existingUser.Name.String
+                    if nameChanged {
+                        log.Printf("Updating name for user ID %d from %q to %q", existingUser.ID, existingUser.Name.String, name)
+                        newName = name
+                    }
+
+                    updatedUser, updateErr := queries.UpdateUserProfile(context.Background(), db.UpdateUserProfileParams{
                         ID: existingUser.ID,
+                        Name: pgtype.Text{
+                            String: newName,
+                            Valid:  newName != "",
+                        },
                         TelegramChatID: pgtype.Int8{
-                            Int64: chatID, 
+                            Int64: chatID,
                             Valid: true,
                         },
-                        Role: "shop_owner",
+                        Role: newRole,
                     })
                     if updateErr == nil {
                         finalRole = updatedUser.Role

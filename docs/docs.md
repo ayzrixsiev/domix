@@ -42,7 +42,7 @@ erDiagram
 ```
 
 ### Auth via telegram bot backend flow
-1. User presses create account in flutter app then he is prompted to choose to pick a role (show owner or customer) and write down his name first and family name, after it he presses "Verify through telegram" button.
+1. User presses create account in flutter app then he is prompted to choose to pick a role (shop owner or customer) and write down his name first and family name, after it he presses "Verify through telegram" button.
 2. Flutter app hits http point api/auth/init and sends a json containing gathered info: role, name.
 3. Our backend receives this json data and generates random sessionID, after that using SessionManager's sync map called sessions, it links this sessionID with SessionData, like this:
 ```go
@@ -59,7 +59,12 @@ sm.sessions.Store(sessionID, SessionData{
 
 ### Auth via telegram bot flluter flow:
 1. frontend/lib/features/profile/data/auth_service.dart - file that contains code for initializing handshake with go backend. It sends collected data to the backend, does polling to check the status of a login ticket and stores JWT and role inside user's hardware encrypted storage.
-2. frontend/lib/features/profile/presentation/controllers/auth_controller.dart - file that orchestrates thw whole auth process, by initialozing authService, initializing handshake with backend, setting up pollling and timer for it, based on the incoming output dictation how to render the page in profile section.
+2. frontend/lib/features/profile/presentation/controllers/auth_controller.dart - file that orchestrates the whole auth process, by initializing authService, initializing handshake with backend, setting up pollling, based on the incoming output dictates how to render the page in profile section.
+
+
+
+
+
 
 ### Things to fix and work on
 1. ~~After registration through telegram completes, user can keep spamming /start and phone number button, we need to fix that.~~

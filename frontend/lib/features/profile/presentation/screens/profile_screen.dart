@@ -161,6 +161,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _showLoginBottomSheet(BuildContext context) {
     final nameController = TextEditingController();
     String selectedRole = 'customer';
+    // shown under the name field if the user tries to continue without typing a name
+    String? nameError;
 
     showModalBottomSheet(
       context: context,
@@ -228,8 +230,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   fontSize: 15.5,
                   fontWeight: FontWeight.w600,
                 ),
+                // clear the inline error as soon as the user starts fixing it
+                onChanged: (_) {
+                  if (nameError != null) setModalState(() => nameError = null);
+                },
                 decoration: InputDecoration(
                   labelText: _strings.nameInputLabel,
+                  errorText: nameError,
                   labelStyle: const TextStyle(
                     color: _kTextMuted,
                     fontSize: 14.5,
@@ -252,6 +259,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       color: _kPrimaryOrange,
                       width: 1.5,
                     ),
+                  ),
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: _kDanger, width: 1.5),
+                  ),
+                  focusedErrorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: _kDanger, width: 1.5),
                   ),
                 ),
               ),
@@ -301,16 +316,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   onPressed: () {
-                    // THREAD SAFETY SHIELD: WE CAPTURE THE MESSENGER SYNCHRONOUSLY BEFORE POPPING THE MODAL OR ENTERING AN ASYNC GAP!
+                    final trimmedName = nameController.text.trim();
+
+                    // block progress to telegram until a name is actually entered
+                    if (trimmedName.isEmpty) {
+                      setModalState(() => nameError = _strings.nameRequiredError);
+                      return;
+                    }
+
                     final scaffoldMessenger = ScaffoldMessenger.of(context);
                     Navigator.pop(ctx);
 
                     // trigger backend authorization and switch app to telegram bot
                     final authController = Provider.of<AuthController>(context, listen: false);
                     authController.startTelegramLogin(
-                      name: nameController.text.trim().isEmpty
-                          ? "Domix User"
-                          : nameController.text.trim(),
+                      name: trimmedName,
                       role: selectedRole,
                       onSuccess: () {
                         // THIS SNACKBAR IS NOW SAFE FROM CONTEXT-UNMOUNT CRASHES EVEN 2 MINUTES LATER!
@@ -505,6 +525,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // centered, modal error dialog: user reads the message and instructions, then must press ok to dismiss
   void _showErrorDialog(String message) {
+    // log the raw technical detail for our own debugging; users only ever see the friendly instructions below
+    debugPrint('Auth error: $message');
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -539,7 +562,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-              // what to try next, in plain words, before the raw technical detail
               Text(
                 _strings.errorDialogInstructions,
                 textAlign: TextAlign.center,
@@ -548,16 +570,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: _kTextMuted,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(height: 22),

@@ -31,7 +31,7 @@ class AppLocalizations {
   String get manageShops =>
       isRu ? 'Управление магазинами' : "Do'konlarni boshqarish";
   String get innerManageStores =>
-      isRu ? 'Настройка и статистика' : 'Sozlamalar va statistika';
+      isRu ? 'Управление магазинами' : "Do'konlarni boshqarish";
   String get addStore => isRu ? 'Добавить новый магазин' : "Yangi do'kon qo'shish";
   String get backButton => isRu ? 'Назад в профиль' : 'Profilga qaytish';
   String get favorites => isRu ? 'Избранное' : 'Tanlanganlar';
@@ -44,6 +44,8 @@ class AppLocalizations {
   String get registerTitle => isRu ? 'Регистрация' : "Ro'yxatdan o'tish";
   String get registerSubtitle => '';
   String get nameInputLabel => isRu ? 'Имя и фамилия' : "Ism va familiyangiz";
+  String get nameRequiredError =>
+      isRu ? 'Пожалуйста, введите имя' : "Iltimos, ismingizni kiriting";
   String get roleCustomer => isRu ? 'Покупатель' : "Xaridor";
   String get roleCustomerSub =>
       isRu ? 'Покупки и заказы' : "Xaridlar va buyurtmalar";
