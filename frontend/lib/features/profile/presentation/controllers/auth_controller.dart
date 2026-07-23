@@ -20,7 +20,7 @@ class AuthController extends ChangeNotifier {
   bool _isPolling = false;
   bool _isLoading = false;
   String? _errorMessage;
-  
+
   // holds current ui state for the profilescreen
   ProfileViewState _profileState = const ProfileViewState.guest();
 
@@ -164,6 +164,12 @@ class AuthController extends ChangeNotifier {
 
   void _cancelPolling() {
     _isPolling = false;
+  }
+
+  // dismiss the current error once the user has read it and pressed ok, so it doesn't linger forever
+  void clearError() {
+    _errorMessage = null;
+    notifyListeners();
   }
 
   // wipe local storage and reset interface back to guest state

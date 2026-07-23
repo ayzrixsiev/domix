@@ -70,6 +70,14 @@ class AppLocalizations {
       ? 'Время ожидания истекло. Попробуйте снова.'
       : 'Kutish vaqti tugadi. Qayta urinib ko\'ring.';
 
+  // error dialog shown when the login attempt fails
+  String get errorDialogTitle =>
+      isRu ? 'Что-то пошло не так' : 'Nimadir xato ketdi';
+  String get errorDialogInstructions => isRu
+      ? 'Проверьте, что Telegram установлен и есть подключение к интернету, затем попробуйте снова.'
+      : "Telegram o'rnatilganligini va internet aloqasi borligini tekshiring, so'ngra qayta urinib ko'ring.";
+  String get okButton => isRu ? 'Понятно' : 'Tushunarli';
+
   // bottom navigation labels
   String get homeTab => isRu ? 'Главная' : 'Asosiy';
   String get searchTab => isRu ? 'Поиск' : 'Qidirish';

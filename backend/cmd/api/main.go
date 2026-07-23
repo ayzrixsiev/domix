@@ -115,7 +115,10 @@ func main() {
         w.WriteHeader(http.StatusOK)
         json.NewEncoder(w).Encode(map[string]string{
             "session_id": sessionID,
-            "telegram_url": "tg://resolve?domain=" + bot.Self.UserName + "&start=" + sessionID,
+            // https://t.me/<bot>?start=<id> is telegram's documented deep-link format (unlike the unofficial tg:// scheme),
+            // so mobile os link verification opens the app directly, and it still degrades gracefully to a web preview
+            // instead of failing silently if telegram isn't installed or the client cold-starts and drops the param
+            "telegram_url": "https://t.me/" + bot.Self.UserName + "?start=" + sessionID,
         })
     })
 

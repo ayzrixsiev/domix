@@ -90,6 +90,9 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _showShopsSubMenu = false;
 
+  // tracks which error message we already showed a dialog for, so we don't pop it again on every rebuild
+  String? _lastHandledError;
+
   AppLocalizations get _strings =>
       Provider.of<LanguageProvider>(context).strings;
 
@@ -358,6 +361,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final authController = Provider.of<AuthController>(context);
     final currentProfile = authController.profileState;
 
+    // show a centered, dismissible dialog once per new error instead of a raw banner that never goes away
+    final currentError = authController.errorMessage;
+    if (currentError != null && currentError != _lastHandledError) {
+      _lastHandledError = currentError;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showErrorDialog(currentError);
+      });
+    } else if (currentError == null) {
+      _lastHandledError = null;
+    }
+
     final body = SafeArea(
       child: ListView(
         physics: const BouncingScrollPhysics(),
@@ -467,29 +481,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ? Scaffold(backgroundColor: _kSoftSurface, body: body)
         : ColoredBox(color: _kSoftSurface, child: body);
 
-    // stack overlays: error banner and loading indicator
+    // stack overlays: loading indicator (errors now show as a centered dialog, scheduled above)
     return Stack(
       children: [
         scaffold,
-        if (authController.errorMessage != null && !authController.isLoading)
-          Positioned(
-            left: 12,
-            right: 12,
-            top: 20,
-            child: Material(
-              elevation: 6,
-              borderRadius: BorderRadius.circular(12),
-              color: _kDangerSoft,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                child: Text(
-                  authController.errorMessage ?? '',
-                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w700),
-                ),
-              ),
-            ),
-          ),
-        
         if (authController.isLoading)
           Positioned.fill(
             child: ColoredBox(
@@ -505,6 +500,78 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
       ],
+    );
+  }
+
+  // centered, modal error dialog: user reads the message and instructions, then must press ok to dismiss
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: const BoxDecoration(
+                  color: _kDangerSoft,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  CupertinoIcons.exclamationmark_triangle_fill,
+                  color: _kDanger,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                _strings.errorDialogTitle,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: _kTextPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 10),
+              // what to try next, in plain words, before the raw technical detail
+              Text(
+                _strings.errorDialogInstructions,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: _kTextPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: _kTextMuted,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 22),
+              _ProfileButton(
+                label: _strings.okButton,
+                onTap: () {
+                  Navigator.of(dialogCtx).pop();
+                  Provider.of<AuthController>(context, listen: false).clearError();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

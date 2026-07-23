@@ -76,7 +76,7 @@ This is the core, non-obvious piece of the system — it spans both backend and 
 
 1. Flutter collects `name` + `role` (customer/shop_owner) and POSTs to `backend` `/api/auth/init`.
 2. Backend (`internal/auth/session.go` `SessionManager`) creates an in-memory session (`sess_<hex>`) with status `pending`, stored in a `sync.Map` (`sessions`). No DB row exists yet.
-3. Backend returns a `tg://resolve?...&start=<sessionID>` deep link; Flutter opens Telegram with it.
+3. Backend returns a `https://t.me/<bot>?start=<sessionID>` deep link (Telegram's documented deep-linking format, not the unofficial `tg://` scheme — this opens the app directly via verified Universal/App Links on mobile and degrades gracefully to a web preview if Telegram isn't installed); Flutter opens it in `AuthController.startTelegramLogin`.
 4. User's `/start <sessionID>` message hits the bot webhook (`cmd/api/main.go`); `SessionManager.LinkChat` maps `chatID -> sessionID` in a second `sync.Map` (`chatToSession`).
 5. Bot asks the user to share their phone number via a Telegram contact button.
 6. On receiving the contact, the backend looks up `name`/`role` for that chat via `GetPendingSession`, then checks Postgres by phone (`GetUserByPhone`): existing users log in (and get upgraded from `customer` to `shop_owner` if they registered a shop with a previously-customer account); new users are created (`CreateUser`).
