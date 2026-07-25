@@ -1,0 +1,3 @@
+ALTER TABLE shops
+DROP COLUMN IF EXISTS contact_phone,
+DROP COLUMN IF EXISTS image_url;

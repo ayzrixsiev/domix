@@ -28,6 +28,8 @@ type Shop struct {
 	Location        interface{}        `json:"location"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	ContactPhone    string             `json:"contact_phone"`
+	ImageUrl        pgtype.Text        `json:"image_url"`
 }
 
 type User struct {

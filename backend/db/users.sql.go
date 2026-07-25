@@ -55,8 +55,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 }
 
 const getUserByPhone = `-- name: GetUserByPhone :one
-SELECT id, name, phone, telegram_chat_id, role, created_at, updated_at 
-FROM users 
+SELECT id, name, phone, telegram_chat_id, role, created_at, updated_at
+FROM users
 WHERE phone = $1
 `
 
@@ -83,6 +83,19 @@ func (q *Queries) GetUserByPhone(ctx context.Context, phone string) (GetUserByPh
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getUserRole = `-- name: GetUserRole :one
+SELECT role FROM users WHERE id = $1
+`
+
+// role isn't baked into the jwt (it can change after the token is issued), so authorization checks
+// look this up fresh instead of trusting a claim that might be stale - see internal/auth/jwt.go
+func (q *Queries) GetUserRole(ctx context.Context, id int64) (string, error) {
+	row := q.db.QueryRow(ctx, getUserRole, id)
+	var role string
+	err := row.Scan(&role)
+	return role, err
 }
 
 const updateUserProfile = `-- name: UpdateUserProfile :one
