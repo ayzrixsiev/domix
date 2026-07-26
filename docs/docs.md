@@ -69,11 +69,9 @@ Parent context in this function means that we need to pass it an existing ctx wh
 
 
 
-
-
-
-
 # Auth
+
+Our authentication works around SessionManager struct, which contains two sync.Map, one called `session` for linking sessionID and data that we got from flutter app - name and role, this data is saved inside another struct named SessionData, another sync map called chatToSession links telegram chatID to sessionID. We used sync.Map deliberately to avoid race condition (two or more goroutines e.g from http requests trying to allocate a store inside one shared container), so sync.Map saves us from concurrency problem. Each sync map contains their entries, and i set up goroutines to watch those entries, if one of the entries in sessions sync.Map get older than 10 minutes it gets cleaned up, if user stuck in the telegram chat without sending a phone number, session and session data will be deleted after 10 minuets as i described above, which will create an orphaned chatToSession - chat id pointing to non existing session id, so the same goroutine cleans it up as soon as it cleand sessions entry.
 
 ### Auth via telegram bot backend flow
 1. User presses create account in flutter app then he is prompted to choose a role (customer or shop owner) and write down his name, after that he presses "Verify through telegram" button.
@@ -96,8 +94,14 @@ sm.sessions.Store(sessionID, SessionData{
 2. frontend/lib/features/profile/presentation/controllers/auth_controller.dart - file that orchestrates the whole auth process, by initializing authService, initializing handshake with backend, setting up pollling, based on the incoming output dictates how to render the page in profile section.
 
 
-# LOCAL TESTING
-TRUNCATE TABLE users RESTART IDENTITY CASCADE;          
-ngrok http 8080                 
-flutter run --dart-define-from-file=env.json            
-go run backend/cmd/api                      
+### LOCAL TESTING
+
+- TRUNCATE TABLE users RESTART IDENTITY CASCADE;          
+- ngrok http 8080                 
+- flutter run --dart-define-from-file=env.json            
+- go run backend/cmd/api    
+
+
+### Things to work on
+
+1. JWT token now does not contain role, which means some endpoints which require role identification now have to ask a db for the role based on the user's id, which adds additional db queries.
