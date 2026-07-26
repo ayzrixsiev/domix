@@ -18,13 +18,13 @@ type SessionData struct {
     CreatedAt time.Time `json:"-"`               // we use - to hide this internal timestamp from json response
 }
 
-// blueprint of data during active session
+// blueprint of data manager during active session
 type SessionManager struct {
-    chatToSession sync.Map // maps telegram ChatID -> SessionID
     sessions      sync.Map // maps SessionID -> SessionData
+    chatToSession sync.Map // maps telegram ChatID -> SessionID
 }
 
-// initialize in ram our active session blueprint and hand over its address to use its methods
+// initialize our active session blueprint and hand over its address to use its methods
 func NewSessionManager() *SessionManager {
     sm := &SessionManager{}
 
@@ -41,7 +41,7 @@ func (sm *SessionManager) InitSession(name string, role string) string {
     rand.Read(bytes)
     sessionID := "sess_" + hex.EncodeToString(bytes)
 
-    // save their custom name and role in ram safely
+    // save their custom name, role in ram and set login status to pending
     sm.sessions.Store(sessionID, SessionData{
         Status:    "pending",
         Name:      name,
@@ -54,7 +54,7 @@ func (sm *SessionManager) InitSession(name string, role string) string {
 
 // when /start button pressed in tg we link sessionID with telegram chatID, and track from which chat expect user's phone number
 func (sm *SessionManager) LinkChat(chatID int64, sessionID string) bool {
-    // SECURITY GUARD: DURING A COLD BOOT, THE OS MIGHT DROP THE DEEP-LINK PARAMETER, LEAVING SESSIONID AS AN EMPTY STRING. WE MUST EXPLICITLY INTERCEPT AND REJECT EMPTY STRINGS SO WE DO NOT ACCIDENTALLY MAP A GHOST SESSION IN RAM.
+    // safety check to see whether session id was dropped inside telegram link to avoid ghost account creation
     if sessionID == "" {
         return false
     }
@@ -69,7 +69,7 @@ func (sm *SessionManager) LinkChat(chatID int64, sessionID string) bool {
 
 // when /phone button pressed we retrieve role, name and sessionID
 func (sm *SessionManager) GetPendingSession(chatID int64) (sessionID string, name string, role string, exists bool) {
-    // FIXED: Added := operator
+    
     val, found := sm.chatToSession.Load(chatID)
     if !found {
         return "", "", "customer", false
@@ -100,8 +100,8 @@ func (sm *SessionManager) CompleteSession(chatID int64, userID int64, phone stri
         existingName = sessionVal.(SessionData).Name
     }
 
-    // generate jwt token
-    jwt, err := GenerateJWT(userID, phone, role, jwtSecret)
+    // generate jwt token - role is not part of the token itself, see internal/auth/jwt.go
+    jwt, err := GenerateJWT(userID, phone, jwtSecret)
     if err != nil {
         return "", err
     }
@@ -132,6 +132,7 @@ func (sm *SessionManager) GetStatus(sessionID string) SessionData {
     return val.(SessionData)
 }
 
+// goroutine for the old session cleaning
 func (sm *SessionManager) startCleanupSweeper(interval, ttl time.Duration) {
     ticker := time.NewTicker(interval)
     for range ticker.C {
@@ -145,6 +146,20 @@ func (sm *SessionManager) startCleanupSweeper(interval, ttl time.Duration) {
                 sm.sessions.Delete(sessionID)
             }
             return true // return true to keep iterating through all map items
+        })
+
+        // a chat link is only useful as long as the session it points to still exists.
+        // CompleteSession already deletes its own chat link on success (see above), so the only
+        // way a link ends up here is a chat that never finished the flow (phone number was not send)
+        // its session just got deleted by the sweep above, orphaning this entry. cleaning it up too.
+        sm.chatToSession.Range(func(key, value interface{}) bool {
+            chatID := key.(int64)
+            sessionID := value.(string)
+
+            if _, exists := sm.sessions.Load(sessionID); !exists {
+                sm.chatToSession.Delete(chatID)
+            }
+            return true
         })
     }
 }

@@ -4,8 +4,6 @@ FROM users
 WHERE phone = $1;
 
 -- name: GetUserRole :one
--- role isn't baked into the jwt (it can change after the token is issued), so authorization checks
--- look this up fresh instead of trusting a claim that might be stale - see internal/auth/jwt.go
 SELECT role FROM users WHERE id = $1;
 
 -- name: CreateUser :one

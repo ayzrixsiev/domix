@@ -11,16 +11,14 @@ import (
 type TokenClaims struct {
 	UserID int64  `json:"user_id"`
 	Phone  string `json:"phone"`
-	Role   string `json:"role"`
 	jwt.RegisteredClaims
 }
 
 // func to generate jwt that lives 1 year
-func GenerateJWT(userID int64, phone string, role string, secretKey string) (string, error) {
+func GenerateJWT(userID int64, phone string, secretKey string) (string, error) {
 	claims := TokenClaims{
 		UserID: userID,
 		Phone:  phone,
-		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
             ExpiresAt: jwt.NewNumericDate(time.Now().AddDate(1, 0, 0)),
             IssuedAt:  jwt.NewNumericDate(time.Now()),
