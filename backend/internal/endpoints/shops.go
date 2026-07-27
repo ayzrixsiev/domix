@@ -32,6 +32,10 @@ type ShopResponse struct {
 	AveragePaycheck int64   `json:"average_paycheck"`
 	Latitude        float64 `json:"latitude"`
 	Longitude       float64 `json:"longitude"`
+
+	// only ListMine counts products (the public map list has no use for it and shouldn't pay for
+	// the extra per-shop count), so this stays out of the json entirely when it wasn't looked up
+	ProductCount int64 `json:"product_count,omitempty"`
 }
 
 // dispatches by method, since GET and POST share the same url but need very different handling
@@ -74,6 +78,51 @@ func (s *Shops) List(w http.ResponseWriter, r *http.Request) {
 			AveragePaycheck: int64(shop.AveragePaycheck),
 			Latitude:        shop.Latitude,
 			Longitude:       shop.Longitude,
+		})
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
+// authenticated: backs the "manage my shops" screen - every shop the caller themselves owns, as
+// opposed to List above which is every shop, for anyone, for the map. no role check needed here:
+// unlike Create/products upload this has no side effects, and it's already self-scoped to the
+// caller's own user_id, so there's nothing a customer account could see here that a shop_owner
+// couldn't (it would just always come back empty for them).
+func (s *Shops) ListMine(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.UserIDFromContext(r.Context())
+	if !ok {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	ctx, cancel := dbctx.WithTimeout(r.Context())
+	defer cancel()
+
+	shops, err := s.Queries.ListShopsByOwner(ctx, userID)
+	if err != nil {
+		log.Printf("CRITICAL: failed to list shops for owner %d: %v", userID, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "failed to load shops"})
+		return
+	}
+
+	response := make([]ShopResponse, 0, len(shops))
+	for _, shop := range shops {
+		ratingF8, _ := shop.Rating.Float64Value()
+		response = append(response, ShopResponse{
+			ID:              shop.ID,
+			Name:            shop.Name,
+			ContactPhone:    shop.ContactPhone,
+			ImageURL:        shop.ImageUrl.String,
+			Address:         shop.Address,
+			Rating:          ratingF8.Float64,
+			AveragePaycheck: int64(shop.AveragePaycheck),
+			Latitude:        shop.Latitude,
+			Longitude:       shop.Longitude,
+			ProductCount:    shop.ProductCount,
 		})
 	}
 

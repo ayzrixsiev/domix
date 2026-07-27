@@ -99,7 +99,7 @@ sm.sessions.Store(sessionID, SessionData{
 - TRUNCATE TABLE users RESTART IDENTITY CASCADE;          
 - ngrok http 8080                 
 - flutter run --dart-define-from-file=env.json            
-- go run backend/cmd/api    
+- go run ./cmd/api    
 
 
 ### Things to work on

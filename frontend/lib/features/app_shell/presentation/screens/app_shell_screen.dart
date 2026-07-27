@@ -10,6 +10,8 @@ import 'package:frontend/features/map/presentation/screens/map_screen.dart';
 import 'package:frontend/features/messages/presentation/screens/messages_screen.dart';
 import 'package:frontend/features/profile/presentation/screens/profile_screen.dart';
 import 'package:frontend/features/search/presentation/screens/search_screen.dart';
+import 'package:frontend/features/stores/presentation/screens/add_store_screen.dart';
+import 'package:frontend/features/stores/presentation/screens/my_shops_screen.dart';
 
 class AppShellScreen extends StatefulWidget {
   const AppShellScreen({super.key});
@@ -29,12 +31,23 @@ class _AppShellScreenState extends State<AppShellScreen> {
     ShellNavItem(icon: LucideIcons.user, label: strings.profileTab),
   ];
 
-  final _pages = [
+  // built per-frame (like _buildNavItems below) rather than as a static field, since ProfileScreen
+  // needs a BuildContext to navigate to AddStoreScreen when its "add store" row is tapped
+  List<Widget> _buildPages(BuildContext context) => [
     const HomeScreen(showScaffold: false, bottomPadding: _bottomPadding),
     const SearchScreen(showScaffold: false, bottomPadding: _bottomPadding),
     const MapScreen(showScaffold: false, bottomPadding: _bottomPadding),
     const MessagesScreen(showScaffold: false, bottomPadding: _bottomPadding),
-    const ProfileScreen(showScaffold: false, bottomPadding: _bottomPadding),
+    ProfileScreen(
+      showScaffold: false,
+      bottomPadding: _bottomPadding,
+      onAddStoreTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const AddStoreScreen()),
+      ),
+      onManageShopTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const MyShopsScreen()),
+      ),
+    ),
   ];
 
   int _currentIndex = 0;
@@ -60,7 +73,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
         currentIndex: _currentIndex,
         onItemSelected: _selectTab,
       ),
-      body: IndexedStack(index: _currentIndex, children: _pages),
+      body: IndexedStack(index: _currentIndex, children: _buildPages(context)),
     );
   }
 }

@@ -434,7 +434,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   _MenuRowData(
                     icon: CupertinoIcons.slider_horizontal_3,
-                    title: _strings.innerManageStores,
+                    title: _strings.shopSettings,
                     onTap: widget.onManageShopTap,
                   ),
                   _MenuRowData(

@@ -79,6 +79,10 @@ func main() {
 
 	shopsEndpoints := &endpoints.Shops{Queries: queries, JWTSecret: jwtSecret}
 	http.HandleFunc("/api/shops", endpoints.WithCORS("GET, POST", shopsEndpoints.Route))
+	http.HandleFunc("/api/shops/mine", endpoints.WithCORS("GET", auth.RequireAuth(jwtSecret, shopsEndpoints.ListMine)))
+
+	productsEndpoints := &endpoints.Products{Pool: dbPool, Queries: queries, JWTSecret: jwtSecret}
+	http.HandleFunc("/api/products/upload", endpoints.WithCORS("POST", auth.RequireAuth(jwtSecret, productsEndpoints.Upload)))
 
 	http.HandleFunc("/health", healthCheck(dbPool))
 

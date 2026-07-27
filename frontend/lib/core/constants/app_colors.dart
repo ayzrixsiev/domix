@@ -18,4 +18,8 @@ class AppColors {
   // Accents
   static const Color starYellow = Color(0xFFFFB800);
   static const Color accentBlue = Color(0xFF2A85FF);
+
+  // Errors / validation
+  static const Color danger = Color(0xFFB42318);
+  static const Color dangerSoft = Color(0xFFFEF0EE);
 }

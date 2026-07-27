@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- unlike the debug/profile manifests, this one is used for release builds too - without this,
+         every network call (auth, map tiles, geocoding) would silently fail once shipped -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="frontend"
         android:name="${applicationName}"
