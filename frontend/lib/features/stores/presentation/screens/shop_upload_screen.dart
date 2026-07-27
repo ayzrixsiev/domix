@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
+import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/stores/data/product_upload_result.dart';
@@ -77,10 +78,17 @@ class _ShopUploadScreenState extends State<ShopUploadScreen> {
         backgroundColor: AppColors.background,
         elevation: 0,
         scrolledUnderElevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.textDark),
+        centerTitle: false,
+        titleSpacing: 20,
+        iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
         title: Text(
           strings.uploadScreenTitle,
-          style: const TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w800),
+          style: const TextStyle(
+            color: AppColors.textDark,
+            fontSize: 18,
+            letterSpacing: -0.2,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
       body: SafeArea(
@@ -102,10 +110,10 @@ class _ShopUploadScreenState extends State<ShopUploadScreen> {
               strings.skippedRowsHint,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                color: AppColors.textGrey,
+                color: AppColors.textFaint,
                 fontSize: 12,
-                height: 1.4,
-                fontWeight: FontWeight.w500,
+                height: 1.45,
+                fontWeight: FontWeight.w400,
               ),
             ),
             if (controller.uploadResult != null) ...[
@@ -153,13 +161,10 @@ class _ShopHeaderCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFFFF8F2), Colors.white],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF2F4F7)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.hairline),
+        boxShadow: AppShadows.card,
       ),
       child: Row(
         children: [
@@ -167,10 +172,10 @@ class _ShopHeaderCard extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF0E3),
-              borderRadius: BorderRadius.circular(14),
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
-            child: const Icon(CupertinoIcons.building_2_fill, color: AppColors.primaryOrange, size: 21),
+            child: const Icon(CupertinoIcons.building_2_fill, color: AppColors.primaryOrange, size: 20),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -184,7 +189,8 @@ class _ShopHeaderCard extends StatelessWidget {
                   style: const TextStyle(
                     color: AppColors.textDark,
                     fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.2,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -195,7 +201,7 @@ class _ShopHeaderCard extends StatelessWidget {
                   style: const TextStyle(
                     color: AppColors.textGrey,
                     fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
@@ -222,22 +228,24 @@ class _FormatGuideCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF2F4F7)),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.hairline),
+        boxShadow: AppShadows.card,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(CupertinoIcons.table, color: AppColors.textDark, size: 17),
+              const Icon(CupertinoIcons.table, color: AppColors.textFaint, size: 15),
               const SizedBox(width: 8),
               Text(
                 strings.fileFormatTitle,
                 style: const TextStyle(
                   color: AppColors.textDark,
                   fontSize: 15,
-                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.1,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -248,11 +256,11 @@ class _FormatGuideCard extends StatelessWidget {
             style: const TextStyle(
               color: AppColors.textGrey,
               fontSize: 12.5,
-              height: 1.4,
-              fontWeight: FontWeight.w500,
+              height: 1.45,
+              fontWeight: FontWeight.w400,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           for (var i = 0; i < columns.length; i++)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -265,15 +273,15 @@ class _FormatGuideCard extends StatelessWidget {
                     height: 20,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFF0E3),
-                      borderRadius: BorderRadius.circular(6),
+                      color: AppColors.surfaceMuted,
+                      borderRadius: BorderRadius.circular(AppRadius.xs),
                     ),
                     child: Text(
                       '${i + 1}',
                       style: const TextStyle(
-                        color: AppColors.primaryOrange,
+                        color: AppColors.textGrey,
                         fontSize: 11,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -287,16 +295,16 @@ class _FormatGuideCard extends StatelessWidget {
                           style: const TextStyle(
                             color: AppColors.textDark,
                             fontSize: 13,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(height: 1),
+                        const SizedBox(height: 2),
                         Text(
                           columns[i].example,
                           style: const TextStyle(
-                            color: AppColors.textGrey,
+                            color: AppColors.textFaint,
                             fontSize: 11.5,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
                       ],
@@ -330,14 +338,14 @@ class _UploadDropzone extends StatelessWidget {
       onTap: onTap,
       child: CustomPaint(
         painter: _DashedBorderPainter(
-          color: isUploading ? const Color(0xFFE2E8F0) : AppColors.primaryOrange.withValues(alpha: 0.55),
+          color: isUploading ? AppColors.hairline : AppColors.primaryOrange.withValues(alpha: 0.4),
         ),
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 18),
           decoration: BoxDecoration(
-            color: isUploading ? const Color(0xFFF8FAFC) : const Color(0xFFFFF9F4),
-            borderRadius: BorderRadius.circular(18),
+            color: isUploading ? AppColors.surfaceMuted : AppColors.primarySoft.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(AppRadius.md),
           ),
           child: Column(
             children: [
@@ -348,22 +356,29 @@ class _UploadDropzone extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2.6, color: AppColors.primaryOrange),
                 )
               else
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: const BoxDecoration(
-                    color: AppColors.primaryOrange,
+                DecoratedBox(
+                  decoration: BoxDecoration(
                     shape: BoxShape.circle,
+                    boxShadow: AppShadows.accent(AppColors.primaryOrange),
                   ),
-                  child: const Icon(CupertinoIcons.arrow_up_doc_fill, color: Colors.white, size: 22),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: const BoxDecoration(
+                      color: AppColors.primaryOrange,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(CupertinoIcons.arrow_up_doc_fill, color: Colors.white, size: 20),
+                  ),
                 ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 13),
               Text(
                 isUploading ? strings.uploadingLabel : strings.pickFileButton,
                 style: const TextStyle(
                   color: AppColors.textDark,
                   fontSize: 15,
-                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.1,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               if (!isUploading) ...[
@@ -373,7 +388,7 @@ class _UploadDropzone extends StatelessWidget {
                   style: const TextStyle(
                     color: AppColors.textGrey,
                     fontSize: 12,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ],
@@ -401,7 +416,7 @@ class _DashedBorderPainter extends CustomPainter {
 
     final path = Path()
       ..addRRect(
-        RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(18)),
+        RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(AppRadius.md)),
       );
 
     const dashLength = 6.0;
@@ -431,21 +446,15 @@ class _UploadResultCard extends StatelessWidget {
     // a file that parsed cleanly but produced nothing is technically a 200, yet it's a failure from
     // the owner's point of view - it gets the warning treatment, not a green checkmark
     final isEmpty = result.isEmptyResult;
-    final accent = isEmpty ? AppColors.starYellow : const Color(0xFF0F9D58);
+    final accent = isEmpty ? AppColors.starYellow : AppColors.success;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF2F4F7)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.hairline),
+        boxShadow: AppShadows.card,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -457,16 +466,17 @@ class _UploadResultCard extends StatelessWidget {
                     ? CupertinoIcons.exclamationmark_circle_fill
                     : CupertinoIcons.checkmark_circle_fill,
                 color: accent,
-                size: 20,
+                size: 18,
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 9),
               Expanded(
                 child: Text(
                   isEmpty ? strings.uploadNothingTitle : strings.uploadDoneTitle,
                   style: const TextStyle(
                     color: AppColors.textDark,
                     fontSize: 15,
-                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.1,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -484,7 +494,7 @@ class _UploadResultCard extends StatelessWidget {
               _StatTile(
                 value: result.processed,
                 label: strings.uploadStatProcessed,
-                color: const Color(0xFF0F9D58),
+                color: AppColors.success,
               ),
               const SizedBox(width: 10),
               _StatTile(
@@ -502,8 +512,8 @@ class _UploadResultCard extends StatelessWidget {
               style: const TextStyle(
                 color: AppColors.textGrey,
                 fontSize: 12.5,
-                height: 1.4,
-                fontWeight: FontWeight.w500,
+                height: 1.45,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ],
@@ -526,24 +536,29 @@ class _StatTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(14),
+          color: AppColors.surfaceMuted,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
         ),
         child: Column(
           children: [
             Text(
               '$value',
-              style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.w800),
+              style: TextStyle(
+                color: color,
+                fontSize: 20,
+                letterSpacing: -0.4,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 4),
             Text(
               label,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                color: AppColors.textGrey,
+                color: AppColors.textFaint,
                 fontSize: 10.5,
                 height: 1.3,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -570,11 +585,11 @@ class _MessageCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-      decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(AppRadius.sm)),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 18),
+          Icon(icon, color: color, size: 17),
           const SizedBox(width: 10),
           Expanded(
             child: Text(

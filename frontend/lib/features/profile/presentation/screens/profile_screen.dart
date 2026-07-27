@@ -406,32 +406,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 24),
           ],
 
-          // render navigation layers dynamically based on vendor submenu drill-down selection
+          // shop management, as an accordion the owner opens in place. it used to swap this card for
+          // an entirely different one, which is why the entry point vanished on tap and its chevron
+          // could never indicate open/closed.
           if (currentProfile.isVendor) ...[
-            if (!_showShopsSubMenu) ...[
-              // primary layout entry point for authenticated store owners
-              _MenuGroupCard(
-                rows: [
-                  _MenuRowData(
-                    icon: CupertinoIcons.bag,
-                    title: _strings.manageShops,
-                    onTap: () => setState(() => _showShopsSubMenu = true),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-            ] else ...[
-              // inner operational navigation group containing manage and creation options
-              _MenuGroupCard(
-                rows: [
-                  _MenuRowData(
-                    icon: CupertinoIcons.arrow_left,
-                    title: _strings.backButton,
-                    textColor: _kPrimaryOrangeDark,
-                    iconColor: _kPrimaryOrangeDark,
-                    iconBackground: const Color(0xFFFFF0E3),
-                    onTap: () => setState(() => _showShopsSubMenu = false),
-                  ),
+            _MenuGroupCard(
+              rows: const [],
+              leading: _ExpandableMenuSection(
+                isExpanded: _showShopsSubMenu,
+                onToggle: () => setState(() => _showShopsSubMenu = !_showShopsSubMenu),
+                header: _MenuRowData(
+                  icon: CupertinoIcons.bag,
+                  title: _strings.manageShops,
+                  onTap: null, // supplied by the section, which owns the toggle
+                ),
+                children: [
                   _MenuRowData(
                     icon: CupertinoIcons.slider_horizontal_3,
                     title: _strings.shopSettings,
@@ -442,10 +431,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     title: _strings.addStore,
                     onTap: widget.onAddStoreTap,
                   ),
+                  // closes the group rather than navigating anywhere, so it points up at the rows
+                  // it collapses and carries no forward chevron
+                  _MenuRowData(
+                    icon: CupertinoIcons.chevron_up,
+                    title: _strings.closeButton,
+                    textColor: _kPrimaryOrangeDark,
+                    iconColor: _kPrimaryOrangeDark,
+                    iconBackground: const Color(0xFFFFF0E3),
+                    trailing: const SizedBox.shrink(),
+                    onTap: () => setState(() => _showShopsSubMenu = false),
+                  ),
                 ],
               ),
-              const SizedBox(height: 16),
-            ],
+            ),
+            const SizedBox(height: 16),
           ],
 
           // standard operations card showing basic options for customers
@@ -683,9 +683,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  // 76, not 68: with the vendor badge stacked above the name and phone the text
+                  // column measures ~71px, so the old avatar was shorter than the text beside it
+                  // and the first and last lines visibly hung past it.
                   _ProfileAvatar(
                     initials: profile.initials,
-                    size: 68,
+                    size: 76,
                     backgroundColor: const Color(0xFFFFEEDD),
                     textColor: _kPrimaryOrangeDark,
                   ),
@@ -699,8 +702,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           _buildVendorBadge(),
                           const SizedBox(height: 6),
                         ],
+                        // single line keeps the column's height predictable against the avatar;
+                        // a wrapping name would put the block out of balance again
                         Text(
                           profile.fullName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: _kTextPrimary,
                             fontSize: 20,
@@ -1084,6 +1091,7 @@ class _MenuRowData {
     this.textColor,
     this.iconColor,
     this.iconBackground,
+    this.trailing,
   });
 
   final IconData icon;
@@ -1092,12 +1100,20 @@ class _MenuRowData {
   final Color? textColor;
   final Color? iconColor;
   final Color? iconBackground;
+
+  /// what sits at the far right. left null for the usual "this navigates somewhere" chevron; pass
+  /// a widget to replace it, or [SizedBox.shrink] for a row that doesn't lead anywhere.
+  final Widget? trailing;
 }
 
 class _MenuGroupCard extends StatelessWidget {
-  const _MenuGroupCard({required this.rows});
+  const _MenuGroupCard({required this.rows, this.leading});
 
   final List<_MenuRowData> rows;
+
+  /// an optional section rendered above [rows] inside the same card - used for the expandable
+  /// shop-management group, which needs to own its own animation rather than be a plain row.
+  final Widget? leading;
 
   @override
   Widget build(BuildContext context) {
@@ -1114,15 +1130,91 @@ class _MenuGroupCard extends StatelessWidget {
           ),
         ],
       ),
+      // the clip is what lets the expanding section slide out from under the header instead of
+      // spilling past the card's rounded corners mid-animation
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
         child: Column(
           children: [
+            ?leading,
             for (var i = 0; i < rows.length; i++)
               _MenuRow(data: rows[i], isLast: i == rows.length - 1),
           ],
         ),
       ),
+    );
+  }
+}
+
+// an accordion section for a menu card: a header row that stays put and reveals its children in
+// place, instead of the page swapping one card for a different one.
+//
+// keeping the header on screen is the whole point - a control that disappears the moment you use it
+// has no way to tell you what state it put you in, which is why the old chevron never appeared to
+// respond. here it rotates a quarter turn to point at the content it just opened.
+class _ExpandableMenuSection extends StatelessWidget {
+  const _ExpandableMenuSection({
+    required this.header,
+    required this.children,
+    required this.isExpanded,
+    required this.onToggle,
+  });
+
+  final _MenuRowData header;
+  final List<_MenuRowData> children;
+  final bool isExpanded;
+  final VoidCallback onToggle;
+
+  static const Duration _duration = Duration(milliseconds: 260);
+  // quick to start, long gentle settle - the same easing family the rest of the redesign uses
+  static const Curve _curve = Cubic(0.22, 1, 0.36, 1);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _MenuRow(
+          data: _MenuRowData(
+            icon: header.icon,
+            title: header.title,
+            onTap: onToggle,
+            textColor: header.textColor,
+            iconColor: isExpanded ? _kPrimaryOrangeDark : header.iconColor,
+            iconBackground: isExpanded ? const Color(0xFFFFF0E3) : header.iconBackground,
+            // 0.25 turns = 90 degrees, so the forward chevron ends up pointing down at the rows
+            // it revealed. AnimatedRotation tweens that for us on every state change.
+            trailing: AnimatedRotation(
+              turns: isExpanded ? 0.25 : 0,
+              duration: _duration,
+              curve: _curve,
+              child: Icon(
+                CupertinoIcons.chevron_forward,
+                color: isExpanded
+                    ? _kPrimaryOrangeDark
+                    : (header.textColor ?? _kTextPrimary).withValues(alpha: 0.3),
+                size: 16,
+              ),
+            ),
+          ),
+          isLast: !isExpanded,
+        ),
+        // AnimatedSize measures its child each frame and tweens its own height between the two
+        // sizes, so swapping the rows for an empty box animates the reveal without us hand-rolling
+        // an AnimationController. topCenter keeps the growth anchored under the header.
+        AnimatedSize(
+          duration: _duration,
+          curve: _curve,
+          alignment: Alignment.topCenter,
+          child: isExpanded
+              ? Column(
+                  children: [
+                    for (var i = 0; i < children.length; i++)
+                      _MenuRow(data: children[i], isLast: i == children.length - 1),
+                  ],
+                )
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
     );
   }
 }
@@ -1173,11 +1265,12 @@ class _MenuRow extends StatelessWidget {
                   ),
                 ),
               ),
-              Icon(
-                CupertinoIcons.chevron_forward,
-                color: resolvedTextColor.withValues(alpha: 0.3),
-                size: 16,
-              ),
+              data.trailing ??
+                  Icon(
+                    CupertinoIcons.chevron_forward,
+                    color: resolvedTextColor.withValues(alpha: 0.3),
+                    size: 16,
+                  ),
             ],
           ),
         ),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/features/home/presentation/widgets/home_header.dart';
-import 'package:frontend/features/home/presentation/widgets/infinite_shop_carousel.dart';
+import 'package:frontend/features/home/presentation/widgets/popular_shops_carousel.dart';
 import 'package:frontend/features/home/presentation/widgets/popular_categories_grid.dart';
 import 'package:frontend/features/home/presentation/widgets/search_and_like_bar.dart';
 import 'package:frontend/features/home/presentation/widgets/shops_nearby.dart';
@@ -34,13 +34,13 @@ class HomeScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
                   const SearchAndLikeBar(),
-                  const SizedBox(height: 18),
-                  const InfiniteShopCarousel(),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
+                  const PopularShopsCarousel(),
+                  const SizedBox(height: 24),
                   const PopularCategoriesGrid(),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
                   const ShopsNearbyGrid(),
                   SizedBox(height: bottomPadding),
                 ],

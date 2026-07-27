@@ -34,6 +34,10 @@ class AppLocalizations {
       isRu ? 'Настройка магазинов' : "Do'konlar sozlamalari";
   String get addStore => isRu ? 'Добавить новый магазин' : "Yangi do'kon qo'shish";
   String get backButton => isRu ? 'Назад в профиль' : 'Profilga qaytish';
+
+  // collapses the shop-management accordion. deliberately not "back": the group expands in place
+  // now instead of replacing the page, so nothing is being navigated away from.
+  String get closeButton => isRu ? 'Закрыть' : 'Yopish';
   String get favorites => isRu ? 'Избранное' : 'Tanlanganlar';
   String get languageSettings => isRu ? 'Язык приложения' : 'Ilova tili';
   String get support => isRu ? 'Поддержка' : "Qo'llab-quvvatlash";
@@ -91,10 +95,23 @@ class AppLocalizations {
   String get searchHint => isRu ? 'Поиск...' : 'Qidirish...';
   String get shopsNearbyTitle => isRu ? 'Магазины рядом с вами' : "Sizga yaqin do'konlar";
   String get popularProducts => isRu ? 'Популярные товары' : "Mashhur mahsulotlar";
-  String get seeAll => isRu ? 'Все →' : "Hammasi →";
+  String get seeAll => isRu ? 'Все' : 'Hammasi';
   String get popularShops => isRu ? 'Популярные магазины' : "Mashhur do'konlar";
-  String get viewAll => isRu ? 'Смотреть все →' : "Hammasini ko'rish →";
+  String get viewAll => isRu ? 'Смотреть все' : "Hammasini ko'rish";
   String get averageCheck => isRu ? 'Средний чек:' : "O'rtacha hisob:";
+  String get nearbyDistanceAway => isRu ? 'км' : 'km';
+
+  // placeholder construction categories for the home grid, until the backend serves a real list.
+  // they live here rather than inline in the widget because they were hardcoded in russian, which
+  // meant switching the app to uzbek left this whole section untranslated.
+  String get categoryConcrete => isRu ? 'Бетон' : 'Beton';
+  String get categoryCement => isRu ? 'Цемент' : 'Sement';
+  String get categoryBrick => isRu ? 'Кирпич' : "G'isht";
+  String get categoryRebar => isRu ? 'Арматура' : 'Armatura';
+  String get categoryFoamBlock => isRu ? 'Пеноблок' : 'Penoblok';
+  String get categoryRoofing => isRu ? 'Кровля' : 'Tom yopish';
+  String get categoryPaint => isRu ? 'Краска' : "Bo'yoq";
+  String get categoryInsulation => isRu ? 'Изоляция' : 'Izolyatsiya';
   String get currencySom => isRu ? 'сум' : "so'm";
 
   // "1250000" -> "1 250 000 сум" (or "so'm"). lives here rather than in one screen because the map
@@ -123,6 +140,16 @@ class AppLocalizations {
   String get noShopsYet => isRu ? 'Пока нет магазинов' : "Hozircha do'konlar yo'q";
   String get mapLoadError =>
       isRu ? 'Не удалось загрузить магазины' : "Do'konlarni yuklab bo'lmadi";
+  String get loadingShops => isRu ? 'Загружаем магазины...' : "Do'konlar yuklanmoqda...";
+
+  // shop details sheet. the phone number is shown as a labelled detail row now, so the call button
+  // can carry a short verb instead of the raw number - a cta reads better as an action than as data.
+  String get addressLabel => isRu ? 'Адрес' : 'Manzil';
+  String get phoneLabel => isRu ? 'Телефон' : 'Telefon';
+  String get callButton => isRu ? 'Позвонить' : "Qo'ng'iroq qilish";
+
+  // compact form of averageCheck, for rows where the full label would crowd the number out
+  String get averageCheckShort => isRu ? 'Ср. чек' : "O'rt. hisob";
 
   // location picker screen
   String get searchLocationHint => isRu ? 'Поиск адреса...' : "Manzilni qidirish...";

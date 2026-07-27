@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
+import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/map/presentation/screens/location_picker_screen.dart';
@@ -88,7 +89,7 @@ class _AddStoreScreenState extends State<AddStoreScreen> {
           content: Text(_strings.storeCreatedMessage),
           backgroundColor: AppColors.textDark,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
         ),
       );
     }
@@ -104,10 +105,18 @@ class _AddStoreScreenState extends State<AddStoreScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.background,
         elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.textDark),
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        titleSpacing: 20,
+        iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
         title: Text(
           _strings.addStoreScreenTitle,
-          style: const TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w800),
+          style: const TextStyle(
+            color: AppColors.textDark,
+            fontSize: 18,
+            letterSpacing: -0.2,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
       body: SafeArea(
@@ -152,26 +161,10 @@ class _AddStoreScreenState extends State<AddStoreScreen> {
               _InlineErrorCard(message: _strings.storeCreationFailed),
             ],
             const SizedBox(height: 28),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryOrange,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
-                onPressed: controller.isSaving ? null : _submit,
-                child: controller.isSaving
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
-                      )
-                    : Text(
-                        _strings.createStoreButton,
-                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800),
-                      ),
-              ),
+            _SubmitButton(
+              label: _strings.createStoreButton,
+              isBusy: controller.isSaving,
+              onTap: _submit,
             ),
           ],
         ),
@@ -189,7 +182,12 @@ class _FormLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: const TextStyle(color: AppColors.textDark, fontSize: 13.5, fontWeight: FontWeight.w700),
+      style: const TextStyle(
+        color: AppColors.textDark,
+        fontSize: 13,
+        letterSpacing: 0.1,
+        fontWeight: FontWeight.w600,
+      ),
     );
   }
 }
@@ -217,24 +215,36 @@ class _FormTextField extends StatelessWidget {
       controller: controller,
       keyboardType: keyboardType,
       onChanged: onChanged,
-      style: const TextStyle(color: AppColors.textDark, fontSize: 15.5, fontWeight: FontWeight.w600),
+      style: const TextStyle(color: AppColors.textDark, fontSize: 15, fontWeight: FontWeight.w500),
       decoration: InputDecoration(
         hintText: hint,
+        hintStyle: const TextStyle(color: AppColors.textFaint, fontSize: 15, fontWeight: FontWeight.w400),
         errorText: errorText,
+        errorStyle: const TextStyle(color: AppColors.danger, fontSize: 12, fontWeight: FontWeight.w500),
         filled: true,
-        fillColor: const Color(0xFFF1F5F9),
-        prefixIcon: Icon(icon, color: AppColors.textGrey, size: 20),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+        fillColor: AppColors.surfaceMuted,
+        prefixIcon: Icon(icon, color: AppColors.textFaint, size: 18),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        // an unfocused field is a plain hairline, not a heavy outline - the border only gains
+        // weight and colour once the field is actually the one being edited
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          borderSide: const BorderSide(color: AppColors.hairline),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          borderSide: const BorderSide(color: AppColors.hairline),
+        ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
           borderSide: const BorderSide(color: AppColors.primaryOrange, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.danger, width: 1.5),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          borderSide: const BorderSide(color: AppColors.danger),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
           borderSide: const BorderSide(color: AppColors.danger, width: 1.5),
         ),
       ),
@@ -260,58 +270,76 @@ class _LocationPickerTile extends StatelessWidget {
     final hasLocation = pickedAddress != null;
     final borderColor = errorText != null
         ? AppColors.danger
-        : (hasLocation ? AppColors.primaryOrange : const Color(0xFFE2E8F0));
+        : (hasLocation ? AppColors.primaryOrange : AppColors.hairline);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: borderColor, width: hasLocation || errorText != null ? 1.5 : 1),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  hasLocation ? CupertinoIcons.checkmark_circle_fill : CupertinoIcons.map_pin_ellipse,
-                  color: hasLocation ? AppColors.primaryOrange : AppColors.textGrey,
-                  size: 20,
+        Material(
+          color: AppColors.surfaceMuted,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            child: Ink(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceMuted,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(
+                  color: borderColor,
+                  width: hasLocation || errorText != null ? 1.5 : 1,
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    pickedAddress ?? strings.pickLocationPrompt,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: hasLocation ? AppColors.textDark : AppColors.textGrey,
-                      fontSize: 13.5,
-                      fontWeight: hasLocation ? FontWeight.w700 : FontWeight.w500,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    hasLocation ? CupertinoIcons.checkmark_circle_fill : CupertinoIcons.map_pin_ellipse,
+                    color: hasLocation ? AppColors.primaryOrange : AppColors.textFaint,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Text(
+                      pickedAddress ?? strings.pickLocationPrompt,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: hasLocation ? AppColors.textDark : AppColors.textFaint,
+                        fontSize: 13.5,
+                        height: 1.35,
+                        fontWeight: hasLocation ? FontWeight.w500 : FontWeight.w400,
+                      ),
                     ),
                   ),
-                ),
-                if (hasLocation)
-                  Text(
-                    strings.changeLocationButton,
-                    style: const TextStyle(color: AppColors.primaryOrange, fontSize: 12.5, fontWeight: FontWeight.w700),
-                  ),
-              ],
+                  if (hasLocation) ...[
+                    const SizedBox(width: 10),
+                    Text(
+                      strings.changeLocationButton,
+                      style: const TextStyle(
+                        color: AppColors.primaryOrange,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         ),
         if (errorText != null) ...[
-          const SizedBox(height: 6),
+          const SizedBox(height: 7),
           Padding(
             padding: const EdgeInsets.only(left: 4),
             child: Text(
               errorText!,
-              style: const TextStyle(color: AppColors.danger, fontSize: 12, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                color: AppColors.danger,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],
@@ -332,19 +360,75 @@ class _InlineErrorCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.dangerSoft,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(CupertinoIcons.exclamationmark_triangle_fill, color: AppColors.danger, size: 18),
+          const Icon(CupertinoIcons.exclamationmark_triangle_fill, color: AppColors.danger, size: 17),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(color: AppColors.danger, fontSize: 13, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                color: AppColors.danger,
+                fontSize: 13,
+                height: 1.35,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// matches the call cta in the shop details sheet: fixed comfortable height, radius from the scale,
+// and a soft brand-coloured glow instead of material's default grey elevation.
+class _SubmitButton extends StatelessWidget {
+  const _SubmitButton({required this.label, required this.isBusy, required this.onTap});
+
+  final String label;
+  final bool isBusy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        // the glow is dropped while saving so the disabled state reads as genuinely inert
+        boxShadow: isBusy ? const [] : AppShadows.accent(AppColors.primaryOrange),
+      ),
+      child: Material(
+        color: isBusy ? AppColors.primaryOrange.withValues(alpha: 0.55) : AppColors.primaryOrange,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          onTap: isBusy ? null : onTap,
+          child: SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: Center(
+              child: isBusy
+                  ? const SizedBox(
+                      width: 21,
+                      height: 21,
+                      child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white),
+                    )
+                  : Text(
+                      label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15.5,
+                        letterSpacing: 0.1,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+            ),
+          ),
+        ),
       ),
     );
   }

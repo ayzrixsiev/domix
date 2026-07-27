@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/core/constants/app_colors.dart';
+import 'package:frontend/core/constants/app_theme.dart';
 
 // teardrop pin shape in brand orange with a shop icon inside, pointing down at its bottom tip.
 // shared between ShopMarker (a tappable pin plotted on the map) and the location picker's fixed
@@ -76,21 +77,30 @@ class _PaycheckLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // neutral hairline rather than the old orange outline: the pin below is already orange, so
+    // outlining the label too made the pair read as one solid orange blob against the map. a soft
+    // shadow does the separation work instead - a map is a busy backdrop, so the pill needs some
+    // lift, just not a hard 15%-black edge.
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.primaryOrange, width: 1),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 4, offset: const Offset(0, 2)),
+        borderRadius: BorderRadius.circular(AppRadius.xs),
+        border: Border.all(color: AppColors.hairline),
+        boxShadow: const [
+          BoxShadow(color: Color(0x1F101828), blurRadius: 8, offset: Offset(0, 2)),
         ],
       ),
       child: Text(
         text,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.textDark),
+        style: const TextStyle(
+          fontSize: 10.5,
+          height: 1.1,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textDark,
+        ),
       ),
     );
   }
