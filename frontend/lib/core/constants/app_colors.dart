@@ -12,7 +12,13 @@ class AppColors {
   static const Color primaryTint = Color(0xFFFFE4CC);
 
   // Backgrounds
-  static const Color background = Color(0xFFF8F9FA);
+  //
+  // the page sits a real step below a white card rather than the ~3% it used to (0xFFF8F9FA). a
+  // white card on a near-white page has almost nothing to separate it but its shadow, and a shadow
+  // soft enough to look premium is too soft to do that job alone - the contrast has to come from
+  // the surface underneath. this is roughly ios's systemGroupedBackground, which exists for the
+  // same reason. it darkens every screen at once, so it is a token change, not a per-widget one.
+  static const Color background = Color(0xFFEFF1F5);
   static const Color surfaceWhite = Color(0xFFFFFFFF);
   static const Color cardGrey = Color(0xFFF1F3F6);
 

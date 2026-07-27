@@ -93,15 +93,20 @@ class AppLocalizations {
   String get messagesTab => isRu ? 'Сообщения' : 'Xabarlar';
   String get profileTab => isRu ? 'Профиль' : 'Profil';
 
-  // home screen
-  String get searchHint => isRu ? 'Поиск...' : 'Qidirish...';
-  String get shopsNearbyTitle => isRu ? 'Магазины рядом с вами' : "Sizga yaqin do'konlar";
+  // home screen. the hint names what is actually searched (products) rather than the generic
+  // "Поиск..." - a placeholder is the only instruction an empty field ever gets.
+  String get searchHint => isRu ? 'Ищите товары...' : 'Mahsulotlarni qidiring...';
+  /// shops ranked by the lowest average check across the whole catalogue - deliberately not a
+  /// nearby/distance list, so the copy promises a price, not a location
+  String get bestOffersTitle => isRu ? 'Лучшие предложения' : 'Eng yaxshi takliflar';
   String get popularCategories => isRu ? 'Популярные категории' : 'Mashhur kategoriyalar';
   String get seeAll => isRu ? 'Все' : 'Hammasi';
-  String get popularShops => isRu ? 'Популярные магазины' : "Mashhur do'konlar";
+
+  // "VIP" stays latin in both languages on purpose - it is the name of the paid placement tier,
+  // not a word being translated. only the noun after it follows the language.
+  String get vipShops => isRu ? 'VIP Магазины' : "VIP Do'konlar";
   String get viewAll => isRu ? 'Смотреть все' : "Hammasini ko'rish";
   String get averageCheck => isRu ? 'Средний чек:' : "O'rtacha hisob:";
-  String get nearbyDistanceAway => isRu ? 'км' : 'km';
 
   // placeholder construction categories for the home grid, until the backend serves a real list.
   // they live here rather than inline in the widget because they were hardcoded in russian, which
@@ -128,7 +133,19 @@ class AppLocalizations {
     }
     return '$grouped $currencySom';
   }
+  /// the city shown in the home header before the user has ever picked one on the map
   String get cityName => isRu ? 'Ташкент' : 'Toshkent';
+
+  /// tooltip/semantics for the header's city pill, which opens the map picker
+  String get changeCityLabel => isRu ? 'Сменить город' : "Shaharni o'zgartirish";
+
+  // notifications screen. empty for everyone right now - nothing in the app produces a
+  // notification yet - so the screen exists to make the bell a real destination, not a dead icon.
+  String get notificationsTitle => isRu ? 'Уведомления' : 'Bildirishnomalar';
+  String get noNotifications => isRu ? 'Нет уведомлений' : "Bildirishnomalar yo'q";
+  String get noNotificationsHint => isRu
+      ? 'Здесь появятся новые заказы, ответы магазинов и новости Domix.'
+      : "Bu yerda yangi buyurtmalar, do'konlar javoblari va Domix yangiliklari paydo bo'ladi.";
 
   // placeholder screens
   String get messagesComingSoon => isRu

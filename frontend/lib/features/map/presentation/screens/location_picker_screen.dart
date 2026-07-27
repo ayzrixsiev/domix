@@ -15,11 +15,16 @@ class LocationPickResult {
     required this.latitude,
     required this.longitude,
     required this.address,
+    this.city,
   });
 
   final double latitude;
   final double longitude;
   final String address;
+
+  /// the city containing the picked point, when nominatim could name one. the add-store form
+  /// ignores this and stores the full address; the home header's city pill uses only this.
+  final String? city;
 }
 
 // lets a shop owner find their shop's location: search by address, drag the map to fine-tune
@@ -41,6 +46,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   LatLng _currentCenter = LocationPickerScreen._defaultCenter;
   String? _resolvedAddress;
+  String? _resolvedCity;
   bool _isResolvingAddress = false;
   List<GeocodeResult> _searchResults = [];
   bool _isSearching = false;
@@ -64,14 +70,20 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     _debounce?.cancel();
     setState(() => _isResolvingAddress = true);
 
+    // read the language synchronously, before the timer: the callback below runs after an await
+    // gap, and reaching for context there could happen once this screen is already gone
+    final languageCode = context.read<LanguageProvider>().language.code;
+
     _debounce = Timer(const Duration(milliseconds: 700), () async {
-      final address = await _geocodingService.reverseGeocode(
+      final result = await _geocodingService.reverseGeocodeDetailed(
         _currentCenter.latitude,
         _currentCenter.longitude,
+        languageCode: languageCode,
       );
       if (!mounted) return;
       setState(() {
-        _resolvedAddress = address;
+        _resolvedAddress = result.address;
+        _resolvedCity = result.city;
         _isResolvingAddress = false;
       });
     });
@@ -109,6 +121,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         longitude: _currentCenter.longitude,
         address: _resolvedAddress ??
             '${_currentCenter.latitude.toStringAsFixed(5)}, ${_currentCenter.longitude.toStringAsFixed(5)}',
+        city: _resolvedCity,
       ),
     );
   }

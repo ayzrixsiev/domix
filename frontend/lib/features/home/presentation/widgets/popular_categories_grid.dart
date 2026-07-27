@@ -27,7 +27,7 @@ class PopularCategoriesGrid extends StatelessWidget {
     HomeCategory.electrical => LucideIcons.zap,
     HomeCategory.plumbing => LucideIcons.droplets,
     HomeCategory.paints => LucideIcons.paint_roller,
-    HomeCategory.tools => LucideIcons.toolbox,
+    HomeCategory.tools => LucideIcons.wrench,
   };
 
   static String _labelOf(HomeCategory category, AppLocalizations strings) => switch (category) {
@@ -51,9 +51,14 @@ class PopularCategoriesGrid extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 4,
-        // sized close to the content height. the previous 0.70 left tall empty cells, and since a
-        // grid cell's slack falls *below* its content, that gap read as the two rows drifting apart.
-        childAspectRatio: 0.86,
+        // a fixed row height rather than childAspectRatio, which was the previous approach.
+        // aspect ratio derives height from *width*, so the cell got taller on a wide phone and
+        // shorter on a narrow one - and once the section moved inside a padded panel the cells
+        // narrowed enough that the computed height no longer fit a two-line label. this is the
+        // content's actual height (64 box + 7 gap + two 13.2px lines) plus a little slack, and it
+        // holds on every screen width. it also fixes the old complaint about tall empty cells,
+        // since the slack is now a constant instead of whatever the width happened to imply.
+        mainAxisExtent: 100,
         crossAxisSpacing: 10,
         mainAxisSpacing: 6,
       ),
@@ -86,17 +91,18 @@ class _CategoryTile extends StatelessWidget {
           // the box stays - it is what separates one category from the next - but it is neutral now.
           // eight different pastel fills with eight matching icon colours was the loudest thing on
           // the screen and read as a children's app; a monochrome glyph on an off-white tile reads
-          // as a catalogue.
+          // as a catalogue. cardGrey (not surfaceMuted) on purpose here: surfaceMuted is tuned to sit
+          // almost flush with the page background, which is what made the tile read as barely-there.
           Container(
-            height: 56,
-            width: 56,
+            height: 64,
+            width: 64,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.surfaceMuted,
+              color: AppColors.cardGrey,
               borderRadius: BorderRadius.circular(AppRadius.sm),
               border: Border.all(color: AppColors.hairline),
             ),
-            child: Icon(icon, color: AppColors.textDark, size: 24),
+            child: Icon(icon, color: AppColors.textDark, size: 28),
           ),
           const SizedBox(height: 7),
           Flexible(

@@ -7,7 +7,7 @@ import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/home/data/home_placeholder_content.dart';
 
-/// A page-snapping carousel of featured shops that loops endlessly in both directions.
+/// A page-snapping carousel of VIP (paid placement) shops that loops endlessly in both directions.
 ///
 /// **How the loop works.** `PageView.builder` with a null `itemCount` is unbounded *forwards* only:
 /// the underlying `SliverChildBuilderDelegate` has no concept of a negative index, so there is no
@@ -22,8 +22,8 @@ import 'package:frontend/features/home/data/home_placeholder_content.dart';
 ///    shop rather than an arbitrary one.
 ///  * Dart's `%` is Euclidean - `-1 % 5` is `4`, not `-1` - so the mapping stays correct even if an
 ///    index below the origin is ever built.
-class PopularShopsCarousel extends StatefulWidget {
-  const PopularShopsCarousel({super.key});
+class VipShopsCarousel extends StatefulWidget {
+  const VipShopsCarousel({super.key});
 
   /// Card + peek. The page is this fraction of the screen; the leftover is split between the two
   /// neighbours, so an edge of the previous and next shop is always visible and the strip reads as
@@ -33,10 +33,10 @@ class PopularShopsCarousel extends StatefulWidget {
   static const double cardHeight = 216;
 
   @override
-  State<PopularShopsCarousel> createState() => _PopularShopsCarouselState();
+  State<VipShopsCarousel> createState() => _VipShopsCarouselState();
 }
 
-class _PopularShopsCarouselState extends State<PopularShopsCarousel> {
+class _VipShopsCarouselState extends State<VipShopsCarousel> {
   /// how many full cycles sit behind the opening page
   static const int _loopOrigin = 5000;
 
@@ -46,9 +46,9 @@ class _PopularShopsCarouselState extends State<PopularShopsCarousel> {
   @override
   void initState() {
     super.initState();
-    _initialPage = _loopOrigin * kPopularShops.length;
+    _initialPage = _loopOrigin * kVipShops.length;
     _controller = PageController(
-      viewportFraction: PopularShopsCarousel.viewportFraction,
+      viewportFraction: VipShopsCarousel.viewportFraction,
       initialPage: _initialPage,
     );
   }
@@ -73,14 +73,14 @@ class _PopularShopsCarouselState extends State<PopularShopsCarousel> {
     final strings = Provider.of<LanguageProvider>(context).strings;
 
     return SizedBox(
-      height: PopularShopsCarousel.cardHeight,
+      height: VipShopsCarousel.cardHeight,
       child: PageView.builder(
         controller: _controller,
         // unbounded: the builder is asked for whatever page the user swipes to, forever
         itemCount: null,
         padEnds: true,
         itemBuilder: (context, index) {
-          final shop = kPopularShops[index % kPopularShops.length];
+          final shop = kVipShops[index % kVipShops.length];
 
           // rebuilds on every scroll tick so the off-centre cards can settle back slightly. it is
           // what makes the swipe feel like cards moving through a viewport rather than a filmstrip
@@ -96,7 +96,7 @@ class _PopularShopsCarouselState extends State<PopularShopsCarousel> {
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 5),
-              child: _PopularShopCard(shop: shop, strings: strings),
+              child: _VipShopCard(shop: shop, strings: strings),
             ),
           );
         },
@@ -109,8 +109,8 @@ class _PopularShopsCarouselState extends State<PopularShopsCarousel> {
 // the top of its brightest screen. they are white now, with the shop's identity carried by a soft
 // branded banner instead of by an inverted colour scheme - and that banner is where a real shop
 // photo will go once photo upload exists, so the layout will not need rethinking then.
-class _PopularShopCard extends StatelessWidget {
-  const _PopularShopCard({required this.shop, required this.strings});
+class _VipShopCard extends StatelessWidget {
+  const _VipShopCard({required this.shop, required this.strings});
 
   final HomeShopPreview shop;
   final AppLocalizations strings;
@@ -124,7 +124,10 @@ class _PopularShopCard extends StatelessWidget {
         color: AppColors.surfaceWhite,
         borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: AppColors.hairline),
-        boxShadow: AppShadows.card,
+        // `raised`, not `card`: this is the section the eye should land on first, and it is the
+        // one surface here big enough that a barely-there shadow just looks like a rendering
+        // artefact rather than depth
+        boxShadow: AppShadows.raised,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -223,7 +226,7 @@ class _Banner extends StatelessWidget {
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.md - 1)),
       child: Container(
-        height: _PopularShopCard._bannerHeight,
+        height: _VipShopCard._bannerHeight,
         width: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(

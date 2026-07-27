@@ -30,6 +30,14 @@ class AppShadows {
     BoxShadow(color: Color(0x0A0D1220), blurRadius: 14, offset: Offset(0, 3)),
   ];
 
+  // one step above `card`, for content the eye is meant to pick out of the page: the shop cards.
+  // still two soft layers rather than one hard one - a single dark shadow reads as a cheap drop
+  // shadow, whereas an ambient blur plus a tight contact shadow reads as a real object on a surface.
+  static const List<BoxShadow> raised = [
+    BoxShadow(color: Color(0x140D1220), blurRadius: 20, offset: Offset(0, 5)),
+    BoxShadow(color: Color(0x0A0D1220), blurRadius: 4, offset: Offset(0, 1)),
+  ];
+
   // for things that genuinely hover over other content (nav bar, map overlays). two layers: a wide
   // ambient one for the lift, and a tight one so the edge stays anchored instead of drifting.
   static const List<BoxShadow> floating = [

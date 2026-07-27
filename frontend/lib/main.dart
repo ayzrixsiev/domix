@@ -3,8 +3,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/app_shell/presentation/screens/app_shell_screen.dart';
+import 'features/location/presentation/controllers/city_controller.dart';
 import 'features/profile/presentation/controllers/auth_controller.dart';
 import 'features/stores/presentation/controllers/stores_controller.dart';
 import 'features/products/presentation/controllers/products_controller.dart';
@@ -26,6 +28,9 @@ void main() async {
       builder: (context) => MultiProvider(
         providers: [
           ChangeNotifierProvider(create: (_) => LanguageProvider()),
+          // holds nothing that needs loading before first paint, so it is built lazily here
+          // rather than awaited above alongside the controllers that read storage
+          ChangeNotifierProvider(create: (_) => CityController()),
           ChangeNotifierProvider.value(value: authController),      // make all
           ChangeNotifierProvider.value(value: storesController),    // UI components
           ChangeNotifierProvider.value(value: productsController),  // to listen to these controllers using notifyListener()
@@ -60,7 +65,9 @@ class DomixApp extends StatelessWidget {
       theme: ThemeData(
         brightness: Brightness.light,
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF8F9FA),
+        // the token, not a copy of its value - this literal was a duplicate of AppColors.background
+        // and would have silently kept the old shade when that token was darkened
+        scaffoldBackgroundColor: AppColors.background,
       ),
       
       home: const AppShellScreen(),

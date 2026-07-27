@@ -7,14 +7,18 @@ import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/home/data/home_placeholder_content.dart';
 
-// a vertical list of cards, where this used to be a two-column grid.
+// "Лучшие предложения" - the cheapest shops in the catalogue, cheapest first.
 //
-// each grid cell had to carry a name, a rating, a distance, a street and an average check inside
-// half the screen's width, which forced all of it down to 11px with nothing emphasised. full-width
-// rows give the shop name a line of its own. they carry their own card surface again now that the
-// section panels are gone - without a containing panel there would be nothing to sit on.
-class ShopsNearbyGrid extends StatelessWidget {
-  const ShopsNearbyGrid({super.key});
+// This was "Магазины рядом с вами", a distance-ordered list. The ranking is now purely by average
+// check across every shop, with no location input, so the row no longer shows a distance: keeping
+// "0.5 км" next to a list that ignores location would have implied a proximity guarantee the
+// section does not make. `kBestOffers` does the ranking (see home_placeholder_content.dart).
+//
+// A vertical list of cards, where this used to be a two-column grid: each grid cell had to carry a
+// name, a rating, a street and an average check inside half the screen's width, which forced all of
+// it down to 11px with nothing emphasised. Full-width rows give the shop name a line of its own.
+class BestOffersList extends StatelessWidget {
+  const BestOffersList({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -22,17 +26,17 @@ class ShopsNearbyGrid extends StatelessWidget {
 
     return Column(
       children: [
-        for (var i = 0; i < kNearbyShops.length; i++) ...[
+        for (var i = 0; i < kBestOffers.length; i++) ...[
           if (i > 0) const SizedBox(height: 10),
-          _NearbyShopRow(shop: kNearbyShops[i], strings: strings),
+          _BestOfferRow(shop: kBestOffers[i], strings: strings),
         ],
       ],
     );
   }
 }
 
-class _NearbyShopRow extends StatelessWidget {
-  const _NearbyShopRow({required this.shop, required this.strings});
+class _BestOfferRow extends StatelessWidget {
+  const _BestOfferRow({required this.shop, required this.strings});
 
   final HomeShopPreview shop;
   final AppLocalizations strings;
@@ -50,7 +54,10 @@ class _NearbyShopRow extends StatelessWidget {
             color: AppColors.surfaceWhite,
             borderRadius: BorderRadius.circular(AppRadius.md),
             border: Border.all(color: AppColors.hairline),
-            boxShadow: AppShadows.card,
+            // matches the popular-shops cards: a shop should carry the same weight wherever it
+            // appears, and six of these stacked down the page is the section that most needed
+            // separating from the background
+            boxShadow: AppShadows.raised,
           ),
           padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
           child: Row(
@@ -112,7 +119,7 @@ class _NearbyShopRow extends StatelessWidget {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            '${shop.distanceKm} ${strings.nearbyDistanceAway} · ${shop.address}',
+                            shop.address,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
