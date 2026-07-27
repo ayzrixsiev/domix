@@ -60,3 +60,6 @@ Authorization: Bearer ...       ←|
                                 ← blank line (mandatory separator between headers and actual body - content)
 {"name":"My Shop", ...}         ← body (the actual content)
 ```
+
+# Channels
+Channels in go is like a pipe that sends signals to goroutines and let's them talk to each other

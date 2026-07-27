@@ -86,7 +86,9 @@ class AppLocalizations {
 
   // bottom navigation labels
   String get homeTab => isRu ? 'Главная' : 'Asosiy';
-  String get searchTab => isRu ? 'Поиск' : 'Qidirish';
+  // the search tab became the entry point for the planned job-ticket marketplace: clients post
+  // construction work requests, workers pick them up. search itself now lives on the map and home.
+  String get ticketsTab => isRu ? 'Заявки' : 'Buyurtmalar';
   String get mapTab => isRu ? 'Карта' : 'Xarita';
   String get messagesTab => isRu ? 'Сообщения' : 'Xabarlar';
   String get profileTab => isRu ? 'Профиль' : 'Profil';
@@ -94,7 +96,7 @@ class AppLocalizations {
   // home screen
   String get searchHint => isRu ? 'Поиск...' : 'Qidirish...';
   String get shopsNearbyTitle => isRu ? 'Магазины рядом с вами' : "Sizga yaqin do'konlar";
-  String get popularProducts => isRu ? 'Популярные товары' : "Mashhur mahsulotlar";
+  String get popularCategories => isRu ? 'Популярные категории' : 'Mashhur kategoriyalar';
   String get seeAll => isRu ? 'Все' : 'Hammasi';
   String get popularShops => isRu ? 'Популярные магазины' : "Mashhur do'konlar";
   String get viewAll => isRu ? 'Смотреть все' : "Hammasini ko'rish";
@@ -104,14 +106,14 @@ class AppLocalizations {
   // placeholder construction categories for the home grid, until the backend serves a real list.
   // they live here rather than inline in the widget because they were hardcoded in russian, which
   // meant switching the app to uzbek left this whole section untranslated.
-  String get categoryConcrete => isRu ? 'Бетон' : 'Beton';
-  String get categoryCement => isRu ? 'Цемент' : 'Sement';
-  String get categoryBrick => isRu ? 'Кирпич' : "G'isht";
-  String get categoryRebar => isRu ? 'Арматура' : 'Armatura';
-  String get categoryFoamBlock => isRu ? 'Пеноблок' : 'Penoblok';
+  String get categoryMixes => isRu ? 'Смеси' : 'Aralashmalar';
+  String get categoryBlocks => isRu ? 'Блоки' : 'Bloklar';
+  String get categoryFasteners => isRu ? 'Крепёж' : 'Mahkamlagichlar';
   String get categoryRoofing => isRu ? 'Кровля' : 'Tom yopish';
-  String get categoryPaint => isRu ? 'Краска' : "Bo'yoq";
-  String get categoryInsulation => isRu ? 'Изоляция' : 'Izolyatsiya';
+  String get categoryElectrical => isRu ? 'Электрика' : 'Elektrika';
+  String get categoryPlumbing => isRu ? 'Сантехника' : 'Santexnika';
+  String get categoryPaints => isRu ? 'Краски' : "Bo'yoqlar";
+  String get categoryTools => isRu ? 'Инструменты' : 'Asboblar';
   String get currencySom => isRu ? 'сум' : "so'm";
 
   // "1250000" -> "1 250 000 сум" (or "so'm"). lives here rather than in one screen because the map
@@ -132,9 +134,12 @@ class AppLocalizations {
   String get messagesComingSoon => isRu
       ? 'Раздел сообщений скоро будет доступен'
       : "Xabarlar bo'limi tez orada bo'ladi";
-  String get searchComingSoon => isRu
-      ? 'Раздел поиска скоро будет доступен'
-      : "Qidiruv bo'limi tez orada bo'ladi";
+  String get ticketsComingSoonTitle =>
+      isRu ? 'Заявки мастерам' : 'Ustalarga buyurtmalar';
+  String get ticketsComingSoonBody => isRu
+      ? 'Скоро здесь можно будет оставить заявку на работу, а мастера и бригады будут откликаться на неё.'
+      : "Tez orada bu yerda ish uchun buyurtma qoldirasiz, ustalar va brigadalar unga javob beradi.";
+  String get comingSoonBadge => isRu ? 'Скоро' : 'Tez orada';
 
   // map screen (shop pins)
   String get noShopsYet => isRu ? 'Пока нет магазинов' : "Hozircha do'konlar yo'q";
@@ -142,14 +147,24 @@ class AppLocalizations {
       isRu ? 'Не удалось загрузить магазины' : "Do'konlarni yuklab bo'lmadi";
   String get loadingShops => isRu ? 'Загружаем магазины...' : "Do'konlar yuklanmoqda...";
 
+  // map search. the panel searches two sources at once, so its results are grouped and labelled -
+  // a shop the app already knows about and a geocoded address are not the same kind of answer.
+  String get mapSearchHint =>
+      isRu ? 'Магазин или адрес' : "Do'kon yoki manzil";
+  String get searchSectionShops => isRu ? 'Магазины' : "Do'konlar";
+  String get searchSectionPlaces => isRu ? 'Адреса' : 'Manzillar';
+  String get searchNoResults => isRu ? 'Ничего не найдено' : 'Hech narsa topilmadi';
+  String get searchClear => isRu ? 'Очистить' : 'Tozalash';
+
   // shop details sheet. the phone number is shown as a labelled detail row now, so the call button
   // can carry a short verb instead of the raw number - a cta reads better as an action than as data.
   String get addressLabel => isRu ? 'Адрес' : 'Manzil';
   String get phoneLabel => isRu ? 'Телефон' : 'Telefon';
   String get callButton => isRu ? 'Позвонить' : "Qo'ng'iroq qilish";
 
-  // compact form of averageCheck, for rows where the full label would crowd the number out
-  String get averageCheckShort => isRu ? 'Ср. чек' : "O'rt. hisob";
+  // compact form of averageCheck, for rows where the full label would crowd the number out.
+  // "Ср." was too clipped to read at a glance next to a number - "Сред." costs three pixels.
+  String get averageCheckShort => isRu ? 'Сред. чек' : "O'rt. hisob";
 
   // location picker screen
   String get searchLocationHint => isRu ? 'Поиск адреса...' : "Manzilni qidirish...";

@@ -6,129 +6,111 @@ import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/home/data/home_placeholder_content.dart';
-import 'section_header.dart';
 
-// the visual identity of one category tile. paired with HomeCategory by the switch below, so adding
-// a category to the enum is a compile error here until its icon and tint are filled in - which is
-// exactly the safety the old `Map<String, dynamic>` version threw away.
-class _CategoryStyle {
-  const _CategoryStyle(this.icon, this.tint, this.iconColor);
-
-  final IconData icon;
-  final Color tint;
-  final Color iconColor;
-}
-
+// Every glyph here is a Lucide icon - one family, one stroke weight, monochrome.
+//
+// The previous version mixed Hugeicons in, which renders each icon by assembling an SVG string at
+// runtime and handing it to flutter_svg. That is strictly worse than a glyph font for this job: it
+// dragged in three extra packages, cost a parse per icon, and hinted less crisply at small sizes.
+// Lucide ships a real icon font, so the glyphs are vector-hinted, cost nothing to draw, and the
+// package was already a dependency. Hugeicons has been removed from pubspec entirely.
 class PopularCategoriesGrid extends StatelessWidget {
   const PopularCategoriesGrid({super.key});
 
   // dart 3 switch *expressions* over an enum are exhaustive: leave a case out and the analyzer
   // rejects the file rather than throwing at runtime the first time that tile is scrolled into view.
-  static _CategoryStyle _styleOf(HomeCategory category) => switch (category) {
-    HomeCategory.concrete =>
-      const _CategoryStyle(LucideIcons.layers, Color(0xFFEEF4FF), Color(0xFF3B72E8)),
-    HomeCategory.cement =>
-      const _CategoryStyle(LucideIcons.package, Color(0xFFF6EFFA), Color(0xFF8E4FB0)),
-    HomeCategory.brick =>
-      const _CategoryStyle(LucideIcons.layout_grid, Color(0xFFFDEEEF), Color(0xFFD4574F)),
-    HomeCategory.rebar =>
-      const _CategoryStyle(LucideIcons.braces, Color(0xFFE9F5F3), Color(0xFF16897C)),
-    HomeCategory.foamBlock =>
-      const _CategoryStyle(LucideIcons.square, Color(0xFFFDF3E3), Color(0xFFCF8A17)),
-    HomeCategory.roofing =>
-      const _CategoryStyle(Icons.roofing_rounded, Color(0xFFEDEFFA), Color(0xFF4A56B5)),
-    HomeCategory.paint =>
-      const _CategoryStyle(LucideIcons.palette, Color(0xFFEAF6EC), Color(0xFF3E9350)),
-    HomeCategory.insulation =>
-      const _CategoryStyle(LucideIcons.shield, Color(0xFFFCEDE9), Color(0xFFC15436)),
+  static IconData _iconOf(HomeCategory category) => switch (category) {
+    HomeCategory.mixes => LucideIcons.container,
+    HomeCategory.blocks => LucideIcons.brick_wall,
+    HomeCategory.fasteners => LucideIcons.bolt,
+    HomeCategory.roofing => LucideIcons.house,
+    HomeCategory.electrical => LucideIcons.zap,
+    HomeCategory.plumbing => LucideIcons.droplets,
+    HomeCategory.paints => LucideIcons.paint_roller,
+    HomeCategory.tools => LucideIcons.toolbox,
   };
 
   static String _labelOf(HomeCategory category, AppLocalizations strings) => switch (category) {
-    HomeCategory.concrete => strings.categoryConcrete,
-    HomeCategory.cement => strings.categoryCement,
-    HomeCategory.brick => strings.categoryBrick,
-    HomeCategory.rebar => strings.categoryRebar,
-    HomeCategory.foamBlock => strings.categoryFoamBlock,
+    HomeCategory.mixes => strings.categoryMixes,
+    HomeCategory.blocks => strings.categoryBlocks,
+    HomeCategory.fasteners => strings.categoryFasteners,
     HomeCategory.roofing => strings.categoryRoofing,
-    HomeCategory.paint => strings.categoryPaint,
-    HomeCategory.insulation => strings.categoryInsulation,
+    HomeCategory.electrical => strings.categoryElectrical,
+    HomeCategory.plumbing => strings.categoryPlumbing,
+    HomeCategory.paints => strings.categoryPaints,
+    HomeCategory.tools => strings.categoryTools,
   };
 
   @override
   Widget build(BuildContext context) {
     final strings = Provider.of<LanguageProvider>(context).strings;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(
-          title: strings.popularProducts,
-          actionLabel: strings.seeAll,
-          onAction: () {},
-        ),
-        const SizedBox(height: 12),
-        GridView.builder(
-          shrinkWrap: true,
-          padding: EdgeInsets.zero,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 4,
-            childAspectRatio: 0.84,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-          ),
-          itemCount: HomeCategory.values.length,
-          itemBuilder: (context, index) {
-            final category = HomeCategory.values[index];
-            return _CategoryTile(
-              style: _styleOf(category),
-              label: _labelOf(category, strings),
-            );
-          },
-        ),
-      ],
+    return GridView.builder(
+      shrinkWrap: true,
+      padding: EdgeInsets.zero,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        // sized close to the content height. the previous 0.70 left tall empty cells, and since a
+        // grid cell's slack falls *below* its content, that gap read as the two rows drifting apart.
+        childAspectRatio: 0.86,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 6,
+      ),
+      itemCount: HomeCategory.values.length,
+      itemBuilder: (context, index) {
+        final category = HomeCategory.values[index];
+        return _CategoryTile(
+          icon: _iconOf(category),
+          label: _labelOf(category, strings),
+        );
+      },
     );
   }
 }
 
 class _CategoryTile extends StatelessWidget {
-  const _CategoryTile({required this.style, required this.label});
+  const _CategoryTile({required this.icon, required this.label});
 
-  final _CategoryStyle style;
+  final IconData icon;
   final String label;
 
   @override
   Widget build(BuildContext context) {
-    // no drop shadow here on purpose: eight small tiles each casting their own shadow reads as
-    // texture rather than depth. a hairline outline separates them from the page just as well.
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceWhite,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.hairline),
-      ),
+    return InkWell(
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      onTap: () {},
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
+          // the box stays - it is what separates one category from the next - but it is neutral now.
+          // eight different pastel fills with eight matching icon colours was the loudest thing on
+          // the screen and read as a children's app; a monochrome glyph on an off-white tile reads
+          // as a catalogue.
           Container(
-            height: 46,
-            width: 46,
+            height: 56,
+            width: 56,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: style.tint,
+              color: AppColors.surfaceMuted,
               borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(color: AppColors.hairline),
             ),
-            child: Icon(style.icon, color: style.iconColor, size: 21),
+            child: Icon(icon, color: AppColors.textDark, size: 24),
           ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.textDark,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w500,
+          const SizedBox(height: 7),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textDark,
+                fontSize: 11,
+                height: 1.2,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],

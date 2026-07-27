@@ -1,13 +1,18 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/home/data/home_placeholder_content.dart';
-import 'section_header.dart';
 
+// a vertical list of cards, where this used to be a two-column grid.
+//
+// each grid cell had to carry a name, a rating, a distance, a street and an average check inside
+// half the screen's width, which forced all of it down to 11px with nothing emphasised. full-width
+// rows give the shop name a line of its own. they carry their own card surface again now that the
+// section panels are gone - without a containing panel there would be nothing to sit on.
 class ShopsNearbyGrid extends StatelessWidget {
   const ShopsNearbyGrid({super.key});
 
@@ -16,78 +21,134 @@ class ShopsNearbyGrid extends StatelessWidget {
     final strings = Provider.of<LanguageProvider>(context).strings;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SectionHeader(title: strings.shopsNearbyTitle),
-        const SizedBox(height: 12),
-        GridView.builder(
-          shrinkWrap: true,
-          padding: EdgeInsets.zero,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 1.12,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemCount: kNearbyShops.length,
-          itemBuilder: (context, index) =>
-              _NearbyShopCard(shop: kNearbyShops[index], strings: strings),
-        ),
+        for (var i = 0; i < kNearbyShops.length; i++) ...[
+          if (i > 0) const SizedBox(height: 10),
+          _NearbyShopRow(shop: kNearbyShops[i], strings: strings),
+        ],
       ],
     );
   }
 }
 
-class _NearbyShopCard extends StatelessWidget {
-  const _NearbyShopCard({required this.shop, required this.strings});
+class _NearbyShopRow extends StatelessWidget {
+  const _NearbyShopRow({required this.shop, required this.strings});
 
   final HomeShopPreview shop;
   final AppLocalizations strings;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceWhite,
+    return Material(
+      color: AppColors.surfaceWhite,
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: InkWell(
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.hairline),
-        boxShadow: AppShadows.card,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        onTap: () {},
+        child: Ink(
+          decoration: BoxDecoration(
+            color: AppColors.surfaceWhite,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.hairline),
+            boxShadow: AppShadows.card,
+          ),
+          padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+          child: Row(
             children: [
-              Expanded(
-                child: Text(
-                  shop.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textDark,
-                    fontSize: 14.5,
-                    height: 1.25,
-                    letterSpacing: -0.1,
-                    fontWeight: FontWeight.w700,
+              // the same placeholder treatment the shop details sheet uses for a photoless shop,
+              // so a shop looks like the same object wherever it appears in the app
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [AppColors.primarySoft, AppColors.surfaceMuted],
                   ),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+                child: Icon(
+                  CupertinoIcons.building_2_fill,
+                  color: AppColors.primaryOrange.withValues(alpha: 0.45),
+                  size: 18,
                 ),
               ),
-              const SizedBox(width: 6),
-              // rating sits inline with the name rather than in its own filled pill - it is one
-              // number, and a background makes it compete with the shop's actual identity
-              Row(
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      shop.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.textDark,
+                        fontSize: 14.5,
+                        height: 1.25,
+                        letterSpacing: -0.1,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        const Icon(
+                          CupertinoIcons.star_fill,
+                          color: AppColors.starYellow,
+                          size: 11,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          shop.rating.toStringAsFixed(1),
+                          style: const TextStyle(
+                            color: AppColors.textDark,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            '${shop.distanceKm} ${strings.nearbyDistanceAway} · ${shop.address}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.textGrey,
+                              fontSize: 11.5,
+                              height: 1.3,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              // the average check moves to the trailing edge, where it lines up down the column and
+              // can be compared shop to shop at a glance - the whole point of the number
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(LucideIcons.star, color: AppColors.starYellow, size: 12),
-                  const SizedBox(width: 3),
                   Text(
-                    shop.rating.toStringAsFixed(1),
+                    strings.averageCheckShort,
+                    style: const TextStyle(
+                      color: AppColors.textFaint,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    strings.somAmount(shop.averagePaycheck),
                     style: const TextStyle(
                       color: AppColors.textDark,
-                      fontSize: 11.5,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -95,60 +156,7 @@ class _NearbyShopCard extends StatelessWidget {
               ),
             ],
           ),
-          Row(
-            children: [
-              const Icon(LucideIcons.navigation, color: AppColors.textFaint, size: 11),
-              const SizedBox(width: 5),
-              Expanded(
-                child: Text(
-                  '${shop.distanceKm} ${strings.nearbyDistanceAway} • ${shop.address}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textGrey,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          // a hairline plus quiet text, where a full-width filled grey block used to sit. the
-          // average check is the same kind of secondary metric as on the my-shops card, so it gets
-          // the same treatment rather than its own container.
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 1, child: ColoredBox(color: AppColors.hairline)),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Text(
-                    strings.averageCheckShort,
-                    style: const TextStyle(
-                      color: AppColors.textFaint,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                  const SizedBox(width: 5),
-                  Expanded(
-                    child: Text(
-                      strings.somAmount(shop.averagePaycheck),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textDark,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }

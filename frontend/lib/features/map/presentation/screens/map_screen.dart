@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
@@ -10,6 +11,7 @@ import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 import 'package:frontend/features/stores/presentation/controllers/stores_controller.dart';
+import '../widgets/map_search_panel.dart';
 import '../widgets/shop_marker.dart';
 
 class MapScreen extends StatefulWidget {
@@ -22,13 +24,29 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMixin {
   // tashkent, since that's where domix currently operates - a sensible default center
   static const _defaultCenter = LatLng(41.2995, 69.2401);
+
+  /// close enough to read street names after jumping to a search result
+  static const _focusedZoom = 16.0;
+
+  final _mapController = MapController();
+
+  // drives the camera tween in _flyTo. flutter_map's own MapController.move() is an instant jump -
+  // animating it is left to the caller (or to the third-party flutter_map_animations package), and
+  // a plain AnimationController does the job here without taking on another dependency.
+  late final AnimationController _cameraController;
+  VoidCallback? _cameraTick;
 
   @override
   void initState() {
     super.initState();
+    _cameraController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 620),
+    );
+
     // fire-and-forget: load once when the map tab is first built. IndexedStack keeps this screen's
     // state alive across tab switches, so this only ever runs the one time per app session.
     // deferred to after the first frame - loadStores() calls notifyListeners() before its first
@@ -41,6 +59,35 @@ class _MapScreenState extends State<MapScreen> {
         controller.loadStores();
       }
     });
+  }
+
+  @override
+  void dispose() {
+    if (_cameraTick != null) _cameraController.removeListener(_cameraTick!);
+    _cameraController.dispose();
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  // glides the camera to [target] instead of teleporting. every frame the controller ticks, we read
+  // the tweens at the current progress and hand flutter_map a new centre/zoom.
+  void _flyTo(LatLng target, {double zoom = _focusedZoom}) {
+    final camera = _mapController.camera;
+    final latTween = Tween<double>(begin: camera.center.latitude, end: target.latitude);
+    final lngTween = Tween<double>(begin: camera.center.longitude, end: target.longitude);
+    final zoomTween = Tween<double>(begin: camera.zoom, end: zoom);
+    final curved = CurvedAnimation(parent: _cameraController, curve: Curves.easeInOutCubic);
+
+    // detach the previous frame callback first. interrupting one fly-to with another would
+    // otherwise leave both listeners driving the same camera, and they would fight each other.
+    if (_cameraTick != null) _cameraController.removeListener(_cameraTick!);
+    _cameraTick = () => _mapController.move(
+      LatLng(latTween.evaluate(curved), lngTween.evaluate(curved)),
+      zoomTween.evaluate(curved),
+    );
+    _cameraController
+      ..addListener(_cameraTick!)
+      ..forward(from: 0);
   }
 
   void _showShopDetails(BuildContext context, Shop shop) {
@@ -63,63 +110,142 @@ class _MapScreenState extends State<MapScreen> {
     final strings = Provider.of<LanguageProvider>(context).strings;
     final controller = Provider.of<StoresController>(context);
 
-    final body = SafeArea(
-      bottom: false,
-      child: Stack(
-        children: [
-          FlutterMap(
-            options: const MapOptions(
-              initialCenter: _defaultCenter,
-              initialZoom: 12,
+    Widget? statusBanner;
+    if (controller.isLoading && controller.stores.isEmpty) {
+      statusBanner = _MapMessageBanner(message: strings.loadingShops, isBusy: true);
+    } else if (controller.loadError != null && controller.stores.isEmpty) {
+      statusBanner = _MapMessageBanner(message: strings.mapLoadError, isError: true);
+    } else if (controller.stores.isEmpty) {
+      statusBanner = _MapMessageBanner(message: strings.noShopsYet);
+    }
+
+    final body = Stack(
+      children: [
+        // deliberately NOT inside a SafeArea. a map is a canvas: it should run edge to edge and let
+        // the status bar and the dynamic island float over it, the same way apple maps does. wrapping
+        // it in SafeArea (as this screen used to) padded the whole notch band away and left a dead
+        // strip of background across the top. only the controls further down are inset.
+        FlutterMap(
+          mapController: _mapController,
+          options: MapOptions(
+            initialCenter: _defaultCenter,
+            initialZoom: 12,
+            // tapping the map itself drops the keyboard and closes the search dropdown
+            onTap: (_, _) => FocusScope.of(context).unfocus(),
+          ),
+          children: [
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'uz.domix.app',
             ),
-            children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'uz.domix.app',
-              ),
-              MarkerLayer(
-                markers: [
-                  for (final shop in controller.stores)
-                    Marker(
-                      point: LatLng(shop.latitude, shop.longitude),
-                      width: shop.averagePaycheck > 0 ? ShopMarker.labeledMarkerWidth : ShopMarker.pinWidth,
-                      height: shop.averagePaycheck > 0
-                          ? ShopMarker.pinHeight + ShopMarker.labelGap + ShopMarker.labelHeight
-                          : ShopMarker.pinHeight,
-                      alignment: Alignment.topCenter,
-                      child: ShopMarker(
-                        onTap: () => _showShopDetails(context, shop),
-                        // omitted entirely (not "0 сум") for a brand-new shop with no sales yet -
-                        // matches the same `> 0` convention the details sheet below already uses
-                        averagePaycheckLabel:
-                            shop.averagePaycheck > 0 ? strings.somAmount(shop.averagePaycheck) : null,
-                      ),
+            MarkerLayer(
+              markers: [
+                for (final shop in controller.stores)
+                  Marker(
+                    point: LatLng(shop.latitude, shop.longitude),
+                    width: shop.averagePaycheck > 0 ? ShopMarker.labeledMarkerWidth : ShopMarker.pinWidth,
+                    height: shop.averagePaycheck > 0
+                        ? ShopMarker.pinHeight + ShopMarker.labelGap + ShopMarker.labelHeight
+                        : ShopMarker.pinHeight,
+                    alignment: Alignment.topCenter,
+                    child: ShopMarker(
+                      onTap: () => _showShopDetails(context, shop),
+                      // omitted entirely (not "0 сум") for a brand-new shop with no sales yet -
+                      // matches the same `> 0` convention the details sheet below already uses
+                      averagePaycheckLabel:
+                          shop.averagePaycheck > 0 ? strings.somAmount(shop.averagePaycheck) : null,
                     ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+
+        // openstreetmap's licence (ODbL) requires visible attribution, so this is not decoration.
+        // it is lifted clear of the floating nav bar, which started covering flutter_map's built-in
+        // bottom-right widget the moment the map went full-bleed.
+        Positioned(
+          right: 10,
+          bottom: widget.bottomPadding + 10,
+          child: const _MapAttribution(),
+        ),
+
+        // the controls layer - *this* is what respects the notch, not the map behind it
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  MapSearchPanel(
+                    shops: controller.stores,
+                    strings: strings,
+                    onShopSelected: (shop) {
+                      _flyTo(LatLng(shop.latitude, shop.longitude));
+                      _showShopDetails(context, shop);
+                    },
+                    onPlaceSelected: (place) =>
+                        _flyTo(LatLng(place.latitude, place.longitude)),
+                  ),
+                  if (statusBanner != null) ...[
+                    const SizedBox(height: 10),
+                    statusBanner,
+                  ],
                 ],
               ),
-              const SimpleAttributionWidget(
-                source: Text('OpenStreetMap contributors'),
-              ),
-            ],
+            ),
           ),
+        ),
+      ],
+    );
 
-          // all three states share one floating pill anchored at the top. a bare centred spinner
-          // over map tiles had nothing behind it to sit on and read as the map itself being broken.
-          if (controller.isLoading && controller.stores.isEmpty)
-            _MapMessageBanner(message: strings.loadingShops, isBusy: true)
-          else if (controller.loadError != null && controller.stores.isEmpty)
-            _MapMessageBanner(message: strings.mapLoadError, isError: true)
-          else if (controller.stores.isEmpty)
-            _MapMessageBanner(message: strings.noShopsYet),
-        ],
-      ),
+    // the clock and battery now sit over light map tiles rather than over our own background, so
+    // they have to be told to paint dark. AnnotatedRegion applies the style while this screen is
+    // the one on top, and reverts when another takes over.
+    final styledBody = AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark,
+      child: body,
     );
 
     if (!widget.showScaffold) {
-      return body;
+      return styledBody;
     }
 
-    return Scaffold(backgroundColor: AppColors.background, body: body);
+    return Scaffold(backgroundColor: AppColors.background, body: styledBody);
+  }
+}
+
+class _MapAttribution extends StatelessWidget {
+  const _MapAttribution();
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => launchUrl(
+        Uri.parse('https://www.openstreetmap.org/copyright'),
+        mode: LaunchMode.externalApplication,
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.82),
+          borderRadius: BorderRadius.circular(AppRadius.xs),
+        ),
+        child: const Text(
+          '© OpenStreetMap',
+          style: TextStyle(
+            color: AppColors.textGrey,
+            fontSize: 9.5,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -422,15 +548,10 @@ class _MapMessageBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Positioned(
-      top: 14,
-      left: 0,
-      right: 0,
-      // centred and content-sized rather than stretched edge to edge: a short line of text in a
-      // full-width bar looks like a system error banner, not a status hint
-      child: Center(
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
+    // centred and content-sized rather than stretched edge to edge: a short line of text in a
+    // full-width bar looks like a system error banner, not a status hint
+    return Center(
+      child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
             color: Colors.white,
@@ -474,7 +595,6 @@ class _MapMessageBanner extends StatelessWidget {
               ),
             ],
           ),
-        ),
       ),
     );
   }

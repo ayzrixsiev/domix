@@ -168,8 +168,8 @@ func mustConnectDB(dbURL string) *pgxpool.Pool {
 	return pool
 }
 
-// reads an int env var, falling back to def if it's unset or not a valid number - lets the pool
-// size be tuned per-deployment (e.g. a bigger production server) without a code change
+// it called twice in mustConnetcDB func, and provided twice with a key (string) and value (def int32)
+// we check whether we have these two keys foncifgured inside env, if no we use the ones inside mustConnectDB
 func envInt(key string, def int32) int32 {
 	raw := os.Getenv(key)
 	if raw == "" {
@@ -182,8 +182,8 @@ func envInt(key string, def int32) int32 {
 	return int32(n)
 }
 
-// lets a load balancer / orchestrator / uptime monitor ask "is this instance actually working",
-// not just "is the process running" - pinging the db is what makes this a readiness check
+// load balaner will hit /health http enpoint to see whether this server's db connection is fine
+// to decide whether it can route traffic here
 func healthCheck(dbPool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
@@ -199,8 +199,9 @@ func healthCheck(dbPool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-// blocks until the process receives an interrupt/terminate signal, then shuts the http server down
-// cleanly (finishing in-flight requests instead of dropping them) and closes the db pool. without
+// when main func runs it creates a channel and starts listening to an interrupt/terminate signal,
+// and stops there, see: <-stop. it means no further code (http server and db pool shutdown), once it receives a signal
+// it shuts the http server down cleanly (finishing in-flight requests instead of dropping them) and closes the db pool. without
 // this, ctrl+c (or however this gets stopped in production) just kills everything mid-request.
 func waitForShutdown(srv *http.Server, dbPool *pgxpool.Pool) {
 	stop := make(chan os.Signal, 1)

@@ -37,7 +37,7 @@ class HomeShopPreview {
 /// The label is *not* stored here: it's resolved per-language from `AppLocalizations`, because
 /// these were previously hardcoded Russian strings and stayed Russian when the app switched to
 /// Uzbek. The enum is what the widget switches over to pick both the label and the icon/tint.
-enum HomeCategory { concrete, cement, brick, rebar, foamBlock, roofing, paint, insulation }
+enum HomeCategory { mixes, blocks, fasteners, roofing, electrical, plumbing, paints, tools }
 
 const List<HomeShopPreview> kPopularShops = [
   HomeShopPreview(
@@ -63,6 +63,12 @@ const List<HomeShopPreview> kPopularShops = [
     address: 'Чиланзар, ул. Шахрисабз, 7',
     rating: 4.6,
     averagePaycheck: 950000,
+  ),
+  HomeShopPreview(
+    name: 'Профиль Групп',
+    address: 'Сергелийский р-н, ул. Янги Сергели, 3',
+    rating: 4.8,
+    averagePaycheck: 1150000,
   ),
 ];
 

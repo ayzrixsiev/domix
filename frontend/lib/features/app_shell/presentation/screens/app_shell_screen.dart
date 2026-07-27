@@ -9,7 +9,7 @@ import 'package:frontend/features/home/presentation/screens/home_screen.dart';
 import 'package:frontend/features/map/presentation/screens/map_screen.dart';
 import 'package:frontend/features/messages/presentation/screens/messages_screen.dart';
 import 'package:frontend/features/profile/presentation/screens/profile_screen.dart';
-import 'package:frontend/features/search/presentation/screens/search_screen.dart';
+import 'package:frontend/features/tickets/presentation/screens/tickets_screen.dart';
 import 'package:frontend/features/stores/presentation/screens/add_store_screen.dart';
 import 'package:frontend/features/stores/presentation/screens/my_shops_screen.dart';
 
@@ -25,7 +25,9 @@ class _AppShellScreenState extends State<AppShellScreen> {
 
   List<ShellNavItem> _buildNavItems(AppLocalizations strings) => [
     ShellNavItem(icon: LucideIcons.house, label: strings.homeTab),
-    ShellNavItem(icon: LucideIcons.search, label: strings.searchTab),
+    // the job-ticket marketplace takes the slot search used to hold: search now lives on the map
+    // and the home header, and a hard hat says "workers" faster than any other glyph here
+    ShellNavItem(icon: LucideIcons.hard_hat, label: strings.ticketsTab),
     ShellNavItem(icon: LucideIcons.map_pin, label: strings.mapTab),
     ShellNavItem(icon: LucideIcons.message_square, label: strings.messagesTab),
     ShellNavItem(icon: LucideIcons.user, label: strings.profileTab),
@@ -35,7 +37,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
   // needs a BuildContext to navigate to AddStoreScreen when its "add store" row is tapped
   List<Widget> _buildPages(BuildContext context) => [
     const HomeScreen(showScaffold: false, bottomPadding: _bottomPadding),
-    const SearchScreen(showScaffold: false, bottomPadding: _bottomPadding),
+    const TicketsScreen(showScaffold: false, bottomPadding: _bottomPadding),
     const MapScreen(showScaffold: false, bottomPadding: _bottomPadding),
     const MessagesScreen(showScaffold: false, bottomPadding: _bottomPadding),
     ProfileScreen(

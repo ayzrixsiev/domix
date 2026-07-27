@@ -415,9 +415,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               leading: _ExpandableMenuSection(
                 isExpanded: _showShopsSubMenu,
                 onToggle: () => setState(() => _showShopsSubMenu = !_showShopsSubMenu),
+                // the header doubles as the close control once open, so the group needs no separate
+                // "collapse" row: the chevron already rotated to point down at what it revealed,
+                // which is the state indicator, and the label says what tapping it now does.
                 header: _MenuRowData(
                   icon: CupertinoIcons.bag,
-                  title: _strings.manageShops,
+                  title: _showShopsSubMenu ? _strings.closeButton : _strings.manageShops,
                   onTap: null, // supplied by the section, which owns the toggle
                 ),
                 children: [
@@ -430,17 +433,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     icon: CupertinoIcons.plus_square,
                     title: _strings.addStore,
                     onTap: widget.onAddStoreTap,
-                  ),
-                  // closes the group rather than navigating anywhere, so it points up at the rows
-                  // it collapses and carries no forward chevron
-                  _MenuRowData(
-                    icon: CupertinoIcons.chevron_up,
-                    title: _strings.closeButton,
-                    textColor: _kPrimaryOrangeDark,
-                    iconColor: _kPrimaryOrangeDark,
-                    iconBackground: const Color(0xFFFFF0E3),
-                    trailing: const SizedBox.shrink(),
-                    onTap: () => setState(() => _showShopsSubMenu = false),
                   ),
                 ],
               ),

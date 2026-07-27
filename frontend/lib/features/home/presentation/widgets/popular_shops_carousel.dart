@@ -1,120 +1,267 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/home/data/home_placeholder_content.dart';
-import 'section_header.dart';
 
-// renamed from InfiniteShopCarousel: it was never infinite. it rendered the same four placeholder
-// shops twice (`itemCount: shops.length * 2`) and attached a PageController to a ListView - a
-// controller that does nothing there, was rebuilt on every frame, and was never disposed. a name
-// that describes what the widget actually is beats one describing what it was meant to become.
-class PopularShopsCarousel extends StatelessWidget {
+/// A page-snapping carousel of featured shops that loops endlessly in both directions.
+///
+/// **How the loop works.** `PageView.builder` with a null `itemCount` is unbounded *forwards* only:
+/// the underlying `SliverChildBuilderDelegate` has no concept of a negative index, so there is no
+/// built-in way to scroll backwards forever. The standard solution, and the one every carousel
+/// package uses, is to start deep inside a very large virtual range instead: the item index is
+/// mapped onto the real list with a modulo, so page 25 000 and page 25 005 both render shop 0.
+/// Swiping forward never ends, and backwards there are [_loopOrigin] × shops pages to burn through
+/// before index 0 is reachable - about twenty-five thousand swipes.
+///
+/// Two details make that safe rather than a trick:
+///  * The starting page is an exact multiple of the shop count, so the carousel opens on the first
+///    shop rather than an arbitrary one.
+///  * Dart's `%` is Euclidean - `-1 % 5` is `4`, not `-1` - so the mapping stays correct even if an
+///    index below the origin is ever built.
+class PopularShopsCarousel extends StatefulWidget {
   const PopularShopsCarousel({super.key});
 
-  static const double _cardHeight = 148;
+  /// Card + peek. The page is this fraction of the screen; the leftover is split between the two
+  /// neighbours, so an edge of the previous and next shop is always visible and the strip reads as
+  /// continuous rather than as a single card.
+  static const double viewportFraction = 0.84;
+
+  static const double cardHeight = 216;
+
+  @override
+  State<PopularShopsCarousel> createState() => _PopularShopsCarouselState();
+}
+
+class _PopularShopsCarouselState extends State<PopularShopsCarousel> {
+  /// how many full cycles sit behind the opening page
+  static const int _loopOrigin = 5000;
+
+  late final PageController _controller;
+  late final int _initialPage;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialPage = _loopOrigin * kPopularShops.length;
+    _controller = PageController(
+      viewportFraction: PopularShopsCarousel.viewportFraction,
+      initialPage: _initialPage,
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  /// The page the viewport is centred on, as a fraction. Reading `.page` before the first layout
+  /// throws, so this falls back to the starting page until the controller is attached.
+  double get _currentPage {
+    if (_controller.hasClients && _controller.position.hasContentDimensions) {
+      return _controller.page ?? _initialPage.toDouble();
+    }
+    return _initialPage.toDouble();
+  }
 
   @override
   Widget build(BuildContext context) {
     final strings = Provider.of<LanguageProvider>(context).strings;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(
-          title: strings.popularShops,
-          actionLabel: strings.viewAll,
-          onAction: () {},
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: _cardHeight,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            padding: EdgeInsets.zero,
-            // lets each card's shadow spill past the strip instead of being cropped at its edges
-            clipBehavior: Clip.none,
-            itemCount: kPopularShops.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 12),
-            itemBuilder: (context, index) =>
-                _PopularShopCard(shop: kPopularShops[index], strings: strings),
-          ),
-        ),
-      ],
+    return SizedBox(
+      height: PopularShopsCarousel.cardHeight,
+      child: PageView.builder(
+        controller: _controller,
+        // unbounded: the builder is asked for whatever page the user swipes to, forever
+        itemCount: null,
+        padEnds: true,
+        itemBuilder: (context, index) {
+          final shop = kPopularShops[index % kPopularShops.length];
+
+          // rebuilds on every scroll tick so the off-centre cards can settle back slightly. it is
+          // what makes the swipe feel like cards moving through a viewport rather than a filmstrip
+          // sliding sideways.
+          return AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              final distance = (_currentPage - index).abs().clamp(0.0, 1.0);
+              return Transform.scale(
+                scale: 1 - distance * 0.05,
+                child: child,
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 5),
+              child: _PopularShopCard(shop: shop, strings: strings),
+            ),
+          );
+        },
+      ),
     );
   }
 }
 
-// the one deliberately dark surface in the app. it gives the home page a single focal point, which
-// is what makes the white cards around it read as calm rather than empty - the same reason a wallet
-// app puts one dark card at the top. everything else stays light.
+// these cards were a near-black gradient, which put the single darkest object in the app right at
+// the top of its brightest screen. they are white now, with the shop's identity carried by a soft
+// branded banner instead of by an inverted colour scheme - and that banner is where a real shop
+// photo will go once photo upload exists, so the layout will not need rethinking then.
 class _PopularShopCard extends StatelessWidget {
   const _PopularShopCard({required this.shop, required this.strings});
 
   final HomeShopPreview shop;
   final AppLocalizations strings;
 
-  static const Color _onDark = Color(0xFFFFFFFF);
+  static const double _bannerHeight = 120;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 268,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF23232F), Color(0xFF33334A)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: AppColors.surfaceWhite,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        // softened from 18% black at 14px blur: a dark card already separates itself from a light
-        // page by value alone, so the shadow only needs to hint at lift
-        boxShadow: const [
-          BoxShadow(color: Color(0x1F1A1D2E), blurRadius: 18, offset: Offset(0, 8)),
-        ],
+        border: Border.all(color: AppColors.hairline),
+        boxShadow: AppShadows.card,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  shop.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _onDark,
-                    fontSize: 17,
-                    height: 1.2,
-                    letterSpacing: -0.2,
-                    fontWeight: FontWeight.w700,
+          _Banner(rating: shop.rating),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 11, 14, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        shop.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textDark,
+                          fontSize: 16,
+                          height: 1.2,
+                          letterSpacing: -0.2,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(
+                            CupertinoIcons.location_solid,
+                            color: AppColors.textFaint,
+                            size: 11,
+                          ),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(
+                              shop.address,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.textGrey,
+                                fontSize: 12,
+                                height: 1.3,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ),
+                  Row(
+                    children: [
+                      Text(
+                        strings.averageCheckShort,
+                        style: const TextStyle(
+                          color: AppColors.textFaint,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          strings.somAmount(shop.averagePaycheck),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.textDark,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Container(
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Banner extends StatelessWidget {
+  const _Banner({required this.rating});
+
+  final double rating;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.md - 1)),
+      child: Container(
+        height: _PopularShopCard._bannerHeight,
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [AppColors.primarySoft, AppColors.surfaceMuted],
+          ),
+        ),
+        child: Stack(
+          children: [
+            Center(
+              child: Icon(
+                CupertinoIcons.building_2_fill,
+                color: AppColors.primaryOrange.withValues(alpha: 0.38),
+                size: 34,
+              ),
+            ),
+            // sits on the banner rather than beside the name: it is a badge about the shop as a
+            // whole, and keeping it here leaves the name a full line to itself
+            Positioned(
+              top: 10,
+              right: 10,
+              child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: _onDark.withValues(alpha: 0.12),
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(AppRadius.xs),
+                  boxShadow: AppShadows.card,
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(LucideIcons.star, color: AppColors.starYellow, size: 12),
+                    const Icon(CupertinoIcons.star_fill, color: AppColors.starYellow, size: 11),
                     const SizedBox(width: 4),
                     Text(
-                      shop.rating.toStringAsFixed(1),
+                      rating.toStringAsFixed(1),
                       style: const TextStyle(
-                        color: _onDark,
+                        color: AppColors.textDark,
                         fontSize: 11.5,
                         fontWeight: FontWeight.w600,
                       ),
@@ -122,65 +269,9 @@ class _PopularShopCard extends StatelessWidget {
                   ],
                 ),
               ),
-            ],
-          ),
-          Row(
-            children: [
-              Icon(LucideIcons.map_pin, color: _onDark.withValues(alpha: 0.4), size: 12),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  shop.address,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: _onDark.withValues(alpha: 0.6),
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          // same hairline-then-metric structure as the light cards elsewhere, just inverted. the
-          // orange-filled, orange-bordered chip that used to sit here was the loudest element on
-          // the entire home screen.
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                height: 1,
-                child: ColoredBox(color: _onDark.withValues(alpha: 0.1)),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Text(
-                    strings.averageCheckShort,
-                    style: TextStyle(
-                      color: _onDark.withValues(alpha: 0.45),
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      strings.somAmount(shop.averagePaycheck),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: _onDark,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
