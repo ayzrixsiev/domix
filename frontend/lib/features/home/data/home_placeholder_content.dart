@@ -28,12 +28,16 @@ class HomeShopPreview {
   final int averagePaycheck;
 }
 
-/// A construction category tile on the home grid.
-///
-/// The label is *not* stored here: it's resolved per-language from `AppLocalizations`, because
-/// these were previously hardcoded Russian strings and stayed Russian when the app switched to
-/// Uzbek. The enum is what the widget switches over to pick both the label and the icon/tint.
-enum HomeCategory { mixes, blocks, fasteners, roofing, electrical, plumbing, paints, tools }
+// The category tiles on the home grid are no longer defined here.
+//
+// There used to be a `HomeCategory` enum in this file - eight categories that existed only for this
+// screen. That was the problem: a product's category was a different vocabulary entirely, so the
+// grid could never have been wired to real products without a translation table nobody would have
+// kept correct. The tiles now render `ProductCategory`
+// (features/products/data/product_category.dart), which is the same list the backend stores in
+// `products.category`, so "Сантехника" the tile and "Сантехника" the product are finally one value.
+//
+// Everything else in this file is still placeholder content, hence the name.
 
 /// The paid/featured placement tier behind the "VIP Магазины" carousel.
 ///

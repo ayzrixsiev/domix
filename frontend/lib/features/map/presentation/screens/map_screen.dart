@@ -9,6 +9,9 @@ import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
+import 'package:frontend/features/products/presentation/controllers/products_controller.dart';
+import 'package:frontend/features/products/presentation/widgets/product_grid.dart';
+import 'package:frontend/features/products/presentation/widgets/product_tile.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 import 'package:frontend/features/stores/presentation/controllers/stores_controller.dart';
 import '../widgets/map_search_panel.dart';
@@ -130,6 +133,17 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
           options: MapOptions(
             initialCenter: _defaultCenter,
             initialZoom: 12,
+            // north stays up, permanently. our markers are teardrop pins with a text label under
+            // them, and flutter_map rotates the whole marker layer with the camera - so a two-finger
+            // twist left every pin lying on its side and the price labels upside down. panning and
+            // zooming stay on; only rotate is subtracted out of the default flag set.
+            interactionOptions: InteractionOptions(
+              flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+              // the flag above only governs the touch gesture. desktop/web have a second, separate
+              // rotation path (hold a modifier key and drag the cursor) that is on by default and
+              // would otherwise still tilt the map.
+              cursorKeyboardRotationOptions: CursorKeyboardRotationOptions.disabled(),
+            ),
             // tapping the map itself drops the keyboard and closes the search dropdown
             onTap: (_, _) => FocusScope.of(context).unfocus(),
           ),
@@ -253,9 +267,10 @@ class _MapAttribution extends StatelessWidget {
 // shop details sheet
 //
 // laid out as a stack of independent sections separated by hairlines rather than as one block of
-// text, so the sections planned for later (products, opening hours, promotions, more actions) drop
-// in as additional entries without the layout needing to be rethought. the sheet already scrolls
-// and is height-capped for the same reason.
+// text, so sections planned for later (opening hours, promotions, more actions) drop in as
+// additional entries without the layout needing to be rethought. the sheet already scrolls and is
+// height-capped for the same reason - which is what let the product catalogue land at the bottom of
+// it without touching anything above.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ShopDetailsSheet extends StatelessWidget {
@@ -332,9 +347,137 @@ class _ShopDetailsSheet extends StatelessWidget {
                   onTap: () => launchUrl(Uri.parse('tel:${shop.contactPhone}')),
                 ),
               ),
+
+              // the catalogue goes last, below the call button, on purpose: someone who opened a
+              // pin wants to know where the shop is and how to reach it first. browsing prices is
+              // the longer, scrollable part of the visit, so it goes where scrolling starts.
+              const _SheetDivider(),
+              _ShopProductsSection(shop: shop, strings: strings),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// the customer-facing half of the products feature: the same two-per-row grid the owner manages,
+// rendered read-only.
+//
+// stateful only to kick off the fetch - the products themselves live in ProductsController, keyed
+// by shop, so tapping the same pin twice in one session doesn't hit the network again.
+class _ShopProductsSection extends StatefulWidget {
+  const _ShopProductsSection({required this.shop, required this.strings});
+
+  final Shop shop;
+  final AppLocalizations strings;
+
+  @override
+  State<_ShopProductsSection> createState() => _ShopProductsSectionState();
+}
+
+class _ShopProductsSectionState extends State<_ShopProductsSection> {
+  @override
+  void initState() {
+    super.initState();
+    // deferred past the first frame for the same reason MapScreen defers its own load:
+    // loadProducts notifies before its first await, and notifying while the tree is still building
+    // trips flutter's "setState() called during build" guard
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<ProductsController>().loadProducts(widget.shop.id);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = widget.strings;
+    final controller = Provider.of<ProductsController>(context);
+    final shopId = widget.shop.id;
+
+    // only products the shop has actually priced. an unpriced row is a real product the owner
+    // simply hasn't got to yet - useful to *them*, which is why their own grid shows it - but to a
+    // customer it is a tile that answers no question, and fifty of them would bury the priced ones.
+    final priced = [
+      for (final product in controller.productsFor(shopId))
+        if (product.hasPrice) product,
+    ];
+
+    final Widget content;
+    if (controller.isLoadingFor(shopId) && !controller.hasLoaded(shopId)) {
+      content = const Padding(
+        padding: EdgeInsets.symmetric(vertical: 26),
+        child: Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2.2, color: AppColors.primaryOrange),
+          ),
+        ),
+      );
+    } else if (priced.isEmpty) {
+      // a shop that hasn't priced anything gets a line saying so rather than a hidden section.
+      // hiding it would make the sheet look like it simply has no products area, which is a
+      // different (and wrong) message.
+      content = Padding(
+        padding: const EdgeInsets.only(top: 4, bottom: 8),
+        child: Text(
+          controller.loadErrorFor(shopId) != null
+              ? strings.productsLoadError
+              : strings.noPricedProductsYet,
+          style: const TextStyle(
+            color: AppColors.textGrey,
+            fontSize: 13,
+            height: 1.4,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+      );
+    } else {
+      content = ProductGrid(
+        // shrink-wrapped: it is inside the sheet's own SingleChildScrollView, and two scrollables
+        // fighting over one drag gesture is how a grid ends up refusing to move
+        shrinkWrap: true,
+        padding: const EdgeInsets.only(top: 4),
+        tiles: [
+          for (final product in priced)
+            ProductTile(product: product, strings: strings),
+        ],
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                strings.shopProductsSectionTitle,
+                style: const TextStyle(
+                  color: AppColors.textDark,
+                  fontSize: 16,
+                  letterSpacing: -0.2,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (priced.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Text(
+                  '${priced.length}',
+                  style: const TextStyle(
+                    color: AppColors.textFaint,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 10),
+          content,
+        ],
       ),
     );
   }

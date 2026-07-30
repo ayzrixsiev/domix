@@ -5,13 +5,14 @@ import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
+import 'package:frontend/core/widgets/empty_state_view.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 import 'add_store_screen.dart';
-import 'shop_upload_screen.dart';
+import 'shop_settings_screen.dart';
 import '../controllers/stores_controller.dart';
 
 // lists the shops the current owner themselves own - opened from Profile > Управление
-// магазинами > Настройка магазинов. tapping a shop opens ShopUploadScreen for it.
+// магазинами > Настройка магазинов. tapping a shop opens ShopSettingsScreen for it.
 class MyShopsScreen extends StatefulWidget {
   const MyShopsScreen({super.key});
 
@@ -44,9 +45,11 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
 
   Future<void> _openShop(Shop shop) async {
     await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => ShopUploadScreen(shop: shop)),
+      MaterialPageRoute(builder: (_) => ShopSettingsScreen(shop: shop)),
     );
-    // an upload changes the product count shown on this shop's row
+    // an upload changes the product count shown on this shop's row, and an edit changes its name or
+    // address. both already write through to the controller's list, so this is only re-syncing with
+    // whatever else moved server-side while the owner was in there.
     if (mounted) context.read<StoresController>().loadMyShops();
   }
 
@@ -97,26 +100,31 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
     }
 
     if (controller.myShopsError != null && controller.myShops.isEmpty) {
-      return _CenteredState(
+      return EmptyStateView(
         icon: CupertinoIcons.wifi_exclamationmark,
+        // the only place this state is coloured differently: the layout is the same designed empty
+        // state, but a failure should not look like a friendly "nothing here yet"
         iconColor: AppColors.danger,
         iconBackground: AppColors.dangerSoft,
         title: strings.myShopsLoadError,
-        actionLabel: strings.retryButtonShort,
-        onAction: () => controller.loadMyShops(),
+        action: _PrimaryButton(
+          label: strings.retryButtonShort,
+          onTap: () => controller.loadMyShops(),
+        ),
       );
     }
 
     if (controller.myShops.isEmpty) {
-      return _CenteredState(
+      return EmptyStateView(
         icon: CupertinoIcons.bag,
-        iconColor: AppColors.primaryOrange,
-        iconBackground: AppColors.primarySoft,
         title: strings.noOwnedShopsYet,
         subtitle: strings.noOwnedShopsHint,
-        actionLabel: strings.addStore,
-        actionIcon: CupertinoIcons.add,
-        onAction: _openAddStore,
+        // unlike the permanently-empty tabs, this one has somewhere to go
+        action: _PrimaryButton(
+          label: strings.addStore,
+          icon: CupertinoIcons.add,
+          onTap: _openAddStore,
+        ),
       );
     }
 
@@ -361,100 +369,6 @@ class _ShopStatsRow extends StatelessWidget {
           ),
         ],
       ],
-    );
-  }
-}
-
-// shared shape for the "nothing to show" states: loading failed, no shops yet, and any future
-// empty case - so they don't drift apart visually.
-class _CenteredState extends StatelessWidget {
-  const _CenteredState({
-    required this.icon,
-    required this.iconColor,
-    required this.iconBackground,
-    required this.title,
-    this.subtitle,
-    required this.actionLabel,
-    this.actionIcon,
-    required this.onAction,
-  });
-
-  final IconData icon;
-  final Color iconColor;
-  final Color iconBackground;
-  final String title;
-  final String? subtitle;
-  final String actionLabel;
-  final IconData? actionIcon;
-  final VoidCallback onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // two nested layers rather than one flat circle - that's what makes an empty screen look
-            // composed on purpose instead of merely unfinished. the inner tile is white and lifted
-            // rather than a second tint: two tints this pale are indistinguishable from each other
-            // against an off-white page, so the layering has to come from value, not hue.
-            Container(
-              width: 96,
-              height: 96,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: iconBackground,
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-              ),
-              child: Container(
-                width: 60,
-                height: 60,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  boxShadow: AppShadows.card,
-                ),
-                child: Icon(icon, color: iconColor, size: 26),
-              ),
-            ),
-            const SizedBox(height: 22),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.textDark,
-                fontSize: 17,
-                height: 1.3,
-                letterSpacing: -0.2,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            if (subtitle != null) ...[
-              const SizedBox(height: 8),
-              // capped measure: long help text set to the full screen width is hard to read and is
-              // most of why the empty state felt sparse and unbalanced
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 270),
-                child: Text(
-                  subtitle!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AppColors.textGrey,
-                    fontSize: 13.5,
-                    height: 1.5,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ),
-            ],
-            const SizedBox(height: 26),
-            _PrimaryButton(label: actionLabel, icon: actionIcon, onTap: onAction),
-          ],
-        ),
-      ),
     );
   }
 }

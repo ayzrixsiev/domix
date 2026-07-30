@@ -1,0 +1,123 @@
+// one product in a shop's catalogue, as returned by the go backend's /api/shops/{id}/products.
+//
+// most products are not created by anyone: picking a category when the shop is created copies a
+// ready-made template into it (backend/internal/catalog), and the owner's job afterwards is filling
+// in prices and adding the handful of products unique to their shop.
+class Product {
+  const Product({
+    required this.id,
+    required this.shopId,
+    required this.name,
+    required this.category,
+    required this.unit,
+    required this.price,
+    required this.availability,
+    required this.isTemplate,
+  });
+
+  final int id;
+  final int shopId;
+  final String name;
+
+  /// the group this product belongs to inside the shop, e.g. "Крепёж" - not the *shop's* category
+  final String category;
+
+  /// unit of measurement: шт, м², мешок ...
+  final String unit;
+
+  /// null means the owner has not set a price yet, which is the state every template product starts
+  /// in. deliberately not 0 - "we haven't priced this" and "this is free" are different facts, and
+  /// the whole seeded-catalogue flow depends on telling them apart to prompt for the missing ones.
+  final int? price;
+
+  final ProductAvailability availability;
+
+  /// true when this row came from the category template rather than from the owner. template rows
+  /// can be edited but not deleted, and they don't count against the 20-product own-products cap.
+  final bool isTemplate;
+
+  bool get hasPrice => price != null;
+
+  factory Product.fromJson(Map<String, dynamic> json) {
+    return Product(
+      id: json['id'] as int,
+      shopId: json['shop_id'] as int,
+      name: json['name'] as String,
+      category: json['category'] as String,
+      unit: json['unit'] as String,
+      // `as int?` and not `as int`: the backend sends json null for an unpriced product
+      price: json['price'] as int?,
+      availability: ProductAvailability.fromCode(json['availability'] as String?),
+      isTemplate: json['is_template'] as bool? ?? false,
+    );
+  }
+
+  Map<String, dynamic> toRequestJson() => {
+        'name': name,
+        'category': category,
+        'unit': unit,
+        'price': price, // null travels as json null, which is what clears a price
+        'availability': availability.code,
+      };
+
+  /// [clearPrice] exists because `price: null` in a copyWith call is indistinguishable from "don't
+  /// change the price" - the standard dart wart with nullable optional parameters. only the edit
+  /// form needs it, and only to blank a price the owner deleted.
+  Product copyWith({
+    String? name,
+    String? category,
+    String? unit,
+    int? price,
+    bool clearPrice = false,
+    ProductAvailability? availability,
+  }) {
+    return Product(
+      id: id,
+      shopId: shopId,
+      name: name ?? this.name,
+      category: category ?? this.category,
+      unit: unit ?? this.unit,
+      price: clearPrice ? null : (price ?? this.price),
+      availability: availability ?? this.availability,
+      isTemplate: isTemplate,
+    );
+  }
+}
+
+// stock status. the codes match the database CHECK constraint (backend/db/migrations/000004) and
+// are locale-neutral for the same reason shop categories are: the display text is chosen in the app.
+enum ProductAvailability {
+  inStock('in_stock'),
+  onOrder('on_order'),
+  unavailable('unavailable');
+
+  const ProductAvailability(this.code);
+
+  final String code;
+
+  /// unknown or missing falls back to [inStock] - the value the backend itself defaults to for a
+  /// freshly seeded product (see SeedTemplateProduct in db/queries/products.sql)
+  static ProductAvailability fromCode(String? code) {
+    for (final value in values) {
+      if (value.code == code) return value;
+    }
+    return ProductAvailability.inStock;
+  }
+}
+
+// same contract as ShopMutationException: the backend's messages are
+// english and this app renders only ru/uz, so a failed save carries a stable machine-readable
+// `code` (see writeAPIError in backend/internal/endpoints/authz.go) that the ui localizes.
+class ProductMutationException implements Exception {
+  const ProductMutationException({required this.code, required this.message, this.limit});
+
+  final String code;
+  final String message;
+
+  /// only set for `product_limit_reached`, so the message can name the actual cap instead of
+  /// hardcoding 20 in two places
+  final int? limit;
+
+  @override
+  String toString() => 'ProductMutationException($code): $message';
+}

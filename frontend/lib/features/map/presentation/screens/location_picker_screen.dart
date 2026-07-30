@@ -138,6 +138,13 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             options: MapOptions(
               initialCenter: _currentCenter,
               initialZoom: 15,
+              // matches map_screen.dart: north stays up. this screen's pin is a fixed overlay rather
+              // than a map marker so it wouldn't tilt, but a picker that can end up facing an
+              // arbitrary direction is disorienting, and two maps behaving differently is worse.
+              interactionOptions: InteractionOptions(
+                flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                cursorKeyboardRotationOptions: CursorKeyboardRotationOptions.disabled(),
+              ),
               onPositionChanged: (camera, hasGesture) {
                 _currentCenter = camera.center;
                 if (hasGesture) _resolveAddressForCurrentCenter();

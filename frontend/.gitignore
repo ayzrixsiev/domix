@@ -43,3 +43,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Build-time config consumed by --dart-define-from-file. env.json is per-developer (it points at
+# whichever ngrok tunnel or local port that machine is running), so it is not shared - copy
+# env.example.json to env.json after cloning. Values here end up compiled into the binary and are
+# readable by anyone who unpacks the app, so nothing secret may live in these files.
+env.json
+env.*.json
+!env.example.json

@@ -1,11 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
-import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
-import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
-import 'package:frontend/features/home/data/home_placeholder_content.dart';
+import 'package:frontend/core/widgets/pressable_scale.dart';
+import 'package:frontend/features/products/data/product_category.dart';
 
 // Every glyph here is a Lucide icon - one family, one stroke weight, monochrome.
 //
@@ -14,62 +15,204 @@ import 'package:frontend/features/home/data/home_placeholder_content.dart';
 // dragged in three extra packages, cost a parse per icon, and hinted less crisply at small sizes.
 // Lucide ships a real icon font, so the glyphs are vector-hinted, cost nothing to draw, and the
 // package was already a dependency. Hugeicons has been removed from pubspec entirely.
-class PopularCategoriesGrid extends StatelessWidget {
+//
+// The label and the glyph both come off `ProductCategory` rather than being switched over here.
+// That is the point of the shared enum: this grid and the product form's category dropdown draw the
+// same twelve categories, and a category that looked different depending on which screen you were
+// on would be worse than either version alone.
+//
+// **It is a pager, not a taller grid.** Twelve categories in one static grid meant three rows, and
+// the section grew until it dominated the feed. Two rows of four is the shape the home screen was
+// designed around, so the extra categories moved onto a second page you swipe to instead of a third
+// row you scroll past. That also retired the "Все →" action in the header: the control that reveals
+// the rest of the list is now the list itself, and a link promising more of what you can already
+// swipe to is a second door to the same room.
+class PopularCategoriesGrid extends StatefulWidget {
   const PopularCategoriesGrid({super.key});
 
-  // dart 3 switch *expressions* over an enum are exhaustive: leave a case out and the analyzer
-  // rejects the file rather than throwing at runtime the first time that tile is scrolled into view.
-  static IconData _iconOf(HomeCategory category) => switch (category) {
-    HomeCategory.mixes => LucideIcons.container,
-    HomeCategory.blocks => LucideIcons.brick_wall,
-    HomeCategory.fasteners => LucideIcons.bolt,
-    HomeCategory.roofing => LucideIcons.house,
-    HomeCategory.electrical => LucideIcons.zap,
-    HomeCategory.plumbing => LucideIcons.droplets,
-    HomeCategory.paints => LucideIcons.paint_roller,
-    HomeCategory.tools => LucideIcons.wrench,
-  };
+  @override
+  State<PopularCategoriesGrid> createState() => _PopularCategoriesGridState();
+}
 
-  static String _labelOf(HomeCategory category, AppLocalizations strings) => switch (category) {
-    HomeCategory.mixes => strings.categoryMixes,
-    HomeCategory.blocks => strings.categoryBlocks,
-    HomeCategory.fasteners => strings.categoryFasteners,
-    HomeCategory.roofing => strings.categoryRoofing,
-    HomeCategory.electrical => strings.categoryElectrical,
-    HomeCategory.plumbing => strings.categoryPlumbing,
-    HomeCategory.paints => strings.categoryPaints,
-    HomeCategory.tools => strings.categoryTools,
-  };
+class _PopularCategoriesGridState extends State<PopularCategoriesGrid> {
+  static const int _columns = 4;
+  static const int _rows = 2;
+  static const int _perPage = _columns * _rows;
+
+  // the content's actual height (64 box + 7 gap + two 13.2px lines) plus a little slack, times two
+  // rows plus the gap between them. a constant rather than a childAspectRatio for the reason spelled
+  // out at the delegate below.
+  static const double _cellHeight = 100;
+  static const double _rowGap = 6;
+  static const double _pageHeight = _cellHeight * _rows + _rowGap * (_rows - 1);
+
+  late final PageController _controller;
+
+  /// how many pages the twelve categories fill - derived, so adding a thirteenth grows the pager
+  /// instead of silently hiding it
+  int get _pageCount => (ProductCategory.values.length / _perPage).ceil();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = PageController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final strings = Provider.of<LanguageProvider>(context).strings;
 
-    return GridView.builder(
-      shrinkWrap: true,
-      padding: EdgeInsets.zero,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        // a fixed row height rather than childAspectRatio, which was the previous approach.
-        // aspect ratio derives height from *width*, so the cell got taller on a wide phone and
-        // shorter on a narrow one - and once the section moved inside a padded panel the cells
-        // narrowed enough that the computed height no longer fit a two-line label. this is the
-        // content's actual height (64 box + 7 gap + two 13.2px lines) plus a little slack, and it
-        // holds on every screen width. it also fixes the old complaint about tall empty cells,
-        // since the slack is now a constant instead of whatever the width happened to imply.
-        mainAxisExtent: 100,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 6,
-      ),
-      itemCount: HomeCategory.values.length,
-      itemBuilder: (context, index) {
-        final category = HomeCategory.values[index];
-        return _CategoryTile(
-          icon: _iconOf(category),
-          label: _labelOf(category, strings),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: _pageHeight,
+          child: PageView.builder(
+            controller: _controller,
+            physics: const BouncingScrollPhysics(),
+            itemCount: _pageCount,
+            itemBuilder: (context, page) {
+              // the slice this page shows. clamped at the end because the last page is partial -
+              // twelve categories over eight-per-page leaves four on page two.
+              final start = page * _perPage;
+              final end = math.min(start + _perPage, ProductCategory.values.length);
+              final categories = ProductCategory.values.sublist(start, end);
+
+              return GridView.builder(
+                // the PageView is the scrollable here; a grid that also scrolled would fight it for
+                // the same drag
+                physics: const NeverScrollableScrollPhysics(),
+                padding: EdgeInsets.zero,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: _columns,
+                  // a fixed row height rather than childAspectRatio, which was the previous
+                  // approach. aspect ratio derives height from *width*, so the cell got taller on a
+                  // wide phone and shorter on a narrow one - and once the section moved inside a
+                  // padded panel the cells narrowed enough that the computed height no longer fit a
+                  // two-line label. this is the content's real height plus slack, and it holds on
+                  // every screen width. it also fixes the old complaint about tall empty cells,
+                  // since the slack is a constant instead of whatever the width happened to imply.
+                  mainAxisExtent: _cellHeight,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: _rowGap,
+                ),
+                itemCount: categories.length,
+                itemBuilder: (context, index) {
+                  final category = categories[index];
+                  return _CategoryTile(
+                    icon: category.icon,
+                    label: category.label(strings),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        // 4, not the 14 this started at. the dots carry their own vertical touch padding (see
+        // _Dot), so the gap the eye measures is that padding *plus* whatever is added here - at 14
+        // the panel looked stretched and pushed Лучшие предложения below the fold.
+        const SizedBox(height: 4),
+        _PageDots(controller: _controller, pageCount: _pageCount),
+      ],
+    );
+  }
+}
+
+/// The dots under the pager, driven by the controller's *fractional* page.
+///
+/// Rebuilding off `onPageChanged` was the simpler option and is what makes most indicators feel
+/// cheap: that callback fires once, after the page has already snapped, so the dot jumps a beat
+/// behind the finger. Listening to the controller instead means the active pill grows and shrinks
+/// continuously as you drag - the indicator tracks the swipe rather than reporting on it
+/// afterwards.
+class _PageDots extends StatelessWidget {
+  const _PageDots({required this.controller, required this.pageCount});
+
+  final PageController controller;
+  final int pageCount;
+
+  static const double _dotSize = 6;
+  static const double _activeWidth = 20;
+
+  @override
+  Widget build(BuildContext context) {
+    if (pageCount < 2) return const SizedBox.shrink();
+
+    return AnimatedBuilder(
+      // the controller is a Listenable that ticks on every scroll frame, so this rebuilds only the
+      // dots - the twelve tiles above are untouched by the animation
+      animation: controller,
+      builder: (context, _) {
+        // `page` is null until the PageView has been laid out once, and `hasClients` is false before
+        // it is attached at all - both happen on the very first frame, so fall back to the initial
+        // page rather than letting the indicator render with no active dot
+        final current = controller.hasClients && controller.page != null
+            ? controller.page!
+            : controller.initialPage.toDouble();
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (var i = 0; i < pageCount; i++) ...[
+              if (i > 0) const SizedBox(width: 6),
+              _Dot(
+                // 1 when this page is centred, 0 once a full page away, and everything between
+                // while the drag is in flight. one number drives width and colour together, which is
+                // what keeps the two from disagreeing mid-swipe.
+                activation: (1 - (current - i).abs()).clamp(0.0, 1.0),
+                onTap: () => controller.animateToPage(
+                  i,
+                  duration: AppMotion.base,
+                  curve: AppMotion.easing,
+                ),
+              ),
+            ],
+          ],
         );
       },
+    );
+  }
+}
+
+class _Dot extends StatelessWidget {
+  const _Dot({required this.activation, required this.onTap});
+
+  /// 0 = fully inactive, 1 = fully active. fractional while a swipe is in progress.
+  final double activation;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      // the dot itself is 6px tall - far under the 44px minimum a finger needs - so the tap target
+      // is padded out around it rather than the dot being drawn bigger than it should look
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+        child: SizedBox(
+          width: _PageDots._activeWidth,
+          child: Align(
+            child: Container(
+              height: _PageDots._dotSize,
+              width: _PageDots._dotSize +
+                  (_PageDots._activeWidth - _PageDots._dotSize) * activation,
+              decoration: BoxDecoration(
+                // lerped rather than switched at a threshold: a colour that flips halfway through a
+                // drag is a flicker, a colour that slides is the same motion as the width
+                color: Color.lerp(AppColors.hairline, AppColors.primaryOrange, activation),
+                borderRadius: BorderRadius.circular(_PageDots._dotSize / 2),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -82,8 +225,10 @@ class _CategoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(AppRadius.sm),
+    // a bit more travel than the default: these tiles are small, and a 3% shrink on a 64px box is
+    // barely perceptible where the same 3% on a full-width row is plenty
+    return PressableScale(
+      pressedScale: 0.93,
       onTap: () {},
       child: Column(
         mainAxisSize: MainAxisSize.min,

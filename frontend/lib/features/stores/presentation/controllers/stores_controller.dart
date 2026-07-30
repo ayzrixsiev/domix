@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/stores_repository.dart';
-import '../../data/product_upload_result.dart';
+import '../../data/shop_category.dart';
 import '../../data/shop_model.dart';
 
 // stores controller - viewmodel behind three separate screens: the map (every shop), the owner's
@@ -26,10 +26,11 @@ class StoresController extends ChangeNotifier {
   bool _isSaving = false;
   String? _saveError;
 
-  // ShopUploadScreen's bulk-products upload
-  bool _isUploading = false;
-  ProductUploadResult? _uploadResult;
-  ProductUploadException? _uploadError;
+  // the edit-shop form and the delete action, both on EditStoreScreen. they share one busy flag on
+  // purpose - the screen disables both buttons while either is in flight, since deleting a shop
+  // mid-save (or the reverse) has no sensible outcome.
+  bool _isMutatingShop = false;
+  ShopMutationException? _shopMutationError;
 
   StoresController({StoresRepository? repository}) : _repo = repository ?? StoresRepository();
 
@@ -44,9 +45,9 @@ class StoresController extends ChangeNotifier {
   bool get isSaving => _isSaving;
   String? get saveError => _saveError;
 
-  bool get isUploading => _isUploading;
-  ProductUploadResult? get uploadResult => _uploadResult;
-  ProductUploadException? get uploadError => _uploadError;
+  bool get isMutatingShop => _isMutatingShop;
+  ShopMutationException? get shopMutationError => _shopMutationError;
+
 
   Future<void> loadStores() async {
     _isLoading = true;
@@ -83,6 +84,7 @@ class StoresController extends ChangeNotifier {
     required String name,
     required String contactPhone,
     required String address,
+    required ShopCategory category,
     required double latitude,
     required double longitude,
   }) async {
@@ -95,6 +97,7 @@ class StoresController extends ChangeNotifier {
         name: name,
         contactPhone: contactPhone,
         address: address,
+        category: category,
         latitude: latitude,
         longitude: longitude,
       );
@@ -121,31 +124,112 @@ class StoresController extends ChangeNotifier {
     _saveError = null;
   }
 
-  Future<void> uploadProductsFile({required int shopId, required String filePath}) async {
-    _isUploading = true;
-    _uploadResult = null;
-    _uploadError = null;
+  // returns the saved shop on success, null on failure (shopMutationError then holds the reason).
+  // returning the shop rather than a bool is what lets the settings screen redraw its header with
+  // the new name immediately instead of waiting for the next loadMyShops().
+  Future<Shop?> updateShop({
+    required int shopId,
+    required String name,
+    required String contactPhone,
+    required String address,
+    required double latitude,
+    required double longitude,
+  }) async {
+    _isMutatingShop = true;
+    _shopMutationError = null;
     notifyListeners();
 
     try {
-      _uploadResult = await _repo.uploadProductsFile(shopId: shopId, filePath: filePath);
-      // the shop's product count just changed, so the row this screen was opened from is stale
-      await loadMyShops();
-    } on ProductUploadException catch (e) {
-      _uploadError = e;
+      final saved = await _repo.updateShop(
+        shopId: shopId,
+        name: name,
+        contactPhone: contactPhone,
+        address: address,
+        latitude: latitude,
+        longitude: longitude,
+      );
+
+      // the PUT response has no product_count (only /api/shops/mine computes one), so carry the
+      // count we already know across instead of letting every edit reset the row to "no products"
+      final previous = _findById(_myShops, shopId);
+      final merged = saved.copyWith(productCount: previous?.productCount ?? 0);
+
+      // replace in place in both lists: the map's pin has to move if the location changed, and the
+      // management row has to show the new name. no re-fetch - we already hold the authoritative row.
+      _myShops = [for (final s in _myShops) s.id == shopId ? merged : s];
+      _stores = [for (final s in _stores) s.id == shopId ? merged : s];
+
+      _isMutatingShop = false;
+      notifyListeners();
+      return merged;
+    } on ShopMutationException catch (e) {
+      _shopMutationError = e;
     } catch (e) {
-      _uploadError = ProductUploadException(code: 'server_error', message: e.toString());
+      _shopMutationError = ShopMutationException(code: 'server_error', message: e.toString());
     }
 
-    _isUploading = false;
+    _isMutatingShop = false;
+    notifyListeners();
+    return null;
+  }
+
+  // returns true on success, so the screen knows it can pop back to the shops list
+  Future<bool> deleteShop(int shopId) async {
+    _isMutatingShop = true;
+    _shopMutationError = null;
+    notifyListeners();
+
+    try {
+      await _repo.deleteShop(shopId);
+      // drop it from both lists rather than re-fetching: the pin must leave the map at the same
+      // moment the row leaves the management list, and one round trip can't guarantee that
+      _myShops = [for (final s in _myShops) if (s.id != shopId) s];
+      _stores = [for (final s in _stores) if (s.id != shopId) s];
+      _isMutatingShop = false;
+      notifyListeners();
+      return true;
+    } on ShopMutationException catch (e) {
+      _shopMutationError = e;
+    } catch (e) {
+      _shopMutationError = ShopMutationException(code: 'server_error', message: e.toString());
+    }
+
+    _isMutatingShop = false;
+    notifyListeners();
+    return false;
+  }
+
+  // called by EditStoreScreen as it opens, so a failure from a previous visit doesn't paint an error
+  // over a form nothing has been submitted from yet. silent for the same reason as resetSaveState.
+  void resetShopMutationState() {
+    _isMutatingShop = false;
+    _shopMutationError = null;
+  }
+
+  // called by the products screen after the owner adds or deletes one of their own products. the
+  // catalogue itself lives in ProductsController, but the *count* is a field on Shop that only
+  // /api/shops/mine computes - so without this the badge on the settings hub would keep showing the
+  // number from the last full load until the screen was left and reopened.
+  //
+  // patching the number we already hold rather than calling loadMyShops() again: one arithmetic
+  // operation against a whole round trip, for a value we know exactly how much has changed by.
+  void adjustProductCount(int shopId, int delta) {
+    final shop = _findById(_myShops, shopId);
+    if (shop == null) return;
+
+    // clamped at zero: a count can't go negative, and letting it would turn one lost sync into a
+    // permanently wrong badge
+    final updated = shop.copyWith(productCount: (shop.productCount + delta).clamp(0, 1 << 30));
+    _myShops = [for (final s in _myShops) s.id == shopId ? updated : s];
     notifyListeners();
   }
 
-  // called by ShopUploadScreen as it opens, so one shop's result never shows up under another's
-  // name. silent for the same reason as resetSaveState above.
-  void resetUploadState() {
-    _isUploading = false;
-    _uploadResult = null;
-    _uploadError = null;
+  // firstWhere with orElse:null needs a nullable element type, which List<Shop> isn't - so this
+  // plain loop rather than fighting the type system for a one-liner
+  Shop? _findById(List<Shop> list, int id) {
+    for (final shop in list) {
+      if (shop.id == id) return shop;
+    }
+    return null;
   }
 }

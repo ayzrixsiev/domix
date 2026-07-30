@@ -108,16 +108,24 @@ class AppLocalizations {
   String get viewAll => isRu ? 'Смотреть все' : "Hammasini ko'rish";
   String get averageCheck => isRu ? 'Средний чек:' : "O'rtacha hisob:";
 
-  // placeholder construction categories for the home grid, until the backend serves a real list.
-  // they live here rather than inline in the widget because they were hardcoded in russian, which
-  // meant switching the app to uzbek left this whole section untranslated.
+  // the twelve product categories, shown both as the home screen's "Популярные категории" grid and
+  // as the options in the product form's category dropdown - one vocabulary, because they are the
+  // same thing (see ProductCategory in features/products/data/product_category.dart).
+  //
+  // they live here rather than in the widget or the database because the stored value is a code
+  // ('mixes', 'blocks', ...): when the display names were the stored values they were hardcoded
+  // russian, and switching the app to uzbek left every category untranslated.
   String get categoryMixes => isRu ? 'Смеси' : 'Aralashmalar';
-  String get categoryBlocks => isRu ? 'Блоки' : 'Bloklar';
+  String get categoryBlocks => isRu ? 'Кирпич и блоки' : "G'isht va bloklar";
+  String get categoryLumber => isRu ? 'Пиломатериалы' : "Yog'och materiallar";
+  String get categoryMetal => isRu ? 'Металлопрокат' : 'Metall prokat';
   String get categoryFasteners => isRu ? 'Крепёж' : 'Mahkamlagichlar';
   String get categoryRoofing => isRu ? 'Кровля' : 'Tom yopish';
+  String get categoryInsulation => isRu ? 'Изоляция' : 'Izolyatsiya';
   String get categoryElectrical => isRu ? 'Электрика' : 'Elektrika';
   String get categoryPlumbing => isRu ? 'Сантехника' : 'Santexnika';
   String get categoryPaints => isRu ? 'Краски' : "Bo'yoqlar";
+  String get categoryFinishing => isRu ? 'Отделка' : 'Pardozlash';
   String get categoryTools => isRu ? 'Инструменты' : 'Asboblar';
   String get currencySom => isRu ? 'сум' : "so'm";
 
@@ -147,10 +155,13 @@ class AppLocalizations {
       ? 'Здесь появятся новые заказы, ответы магазинов и новости Domix.'
       : "Bu yerda yangi buyurtmalar, do'konlar javoblari va Domix yangiliklari paydo bo'ladi.";
 
-  // placeholder screens
-  String get messagesComingSoon => isRu
-      ? 'Раздел сообщений скоро будет доступен'
-      : "Xabarlar bo'limi tez orada bo'ladi";
+  // placeholder screens. these read as a title plus a line of "what will appear here", the shape
+  // EmptyStateView wants - the messages tab used to be one grey sentence floating on the page,
+  // which is why it looked unfinished next to Заявки.
+  String get messagesComingSoonTitle => isRu ? 'Сообщения' : 'Xabarlar';
+  String get messagesComingSoonBody => isRu
+      ? 'Здесь появится переписка с магазинами и мастерами — можно будет уточнить цену и наличие, не выходя из приложения.'
+      : "Bu yerda do'konlar va ustalar bilan yozishmalar paydo bo'ladi — narx va mavjudlikni ilovadan chiqmasdan aniqlaysiz.";
   String get ticketsComingSoonTitle =>
       isRu ? 'Заявки мастерам' : 'Ustalarga buyurtmalar';
   String get ticketsComingSoonBody => isRu
@@ -203,6 +214,44 @@ class AppLocalizations {
   String get changeLocationButton => isRu ? 'Изменить' : "O'zgartirish";
   String get locationRequiredError =>
       isRu ? 'Пожалуйста, выберите местоположение на карте' : "Iltimos, xaritada joylashuvni tanlang";
+  // shop category, picked on the add-store form. it decides which ready-made product catalogue the
+  // backend seeds the new shop with, which is why the picker leads with how many products that is -
+  // it is the concrete thing the owner gets out of the choice.
+  String get shopCategoryLabel => isRu ? 'Категория магазина' : "Do'kon turi";
+  String get pickCategoryPrompt =>
+      isRu ? 'Выберите категорию магазина' : "Do'kon turini tanlang";
+  String get categoryRequiredError => isRu
+      ? 'Пожалуйста, выберите категорию магазина'
+      : "Iltimos, do'kon turini tanlang";
+  String get shopCategoryPickerTitle =>
+      isRu ? 'Категория магазина' : "Do'kon turi";
+  String get shopCategoryPickerHint => isRu
+      ? 'Каталог заполнится готовыми товарами сразу после создания — вам останется указать цены. Категорию нельзя изменить позже.'
+      : "Katalog do'kon yaratilgandan so'ng tayyor mahsulotlar bilan to'ladi — sizga faqat narxlarni ko'rsatish qoladi. Turni keyin o'zgartirib bo'lmaydi.";
+
+  String get shopCategoryUniversal => isRu ? 'Универсальный' : 'Universal';
+  String get shopCategoryPlumbing => isRu ? 'Сантехника' : 'Santexnika';
+  String get shopCategoryWood => isRu ? 'Дерево' : "Yog'och";
+  String get shopCategoryWallpaper => isRu ? 'Обои' : 'Oboylar';
+
+  String get shopCategoryUniversalHint => isRu
+      ? 'Всё для стройки: смеси, блоки, крепёж, электрика'
+      : "Qurilish uchun hammasi: aralashmalar, bloklar, mahkamlagichlar, elektrika";
+  String get shopCategoryPlumbingHint => isRu
+      ? 'Трубы, фитинги, смесители, отопление'
+      : "Quvurlar, fitinglar, smesitellar, isitish";
+  String get shopCategoryWoodHint => isRu
+      ? 'Пиломатериалы, фанера, вагонка, ДСП'
+      : "Yog'och materiallar, faner, vagonka, DSP";
+  String get shopCategoryWallpaperHint => isRu
+      ? 'Обои всех видов, клей, бордюры'
+      : "Har xil oboylar, yelim, bordyurlar";
+
+  /// "Готовый каталог: 50 товаров" - shown under each category in the picker
+  String readyCatalogLabel(int count) => isRu
+      ? 'Готовый каталог: ${productsCountLabel(count)}'
+      : "Tayyor katalog: ${productsCountLabel(count)}";
+
   String get createStoreButton => isRu ? 'Создать магазин' : "Do'kon yaratish";
   String get storeCreatedMessage =>
       isRu ? 'Магазин успешно добавлен! 🎉' : "Do'kon muvaffaqiyatli qo'shildi! 🎉";
@@ -228,90 +277,227 @@ class AppLocalizations {
   String productsCountLabel(int count) =>
       isRu ? '$count ${_ruPlural(count, 'товар', 'товара', 'товаров')}' : '$count ta mahsulot';
 
-  // shop upload screen (opened by tapping a shop in the my-shops list above)
-  String get uploadScreenTitle => isRu ? 'Загрузка товаров' : "Mahsulotlarni yuklash";
-  String get uploadInstructions => isRu
-      ? 'Загрузите файл Excel (.xlsx) — до 50 товаров за раз. Повторная загрузка обновит существующие товары по артикулу, а не создаст дубликаты.'
-      : "Excel (.xlsx) faylini yuklang — bir martada 50 tagacha mahsulot. Qayta yuklash mavjud mahsulotlarni artikul bo'yicha yangilaydi, dublikat yaratmaydi.";
-  String get fileFormatTitle => isRu ? 'Формат файла' : "Fayl formati";
-  String get fileFormatHint => isRu
-      ? 'Первая строка — заголовки, столбцы строго в этом порядке:'
-      : "Birinchi qator — sarlavhalar, ustunlar aynan shu tartibda:";
-  String get skippedRowsHint => isRu
-      ? 'Строки с пропущенными или некорректными данными пропускаются, остальные загружаются.'
-      : "Ma'lumotlari to'liq bo'lmagan qatorlar o'tkazib yuboriladi, qolganlari yuklanadi.";
-  String get pickFileButton => isRu ? 'Выбрать файл Excel' : "Excel faylini tanlash";
-  String get pickFileHint => isRu ? 'Формат .xlsx, до 5 МБ' : ".xlsx formati, 5 MB gacha";
+  // shop settings hub (opened by tapping a shop in the my-shops list above). it is a menu of
+  // sections rather than one long page, so each section here needs a title and a line saying what
+  // is behind it - the owner picks from the list without opening anything to find out.
+  String get shopSettingsScreenTitle => isRu ? 'Настройки магазина' : "Do'kon sozlamalari";
+  String get sectionProductsTitle => isRu ? 'Товары' : 'Mahsulotlar';
+  String get sectionProductsSubtitle => isRu
+      ? 'Цены, наличие и свои товары'
+      : "Narxlar, mavjudligi va o'z mahsulotlaringiz";
+  String get sectionDetailsTitle => isRu ? 'Данные магазина' : "Do'kon ma'lumotlari";
+  String get sectionDetailsSubtitle => isRu
+      ? 'Название, телефон, адрес и удаление'
+      : "Nomi, telefoni, manzili va o'chirish";
 
-  // the six columns the upload expects, in order, each with a realistic example. shown on the
-  // upload screen because an owner has no other way to discover the required layout - the backend
-  // just skips rows it can't read (see parseProductRow in backend/internal/endpoints/products.go).
-  List<({String header, String example})> get productColumnSpec => isRu
-      ? const [
-          (header: 'Категория', example: 'Цемент'),
-          (header: 'Наименование товара', example: 'Цемент М400, 50 кг'),
-          (header: 'Цена (сум)', example: '45 000'),
-          (header: 'Единица измерения', example: 'шт'),
-          (header: 'Наличие', example: 'Есть / Под заказ / Нет'),
-          (header: 'Артикул', example: 'ART-001'),
-        ]
-      : const [
-          (header: 'Kategoriya', example: 'Sement'),
-          (header: 'Mahsulot nomi', example: 'Sement M400, 50 kg'),
-          (header: "Narxi (so'm)", example: '45 000'),
-          (header: "O'lchov birligi", example: 'dona'),
-          (header: 'Mavjudligi', example: "Есть / Под заказ / Нет"),
-          (header: 'Artikul', example: 'ART-001'),
-        ];
-  String get uploadingLabel => isRu ? 'Загрузка...' : "Yuklanmoqda...";
-  String get uploadDoneTitle => isRu ? 'Файл обработан' : "Fayl qayta ishlandi";
-  String get uploadNothingTitle =>
-      isRu ? 'Ни один товар не загружен' : "Hech qanday mahsulot yuklanmadi";
-  String get uploadNothingHint => isRu
-      ? 'Проверьте порядок столбцов и заполненность строк в файле.'
-      : "Fayldagi ustunlar tartibi va qatorlar to'liqligini tekshiring.";
-  String get uploadStatRows => isRu ? 'Строк в файле' : "Faylda qator";
-  String get uploadStatProcessed => isRu ? 'Загружено' : "Yuklandi";
-  String get uploadStatSkipped => isRu ? 'Пропущено' : "O'tkazildi";
+  // edit shop screen (the "Данные магазина" section above)
+  String get editStoreScreenTitle => isRu ? 'Данные магазина' : "Do'kon ma'lumotlari";
+  String get saveChangesButton => isRu ? 'Сохранить изменения' : "O'zgarishlarni saqlash";
+  String get storeUpdatedMessage =>
+      isRu ? 'Изменения сохранены' : "O'zgarishlar saqlandi";
+  String get noChangesToSave =>
+      isRu ? 'Вы ничего не изменили' : "Siz hech narsani o'zgartirmadingiz";
 
-  // upload failures - keyed off the backend's machine-readable `code` (see writeUploadError in
-  // backend/internal/endpoints/products.go) so users never see its english error strings
-  String uploadErrorMessage(String code, {int? limit}) {
+  // delete, kept in its own visually separated block at the bottom of the edit screen. it is the
+  // one irreversible action in the app, so it gets a red section header rather than sitting in the
+  // same list as "save".
+  String get dangerZoneTitle => isRu ? 'Удаление' : "O'chirish";
+  String get deleteStoreButton => isRu ? 'Удалить магазин' : "Do'konni o'chirish";
+  String get deleteStoreHint => isRu
+      ? 'Магазин исчезнет с карты вместе со всеми загруженными товарами. Действие необратимо.'
+      : "Do'kon barcha yuklangan mahsulotlari bilan xaritadan yo'qoladi. Bu amalni qaytarib bo'lmaydi.";
+  String get deleteStoreConfirmTitle =>
+      isRu ? 'Удалить магазин?' : "Do'kon o'chirilsinmi?";
+  String deleteStoreConfirmBody(String shopName, int productCount) {
+    // naming the shop and counting what goes with it is the whole point of the dialog: "удалить?"
+    // alone gives the owner nothing to check their intent against
+    final products = productCount > 0
+        ? (isRu
+            ? ' и все его товары (${productsCountLabel(productCount)})'
+            : " va uning barcha mahsulotlari (${productsCountLabel(productCount)})")
+        : '';
+    return isRu
+        ? 'Магазин «$shopName»$products будет удалён безвозвратно. Это действие нельзя отменить.'
+        : "«$shopName» do'koni$products butunlay o'chiriladi. Bu amalni bekor qilib bo'lmaydi.";
+  }
+  String get deleteStoreConfirmAction => isRu ? 'Удалить' : "O'chirish";
+  String get storeDeletedMessage =>
+      isRu ? 'Магазин удалён' : "Do'kon o'chirildi";
+
+  // edit/delete failures - keyed off the backend's machine-readable `code` (see writeShopError in
+  // backend/internal/endpoints/shops.go), same contract as productErrorMessage below
+  String shopMutationErrorMessage(String code) {
     switch (code) {
-      case 'too_many_rows':
-        final max = limit ?? 50;
-        return isRu
-            ? 'В файле больше $max товаров. Разделите его на несколько файлов.'
-            : "Faylda $max tadan ko'p mahsulot bor. Uni bir nechta faylga bo'ling.";
-      case 'file_too_large':
-        return isRu
-            ? 'Файл слишком большой. Максимум 5 МБ.'
-            : "Fayl juda katta. Maksimal 5 MB.";
-      case 'invalid_file':
-        return isRu
-            ? 'Не удалось прочитать файл. Убедитесь, что это .xlsx.'
-            : "Faylni o'qib bo'lmadi. U .xlsx ekaniga ishonch hosil qiling.";
       case 'not_owner':
       case 'forbidden_role':
         return isRu
-            ? 'У вас нет прав на загрузку товаров в этот магазин.'
-            : "Bu do'konga mahsulot yuklash huquqingiz yo'q.";
+            ? 'У вас нет прав на изменение этого магазина.'
+            : "Bu do'konni o'zgartirish huquqingiz yo'q.";
       case 'shop_not_found':
-        return isRu ? 'Магазин не найден.' : "Do'kon topilmadi.";
+        return isRu
+            ? 'Магазин не найден — возможно, он уже удалён.'
+            : "Do'kon topilmadi — ehtimol u allaqachon o'chirilgan.";
+      case 'missing_fields':
+        return isRu
+            ? 'Заполните название, телефон и адрес.'
+            : "Nomi, telefoni va manzilini to'ldiring.";
       case 'unauthorized':
         return isRu
             ? 'Сессия истекла. Войдите в аккаунт заново.'
             : "Seans tugadi. Hisobingizga qayta kiring.";
       default:
         return isRu
-            ? 'Не удалось загрузить файл. Проверьте подключение и попробуйте снова.'
-            : "Faylni yuklab bo'lmadi. Ulanishni tekshirib, qayta urinib ko'ring.";
+            ? 'Не удалось сохранить. Проверьте подключение и попробуйте снова.'
+            : "Saqlab bo'lmadi. Ulanishni tekshirib, qayta urinib ko'ring.";
     }
   }
 
-  String get fileNotReadable => isRu
-      ? 'Не удалось открыть выбранный файл. Попробуйте другой.'
-      : "Tanlangan faylni ochib bo'lmadi. Boshqasini tanlang.";
+  // ───────────────────────────────────────────────────────────────────────────
+  // products: the catalogue grid the owner manages, and the same grid shown to a customer on a
+  // shop's card. a shop is seeded with its category's template at creation, so most of these
+  // strings are about the state that follows: rows that exist but have no price yet.
+  // ───────────────────────────────────────────────────────────────────────────
+
+  String get productsScreenTitle => isRu ? 'Товары' : 'Mahsulotlar';
+  String get loadingProducts => isRu ? 'Загружаем товары...' : 'Mahsulotlar yuklanmoqda...';
+  /// under the load-error title. a bare "не удалось загрузить" next to a retry button that keeps
+  /// failing tells the owner nothing about whether the problem is theirs to fix; naming the two
+  /// realistic causes at least points somewhere.
+  String get productsLoadErrorHint => isRu
+      ? 'Проверьте подключение к интернету. Если оно есть — сервер временно недоступен, попробуйте позже.'
+      : "Internet aloqasini tekshiring. Aloqa bo'lsa — server vaqtincha ishlamayapti, keyinroq urinib ko'ring.";
+
+  String get productsLoadError =>
+      isRu ? 'Не удалось загрузить товары' : "Mahsulotlarni yuklab bo'lmadi";
+  String get noProductsInShop =>
+      isRu ? 'В магазине пока нет товаров' : "Do'konda hozircha mahsulot yo'q";
+  String get noProductsInShopHint => isRu
+      ? 'Добавьте свои товары кнопкой ниже.'
+      : "Quyidagi tugma orqali o'z mahsulotlaringizni qo'shing.";
+
+  /// on a product with no price yet. the single most important label on the owner's grid right
+  /// after a shop is created - it is the whole to-do list.
+  String get priceNotSet => isRu ? 'Цена не указана' : "Narx ko'rsatilmagan";
+
+  /// "Цены указаны: 12 из 50" - the progress line at the top of the owner's grid
+  String pricedProgressLabel(int priced, int total) => isRu
+      ? 'Цены указаны: $priced из $total'
+      : "Narxlar ko'rsatilgan: $total dan $priced";
+
+  /// badge on a product the owner added themselves, as opposed to one from the category template
+  String get ownProductBadge => isRu ? 'Свой товар' : "O'z mahsuloti";
+
+  String get addProductButton => isRu ? 'Добавить товар' : "Mahsulot qo'shish";
+
+  /// "Свои товары: 12 из 20" - how much of the own-products allowance is used
+  String ownProductsUsedLabel(int used, int max) => isRu
+      ? 'Свои товары: $used из $max'
+      : "O'z mahsulotlaringiz: $max dan $used";
+  String ownProductsLimitReachedHint(int max) => isRu
+      ? 'Достигнут лимит в $max собственных товаров. Удалите один, чтобы добавить новый.'
+      : "$max ta o'z mahsulotingiz chegarasiga yetdingiz. Yangisini qo'shish uchun bittasini o'chiring.";
+
+  // add/edit one product
+  String get addProductTitle => isRu ? 'Новый товар' : 'Yangi mahsulot';
+  String get editProductTitle => isRu ? 'Редактировать товар' : "Mahsulotni tahrirlash";
+  String get productNameLabel => isRu ? 'Наименование' : 'Nomi';
+  String get productNameRequiredError =>
+      isRu ? 'Введите наименование товара' : "Mahsulot nomini kiriting";
+  String get productCategoryLabel => isRu ? 'Категория' : 'Kategoriya';
+  String get productCategoryRequiredError =>
+      isRu ? 'Выберите категорию товара' : "Mahsulot kategoriyasini tanlang";
+
+  /// placeholder in the category dropdown before anything is chosen
+  String get pickProductCategoryPrompt =>
+      isRu ? 'Выберите категорию' : 'Kategoriyani tanlang';
+  String get productPriceLabel => isRu ? 'Цена (сум)' : "Narxi (so'm)";
+  String get productPriceHint =>
+      isRu ? 'Оставьте пустым, если цены пока нет' : "Narx hali bo'lmasa, bo'sh qoldiring";
+  String get productPriceInvalidError =>
+      isRu ? 'Введите цену числом' : "Narxni raqam bilan kiriting";
+  String get productUnitLabel => isRu ? 'Единица измерения' : "O'lchov birligi";
+  String get productUnitRequiredError =>
+      isRu ? 'Укажите единицу измерения' : "O'lchov birligini ko'rsating";
+  String get productAvailabilityLabel => isRu ? 'Наличие' : 'Mavjudligi';
+  String get saveProductButton => isRu ? 'Сохранить' : 'Saqlash';
+  String get productSavedMessage => isRu ? 'Товар сохранён' : 'Mahsulot saqlandi';
+  String get productDeletedMessage => isRu ? 'Товар удалён' : "Mahsulot o'chirildi";
+  String get deleteProductButton => isRu ? 'Удалить товар' : "Mahsulotni o'chirish";
+  String get deleteProductConfirmTitle =>
+      isRu ? 'Удалить товар?' : "Mahsulot o'chirilsinmi?";
+  String deleteProductConfirmBody(String productName) => isRu
+      ? 'Товар «$productName» исчезнет из каталога магазина. Это действие нельзя отменить.'
+      : "«$productName» mahsuloti do'kon katalogidan yo'qoladi. Bu amalni bekor qilib bo'lmaydi.";
+
+  /// explains why a template product's name/category/unit are shown as plain text and why it has no
+  /// delete button - without it, the missing controls read as a bug rather than as a rule
+  String get templateProductHint => isRu
+      ? 'Товар из готового каталога. Такие товары одинаковы во всех магазинах категории — поэтому здесь можно указать только цену и наличие, а удалить товар нельзя. Свои товары редактируются полностью.'
+      : "Tayyor katalogdagi mahsulot. Bunday mahsulotlar kategoriyadagi barcha do'konlarda bir xil — shuning uchun bu yerda faqat narx va mavjudligini ko'rsatish mumkin, o'chirib bo'lmaydi. O'z mahsulotlaringiz to'liq tahrirlanadi.";
+
+  /// badge over the read-only fields of a template product
+  String get templateFieldLocked => isRu ? 'Не изменяется' : "O'zgarmaydi";
+
+  // stock status. the codes behind these live in the database (backend/db/migrations/000004);
+  // these are only ever the display side of them.
+  String get availabilityInStock => isRu ? 'Есть' : 'Bor';
+  String get availabilityOnOrder => isRu ? 'Под заказ' : 'Buyurtma asosida';
+  String get availabilityUnavailable => isRu ? 'Нет' : "Yo'q";
+
+  // customer-facing catalogue on a shop's card
+  String get shopProductsSectionTitle => isRu ? 'Товары' : 'Mahsulotlar';
+  String get noPricedProductsYet => isRu
+      ? 'Магазин ещё не указал цены на товары'
+      : "Do'kon hali mahsulot narxlarini ko'rsatmagan";
+
+  // product add/edit/delete failures - keyed off the backend's machine-readable `code` (see
+  // writeAPIError in backend/internal/endpoints/authz.go), same contract as the two above
+  String productErrorMessage(String code, {int? limit}) {
+    switch (code) {
+      case 'product_limit_reached':
+        final max = limit ?? 20;
+        return isRu
+            ? 'Можно добавить не больше $max собственных товаров.'
+            : "$max tadan ko'p o'z mahsulotingizni qo'sha olmaysiz.";
+      case 'template_product':
+        return isRu
+            ? 'Товар из готового каталога нельзя удалить.'
+            : "Tayyor katalogdagi mahsulotni o'chirib bo'lmaydi.";
+      case 'not_owner':
+      case 'forbidden_role':
+        return isRu
+            ? 'У вас нет прав на изменение товаров этого магазина.'
+            : "Bu do'kon mahsulotlarini o'zgartirish huquqingiz yo'q.";
+      case 'product_not_found':
+        return isRu
+            ? 'Товар не найден — возможно, он уже удалён.'
+            : "Mahsulot topilmadi — ehtimol u allaqachon o'chirilgan.";
+      case 'shop_not_found':
+        return isRu ? 'Магазин не найден.' : "Do'kon topilmadi.";
+      case 'missing_fields':
+        return isRu
+            ? 'Заполните наименование, категорию и единицу измерения.'
+            : "Nomi, kategoriyasi va o'lchov birligini to'ldiring.";
+      case 'invalid_price':
+        return isRu ? 'Некорректная цена.' : "Narx noto'g'ri.";
+      case 'invalid_category':
+        return isRu
+            ? 'Выберите категорию из списка.'
+            : "Ro'yxatdan kategoriyani tanlang.";
+      case 'field_too_long':
+        return isRu
+            ? 'Одно из полей слишком длинное.'
+            : "Maydonlardan biri juda uzun.";
+      case 'unauthorized':
+        return isRu
+            ? 'Сессия истекла. Войдите в аккаунт заново.'
+            : "Seans tugadi. Hisobingizga qayta kiring.";
+      default:
+        return isRu
+            ? 'Не удалось сохранить. Проверьте подключение и попробуйте снова.'
+            : "Saqlab bo'lmadi. Ulanishni tekshirib, qayta urinib ko'ring.";
+    }
+  }
 
   // russian noun agreement: 1 товар, 2-4 товара, 5+ товаров (with the 11-14 exception)
   String _ruPlural(int count, String one, String few, String many) {

@@ -6,6 +6,13 @@ import 'package:frontend/core/constants/app_theme.dart';
 // the "Title ........ See all" row above each home section. it was copy-pasted into three widgets
 // with slightly different type sizes and a bare TextButton whose default material padding pushed
 // the action out of alignment with the title. one widget means the sections actually line up.
+//
+// [actionLabel]/[onAction] are currently passed by nobody: every home section now shows everything
+// it has, so none of them has anywhere for a "see all" to lead. the parameters stay because they are
+// optional and cost nothing when omitted, and a section that genuinely needs one - the ticket
+// marketplace's feed, say - would otherwise have to rebuild this row and drift out of alignment
+// again, which is the exact problem this widget exists to solve. do not wire one up to an empty
+// `onAction: () {}` just to make the row look complete; that is what these three used to do.
 class SectionHeader extends StatelessWidget {
   const SectionHeader({
     super.key,

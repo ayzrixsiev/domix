@@ -46,14 +46,15 @@ class HomeScreen extends StatelessWidget {
                   const SizedBox(height: 14),
                   const Padding(padding: _gutter, child: SearchAndLikeBar()),
 
+                  // none of the three section headings carries a "see all" action any more. each
+                  // section already shows everything it has: the VIP carousel loops endlessly in
+                  // both directions, the categories grid pages through all twelve, and Лучшие
+                  // предложения is a top-N that has no longer tail to open. a link promising more
+                  // than the section holds would have to lead somewhere, and there is nowhere.
                   const SizedBox(height: 26),
                   Padding(
                     padding: _gutter,
-                    child: SectionHeader(
-                      title: strings.vipShops,
-                      actionLabel: strings.viewAll,
-                      onAction: () {},
-                    ),
+                    child: SectionHeader(title: strings.vipShops),
                   ),
                   const SizedBox(height: 12),
                   const VipShopsCarousel(),
@@ -65,11 +66,7 @@ class HomeScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          SectionHeader(
-                            title: strings.popularCategories,
-                            actionLabel: strings.seeAll,
-                            onAction: () {},
-                          ),
+                          SectionHeader(title: strings.popularCategories),
                           const SizedBox(height: 14),
                           const PopularCategoriesGrid(),
                         ],
@@ -121,7 +118,11 @@ class _SectionPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+      // less padding at the bottom than the top on purpose: the only thing that ever sits at the
+      // bottom edge of this panel is the categories pager's dot row, which already carries its own
+      // touch padding. matching the 14 above it counted that space twice and left the panel looking
+      // stretched below its content.
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
       decoration: BoxDecoration(
         color: AppColors.surfaceWhite,
         borderRadius: BorderRadius.circular(AppRadius.md),

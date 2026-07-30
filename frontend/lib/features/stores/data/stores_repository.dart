@@ -2,14 +2,13 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:frontend/core/constants/api_config.dart';
 import 'package:frontend/features/profile/data/auth_service.dart';
-import 'product_upload_result.dart';
+import 'shop_category.dart';
 import 'shop_model.dart';
 
 // talks to the go backend's /api/shops endpoint: listing shops (for the map) and creating a new one
 class StoresRepository {
   static final Uri _shopsUri = Uri.parse('${ApiConfig.serverRoot}/api/shops');
   static final Uri _myShopsUri = Uri.parse('${ApiConfig.serverRoot}/api/shops/mine');
-  static final Uri _productsUploadUri = Uri.parse('${ApiConfig.serverRoot}/api/products/upload');
 
   final AuthService _authService;
 
@@ -53,12 +52,18 @@ class StoresRepository {
   }
 
   // create a new shop for the currently logged-in owner.
+  //
+  // [category] is the one field here with a side effect beyond the shop row: the backend copies
+  // that category's product template into the new shop's catalogue in the same transaction, so the
+  // owner lands on a screen of ready-made products needing only prices rather than an empty one.
+  //
   // no photo yet - the backend leaves image_url null and the app shows a default banner instead
   // (see ShopBanner in map_screen.dart); real photo upload is a later feature.
   Future<Shop> createShop({
     required String name,
     required String contactPhone,
     required String address,
+    required ShopCategory category,
     required double latitude,
     required double longitude,
   }) async {
@@ -78,6 +83,7 @@ class StoresRepository {
             'name': name,
             'contact_phone': contactPhone,
             'address': address,
+            'category': category.code,
             'latitude': latitude,
             'longitude': longitude,
           }),
@@ -97,49 +103,79 @@ class StoresRepository {
     return Shop.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  // bulk-upload a .xlsx of products for a shop the caller owns (see backend/internal/endpoints/products.go).
-  // re-uploading updates existing products by their Артикул instead of duplicating them.
-  //
-  // throws ProductUploadException on any non-200 so the ui can localize the reason off its `code`
-  // rather than showing the backend's english text.
-  Future<ProductUploadResult> uploadProductsFile({
+  // edit a shop the caller owns. a full replacement, not a patch: the edit form always submits all
+  // four fields, and the backend rejects a blank name/phone/address rather than treating it as
+  // "leave this one alone". image_url is untouched - photos aren't uploadable yet.
+  Future<Shop> updateShop({
     required int shopId,
-    required String filePath,
+    required String name,
+    required String contactPhone,
+    required String address,
+    required double latitude,
+    required double longitude,
   }) async {
     final token = await _authService.getToken();
     if (token == null || token.isEmpty) {
-      throw const ProductUploadException(code: 'unauthorized', message: 'Not logged in');
+      throw const ShopMutationException(code: 'unauthorized', message: 'Not logged in');
     }
 
-    final request = http.MultipartRequest('POST', _productsUploadUri)
-      ..headers['Authorization'] = 'Bearer $token'
-      ..fields['shop_id'] = shopId.toString()
-      ..files.add(await http.MultipartFile.fromPath('file', filePath));
-
-    final streamedResponse = await request.send().timeout(const Duration(seconds: 20));
-    final response = await http.Response.fromStream(streamedResponse);
+    final response = await http
+        .put(
+          _shopUri(shopId),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'name': name,
+            'contact_phone': contactPhone,
+            'address': address,
+            'latitude': latitude,
+            'longitude': longitude,
+          }),
+        )
+        .timeout(const Duration(seconds: 10));
 
     if (response.statusCode != 200) {
-      throw _uploadExceptionFrom(response);
+      throw _mutationExceptionFrom(response);
     }
 
-    return ProductUploadResult.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return Shop.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  // a failed upload should never surface as a raw decode crash, so anything unparseable collapses
-  // into the same generic code the ui already knows how to render
-  ProductUploadException _uploadExceptionFrom(http.Response response) {
+  // delete a shop the caller owns. its products go with it (products.shop_id cascades), which is why
+  // the ui puts this behind a typed confirmation rather than a plain "are you sure".
+  Future<void> deleteShop(int shopId) async {
+    final token = await _authService.getToken();
+    if (token == null || token.isEmpty) {
+      throw const ShopMutationException(code: 'unauthorized', message: 'Not logged in');
+    }
+
+    final response = await http
+        .delete(_shopUri(shopId), headers: {'Authorization': 'Bearer $token'})
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 200) {
+      throw _mutationExceptionFrom(response);
+    }
+  }
+
+  // built per call rather than kept as a static field like the three above, since the id varies
+  static Uri _shopUri(int shopId) => Uri.parse('${ApiConfig.serverRoot}/api/shops/$shopId');
+
+  // a failed edit/delete should never surface as a raw decode crash, so anything unparseable
+  // collapses into the same generic code the ui already knows how to render
+  ShopMutationException _mutationExceptionFrom(http.Response response) {
     try {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
-      return ProductUploadException(
+      return ShopMutationException(
         code: body['code'] as String? ?? 'server_error',
-        message: body['error'] as String? ?? 'Upload failed (${response.statusCode})',
-        limit: body['limit'] as int?,
+        message: body['error'] as String? ?? 'Request failed (${response.statusCode})',
       );
     } catch (_) {
-      return ProductUploadException(
+      return ShopMutationException(
         code: 'server_error',
-        message: 'Upload failed (${response.statusCode})',
+        message: 'Request failed (${response.statusCode})',
       );
     }
   }
