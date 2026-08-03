@@ -12,9 +12,9 @@ import (
 )
 
 const createShop = `-- name: CreateShop :one
-INSERT INTO shops (user_id, name, contact_phone, image_url, address, location)
-VALUES ($1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($6, $7), 4326))
-RETURNING id, user_id, name, contact_phone, image_url, address, rating, average_paycheck,
+INSERT INTO shops (user_id, name, contact_phone, image_url, address, category, location)
+VALUES ($1, $2, $3, $4, $5, $6, ST_SetSRID(ST_MakePoint($7, $8), 4326))
+RETURNING id, user_id, name, contact_phone, image_url, address, category, rating, average_paycheck,
           ST_Y(location)::float8 AS latitude, ST_X(location)::float8 AS longitude, created_at, updated_at
 `
 
@@ -24,6 +24,7 @@ type CreateShopParams struct {
 	ContactPhone  string      `json:"contact_phone"`
 	ImageUrl      pgtype.Text `json:"image_url"`
 	Address       string      `json:"address"`
+	Category      string      `json:"category"`
 	StMakepoint   interface{} `json:"st_makepoint"`
 	StMakepoint_2 interface{} `json:"st_makepoint_2"`
 }
@@ -35,6 +36,7 @@ type CreateShopRow struct {
 	ContactPhone    string             `json:"contact_phone"`
 	ImageUrl        pgtype.Text        `json:"image_url"`
 	Address         string             `json:"address"`
+	Category        string             `json:"category"`
 	Rating          pgtype.Numeric     `json:"rating"`
 	AveragePaycheck int32              `json:"average_paycheck"`
 	Latitude        float64            `json:"latitude"`
@@ -50,6 +52,7 @@ func (q *Queries) CreateShop(ctx context.Context, arg CreateShopParams) (CreateS
 		arg.ContactPhone,
 		arg.ImageUrl,
 		arg.Address,
+		arg.Category,
 		arg.StMakepoint,
 		arg.StMakepoint_2,
 	)
@@ -61,6 +64,7 @@ func (q *Queries) CreateShop(ctx context.Context, arg CreateShopParams) (CreateS
 		&i.ContactPhone,
 		&i.ImageUrl,
 		&i.Address,
+		&i.Category,
 		&i.Rating,
 		&i.AveragePaycheck,
 		&i.Latitude,
@@ -71,12 +75,31 @@ func (q *Queries) CreateShop(ctx context.Context, arg CreateShopParams) (CreateS
 	return i, err
 }
 
+
+
+
+// :execrows returns number of rows was deleted
+const deleteShop = `-- name: DeleteShop :execrows
+DELETE FROM shops WHERE id = $1
+`
+
+func (q *Queries) DeleteShop(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteShop, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+
+
+
 const getShopOwner = `-- name: GetShopOwner :one
 SELECT user_id FROM shops WHERE id = $1
 `
 
-// used to authorize the product upload endpoint: only the shop's own owner (or an admin) may upload
-// products to it, so we need its user_id before trusting a shop_id the client sent us.
+// used to authorize the shop and product mutation endpoints: only the shop's own owner (or
+// an admin) may touch it, so we need its user_id before trusting a shop_id the client sent us.
 func (q *Queries) GetShopOwner(ctx context.Context, id int64) (int64, error) {
 	row := q.db.QueryRow(ctx, getShopOwner, id)
 	var user_id int64
@@ -84,8 +107,11 @@ func (q *Queries) GetShopOwner(ctx context.Context, id int64) (int64, error) {
 	return user_id, err
 }
 
+
+
+
 const listShops = `-- name: ListShops :many
-SELECT id, user_id, name, contact_phone, image_url, address, rating, average_paycheck,
+SELECT id, user_id, name, contact_phone, image_url, address, category, rating, average_paycheck,
        ST_Y(location)::float8 AS latitude, ST_X(location)::float8 AS longitude, created_at, updated_at
 FROM shops
 ORDER BY created_at DESC
@@ -98,6 +124,7 @@ type ListShopsRow struct {
 	ContactPhone    string             `json:"contact_phone"`
 	ImageUrl        pgtype.Text        `json:"image_url"`
 	Address         string             `json:"address"`
+	Category        string             `json:"category"`
 	Rating          pgtype.Numeric     `json:"rating"`
 	AveragePaycheck int32              `json:"average_paycheck"`
 	Latitude        float64            `json:"latitude"`
@@ -122,6 +149,7 @@ func (q *Queries) ListShops(ctx context.Context) ([]ListShopsRow, error) {
 			&i.ContactPhone,
 			&i.ImageUrl,
 			&i.Address,
+			&i.Category,
 			&i.Rating,
 			&i.AveragePaycheck,
 			&i.Latitude,
@@ -139,8 +167,11 @@ func (q *Queries) ListShops(ctx context.Context) ([]ListShopsRow, error) {
 	return items, nil
 }
 
+
+
+
 const listShopsByOwner = `-- name: ListShopsByOwner :many
-SELECT s.id, s.user_id, s.name, s.contact_phone, s.image_url, s.address, s.rating, s.average_paycheck,
+SELECT s.id, s.user_id, s.name, s.contact_phone, s.image_url, s.address, s.category, s.rating, s.average_paycheck,
        ST_Y(s.location)::float8 AS latitude, ST_X(s.location)::float8 AS longitude,
        s.created_at, s.updated_at,
        (SELECT COUNT(*) FROM products p WHERE p.shop_id = s.id)::bigint AS product_count
@@ -156,6 +187,7 @@ type ListShopsByOwnerRow struct {
 	ContactPhone    string             `json:"contact_phone"`
 	ImageUrl        pgtype.Text        `json:"image_url"`
 	Address         string             `json:"address"`
+	Category        string             `json:"category"`
 	Rating          pgtype.Numeric     `json:"rating"`
 	AveragePaycheck int32              `json:"average_paycheck"`
 	Latitude        float64            `json:"latitude"`
@@ -167,7 +199,7 @@ type ListShopsByOwnerRow struct {
 
 // backs GET /api/shops/mine - the "manage my shops" list, as opposed to ListShops above which is
 // the public, unauthenticated list every shop for the map. the product count is what makes that
-// screen useful (an owner needs to see whether an upload actually landed), and a correlated
+// screen useful (an owner needs to see how much of their catalogue exists), and a correlated
 // subquery is cheap here since it runs over one owner's handful of shops, not the whole table.
 func (q *Queries) ListShopsByOwner(ctx context.Context, userID int64) ([]ListShopsByOwnerRow, error) {
 	rows, err := q.db.Query(ctx, listShopsByOwner, userID)
@@ -185,6 +217,7 @@ func (q *Queries) ListShopsByOwner(ctx context.Context, userID int64) ([]ListSho
 			&i.ContactPhone,
 			&i.ImageUrl,
 			&i.Address,
+			&i.Category,
 			&i.Rating,
 			&i.AveragePaycheck,
 			&i.Latitude,
@@ -201,4 +234,78 @@ func (q *Queries) ListShopsByOwner(ctx context.Context, userID int64) ([]ListSho
 		return nil, err
 	}
 	return items, nil
+}
+
+
+
+
+const updateShop = `-- name: UpdateShop :one
+UPDATE shops
+SET name = $2,
+    contact_phone = $3,
+    address = $4,
+    location = ST_SetSRID(ST_MakePoint($5, $6), 4326),
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, user_id, name, contact_phone, image_url, address, category, rating, average_paycheck,
+          ST_Y(location)::float8 AS latitude, ST_X(location)::float8 AS longitude, created_at, updated_at
+`
+
+type UpdateShopParams struct {
+	ID            int64       `json:"id"`
+	Name          string      `json:"name"`
+	ContactPhone  string      `json:"contact_phone"`
+	Address       string      `json:"address"`
+	StMakepoint   interface{} `json:"st_makepoint"`
+	StMakepoint_2 interface{} `json:"st_makepoint_2"`
+}
+
+type UpdateShopRow struct {
+	ID              int64              `json:"id"`
+	UserID          int64              `json:"user_id"`
+	Name            string             `json:"name"`
+	ContactPhone    string             `json:"contact_phone"`
+	ImageUrl        pgtype.Text        `json:"image_url"`
+	Address         string             `json:"address"`
+	Category        string             `json:"category"`
+	Rating          pgtype.Numeric     `json:"rating"`
+	AveragePaycheck int32              `json:"average_paycheck"`
+	Latitude        float64            `json:"latitude"`
+	Longitude       float64            `json:"longitude"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+// backs PUT /api/shops/{id} - the "edit shop" form, which always submits all four editable fields,
+// so this is a full replacement rather than a per-column patch. image_url is deliberately absent:
+// photos aren't uploadable yet, and listing the column here would blank it once they are. category
+// is absent for a different reason: it decided which template seeded this shop's catalogue, so
+// changing it later would leave the shop stocked with the wrong list.
+// updated_at is set by hand because there is no trigger on this table (see db/migrations/000001).
+func (q *Queries) UpdateShop(ctx context.Context, arg UpdateShopParams) (UpdateShopRow, error) {
+	row := q.db.QueryRow(ctx, updateShop,
+		arg.ID,
+		arg.Name,
+		arg.ContactPhone,
+		arg.Address,
+		arg.StMakepoint,
+		arg.StMakepoint_2,
+	)
+	var i UpdateShopRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.ContactPhone,
+		&i.ImageUrl,
+		&i.Address,
+		&i.Category,
+		&i.Rating,
+		&i.AveragePaycheck,
+		&i.Latitude,
+		&i.Longitude,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

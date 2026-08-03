@@ -11,39 +11,306 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const upsertProduct = `-- name: UpsertProduct :exec
-INSERT INTO products (shop_id, name, price, category, unit, availability, article)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-ON CONFLICT (shop_id, article) DO UPDATE
-SET name = EXCLUDED.name,
-    price = EXCLUDED.price,
-    category = EXCLUDED.category,
-    unit = EXCLUDED.unit,
-    availability = EXCLUDED.availability,
-    updated_at = CURRENT_TIMESTAMP
+const countCustomProducts = `-- name: CountCustomProducts :one
+SELECT COUNT(*)::bigint FROM products WHERE shop_id = $1 AND template_key IS NULL
 `
 
-type UpsertProductParams struct {
+// how many products this shop's owner added themselves, i.e. everything that did not come from the
+// category template. backs the "20 of your own products" cap.
+//
+// the template rows are what this predicate exists to *exclude*: a universal shop starts with 50 of
+// them and the allowance is 20, so counting every row would put a brand-new shop over its limit
+// before the owner had added anything at all.
+func (q *Queries) CountCustomProducts(ctx context.Context, shopID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countCustomProducts, shopID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const createCustomProduct = `-- name: CreateCustomProduct :one
+INSERT INTO products (shop_id, name, price, category, unit, availability)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, shop_id, name, price, category, unit, availability, template_key
+`
+
+type CreateCustomProductParams struct {
 	ShopID       int64       `json:"shop_id"`
 	Name         string      `json:"name"`
-	Price        int64       `json:"price"`
+	Price        pgtype.Int8 `json:"price"`
 	Category     string      `json:"category"`
 	Unit         string      `json:"unit"`
 	Availability string      `json:"availability"`
-	Article      pgtype.Text `json:"article"`
 }
 
-// a product's natural key is (shop_id, article) - see migration 000004. re-running this with an
-// article already on file for this shop updates that row instead of creating a duplicate.
-func (q *Queries) UpsertProduct(ctx context.Context, arg UpsertProductParams) error {
-	_, err := q.db.Exec(ctx, upsertProduct,
+type CreateCustomProductRow struct {
+	ID           int64       `json:"id"`
+	ShopID       int64       `json:"shop_id"`
+	Name         string      `json:"name"`
+	Price        pgtype.Int8 `json:"price"`
+	Category     string      `json:"category"`
+	Unit         string      `json:"unit"`
+	Availability string      `json:"availability"`
+	TemplateKey  pgtype.Text `json:"template_key"`
+}
+
+// a product the owner typed in themselves. template_key stays NULL, which is exactly what makes it
+// "custom" and what CountCustomProducts below counts against the 20-product allowance.
+func (q *Queries) CreateCustomProduct(ctx context.Context, arg CreateCustomProductParams) (CreateCustomProductRow, error) {
+	row := q.db.QueryRow(ctx, createCustomProduct,
 		arg.ShopID,
 		arg.Name,
 		arg.Price,
 		arg.Category,
 		arg.Unit,
 		arg.Availability,
-		arg.Article,
+	)
+	var i CreateCustomProductRow
+	err := row.Scan(
+		&i.ID,
+		&i.ShopID,
+		&i.Name,
+		&i.Price,
+		&i.Category,
+		&i.Unit,
+		&i.Availability,
+		&i.TemplateKey,
+	)
+	return i, err
+}
+
+const deleteProduct = `-- name: DeleteProduct :execrows
+DELETE FROM products WHERE id = $1
+`
+
+// :execrows returns the number of rows deleted, which is how the handler tells "already gone" apart
+// from "deleted just now" - the same contract DeleteShop uses.
+func (q *Queries) DeleteProduct(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteProduct, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getProduct = `-- name: GetProduct :one
+SELECT id, shop_id, name, price, category, unit, availability, template_key
+FROM products WHERE id = $1
+`
+
+type GetProductRow struct {
+	ID           int64       `json:"id"`
+	ShopID       int64       `json:"shop_id"`
+	Name         string      `json:"name"`
+	Price        pgtype.Int8 `json:"price"`
+	Category     string      `json:"category"`
+	Unit         string      `json:"unit"`
+	Availability string      `json:"availability"`
+	TemplateKey  pgtype.Text `json:"template_key"`
+}
+
+// read back before an edit or delete, so the handler can authorize against the product's *own*
+// shop_id rather than one the client claimed, and can tell a template row from the owner's own.
+func (q *Queries) GetProduct(ctx context.Context, id int64) (GetProductRow, error) {
+	row := q.db.QueryRow(ctx, getProduct, id)
+	var i GetProductRow
+	err := row.Scan(
+		&i.ID,
+		&i.ShopID,
+		&i.Name,
+		&i.Price,
+		&i.Category,
+		&i.Unit,
+		&i.Availability,
+		&i.TemplateKey,
+	)
+	return i, err
+}
+
+const listProductsByShop = `-- name: ListProductsByShop :many
+SELECT id, shop_id, name, price, category, unit, availability, template_key
+FROM products
+WHERE shop_id = $1
+ORDER BY (template_key IS NULL), id
+`
+
+type ListProductsByShopRow struct {
+	ID           int64       `json:"id"`
+	ShopID       int64       `json:"shop_id"`
+	Name         string      `json:"name"`
+	Price        pgtype.Int8 `json:"price"`
+	Category     string      `json:"category"`
+	Unit         string      `json:"unit"`
+	Availability string      `json:"availability"`
+	TemplateKey  pgtype.Text `json:"template_key"`
+}
+
+// the shop's whole catalogue, for both the owner's management grid and the customer-facing grid in
+// the map sheet. template rows come first in the order the template defines them - which is the
+// order they were inserted, hence id - and the owner's own additions follow. in postgres false
+// sorts before true, so `template_key IS NULL` ascending puts the template rows on top.
+func (q *Queries) ListProductsByShop(ctx context.Context, shopID int64) ([]ListProductsByShopRow, error) {
+	rows, err := q.db.Query(ctx, listProductsByShop, shopID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListProductsByShopRow
+	for rows.Next() {
+		var i ListProductsByShopRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ShopID,
+			&i.Name,
+			&i.Price,
+			&i.Category,
+			&i.Unit,
+			&i.Availability,
+			&i.TemplateKey,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const seedTemplateProduct = `-- name: SeedTemplateProduct :exec
+INSERT INTO products (shop_id, name, category, unit, template_key)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type SeedTemplateProductParams struct {
+	ShopID      int64       `json:"shop_id"`
+	Name        string      `json:"name"`
+	Category    string      `json:"category"`
+	Unit        string      `json:"unit"`
+	TemplateKey pgtype.Text `json:"template_key"`
+}
+
+// one row of the category template (internal/catalog), written while the shop itself is being
+// created and inside the same transaction. price is left out of the column list entirely rather
+// than passed as 0: the owner has not set one yet, and NULL is what "not set" means (migration
+// 000005). availability falls back to its 'in_stock' default for the same reason - it is the value
+// the owner will most often want, and they can change it per product afterwards.
+func (q *Queries) SeedTemplateProduct(ctx context.Context, arg SeedTemplateProductParams) error {
+	_, err := q.db.Exec(ctx, seedTemplateProduct,
+		arg.ShopID,
+		arg.Name,
+		arg.Category,
+		arg.Unit,
+		arg.TemplateKey,
 	)
 	return err
+}
+
+const updateProduct = `-- name: UpdateProduct :one
+UPDATE products
+SET name = $2,
+    price = $3,
+    category = $4,
+    unit = $5,
+    availability = $6,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, shop_id, name, price, category, unit, availability, template_key
+`
+
+type UpdateProductParams struct {
+	ID           int64       `json:"id"`
+	Name         string      `json:"name"`
+	Price        pgtype.Int8 `json:"price"`
+	Category     string      `json:"category"`
+	Unit         string      `json:"unit"`
+	Availability string      `json:"availability"`
+}
+
+type UpdateProductRow struct {
+	ID           int64       `json:"id"`
+	ShopID       int64       `json:"shop_id"`
+	Name         string      `json:"name"`
+	Price        pgtype.Int8 `json:"price"`
+	Category     string      `json:"category"`
+	Unit         string      `json:"unit"`
+	Availability string      `json:"availability"`
+	TemplateKey  pgtype.Text `json:"template_key"`
+}
+
+// backs PUT /api/products/{id} for a product the owner added themselves: the edit form always
+// submits every field, so this is a full replacement like UpdateShop rather than a per-column
+// patch. template_key is deliberately absent - it identifies the row for cross-shop comparison, and
+// editing a product must not change what it *is*.
+func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (UpdateProductRow, error) {
+	row := q.db.QueryRow(ctx, updateProduct,
+		arg.ID,
+		arg.Name,
+		arg.Price,
+		arg.Category,
+		arg.Unit,
+		arg.Availability,
+	)
+	var i UpdateProductRow
+	err := row.Scan(
+		&i.ID,
+		&i.ShopID,
+		&i.Name,
+		&i.Price,
+		&i.Category,
+		&i.Unit,
+		&i.Availability,
+		&i.TemplateKey,
+	)
+	return i, err
+}
+
+const updateProductPricing = `-- name: UpdateProductPricing :one
+UPDATE products
+SET price = $2,
+    availability = $3,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, shop_id, name, price, category, unit, availability, template_key
+`
+
+type UpdateProductPricingParams struct {
+	ID           int64       `json:"id"`
+	Price        pgtype.Int8 `json:"price"`
+	Availability string      `json:"availability"`
+}
+
+type UpdateProductPricingRow struct {
+	ID           int64       `json:"id"`
+	ShopID       int64       `json:"shop_id"`
+	Name         string      `json:"name"`
+	Price        pgtype.Int8 `json:"price"`
+	Category     string      `json:"category"`
+	Unit         string      `json:"unit"`
+	Availability string      `json:"availability"`
+	TemplateKey  pgtype.Text `json:"template_key"`
+}
+
+// backs the same endpoint for a *template* product, where only these two columns may change.
+//
+// name, category and unit are absent from the SET list rather than being passed through unchanged,
+// so the rule is enforced by the statement itself: there is no request body, however malformed or
+// hand-crafted, that can rename a template row through this query. the template is the shared
+// basket every shop of a category is compared on, and it stops meaning anything the moment one shop
+// can relabel "Цемент М400" as something else while keeping its template_key.
+func (q *Queries) UpdateProductPricing(ctx context.Context, arg UpdateProductPricingParams) (UpdateProductPricingRow, error) {
+	row := q.db.QueryRow(ctx, updateProductPricing, arg.ID, arg.Price, arg.Availability)
+	var i UpdateProductPricingRow
+	err := row.Scan(
+		&i.ID,
+		&i.ShopID,
+		&i.Name,
+		&i.Price,
+		&i.Category,
+		&i.Unit,
+		&i.Availability,
+		&i.TemplateKey,
+	)
+	return i, err
 }

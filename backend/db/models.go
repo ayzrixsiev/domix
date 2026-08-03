@@ -12,13 +12,13 @@ type Product struct {
 	ID           int64              `json:"id"`
 	ShopID       int64              `json:"shop_id"`
 	Name         string             `json:"name"`
-	Price        int64              `json:"price"`
+	Price        pgtype.Int8        `json:"price"`
 	Category     string             `json:"category"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 	Unit         string             `json:"unit"`
 	Availability string             `json:"availability"`
-	Article      pgtype.Text        `json:"article"`
+	TemplateKey  pgtype.Text        `json:"template_key"`
 }
 
 type Shop struct {
@@ -33,6 +33,7 @@ type Shop struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 	ContactPhone    string             `json:"contact_phone"`
 	ImageUrl        pgtype.Text        `json:"image_url"`
+	Category        string             `json:"category"`
 }
 
 type User struct {

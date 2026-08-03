@@ -77,12 +77,23 @@ func main() {
 	http.HandleFunc("/api/auth/init", endpoints.WithCORS("POST", authEndpoints.Init))
 	http.HandleFunc("/api/auth/status", endpoints.WithCORS("GET", authEndpoints.Status))
 
-	shopsEndpoints := &endpoints.Shops{Queries: queries, JWTSecret: jwtSecret}
+	shopsEndpoints := &endpoints.Shops{Pool: dbPool, Queries: queries, JWTSecret: jwtSecret}
 	http.HandleFunc("/api/shops", endpoints.WithCORS("GET, POST", shopsEndpoints.Route))
 	http.HandleFunc("/api/shops/mine", endpoints.WithCORS("GET", auth.RequireAuth(jwtSecret, shopsEndpoints.ListMine)))
+	// {id} is a go 1.22+ servemux wildcard, read back inside the handler with r.PathValue("id").
+	// it does not shadow /api/shops/mine above: when two patterns both match, the mux picks the more
+	// specific one, and a literal segment always beats a wildcard.
+	http.HandleFunc("/api/shops/{id}", endpoints.WithCORS("PUT, DELETE", shopsEndpoints.RouteByID))
 
-	productsEndpoints := &endpoints.Products{Pool: dbPool, Queries: queries, JWTSecret: jwtSecret}
-	http.HandleFunc("/api/products/upload", endpoints.WithCORS("POST", auth.RequireAuth(jwtSecret, productsEndpoints.Upload)))
+	// no Pool here, unlike Shops above: seeding a catalogue is many statements that must land
+	// together, whereas every products endpoint is a single statement and has nothing to wrap in a
+	// transaction. the excel upload was the one that did, and it is gone.
+	productsEndpoints := &endpoints.Products{Queries: queries, JWTSecret: jwtSecret}
+	// a shop's catalogue: GET is public (a customer browsing the map has no account), POST adds one
+	// of the owner's own products. RouteByShop does that split itself, so no RequireAuth here.
+	http.HandleFunc("/api/shops/{id}/products", endpoints.WithCORS("GET, POST", productsEndpoints.RouteByShop))
+	// one product, by its own id
+	http.HandleFunc("/api/products/{id}", endpoints.WithCORS("PUT, DELETE", productsEndpoints.RouteByID))
 
 	http.HandleFunc("/health", healthCheck(dbPool))
 
@@ -145,7 +156,7 @@ func mustConnectDB(dbURL string) *pgxpool.Pool {
 
 	config.MaxConns = envInt("DB_MAX_CONNS", 10) // max connections pool holds
 	config.MinConns = envInt("DB_MIN_CONNS", 2)  // minimum ready to use connetion, avoid cold-start latency
-	config.MaxConnLifetime = time.Hour           // every connection that ahs been used longer than 1 hour should be cleaned
+	config.MaxConnLifetime = time.Hour           // every connection that has been used longer than 1 hour should be cleaned
 	config.MaxConnIdleTime = 30 * time.Minute    // every connection that was not used at all gets cleaned
 	config.HealthCheckPeriod = time.Minute		 // every minute check on the connections and remove "bad" ones
 

@@ -2,54 +2,113 @@ package endpoints
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"domix/backend/db"
 	"domix/backend/internal/auth"
+	"domix/backend/internal/catalog"
 	"domix/backend/internal/dbctx"
 )
 
-// GET /api/shops (public - the map needs to see every shop) and POST /api/shops (a logged-in
-// shop_owner adding their own shop). see db/queries/shops.sql for how the postgis location column
-// is read and written.
 type Shops struct {
+	Pool      *pgxpool.Pool
 	Queries   *db.Queries
 	JWTSecret string
 }
 
-// what we send back to flutter for a single shop - a clean shape independent of sqlc's generated row
-// types, so the two near-identical CreateShopRow / ListShopsRow structs don't leak their pgtype
-// wrapper types over the wire
+// one universal return type for all handlers here, two reasons why sqlc generated structs are not suitable here
+// 1. for different function: ListShops and ListShopsByOwnerRow have almost identical struct, except second func has additonal row
+// 2. those sqlc structs have internal pgtype.Numeric, pgtype.Text types, we do not want to send them to flutter like this
 type ShopResponse struct {
-	ID              int64   `json:"id"`
-	Name            string  `json:"name"`
-	ContactPhone    string  `json:"contact_phone"`
-	ImageURL        string  `json:"image_url,omitempty"`
-	Address         string  `json:"address"`
+	ID           	int64  	`json:"id"`
+	Name         	string 	`json:"name"`
+	ContactPhone 	string 	`json:"contact_phone"`
+	ImageURL     	string 	`json:"image_url,omitempty"`
+	Address      	string 	`json:"address"`
+	Category 	 	string 	`json:"category"`
 	Rating          float64 `json:"rating"`
 	AveragePaycheck int64   `json:"average_paycheck"`
 	Latitude        float64 `json:"latitude"`
 	Longitude       float64 `json:"longitude"`
-
-	// only ListMine counts products (the public map list has no use for it and shouldn't pay for
-	// the extra per-shop count), so this stays out of the json entirely when it wasn't looked up
-	ProductCount int64 `json:"product_count,omitempty"`
+	ProductCount 	int64 	`json:"product_count,omitempty"`
 }
 
-// dispatches by method, since GET and POST share the same url but need very different handling
+// every shop endpoint will carry erros, we format them cleanly here
+func writeShopError(w http.ResponseWriter, status int, code, message string) {
+	// send a status code like: 404
+	w.WriteHeader(status)
+	// write a JSON message to the flutter, the code: 404 and human readable message: not found, flutter outputs error based on the code
+	json.NewEncoder(w).Encode(map[string]string{"error": message, "code": code})
+}
+
+
+
+
+// dispatches /api/shops by method, since GET and POST share the same url but need very different handling
 // (list is public, create requires a logged-in shop owner)
 func (s *Shops) Route(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		s.List(w, r)
 	case http.MethodPost:
-		// only shop owners with a valid session may create a shop; RequireAuth checks the jwt before we touch the db
+		// only shop owners with a valid credentials may create a shop; RequireAuth checks the jwt before we touch the db
 		auth.RequireAuth(s.JWTSecret, s.Create)(w, r)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed) // error 405
 	}
+}
+
+
+
+
+// dispatches /api/shops/{id} by method both methods here mutate one specific existing shop, so both need the authorization
+func (s *Shops) RouteByID(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPut:
+		auth.RequireAuth(s.JWTSecret, s.Update)(w, r)
+	case http.MethodDelete:
+		auth.RequireAuth(s.JWTSecret, s.Delete)(w, r)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+
+
+
+// the shared gate in front of Update and Delete: pull {id} out of the path, then ask
+// authorizeShopAccess (authz.go) whether this caller may modify that shop.
+// on failure it has already written the response, so callers just return.
+func (s *Shops) authorizeShopAccess(w http.ResponseWriter, r *http.Request) (shopID int64, ok bool) {
+	userID, ok := auth.UserIDFromContext(r.Context())
+	if !ok {
+		writeShopError(w, http.StatusUnauthorized, "unauthorized", "unauthorized")
+		return 0, false
+	}
+
+	shopID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeShopError(w, http.StatusBadRequest, "invalid_shop_id", "invalid shop id")
+		return 0, false
+	}
+
+	ctx, cancel := dbctx.WithTimeout(r.Context())
+	defer cancel()
+
+	if accessErr := authorizeShopAccess(ctx, s.Queries, userID, shopID); accessErr != nil {
+		accessErr.write(w)
+		return 0, false
+	}
+
+	return shopID, true
 }
 
 // public, unauthenticated: used by the map screen to plot every shop as a pin
@@ -74,6 +133,7 @@ func (s *Shops) List(w http.ResponseWriter, r *http.Request) {
 			ContactPhone:    shop.ContactPhone,
 			ImageURL:        shop.ImageUrl.String,
 			Address:         shop.Address,
+			Category:        shop.Category,
 			Rating:          ratingF8.Float64,
 			AveragePaycheck: int64(shop.AveragePaycheck),
 			Latitude:        shop.Latitude,
@@ -87,7 +147,7 @@ func (s *Shops) List(w http.ResponseWriter, r *http.Request) {
 
 // authenticated: backs the "manage my shops" screen - every shop the caller themselves owns, as
 // opposed to List above which is every shop, for anyone, for the map. no role check needed here:
-// unlike Create/products upload this has no side effects, and it's already self-scoped to the
+// unlike Create and the product mutations this has no side effects, and it's already scoped to the
 // caller's own user_id, so there's nothing a customer account could see here that a shop_owner
 // couldn't (it would just always come back empty for them).
 func (s *Shops) ListMine(w http.ResponseWriter, r *http.Request) {
@@ -118,6 +178,7 @@ func (s *Shops) ListMine(w http.ResponseWriter, r *http.Request) {
 			ContactPhone:    shop.ContactPhone,
 			ImageURL:        shop.ImageUrl.String,
 			Address:         shop.Address,
+			Category:        shop.Category,
 			Rating:          ratingF8.Float64,
 			AveragePaycheck: int64(shop.AveragePaycheck),
 			Latitude:        shop.Latitude,
@@ -165,6 +226,7 @@ func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 		Name         string  `json:"name"`
 		ContactPhone string  `json:"contact_phone"`
 		Address      string  `json:"address"`
+		Category     string  `json:"category"`
 		Latitude     float64 `json:"latitude"`
 		Longitude    float64 `json:"longitude"`
 	}
@@ -177,6 +239,7 @@ func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(req.Name)
 	contactPhone := strings.TrimSpace(req.ContactPhone)
 	address := strings.TrimSpace(req.Address)
+	category := strings.TrimSpace(req.Category)
 
 	if name == "" || contactPhone == "" || address == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -184,11 +247,37 @@ func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shop, err := s.Queries.CreateShop(ctx, db.CreateShopParams{
+	// checked before the insert rather than left to the column's CHECK constraint: postgres would
+	// reject it too, but as a 500 with a constraint violation in the log instead of a 400 naming
+	// the field. it also has to be a category we hold a template for, since the next step copies
+	// that template in.
+	if !catalog.IsValidCategory(category) {
+		writeShopError(w, http.StatusBadRequest, "invalid_category", "unknown shop category")
+		return
+	}
+
+	// one transaction for two writes: the shop row, and the category template copied into its
+	// product catalogue. without it a failure halfway through would leave a shop that exists but
+	// has a half-filled catalogue - and the owner has no way to ask for the rest of it, since
+	// seeding only ever happens here, at creation.
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		log.Printf("CRITICAL: failed to begin shop creation transaction for user %d: %v", userID, err)
+		writeShopError(w, http.StatusInternalServerError, "server_error", "failed to create shop")
+		return
+	}
+	defer tx.Rollback(ctx) // no-op once Commit below succeeds
+
+	// the same Queries methods, but routed through the transaction instead of straight at the pool
+	// - that is the whole job of db.Queries.WithTx (see db/db.go)
+	qtx := s.Queries.WithTx(tx)
+
+	shop, err := qtx.CreateShop(ctx, db.CreateShopParams{
 		UserID:       userID,
 		Name:         name,
 		ContactPhone: contactPhone,
 		Address:      address,
+		Category:     category,
 		// st_makepoint wants (longitude, latitude) in that order - see the comment in shops.sql
 		StMakepoint:   req.Longitude,
 		StMakepoint_2: req.Latitude,
@@ -200,6 +289,35 @@ func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// a plain loop of single-row inserts rather than one bulk COPY: it is at most 50 statements,
+	// runs once in a shop's lifetime, and reuses the query sqlc already generated. worth revisiting
+	// only if templates ever grow into the thousands.
+	template := catalog.Template(category)
+	for _, item := range template {
+		if err := qtx.SeedTemplateProduct(ctx, db.SeedTemplateProductParams{
+			ShopID:      shop.ID,
+			Name:        item.Name,
+			// ProductCategory is a named string type, so the conversion is explicit. it is typed in
+			// the template list precisely so a typo there fails to compile instead of quietly
+			// filing a product under a category the app has no label for.
+			Category:    string(item.Category),
+			Unit:        item.Unit,
+			TemplateKey: pgtype.Text{String: item.Key, Valid: true},
+		}); err != nil {
+			log.Printf("CRITICAL: failed to seed template product %q into shop %d: %v", item.Key, shop.ID, err)
+			writeShopError(w, http.StatusInternalServerError, "server_error", "failed to create shop")
+			return
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		log.Printf("CRITICAL: failed to commit shop creation for user %d: %v", userID, err)
+		writeShopError(w, http.StatusInternalServerError, "server_error", "failed to create shop")
+		return
+	}
+
+	log.Printf("Shop %d created for user %d (category %s, %d template products)", shop.ID, userID, category, len(template))
+
 	ratingF8, _ := shop.Rating.Float64Value()
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(ShopResponse{
@@ -208,9 +326,115 @@ func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 		ContactPhone:    shop.ContactPhone,
 		ImageURL:        shop.ImageUrl.String,
 		Address:         shop.Address,
+		Category:        shop.Category,
+		Rating:          ratingF8.Float64,
+		AveragePaycheck: int64(shop.AveragePaycheck),
+		Latitude:        shop.Latitude,
+		Longitude:       shop.Longitude,
+		// the app appends this shop straight into its in-memory list instead of re-fetching, so
+		// without this the brand-new shop would show "нет товаров" despite having just been seeded
+		ProductCount: int64(len(template)),
+	})
+}
+
+// PUT /api/shops/{id} - the "edit shop" form. the form always submits all four editable fields, so
+// this is a full replacement, not a per-field patch; whatever is missing from the body would be
+// written as empty and is therefore rejected by the same required-field check Create uses.
+func (s *Shops) Update(w http.ResponseWriter, r *http.Request) {
+	shopID, ok := s.authorizeShopAccess(w, r)
+	if !ok {
+		return
+	}
+
+	var req struct {
+		Name         string  `json:"name"`
+		ContactPhone string  `json:"contact_phone"`
+		Address      string  `json:"address"`
+		Latitude     float64 `json:"latitude"`
+		Longitude    float64 `json:"longitude"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeShopError(w, http.StatusBadRequest, "invalid_body", "invalid json body")
+		return
+	}
+
+	name := strings.TrimSpace(req.Name)
+	contactPhone := strings.TrimSpace(req.ContactPhone)
+	address := strings.TrimSpace(req.Address)
+
+	if name == "" || contactPhone == "" || address == "" {
+		writeShopError(w, http.StatusBadRequest, "missing_fields", "name, contact_phone and address are required")
+		return
+	}
+
+	// a fresh timeout, not the one authorizeShopAccess used: that one's cancel() already fired when
+	// the helper returned, so reusing its context here would hit an already-cancelled deadline
+	ctx, cancel := dbctx.WithTimeout(r.Context())
+	defer cancel()
+
+	shop, err := s.Queries.UpdateShop(ctx, db.UpdateShopParams{
+		ID:           shopID,
+		Name:         name,
+		ContactPhone: contactPhone,
+		Address:      address,
+		// st_makepoint wants (longitude, latitude) in that order - see the comment in shops.sql
+		StMakepoint:   req.Longitude,
+		StMakepoint_2: req.Latitude,
+	})
+	if err != nil {
+		// the row existed a moment ago (authorizeShopAccess read its owner), so no-rows here means it
+		// was deleted in between - a real race, not a client mistake
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeShopError(w, http.StatusNotFound, "shop_not_found", "shop not found")
+			return
+		}
+		log.Printf("CRITICAL: failed to update shop %d: %v", shopID, err)
+		writeShopError(w, http.StatusInternalServerError, "server_error", "failed to update shop")
+		return
+	}
+
+	ratingF8, _ := shop.Rating.Float64Value()
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(ShopResponse{
+		ID:              shop.ID,
+		Name:            shop.Name,
+		ContactPhone:    shop.ContactPhone,
+		ImageURL:        shop.ImageUrl.String,
+		Address:         shop.Address,
+		Category:        shop.Category,
 		Rating:          ratingF8.Float64,
 		AveragePaycheck: int64(shop.AveragePaycheck),
 		Latitude:        shop.Latitude,
 		Longitude:       shop.Longitude,
 	})
+}
+
+// DELETE /api/shops/{id}. the shop's products go with it through products.shop_id ON DELETE CASCADE,
+// so this is one statement and not a transaction.
+func (s *Shops) Delete(w http.ResponseWriter, r *http.Request) {
+	shopID, ok := s.authorizeShopAccess(w, r)
+	if !ok {
+		return
+	}
+
+	ctx, cancel := dbctx.WithTimeout(r.Context())
+	defer cancel()
+
+	rows, err := s.Queries.DeleteShop(ctx, shopID)
+	if err != nil {
+		log.Printf("CRITICAL: failed to delete shop %d: %v", shopID, err)
+		writeShopError(w, http.StatusInternalServerError, "server_error", "failed to delete shop")
+		return
+	}
+	if rows == 0 {
+		// same race as Update above: it was there when we checked its owner and is gone now. the
+		// caller's goal ("this shop should not exist") is satisfied either way, but saying so is
+		// more honest than reporting a deletion we didn't perform.
+		writeShopError(w, http.StatusNotFound, "shop_not_found", "shop not found")
+		return
+	}
+
+	log.Printf("Shop %d deleted", shopID)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]bool{"deleted": true})
 }
