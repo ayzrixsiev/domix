@@ -28,6 +28,13 @@ class AppColors {
   static const Color surfaceMuted = Color(0xFFF7F8FA);
   static const Color hairline = Color(0xFFECEEF2);
 
+  // the recessed track a white pill slides along - the segmented control. deliberately a step
+  // *below* `background` rather than above it: the whole illusion is that the selected pill is
+  // raised out of a groove, and a track lighter than the page reads as a card sitting on top
+  // instead. surfaceMuted and cardGrey are both at or above the page, which is why neither works
+  // here.
+  static const Color trackGrey = Color(0xFFE4E7EC);
+
   // Text
   static const Color textDark = Color(0xFF1A1D1E);
   static const Color textGrey = Color(0xFF8C929D);
@@ -43,4 +50,11 @@ class AppColors {
   static const Color dangerSoft = Color(0xFFFEF0EE);
   static const Color success = Color(0xFF0E9F6E);
   static const Color successSoft = Color(0xFFE7F6EF);
+
+  // the middle of a three-state signal - "neither good nor bad", as in a shop priced at the market
+  // average. deliberately not `starYellow` (0xFFFFB800), which is bright enough to read as a
+  // highlight and is already spoken for by ratings; this is darkened until it passes as body text
+  // on its own tint.
+  static const Color warning = Color(0xFFB54708);
+  static const Color warningSoft = Color(0xFFFEF6EE);
 }

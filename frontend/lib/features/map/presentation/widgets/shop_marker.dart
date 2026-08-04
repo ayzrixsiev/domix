@@ -2,6 +2,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
+import 'package:frontend/core/widgets/price_tier_badge.dart';
+import 'package:frontend/features/stores/data/price_tier.dart';
 
 // teardrop pin shape in brand orange with a shop icon inside, pointing down at its bottom tip.
 // shared between ShopMarker (a tappable pin plotted on the map) and the location picker's fixed
@@ -31,14 +33,20 @@ class MapPinIcon extends StatelessWidget {
   }
 }
 
-// a MapPinIcon that reacts to taps, used inside the map's MarkerLayer. optionally shows a small
-// preformatted label (e.g. "150 000 сум") above the pin - map_screen.dart builds the exact text
-// (locale + number formatting is its job, not this widget's) and passes null to omit it entirely.
+// a MapPinIcon that reacts to taps, used inside the map's MarkerLayer. optionally shows how this
+// shop's basket compares to its market - "−4%" in green - or nothing at all for a shop with no
+// published comparison.
+//
+// takes the tier and the percentage rather than a preformatted string, which is a change from when
+// this showed an average check in сум: the colour is *derived* from the tier, so handing this
+// widget a string would mean handing it a colour too, and two callers could then disagree about
+// which number is green.
 class ShopMarker extends StatelessWidget {
-  const ShopMarker({super.key, required this.onTap, this.averagePaycheckLabel});
+  const ShopMarker({super.key, required this.onTap, this.priceTier, this.priceDifferencePercent});
 
   final VoidCallback onTap;
-  final String? averagePaycheckLabel;
+  final PriceTier? priceTier;
+  final int? priceDifferencePercent;
 
   // the pin itself is unchanged from before this label was added (44x50, matching the Marker size
   // map_screen.dart already used) - kept as an explicit SizedBox here so wrapping it in a Column
@@ -59,8 +67,8 @@ class ShopMarker extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          if (averagePaycheckLabel != null) ...[
-            _PaycheckLabel(text: averagePaycheckLabel!),
+          if (priceTier case final tier?) ...[
+            _PriceComparisonLabel(tier: tier, differencePercent: priceDifferencePercent),
             const SizedBox(height: labelGap),
           ],
           const SizedBox(width: pinWidth, height: pinHeight, child: MapPinIcon()),
@@ -70,10 +78,11 @@ class ShopMarker extends StatelessWidget {
   }
 }
 
-class _PaycheckLabel extends StatelessWidget {
-  const _PaycheckLabel({required this.text});
+class _PriceComparisonLabel extends StatelessWidget {
+  const _PriceComparisonLabel({required this.tier, required this.differencePercent});
 
-  final String text;
+  final PriceTier tier;
+  final int? differencePercent;
 
   @override
   Widget build(BuildContext context) {
@@ -91,17 +100,10 @@ class _PaycheckLabel extends StatelessWidget {
           BoxShadow(color: Color(0x1F101828), blurRadius: 8, offset: Offset(0, 2)),
         ],
       ),
-      child: Text(
-        text,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          fontSize: 10.5,
-          height: 1.1,
-          fontWeight: FontWeight.w700,
-          color: AppColors.textDark,
-        ),
-      ),
+      // the white card is what makes this readable over map tiles, so the label inside it is bare
+      // text - a tinted pill nested in a white card would be two rounded boxes deep for four
+      // characters, and these tints are close to invisible over tiles anyway
+      child: PriceTierPinLabel(tier: tier, differencePercent: differencePercent),
     );
   }
 }

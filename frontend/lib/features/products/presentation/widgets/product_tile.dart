@@ -19,10 +19,21 @@ class ProductTile extends StatelessWidget {
     required this.strings,
     this.onTap,
     this.showOwnBadge = false,
+    this.subtitle,
   });
 
   final Product product;
   final AppLocalizations strings;
+
+  /// A second line under the name - the selling shop, on the cross-shop category browse.
+  ///
+  /// Only that screen sets it. On a shop's own catalogue the shop is the page, so naming it on
+  /// every one of fifty tiles would be noise; browsing "Сантехника" across the market it is the
+  /// difference between a price and an actionable price.
+  ///
+  /// When present the product name is capped to one line, so the tile keeps its fixed [height]
+  /// instead of growing a variant nobody would keep aligned with this one.
+  final String? subtitle;
 
   /// null on the customer-facing grid: a shop's card is for looking, and a tile that lights up
   /// under a finger but does nothing when released reads as broken
@@ -65,7 +76,7 @@ class ProductTile extends StatelessWidget {
                 children: [
                   Text(
                     product.name,
-                    maxLines: 2,
+                    maxLines: subtitle == null ? 2 : 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: AppColors.textDark,
@@ -75,6 +86,29 @@ class ProductTile extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                  if (subtitle case final shop?) ...[
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        const Icon(CupertinoIcons.building_2_fill,
+                            color: AppColors.textFaint, size: 10),
+                        const SizedBox(width: 3),
+                        Expanded(
+                          child: Text(
+                            shop,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.textGrey,
+                              fontSize: 10.5,
+                              height: 1.2,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   // pushes the price to the bottom edge, so prices line up across a row no matter
                   // whether a name wrapped onto one line or two
                   const Spacer(),

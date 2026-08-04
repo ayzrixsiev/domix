@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/app_shell/presentation/screens/app_shell_screen.dart';
+import 'features/home/presentation/controllers/home_controller.dart';
 import 'features/location/presentation/controllers/city_controller.dart';
 import 'features/profile/presentation/controllers/auth_controller.dart';
 import 'features/stores/presentation/controllers/stores_controller.dart';
@@ -31,6 +32,10 @@ void main() async {
           // holds nothing that needs loading before first paint, so it is built lazily here
           // rather than awaited above alongside the controllers that read storage
           ChangeNotifierProvider(create: (_) => CityController()),
+          // same: the home screen kicks off its own fetch from initState, so there is nothing to
+          // await here - building it lazily keeps a cold start off the network until the first
+          // frame is already on screen
+          ChangeNotifierProvider(create: (_) => HomeController()),
           ChangeNotifierProvider.value(value: authController),      // make all
           ChangeNotifierProvider.value(value: storesController),    // UI components
           ChangeNotifierProvider.value(value: productsController),  // to listen to these controllers using notifyListener()

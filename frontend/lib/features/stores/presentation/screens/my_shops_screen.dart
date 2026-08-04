@@ -6,6 +6,8 @@ import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
+import 'package:frontend/core/widgets/price_tier_badge.dart';
+import 'package:frontend/core/widgets/primary_action_button.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 import 'add_store_screen.dart';
 import 'shop_settings_screen.dart';
@@ -107,7 +109,7 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
         iconColor: AppColors.danger,
         iconBackground: AppColors.dangerSoft,
         title: strings.myShopsLoadError,
-        action: _PrimaryButton(
+        action: PrimaryActionButton(
           label: strings.retryButtonShort,
           onTap: () => controller.loadMyShops(),
         ),
@@ -120,7 +122,7 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
         title: strings.noOwnedShopsYet,
         subtitle: strings.noOwnedShopsHint,
         // unlike the permanently-empty tabs, this one has somewhere to go
-        action: _PrimaryButton(
+        action: PrimaryActionButton(
           label: strings.addStore,
           icon: CupertinoIcons.add,
           onTap: _openAddStore,
@@ -349,25 +351,28 @@ class _ShopStatsRow extends StatelessWidget {
         ],
         const SizedBox(width: 12),
         const Spacer(),
-        if (shop.averagePaycheck > 0) ...[
-          Text(
-            strings.averageCheckShort,
-            style: const TextStyle(
-              color: AppColors.textFaint,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w500,
+        // the owner's own view of what a customer sees. worth showing even though it is a
+        // customer-facing comparison: "your basket is 6% above the market" is the single most
+        // actionable thing this screen can tell a shop owner.
+        if (shop.priceTier case final tier?)
+          Flexible(
+            child: PriceTierBadge(
+              tier: tier,
+              differencePercent: shop.priceDifferencePercent,
+              strings: strings,
+              compact: true,
             ),
-          ),
-          const SizedBox(width: 5),
+          )
+        else if (shop.basketPrice case final basket?)
+          // priced, but in a market too thin to compare within - the number is still true
           Text(
-            strings.somAmount(shop.averagePaycheck),
+            strings.somAmount(basket),
             style: const TextStyle(
               color: AppColors.textDark,
               fontSize: 12.5,
               fontWeight: FontWeight.w600,
             ),
           ),
-        ],
       ],
     );
   }
@@ -375,57 +380,3 @@ class _ShopStatsRow extends StatelessWidget {
 
 // sized to its label instead of stretching edge to edge: a full-width slab of orange under a short
 // piece of centred text was the heaviest thing on an otherwise empty screen.
-class _PrimaryButton extends StatelessWidget {
-  const _PrimaryButton({required this.label, required this.onTap, this.icon});
-
-  final String label;
-  final IconData? icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        boxShadow: AppShadows.accent(AppColors.primaryOrange),
-      ),
-      child: Material(
-        color: AppColors.primaryOrange,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (icon != null) ...[
-                  Icon(icon, color: Colors.white, size: 17),
-                  const SizedBox(width: 8),
-                ],
-                // Flexible, not a bare Text: "Добавить новый магазин" and its uzbek equivalent are
-                // long enough to overflow a min-sized Row on a narrow screen or at a large text
-                // scale. it stays on one line whenever it fits and wraps rather than clipping.
-                Flexible(
-                  child: Text(
-                    label,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      height: 1.25,
-                      letterSpacing: 0.1,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}

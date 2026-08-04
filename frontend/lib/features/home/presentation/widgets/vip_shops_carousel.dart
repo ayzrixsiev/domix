@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -5,7 +7,8 @@ import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
-import 'package:frontend/features/home/data/home_placeholder_content.dart';
+import 'package:frontend/core/widgets/price_tier_badge.dart';
+import 'package:frontend/features/home/data/home_content.dart';
 
 /// A page-snapping carousel of VIP (paid placement) shops that loops endlessly in both directions.
 ///
@@ -23,14 +26,26 @@ import 'package:frontend/features/home/data/home_placeholder_content.dart';
 ///  * Dart's `%` is Euclidean - `-1 % 5` is `4`, not `-1` - so the mapping stays correct even if an
 ///    index below the origin is ever built.
 class VipShopsCarousel extends StatefulWidget {
-  const VipShopsCarousel({super.key});
+  const VipShopsCarousel({super.key, required this.shops});
+
+  /// The shops holding the paid placement tier, from `GET /api/home` (or the showcase list while
+  /// the database has none). May be empty - see the guard at the top of [build], which is not
+  /// defensive padding: the loop below maps a page index onto this list with `%`, and `% 0` throws.
+  final List<HomeShopPreview> shops;
 
   /// Card + peek. The page is this fraction of the screen; the leftover is split between the two
   /// neighbours, so an edge of the previous and next shop is always visible and the strip reads as
   /// continuous rather than as a single card.
   static const double viewportFraction = 0.84;
 
-  static const double cardHeight = 216;
+  /// Fixed, because a `PageView` needs a bounded height and a carousel whose cards changed height
+  /// per shop would jolt as it snapped.
+  ///
+  /// 232 and not the 216 it was: the card carries a basket price *and* a comparison badge now,
+  /// which is one line more than the single price row it replaced. The overflow that caused was
+  /// silent in release and a 12px striped bar in debug - worth knowing that a `Column` inside a
+  /// fixed-height card fails this way rather than by scrolling.
+  static const double cardHeight = 232;
 
   @override
   State<VipShopsCarousel> createState() => _VipShopsCarouselState();
@@ -46,7 +61,13 @@ class _VipShopsCarouselState extends State<VipShopsCarousel> {
   @override
   void initState() {
     super.initState();
-    _initialPage = _loopOrigin * kVipShops.length;
+    // the opening page has to be an exact multiple of the shop count so the carousel opens on the
+    // first shop. that makes it depend on a list which arrives *after* the first frame, and a
+    // PageController's initialPage cannot be changed once it is built - so the home screen gives
+    // this widget a ValueKey on the list length, which makes flutter build a fresh State (and a
+    // fresh controller) the moment the count changes. the `max(1, ...)` only covers the first frame
+    // before any shops have loaded, when build returns early anyway.
+    _initialPage = _loopOrigin * math.max(1, widget.shops.length);
     _controller = PageController(
       viewportFraction: VipShopsCarousel.viewportFraction,
       initialPage: _initialPage,
@@ -70,6 +91,11 @@ class _VipShopsCarouselState extends State<VipShopsCarousel> {
 
   @override
   Widget build(BuildContext context) {
+    // nothing to loop over. the home screen already omits the whole section (heading included) in
+    // this case, so this is the belt to that braces - but it is a real one: `index % 0` below is a
+    // division by zero, not an empty carousel.
+    if (widget.shops.isEmpty) return const SizedBox.shrink();
+
     final strings = Provider.of<LanguageProvider>(context).strings;
 
     return SizedBox(
@@ -80,7 +106,7 @@ class _VipShopsCarouselState extends State<VipShopsCarousel> {
         itemCount: null,
         padEnds: true,
         itemBuilder: (context, index) {
-          final shop = kVipShops[index % kVipShops.length];
+          final shop = widget.shops[index % widget.shops.length];
 
           // rebuilds on every scroll tick so the off-centre cards can settle back slightly. it is
           // what makes the swipe feel like cards moving through a viewport rather than a filmstrip
@@ -132,80 +158,83 @@ class _VipShopCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Banner(rating: shop.rating),
+          // the shop's name lives on the banner, opposite its rating. it used to head the content
+          // block below, which meant the tallest, boldest thing on the card sat *under* a large
+          // empty image - the eye landed on the placeholder first and the identity second. moving
+          // it up pairs the two facts that identify a shop on one line and leaves the content block
+          // to do one job: what it costs.
+          _Banner(name: shop.name, rating: shop.rating),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 11, 14, 12),
+              // 14 all round, and 16 at the bottom: the badge is the last thing on the card and
+              // needs to sit clear of the edge rather than tucked against it
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        shop.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.textDark,
-                          fontSize: 16,
-                          height: 1.2,
-                          letterSpacing: -0.2,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const Icon(
-                            CupertinoIcons.location_solid,
-                            color: AppColors.textFaint,
-                            size: 11,
-                          ),
-                          const SizedBox(width: 5),
-                          Expanded(
-                            child: Text(
-                              shop.address,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: AppColors.textGrey,
-                                fontSize: 12,
-                                height: 1.3,
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
                   Row(
                     children: [
-                      Text(
-                        strings.averageCheckShort,
-                        style: const TextStyle(
-                          color: AppColors.textFaint,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w400,
-                        ),
+                      const Icon(
+                        CupertinoIcons.location_solid,
+                        color: AppColors.textFaint,
+                        size: 11,
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 5),
                       Expanded(
                         child: Text(
-                          strings.somAmount(shop.averagePaycheck),
+                          shop.address,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            color: AppColors.textDark,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
+                            color: AppColors.textGrey,
+                            fontSize: 12,
+                            height: 1.3,
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
                       ),
                     ],
                   ),
+
+                  // the three below are separated by real gaps rather than by `spaceBetween`. the
+                  // old card distributed its slack, so the spacing changed with the content and the
+                  // block read as compressed at the top and stranded at the bottom; fixed gaps make
+                  // the rhythm the same on every card, and the Spacer takes the leftover.
+                  const SizedBox(height: 10),
+
+                  // ListVipShops inner-joins the basket index, so a card in this carousel always
+                  // has a price - a paid slot showing a blank is not worth what someone paid for
+                  // it. the null branches are still written out because the showcase list and any
+                  // future caller are not bound by that query's shape.
+                  //
+                  // the price is the largest thing in the content block on purpose: it is what the
+                  // section is for, and the address above it is context, not the point.
+                  if (shop.basketPrice case final basket?)
+                    Text(
+                      strings.somAmount(basket),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.textDark,
+                        fontSize: 17,
+                        height: 1.15,
+                        letterSpacing: -0.4,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+
+                  if (shop.priceTier case final tier?) ...[
+                    const SizedBox(height: 9),
+                    PriceTierBadge(
+                      tier: tier,
+                      differencePercent: shop.priceDifferencePercent,
+                      strings: strings,
+                    ),
+                  ],
+
+                  // soaks up whatever is left, so the block stays top-aligned and the bottom
+                  // padding above is the real distance to the card's edge
+                  const Spacer(),
                 ],
               ),
             ),
@@ -216,9 +245,22 @@ class _VipShopCard extends StatelessWidget {
   }
 }
 
+/// The card's cover area: a placeholder where a shop photo will go, with the shop's name at the
+/// top-left and its rating at the top-right, on one line.
+///
+/// **The name is brand orange on the bare placeholder, with no scrim behind it.** A dark gradient
+/// across the top was tried and removed: over a pale peach placeholder there is nothing to protect
+/// text from, so all it did was put a grey smear across the top third of every card.
+///
+/// That leaves a real problem for the day photo upload lands - orange text on an arbitrary
+/// photograph will not always be legible. The fix then is the treatment already on this card: a
+/// white pill, the same as the rating badge on the right, which works over any image and keeps the
+/// two ends of the line symmetrical. Adding it now would be solving a problem that does not exist
+/// yet against a placeholder that will be deleted.
 class _Banner extends StatelessWidget {
-  const _Banner({required this.rating});
+  const _Banner({required this.name, required this.rating});
 
+  final String name;
   final double rating;
 
   @override
@@ -244,33 +286,55 @@ class _Banner extends StatelessWidget {
                 size: 34,
               ),
             ),
-            // sits on the banner rather than beside the name: it is a badge about the shop as a
-            // whole, and keeping it here leaves the name a full line to itself
+
+            // name and rating on one line: identity on the left, quality on the right, the way a
+            // listing card is read.
             Positioned(
               top: 10,
+              left: 12,
               right: 10,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(AppRadius.xs),
-                  boxShadow: AppShadows.card,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(CupertinoIcons.star_fill, color: AppColors.starYellow, size: 11),
-                    const SizedBox(width: 4),
-                    Text(
-                      rating.toStringAsFixed(1),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: AppColors.textDark,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w600,
+                        color: AppColors.primaryOrange,
+                        fontSize: 16,
+                        height: 1.2,
+                        letterSpacing: -0.2,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(AppRadius.xs),
+                      boxShadow: AppShadows.card,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(CupertinoIcons.star_fill, color: AppColors.starYellow, size: 11),
+                        const SizedBox(width: 4),
+                        Text(
+                          rating.toStringAsFixed(1),
+                          style: const TextStyle(
+                            color: AppColors.textDark,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

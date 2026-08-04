@@ -28,10 +28,22 @@ enum ShopCategory {
   /// throwing: a shop row is still perfectly displayable if we don't know its category, and a
   /// category added on the server before the app is updated must not crash an old build.
   static ShopCategory fromCode(String? code) {
+    return tryFromCode(code) ?? ShopCategory.universal;
+  }
+
+  /// The same lookup without the fallback, for the one caller where guessing would be worse than
+  /// dropping the row: the "Лучшие предложения" tabs.
+  ///
+  /// A shop *row* with an unknown category still renders fine, so defaulting is right there. A
+  /// whole tab of shops is different - defaulting an unrecognised category to [universal] would
+  /// merge a fifth category's shops into the Универсальный tab and rank them against a basket they
+  /// were never priced against. Skipping the group leaves an older app showing four tabs, which is
+  /// wrong only by omission.
+  static ShopCategory? tryFromCode(String? code) {
     for (final category in values) {
       if (category.code == code) return category;
     }
-    return ShopCategory.universal;
+    return null;
   }
 
   // an exhaustive switch rather than a map or an added constructor field: dart's analyzer flags a

@@ -1,4 +1,5 @@
 import 'package:frontend/core/constants/api_config.dart';
+import 'price_tier.dart';
 import 'shop_category.dart';
 
 // a single shop as returned by the go backend's /api/shops endpoint
@@ -12,7 +13,10 @@ class Shop {
     required this.latitude,
     required this.longitude,
     required this.rating,
-    required this.averagePaycheck,
+    this.priceTier,
+    this.priceDifferencePercent,
+    this.basketPrice,
+    this.isVip = false,
     this.imageUrl,
     this.productCount = 0,
   });
@@ -30,10 +34,41 @@ class Shop {
   final double latitude;
   final double longitude;
   final double rating;
-  final int averagePaycheck;
+
+  /// How this shop's basket compares to its market, already decided by the backend: cheaper,
+  /// average or dearer.
+  ///
+  /// **The raw Basket Price Index is deliberately not here, and never crosses the network.** The
+  /// number is used for ranking (in SQL) and for picking this tier (in Go), and neither of those
+  /// happens in the app - so shipping "96" would only invite a screen to render it, which is a
+  /// comparison the reader has to be taught to perform. It also keeps every threshold on the
+  /// server: they are guesses until there is real data, and a guess baked into a Flutter build
+  /// takes an App Store release to change.
+  ///
+  /// **Null when the shop has no index yet** - it has priced less than 30% of its catalogue, the
+  /// `shop_basket_index` floor. Null in exactly the same circumstances as [basketPrice], since the
+  /// two come from the same view row. The UI shows no badge.
+  final PriceTier? priceTier;
+
+  /// The X in "X% cheaper than market" - unsigned, since [priceTier] carries the direction. Null
+  /// exactly when [priceTier] is.
+  final int? priceDifferencePercent;
+
+  /// What the shared basket costs here, in so'm - the index's own first step, before the division.
+  ///
+  /// Null when the owner hasn't priced at least 30% of their catalogue (the `shop_basket_index`
+  /// view in migration 000008).
+  final int? basketPrice;
+
+  /// Whether this shop currently holds a paid placement - the home screen's VIP carousel.
+  ///
+  /// Computed by the backend from `shops.vip_until > now()` and sent as a plain boolean, so the app
+  /// never compares a placement against the *device* clock, which the user can change.
+  final bool isVip;
 
   // only /api/shops/mine counts products - the public map list omits the field entirely, so this
-  // defaults to 0 there rather than being a meaningful "this shop has no products"
+  // defaults to 0 there rather than being a meaningful "this shop has no products". on the category
+  // drill-down it means something narrower: how many products this shop prices *in that category*.
   final int productCount;
 
   // relative path returned by the backend (e.g. "/uploads/shops/xxx.jpg"), or null if no photo was set
@@ -53,7 +88,13 @@ class Shop {
       latitude: (json['latitude'] as num).toDouble(),
       longitude: (json['longitude'] as num).toDouble(),
       rating: (json['rating'] as num).toDouble(),
-      averagePaycheck: json['average_paycheck'] as int,
+      // `as int?` and no `?? 0` throughout: the backend sends an explicit null for a shop with no
+      // published index, and collapsing that to 0 here would undo the whole point of the nullable
+      // column - a 0 index would render as "100% cheaper than the market"
+      priceTier: PriceTier.tryFromCode(json['price_tier'] as String?),
+      priceDifferencePercent: json['price_difference_percent'] as int?,
+      basketPrice: json['basket_price'] as int?,
+      isVip: json['is_vip'] as bool? ?? false,
       imageUrl: json['image_url'] as String?,
       productCount: json['product_count'] as int? ?? 0,
     );
@@ -71,7 +112,10 @@ class Shop {
         latitude: latitude,
         longitude: longitude,
         rating: rating,
-        averagePaycheck: averagePaycheck,
+        priceTier: priceTier,
+        priceDifferencePercent: priceDifferencePercent,
+        basketPrice: basketPrice,
+        isVip: isVip,
         imageUrl: imageUrl,
         productCount: productCount ?? this.productCount,
       );

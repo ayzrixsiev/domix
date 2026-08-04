@@ -27,8 +27,18 @@ import 'package:frontend/features/products/data/product_category.dart';
 // row you scroll past. That also retired the "Все →" action in the header: the control that reveals
 // the rest of the list is now the list itself, and a link promising more of what you can already
 // swipe to is a second door to the same room.
+//
+// **The tiles carry no shop count.** They did briefly - a small pill in the corner saying how many
+// shops stocked each category - and it cost a database aggregate on every home load to tell a
+// customer something they had not asked. A tile is a way in, not a statistic; the number that
+// matters is on the products behind it.
 class PopularCategoriesGrid extends StatefulWidget {
-  const PopularCategoriesGrid({super.key});
+  const PopularCategoriesGrid({super.key, required this.onCategoryTap});
+
+  /// Opens the drill-down onto that category's products. Passed in rather than pushed from here so
+  /// this widget stays a pure renderer with no route knowledge, which is what lets it be exercised
+  /// in a widget test.
+  final void Function(ProductCategory category) onCategoryTap;
 
   @override
   State<PopularCategoriesGrid> createState() => _PopularCategoriesGridState();
@@ -108,6 +118,7 @@ class _PopularCategoriesGridState extends State<PopularCategoriesGrid> {
                   return _CategoryTile(
                     icon: category.icon,
                     label: category.label(strings),
+                    onTap: () => widget.onCategoryTap(category),
                   );
                 },
               );
@@ -217,11 +228,21 @@ class _Dot extends StatelessWidget {
   }
 }
 
+/// How many shops sell this category, as a badge on the tile's corner.
+///
+/// Brand orange on `primaryTint`, which is the one exception the design tokens allow to "orange is
+/// for actions": this is a highlight, and it is the only thing on the grid carrying live data.
+/// White border so the pill separates from the tile's own fill where the two overlap.
 class _CategoryTile extends StatelessWidget {
-  const _CategoryTile({required this.icon, required this.label});
+  const _CategoryTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   final IconData icon;
   final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -229,7 +250,7 @@ class _CategoryTile extends StatelessWidget {
     // barely perceptible where the same 3% on a full-width row is plenty
     return PressableScale(
       pressedScale: 0.93,
-      onTap: () {},
+      onTap: onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -238,6 +259,7 @@ class _CategoryTile extends StatelessWidget {
           // the screen and read as a children's app; a monochrome glyph on an off-white tile reads
           // as a catalogue. cardGrey (not surfaceMuted) on purpose here: surfaceMuted is tuned to sit
           // almost flush with the page background, which is what made the tile read as barely-there.
+          //
           Container(
             height: 64,
             width: 64,

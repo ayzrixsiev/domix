@@ -9,6 +9,7 @@ import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
+import 'package:frontend/core/widgets/price_tier_badge.dart';
 import 'package:frontend/features/products/presentation/controllers/products_controller.dart';
 import 'package:frontend/features/products/presentation/widgets/product_grid.dart';
 import 'package:frontend/features/products/presentation/widgets/product_tile.dart';
@@ -157,17 +158,24 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                 for (final shop in controller.stores)
                   Marker(
                     point: LatLng(shop.latitude, shop.longitude),
-                    width: shop.averagePaycheck > 0 ? ShopMarker.labeledMarkerWidth : ShopMarker.pinWidth,
-                    height: shop.averagePaycheck > 0
+                    // `!= null` where this used to be `> 0`. the guard is the same guard - it was
+                    // always asking "does this shop have a price comparison to show" - but it now
+                    // asks the model instead of inferring it from a sentinel value, because
+                    // priceTier is genuinely nullable rather than an int that is always 0.
+                    width: shop.priceTier != null
+                        ? ShopMarker.labeledMarkerWidth
+                        : ShopMarker.pinWidth,
+                    height: shop.priceTier != null
                         ? ShopMarker.pinHeight + ShopMarker.labelGap + ShopMarker.labelHeight
                         : ShopMarker.pinHeight,
                     alignment: Alignment.topCenter,
                     child: ShopMarker(
                       onTap: () => _showShopDetails(context, shop),
-                      // omitted entirely (not "0 сум") for a brand-new shop with no sales yet -
-                      // matches the same `> 0` convention the details sheet below already uses
-                      averagePaycheckLabel:
-                          shop.averagePaycheck > 0 ? strings.somAmount(shop.averagePaycheck) : null,
+                      // omitted entirely for a shop whose owner hasn't priced enough of its
+                      // catalogue yet, or whose category has too few shops to compare within -
+                      // matches the details sheet below
+                      priceTier: shop.priceTier,
+                      priceDifferencePercent: shop.priceDifferencePercent,
                     ),
                   ),
               ],
@@ -539,11 +547,24 @@ class _ShopMetaLine extends StatelessWidget {
             color: AppColors.textDark,
           ),
         ),
-        if (shop.averagePaycheck > 0) ...[
+        // the sheet is where somebody who just tapped a pin reading "−4%" finds out what it meant,
+        // so this is the full sentence rather than the compressed form
+        if (shop.priceTier case final tier?) ...[
+          const _MetaDot(),
+          Flexible(
+            child: PriceTierBadge(
+              tier: tier,
+              differencePercent: shop.priceDifferencePercent,
+              strings: strings,
+              compact: true,
+            ),
+          ),
+        ] else if (shop.basketPrice case final basket?) ...[
+          // a real price with no market to compare it against
           const _MetaDot(),
           Flexible(
             child: Text(
-              '${strings.averageCheckShort} ${strings.somAmount(shop.averagePaycheck)}',
+              '${strings.basketPriceShort} ${strings.somAmount(basket)}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(

@@ -106,7 +106,28 @@ class AppLocalizations {
   // not a word being translated. only the noun after it follows the language.
   String get vipShops => isRu ? 'VIP Магазины' : "VIP Do'konlar";
   String get viewAll => isRu ? 'Смотреть все' : "Hammasini ko'rish";
-  String get averageCheck => isRu ? 'Средний чек:' : "O'rtacha hisob:";
+
+  // The Basket Price Index, in the only form a customer ever sees it: words. The number itself
+  // (96, 104) never leaves the backend - see backend/internal/pricing for why.
+  //
+  // "рынок" here means "the other shops selling the same basket", which is a narrower claim than it
+  // sounds and is the reason the backend withholds the badge entirely until a category has enough
+  // shops to have a market at all.
+  String priceTierCheaper(int percent) =>
+      isRu ? 'на $percent% дешевле рынка' : "bozordan $percent% arzon";
+  String get priceTierAverage =>
+      isRu ? 'Средняя цена по рынку' : "Bozor o'rtacha narxi";
+  String priceTierDearer(int percent) =>
+      isRu ? 'на $percent% дороже рынка' : "bozordan $percent% qimmat";
+
+  /// What the whole shared basket costs at this shop, in so'm - the index's own step 1, and the one
+  /// absolute price a shop card shows.
+  String get basketPrice => isRu ? 'Цена корзины' : 'Savat narxi';
+  String get basketPriceShort => isRu ? 'Корзина' : 'Savat';
+
+  /// The average price of one product inside a single category, shown on the category drill-down.
+  /// Deliberately worded differently from [priceIndex]: it is a price in so'm, not a comparison.
+  String get categoryAveragePriceShort => isRu ? 'Сред. цена' : "O'rt. narx";
 
   // the twelve product categories, shown both as the home screen's "Популярные категории" grid and
   // as the options in the product form's category dropdown - one vocabulary, because they are the
@@ -127,6 +148,24 @@ class AppLocalizations {
   String get categoryPaints => isRu ? 'Краски' : "Bo'yoqlar";
   String get categoryFinishing => isRu ? 'Отделка' : 'Pardozlash';
   String get categoryTools => isRu ? 'Инструменты' : 'Asboblar';
+  // the category drill-down, opened by tapping a "Популярные категории" tile. it lists products
+  // from every shop, so the copy talks about товары rather than магазины.
+  /// The home screen when the database genuinely has no ranked shops - reachable only once the
+  /// showcase rows are deleted.
+  String get noShopsYetHint => isRu
+      ? 'Магазины появятся здесь, как только они укажут цены.'
+      : "Do'konlar narxlarni ko'rsatishi bilan shu yerda paydo bo'ladi.";
+
+  String get categoryProductsSubtitle =>
+      isRu ? 'Товары со всех магазинов' : "Barcha do'konlardagi mahsulotlar";
+  String get noProductsInCategory =>
+      isRu ? 'Пока нет товаров' : 'Hozircha mahsulotlar yo\'q';
+  String get noProductsInCategoryHint => isRu
+      ? 'В этой категории ещё никто не указал цены. Загляните позже.'
+      : "Bu kategoriyada hali hech kim narx ko'rsatmagan. Keyinroq qarang.";
+  String get categoryProductsLoadError =>
+      isRu ? 'Не удалось загрузить товары' : "Mahsulotlarni yuklab bo'lmadi";
+
   String get currencySom => isRu ? 'сум' : "so'm";
 
   // "1250000" -> "1 250 000 сум" (or "so'm"). lives here rather than in one screen because the map
@@ -141,6 +180,11 @@ class AppLocalizations {
     }
     return '$grouped $currencySom';
   }
+  // the category drill-down, opened by tapping a "Популярные категории" tile
+
+  // the category screen's subtitle counts its shops with the existing shopsCountLabel below - the
+  // russian plural rule is already written once in _ruPlural and does not want a second copy.
+
   /// the city shown in the home header before the user has ever picked one on the map
   String get cityName => isRu ? 'Ташкент' : 'Toshkent';
 
@@ -189,10 +233,6 @@ class AppLocalizations {
   String get addressLabel => isRu ? 'Адрес' : 'Manzil';
   String get phoneLabel => isRu ? 'Телефон' : 'Telefon';
   String get callButton => isRu ? 'Позвонить' : "Qo'ng'iroq qilish";
-
-  // compact form of averageCheck, for rows where the full label would crowd the number out.
-  // "Ср." was too clipped to read at a glance next to a number - "Сред." costs three pixels.
-  String get averageCheckShort => isRu ? 'Сред. чек' : "O'rt. hisob";
 
   // location picker screen
   String get searchLocationHint => isRu ? 'Поиск адреса...' : "Manzilni qidirish...";
