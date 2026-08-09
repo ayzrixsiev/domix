@@ -27,7 +27,7 @@ erDiagram
         text address "Physical text address"
         varchar category "universal, plumbing, wood, wallpaper - fixed at creation"
         numeric rating "Shop rating (0.0 to 5.0)"
-        int average_paycheck "Average customer check size"
+        timestamp vip_until "Paid placement runs until this moment (Nullable) - VIP while it is in the future"
         geometry location "PostGIS spatial point (stored as longitude, latitude)"
         timestamp created_at "Creation timestamp"
         timestamp updated_at "Update timestamp"
@@ -47,47 +47,6 @@ erDiagram
     }
 ```
 
-### Three things about `products` worth knowing before touching it
-
-**`price` is nullable, and that is the point.** A shop is not created empty: picking a category on
-the add-store form copies that category's product list (`backend/internal/catalog`) into the new
-shop in the same transaction as the shop row. Those copies arrive with no price, because the owner
-has not set one yet - and "not priced yet" is a different fact from "this costs 0". That NULL is
-what the app's orange «Цена не указана» prompt is reading. It travels as `pgtype.Int8` in Go,
-`*int64` in the JSON DTO (so the wire carries `price: null`, never `price: 0`) and `int?` in Dart.
-Anything that treats a missing price as zero breaks the whole post-creation workflow.
-
-**`template_key` is the only thing separating a template product from the owner's own.** NULL means
-the owner added it; a key like `universal.cement_m400` means it came from the shared list. One
-nullable column carries the whole distinction - a separate `is_template` flag was the alternative
-and was rejected because it would be a second copy of the same fact, and the two could disagree. It
-is unique per `(shop_id, template_key)`, so re-seeding an already-seeded shop fails loudly instead
-of silently doubling its catalogue, and the key must stay stable forever: it is what will identify
-"the same product across every shop" when cross-shop price comparison gets built.
-
-That column is also what the two rules around a product are expressed in:
-- **Template rows:** only `price` and `availability` may change. Enforced by the SQL itself -
-  `UpdateProductPricing` has no `SET` for the other columns - not by trusting the app. They also
-  cannot be deleted. Every shop of a category holds the same items, which is the only reason the
-  "average check" the map advertises compares anything meaningful.
-- **The owner's own rows:** fully editable, deletable, and capped at 20 per shop
-  (`CountCustomProducts` counts `template_key IS NULL`). The 50 seeded rows are deliberately outside
-  that budget - counting them would leave a brand-new universal shop 50 products into a 20-product
-  allowance.
-
-**`category` holds a code, not display text.** `mixes`, `blocks`, `lumber`, `metal`, `fasteners`,
-`roofing`, `insulation`, `electrical`, `plumbing`, `paints`, `finishing`, `tools` - the same twelve
-the app's "Популярные категории" grid is built from, so a home tile and a product finally refer to
-the same thing. The Russian/Uzbek names live in the Flutter app (`AppLocalizations`), which is why a
-product's category now follows the app language; it used to be stored as Russian text and stayed
-Russian when the app was switched to Uzbek. Unlike `shops.category` and `products.availability`
-there is no CHECK constraint behind it: those two are structural and fixed, whereas this list is
-content that will grow with the home grid, and a CHECK would make every addition a migration. Go
-validates it on the only two paths that write it (`catalog.IsValidProductCategory`).
-
-Removed in migration 000006: `products.article`, the (shop_id, article) unique index, and the whole
-Excel bulk-upload endpoint they existed for. The spreadsheet was there so an owner wouldn't have to
-type a catalogue from nothing, and a shop no longer starts from nothing.
 ## Database system design
 
 ### Connection pool
@@ -146,8 +105,3 @@ sm.sessions.Store(sessionID, SessionData{
 - ngrok http 8080                 
 - flutter run --dart-define-from-file=env.json            
 - go run ./cmd/api    
-
-
-### Things to work on
-
-1. JWT token now does not contain role, which means some endpoints which require role identification now have to ask a db for the role based on the user's id, which adds additional db queries.
