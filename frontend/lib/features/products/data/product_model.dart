@@ -1,3 +1,5 @@
+import 'package:frontend/core/constants/api_config.dart';
+
 // one product in a shop's catalogue, as returned by the go backend's /api/shops/{id}/products.
 //
 // most products are not created by anyone: picking a category when the shop is created copies a
@@ -13,6 +15,8 @@ class Product {
     required this.price,
     required this.availability,
     required this.isTemplate,
+    required this.nameEditable,
+    this.imageUrl,
   });
 
   final int id;
@@ -36,6 +40,20 @@ class Product {
   /// can be edited but not deleted, and they don't count against the 20-product own-products cap.
   final bool isTemplate;
 
+  /// whether the owner may write this product's name. two flags rather than one, because an обои
+  /// *slot* answers the two questions differently: it is a template row (locked category and unit,
+  /// no delete button) whose name is nonetheless the owner's to write, since the slot describes a
+  /// kind of product - "премиальные российские обои" - and the shop supplies the collection it
+  /// actually stocks. for every other row the two flags agree.
+  final bool nameEditable;
+
+  /// The product's photo, ready to hand to `Image.network`, or null when it has no photo.
+  ///
+  /// The backend sends a root-relative path ("/static/products/universal/001.jpg") because the host
+  /// changes between the ngrok tunnel, staging and production; [Product.fromJson] prepends
+  /// [ApiConfig.serverRoot] on the way in, so nothing downstream has to know that.
+  final String? imageUrl;
+
   bool get hasPrice => price != null;
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -49,7 +67,19 @@ class Product {
       price: json['price'] as int?,
       availability: ProductAvailability.fromCode(json['availability'] as String?),
       isTemplate: json['is_template'] as bool? ?? false,
+      // defaults to "not a template row's rule", i.e. editable, so a build talking to a backend
+      // from before slots existed behaves exactly as it did then: `!is_template`
+      nameEditable: json['name_editable'] as bool? ?? !(json['is_template'] as bool? ?? false),
+      imageUrl: _absoluteImageUrl(json['image_url'] as String?),
     );
+  }
+
+  /// The server sends "/static/products/universal/001.jpg"; the widget needs a full url. Guarded
+  /// against an already-absolute value so this stays correct if photos ever move to a CDN.
+  static String? _absoluteImageUrl(String? path) {
+    if (path == null || path.isEmpty) return null;
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    return '${ApiConfig.serverRoot}$path';
   }
 
   Map<String, dynamic> toRequestJson() => {
@@ -80,6 +110,8 @@ class Product {
       price: clearPrice ? null : (price ?? this.price),
       availability: availability ?? this.availability,
       isTemplate: isTemplate,
+      nameEditable: nameEditable,
+      imageUrl: imageUrl,
     );
   }
 }

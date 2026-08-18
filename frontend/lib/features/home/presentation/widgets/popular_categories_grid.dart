@@ -28,6 +28,14 @@ import 'package:frontend/features/products/data/product_category.dart';
 // the rest of the list is now the list itself, and a link promising more of what you can already
 // swipe to is a second door to the same room.
 //
+// **No white surface anywhere in this section - not behind it, and not behind a tile** (2026-08-18).
+// The grid used to sit inside one white panel, which made it the only section on an otherwise
+// container-free feed to have one; that panel is gone. Giving each tile its own white card instead
+// was tried the same day and rejected on sight: eight framed cards, each holding a second framed
+// box, is two nested borders per tile and it read as clutter rather than as a group. What is left is
+// the grey glyph box and its label on the page background - the panel was the thing that had to go,
+// not the tiles.
+//
 // **The tiles carry no shop count.** They did briefly - a small pill in the corner saying how many
 // shops stocked each category - and it cost a database aggregate on every home load to tell a
 // customer something they had not asked. A tile is a way in, not a statistic; the number that
@@ -103,11 +111,12 @@ class _PopularCategoriesGridState extends State<PopularCategoriesGrid> {
                   crossAxisCount: _columns,
                   // a fixed row height rather than childAspectRatio, which was the previous
                   // approach. aspect ratio derives height from *width*, so the cell got taller on a
-                  // wide phone and shorter on a narrow one - and once the section moved inside a
-                  // padded panel the cells narrowed enough that the computed height no longer fit a
-                  // two-line label. this is the content's real height plus slack, and it holds on
-                  // every screen width. it also fixes the old complaint about tall empty cells,
-                  // since the slack is a constant instead of whatever the width happened to imply.
+                  // wide phone and shorter on a narrow one - and when the section briefly sat
+                  // inside a padded panel the cells narrowed enough that the computed height no
+                  // longer fit a two-line label. this is the content's real height plus slack, and
+                  // it holds on every screen width. it also fixes the old complaint about tall
+                  // empty cells, since the slack is a constant rather than whatever the width
+                  // happened to imply.
                   mainAxisExtent: _cellHeight,
                   crossAxisSpacing: 10,
                   mainAxisSpacing: _rowGap,
@@ -127,7 +136,7 @@ class _PopularCategoriesGridState extends State<PopularCategoriesGrid> {
         ),
         // 4, not the 14 this started at. the dots carry their own vertical touch padding (see
         // _Dot), so the gap the eye measures is that padding *plus* whatever is added here - at 14
-        // the panel looked stretched and pushed Лучшие предложения below the fold.
+        // the section looked stretched and pushed Лучшие предложения below the fold.
         const SizedBox(height: 4),
         _PageDots(controller: _controller, pageCount: _pageCount),
       ],
@@ -215,9 +224,17 @@ class _Dot extends StatelessWidget {
               width: _PageDots._dotSize +
                   (_PageDots._activeWidth - _PageDots._dotSize) * activation,
               decoration: BoxDecoration(
+                // **the inactive end is textFaint, and it used to be hairline - which is the whole
+                // reason nobody could tell there was a second page.** hairline is #ECEEF2 against a
+                // #EFF1F5 background: a contrast ratio of about 1.02, invisible in any light. so the
+                // row drew one orange pill and, as far as the eye was concerned, nothing beside it -
+                // an indicator that indicated nothing. an inactive dot has to be *seen* to say "there
+                // is more over here"; it is the only thing on this screen that says it, since a full
+                // page of tiles leaves no edge of the next one showing.
+                //
                 // lerped rather than switched at a threshold: a colour that flips halfway through a
                 // drag is a flicker, a colour that slides is the same motion as the width
-                color: Color.lerp(AppColors.hairline, AppColors.primaryOrange, activation),
+                color: Color.lerp(AppColors.textFaint, AppColors.primaryOrange, activation),
                 borderRadius: BorderRadius.circular(_PageDots._dotSize / 2),
               ),
             ),
@@ -228,11 +245,13 @@ class _Dot extends StatelessWidget {
   }
 }
 
-/// How many shops sell this category, as a badge on the tile's corner.
+/// One category: the glyph on a grey box, with the name under it.
 ///
-/// Brand orange on `primaryTint`, which is the one exception the design tokens allow to "orange is
-/// for actions": this is a highlight, and it is the only thing on the grid carrying live data.
-/// White border so the pill separates from the tile's own fill where the two overlap.
+/// **Two surfaces were tried here and both are gone.** The section had a white panel behind all
+/// twelve tiles, and then each tile had a white card of its own; the first made this the only
+/// contained section on the feed, and the second put two nested boxes on every tile. The grey box
+/// alone is what separates the icon from the page and is the only part of the tile that reads as a
+/// control - it does not need a frame around it to do that.
 class _CategoryTile extends StatelessWidget {
   const _CategoryTile({
     required this.icon,
@@ -244,6 +263,8 @@ class _CategoryTile extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
+  static const double _glyphBox = 64;
+
   @override
   Widget build(BuildContext context) {
     // a bit more travel than the default: these tiles are small, and a 3% shrink on a 64px box is
@@ -251,28 +272,44 @@ class _CategoryTile extends StatelessWidget {
     return PressableScale(
       pressedScale: 0.93,
       onTap: onTap,
+      // the grid hands this cell a *tight* height, so the column fills it whatever the label does.
+      // top-aligned rather than centred, and that is not a detail: centring pushes the glyph box
+      // down by half a line on the tiles whose label wraps to two, so a row of four ends up with its
+      // icons at two different heights - visible as a wobble along the row, and it changes with the
+      // display language.
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
           // the box stays - it is what separates one category from the next - but it is neutral now.
           // eight different pastel fills with eight matching icon colours was the loudest thing on
-          // the screen and read as a children's app; a monochrome glyph on an off-white tile reads
-          // as a catalogue. cardGrey (not surfaceMuted) on purpose here: surfaceMuted is tuned to sit
-          // almost flush with the page background, which is what made the tile read as barely-there.
+          // the screen and read as a children's app; a monochrome glyph on a grey tile reads as a
+          // catalogue.
           //
+          // **trackGrey, and the reason is that a fill is only ever grey relative to what is behind
+          // it.** This was cardGrey (#F1F3F6) for as long as the section had a white panel under it,
+          // where it read as a light grey chip. The panel is gone, so the tile now sits on
+          // `background` (#EFF1F5) - and cardGrey is *lighter* than that, by two points per channel.
+          // It stopped being a grey box and became a white-ish one, which is exactly what it looked
+          // like. surfaceMuted is lighter still. trackGrey is the one token in the ramp deliberately
+          // *below* the page (see app_colors.dart - it is the groove the segmented control's pill
+          // slides in), so it is the only one that reads as recessed rather than as a card.
+          //
+          // No border with it: hairline is lighter than trackGrey, so it would draw a pale ring
+          // round a darker fill. The fill carries the shape on its own now.
           Container(
-            height: 64,
-            width: 64,
+            height: _glyphBox,
+            width: _glyphBox,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.cardGrey,
+              color: AppColors.trackGrey,
               borderRadius: BorderRadius.circular(AppRadius.sm),
-              border: Border.all(color: AppColors.hairline),
             ),
             child: Icon(icon, color: AppColors.textDark, size: 28),
           ),
           const SizedBox(height: 7),
-          Flexible(
+          // Expanded, so the label owns the whole strip under the glyph box no matter how many lines
+          // it uses. a Text given a tight height paints from the top of it, which is what keeps the
+          // first line of every label on the same baseline across the row.
+          Expanded(
             child: Text(
               label,
               maxLines: 2,

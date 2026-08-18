@@ -1,0 +1,18 @@
+# Copy to android/key.properties on the machine that builds releases, and fill in the real values.
+#
+# key.properties, *.jks and *.keystore are all gitignored: whoever has them can publish an update to
+# Domix under our name on Google Play. This example file carries no secrets and is committed so the
+# shape of the real one is documented.
+#
+# Generate the keystore once, and never lose it - Play ties the listing to this key, and without it
+# there is no way to ship an update to the app people have installed:
+#
+#   keytool -genkey -v -keystore ~/domix-upload-key.jks \
+#     -keyalg RSA -keysize 2048 -validity 10000 -alias domix
+#
+# Back the .jks file up somewhere that is not this laptop.
+
+storePassword=the password you typed into keytool
+keyPassword=the key password you typed into keytool
+keyAlias=domix
+storeFile=/home/you/domix-upload-key.jks

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The adaptive launcher icon, used from Android 8 onwards.
+
+  Android 8 stopped drawing an app's icon as a fixed picture and started drawing it as two layers it
+  masks itself - so the launcher decides whether Domix is a circle, a squircle or a rounded square,
+  and every icon on the homescreen ends up the same shape. A single flat PNG still installs, but the
+  system pillar-boxes it inside a white rounded square, which is why an app without this file looks
+  like it was made before the phone was.
+
+  background: flat brand orange, as a colour rather than a bitmap - it is one value, and a bitmap
+  would be five files that can disagree.
+
+  foreground: the white pin alone, on transparency, drawn at 560/1024 of the canvas. The size is the
+  load-bearing part. The layer is 108dp but only the central 66dp is guaranteed to survive the mask,
+  and launchers pan the rest during animations, so a glyph drawn to fill the canvas gets its edges
+  cut off on exactly the devices nobody tests on. At this scale the pin's furthest point sits 280px
+  from centre against the 313px the safe circle allows.
+
+  monochrome: the same silhouette, which is what Android 13's themed icons tint to match the user's
+  wallpaper. It works unchanged because the foreground is already a flat white shape rather than a
+  picture - the tile gaps come through as gaps in the tinted glyph too.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <monochrome android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>

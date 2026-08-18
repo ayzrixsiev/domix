@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
-import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
@@ -147,19 +146,15 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ],
 
+      // no panel behind this section any more: the white surface moved onto the individual tiles
+      // (see PopularCategoriesGrid), so the feed is container-free again and this heading sits on
+      // the gutter like every other one.
       const SizedBox(height: 26),
+      Padding(padding: _gutter, child: SectionHeader(title: strings.popularCategories)),
+      const SizedBox(height: 12),
       Padding(
         padding: _gutter,
-        child: _SectionPanel(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SectionHeader(title: strings.popularCategories),
-              const SizedBox(height: 14),
-              PopularCategoriesGrid(onCategoryTap: _openCategory),
-            ],
-          ),
-        ),
+        child: PopularCategoriesGrid(onCategoryTap: _openCategory),
       ),
 
       if (home.bestOffers.isNotEmpty) ...[
@@ -184,40 +179,5 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ],
     ];
-  }
-}
-
-// The white panel behind the categories grid.
-//
-// The home feed is otherwise deliberately container-free - an earlier pass wrapped every section
-// in a panel and it was removed, so this is not a return to that. Only the categories grid gets
-// one, because it is the one section made of small tinted tiles rather than self-contained cards:
-// without a surface behind them the tiles read as loose objects scattered on the page rather
-// than as one group, which is exactly what the box is there to fix.
-//
-// It sits on `_gutter` like everything else, so its border lines up down the left edge with the
-// DOMIX pill, the search bar and every section heading - the alignment is the point; an inset or
-// full-bleed panel here would break the column the whole feed is built on.
-class _SectionPanel extends StatelessWidget {
-  const _SectionPanel({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      // less padding at the bottom than the top on purpose: the only thing that ever sits at the
-      // bottom edge of this panel is the categories pager's dot row, which already carries its own
-      // touch padding. matching the 14 above it counted that space twice and left the panel looking
-      // stretched below its content.
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceWhite,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.hairline),
-        boxShadow: AppShadows.card,
-      ),
-      child: child,
-    );
   }
 }

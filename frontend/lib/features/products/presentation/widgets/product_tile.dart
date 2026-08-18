@@ -134,9 +134,7 @@ class ProductTile extends StatelessWidget {
   }
 }
 
-// products have no photos yet, exactly like shops don't (see ShopBanner in map_screen.dart), so
-// this is the same idea: a near-neutral surface with the faintest warm tint, not a saturated block
-// of brand colour. a placeholder should not be the loudest thing on the card.
+// the photo, or the placeholder that stands in for one.
 class _ProductBanner extends StatelessWidget {
   const _ProductBanner({
     required this.product,
@@ -155,22 +153,11 @@ class _ProductBanner extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [AppColors.primarySoft, AppColors.surfaceMuted],
-              ),
-            ),
-          ),
-          Center(
-            child: Icon(
-              CupertinoIcons.cube_box_fill,
-              color: AppColors.primaryOrange.withValues(alpha: 0.34),
-              size: 30,
-            ),
-          ),
+          // always painted, and always *under* the photo rather than instead of it: it is what
+          // shows while the image is still downloading and what is left if it fails, so the tile
+          // never flashes a bare white rectangle mid-scroll
+          const _BannerPlaceholder(),
+          if (product.imageUrl case final url?) _BannerPhoto(url: url),
 
           // in stock is the normal case and the one nobody needs told, so only the two exceptions
           // get a chip - otherwise every tile in the grid would carry the same green label
@@ -196,6 +183,68 @@ class _ProductBanner extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+// a near-neutral surface with the faintest warm tint, not a saturated block of brand colour: a
+// placeholder should not be the loudest thing on the card. same idea as ShopBanner in map_screen.
+class _BannerPlaceholder extends StatelessWidget {
+  const _BannerPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return const DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.primarySoft, AppColors.surfaceMuted],
+        ),
+      ),
+      child: Center(
+        child: Icon(CupertinoIcons.cube_box_fill, color: AppColors.textFaint, size: 30),
+      ),
+    );
+  }
+}
+
+// the product photo.
+//
+// `contain`, not `cover`: these are catalogue shots of a single object on white, and cropping one
+// to fill a 118px band cuts the ends off a roll of cable or the head off a hammer. letterboxing
+// against the placeholder underneath is the lesser cost, and the photos are already trimmed to the
+// product.
+//
+// [cacheWidth] is the one line that keeps a 99-tile grid from running out of memory: without it
+// flutter decodes each jpeg at full size and holds the raw bitmap, so a 1000x1000 photo costs 4 MB
+// of RAM whatever size it is drawn at. this decodes them at roughly the width they are painted,
+// times three for a high-density screen.
+class _BannerPhoto extends StatelessWidget {
+  const _BannerPhoto({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.network(
+      url,
+      fit: BoxFit.contain,
+      cacheWidth: 540,
+      // an unreachable server or a photo the founder hasn't added yet leaves the placeholder
+      // showing, rather than flutter's default grey box with a broken-image glyph
+      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+      // fades in once decoded instead of popping, and shows nothing at all before then - the
+      // placeholder underneath is already the loading state
+      frameBuilder: (_, child, frame, wasSynchronouslyLoaded) {
+        if (wasSynchronouslyLoaded) return child;
+        return AnimatedOpacity(
+          opacity: frame == null ? 0 : 1,
+          duration: AppMotion.base,
+          curve: Curves.easeOut,
+          child: child,
+        );
+      },
     );
   }
 }

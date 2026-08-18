@@ -109,4 +109,30 @@ class HomeController extends ChangeNotifier {
     if (_isShowingShowcase) return showcaseProductsForCategory(category);
     return _repo.fetchProductsByCategory(category);
   }
+
+  /// Products matching what the customer typed into the home screen's search field.
+  ///
+  /// Uncached and unstored for the same reasons as [productsForCategory], and routed through the
+  /// same showcase check - a demo with invented shops on the home screen and a real, empty search
+  /// behind them would be the one screen where the substitution shows through. Searching the
+  /// showcase happens in memory, since the showcase catalogue is a fixed list the app already holds.
+  Future<List<CategoryProduct>> searchProducts(String query) async {
+    if (_isShowingShowcase) return _searchShowcase(query);
+    return _repo.searchProducts(query);
+  }
+
+  /// The showcase's answer to a search: every invented product whose name contains the query.
+  ///
+  /// `toLowerCase()` on both sides is what makes it case-insensitive, matching the backend's ILIKE.
+  /// It is not a full match for postgres' rules - Dart lowercases by Unicode, postgres by the
+  /// database's collation - but the two only have to agree on data that exists in one of them, and
+  /// this data exists in neither.
+  List<CategoryProduct> _searchShowcase(String query) {
+    final needle = query.toLowerCase();
+    return [
+      for (final category in ProductCategory.values)
+        for (final entry in showcaseProductsForCategory(category))
+          if (entry.product.name.toLowerCase().contains(needle)) entry,
+    ]..sort((a, b) => (a.product.price ?? 0).compareTo(b.product.price ?? 0));
+  }
 }

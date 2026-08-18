@@ -55,6 +55,22 @@ class _VipShopsCarouselState extends State<VipShopsCarousel> {
   /// how many full cycles sit behind the opening page
   static const int _loopOrigin = 5000;
 
+  /// How far an off-centre card recedes, as a fraction of its size. Scale and nothing else.
+  ///
+  /// **This number is capped by [VipShopsCarousel.viewportFraction], and the cap is low.** A card
+  /// scales about its own centre, so every point of shrink slides its inner edge *away* from the
+  /// screen and eats into the sliver of the neighbour that the 0.84 viewport exists to leave
+  /// visible. On a 360dp phone that sliver is ~16px at 0.05 and ~6px at 0.12 - so a drop big enough
+  /// to be dramatic is a drop that closes the peek and leaves the strip looking like one card alone
+  /// on the page.
+  ///
+  /// 0.12 plus a 28% fade was tried on 2026-08-18 and reverted the same day: the recede was very
+  /// visible and the neighbours had all but vanished, which is the wrong trade - the peek is what
+  /// says "there are more of these". 0.07 is the previous 0.05 nudged, which is what was actually
+  /// asked for. **If a stronger effect is ever wanted, viewportFraction has to come down with it**
+  /// (0.80 buys back roughly the peek that 0.12 costs), and that narrows every card.
+  static const double _offCentreScaleDrop = 0.07;
+
   late final PageController _controller;
   late final int _initialPage;
 
@@ -108,15 +124,18 @@ class _VipShopsCarouselState extends State<VipShopsCarousel> {
         itemBuilder: (context, index) {
           final shop = widget.shops[index % widget.shops.length];
 
-          // rebuilds on every scroll tick so the off-centre cards can settle back slightly. it is
-          // what makes the swipe feel like cards moving through a viewport rather than a filmstrip
+          // rebuilds on every scroll tick so the off-centre cards can settle back. it is what
+          // makes the swipe feel like cards moving through a viewport rather than a filmstrip
           // sliding sideways.
           return AnimatedBuilder(
             animation: _controller,
             builder: (context, child) {
+              // 0 for the card the viewport is centred on, 1 for anything a full page away or
+              // further, and everything between while a drag is in flight
               final distance = (_currentPage - index).abs().clamp(0.0, 1.0);
+
               return Transform.scale(
-                scale: 1 - distance * 0.05,
+                scale: 1 - distance * _offCentreScaleDrop,
                 child: child,
               );
             },
@@ -163,7 +182,7 @@ class _VipShopCard extends StatelessWidget {
           // empty image - the eye landed on the placeholder first and the identity second. moving
           // it up pairs the two facts that identify a shop on one line and leaves the content block
           // to do one job: what it costs.
-          _Banner(name: shop.name, rating: shop.rating),
+          _Banner(name: shop.name, rating: shop.hasRating ? shop.rating : null),
           Expanded(
             child: Padding(
               // 14 all round, and 16 at the bottom: the badge is the last thing on the card and
@@ -261,7 +280,10 @@ class _Banner extends StatelessWidget {
   const _Banner({required this.name, required this.rating});
 
   final String name;
-  final double rating;
+  /// Null when the shop has no reviews, which today is every shop - see Shop.hasRating. Nullable
+  /// rather than a separate `showRating` flag for the same reason `basket_price` is: two fields
+  /// that must agree can disagree.
+  final double? rating;
 
   @override
   Widget build(BuildContext context) {
@@ -310,30 +332,34 @@ class _Banner extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(AppRadius.xs),
-                      boxShadow: AppShadows.card,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(CupertinoIcons.star_fill, color: AppColors.starYellow, size: 11),
-                        const SizedBox(width: 4),
-                        Text(
-                          rating.toStringAsFixed(1),
-                          style: const TextStyle(
-                            color: AppColors.textDark,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
+                  // the whole pill goes, not just its number: an empty white badge beside the
+                  // name would read as a card that failed to load something.
+                  if (rating != null) ...[
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(AppRadius.xs),
+                        boxShadow: AppShadows.card,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(CupertinoIcons.star_fill, color: AppColors.starYellow, size: 11),
+                          const SizedBox(width: 4),
+                          Text(
+                            rating!.toStringAsFixed(1),
+                            style: const TextStyle(
+                              color: AppColors.textDark,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

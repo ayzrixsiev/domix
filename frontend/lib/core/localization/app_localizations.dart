@@ -42,6 +42,51 @@ class AppLocalizations {
   String get languageSettings => isRu ? 'Язык приложения' : 'Ilova tili';
   String get support => isRu ? 'Поддержка' : "Qo'llab-quvvatlash";
   String get logout => isRu ? 'Выйти из аккаунта' : 'Akkauntdan chiqish';
+
+  // account deletion. google play requires every app with accounts to offer this from inside the
+  // app, and the wording matters as much as the button: the dialog has to name what disappears,
+  // because for a shop owner that is their whole catalogue and not just a login.
+  String get deleteAccount => isRu ? 'Удалить аккаунт' : "Akkauntni o'chirish";
+  String get deleteAccountConfirmTitle =>
+      isRu ? 'Удалить аккаунт?' : "Akkaunt o'chirilsinmi?";
+  String get deleteAccountConfirmBody => isRu
+      ? 'Ваш профиль, все ваши магазины и все их товары будут удалены безвозвратно. '
+          'Это действие нельзя отменить.'
+      : "Profilingiz, barcha do'konlaringiz va ulardagi barcha mahsulotlar butunlay o'chiriladi. "
+          "Bu amalni bekor qilib bo'lmaydi.";
+  String get deleteAccountConfirmAction => isRu ? 'Удалить' : "O'chirish";
+  /// The headline over a failed deletion.
+  ///
+  /// It has its own, rather than reusing [errorDialogTitle] («Что-то пошло не так»), because that
+  /// one comes paired with [errorDialogInstructions] - which is about Telegram. The profile screen
+  /// printed that pair for a failed deletion for a while, so the app told a user whose account had
+  /// not been deleted to go and check their Telegram installation.
+  String get deleteAccountFailedTitle => isRu
+      ? 'Не удалось удалить аккаунт'
+      : "Akkauntni o'chirib bo'lmadi";
+  String get deleteAccountFailed => isRu
+      ? 'Не удалось удалить аккаунт. Проверьте соединение и попробуйте ещё раз.'
+      : "Akkauntni o'chirib bo'lmadi. Aloqani tekshiring va qayta urinib ko'ring.";
+
+  /// A timeout says something different from a failure, so it gets a different sentence.
+  ///
+  /// The request most likely *did* reach the server - deleting an account cascades through the
+  /// user's shops and all of their products, which is the slowest write in the app - so the honest
+  /// instruction is "press it again", not "check your connection". Pressing it again is safe:
+  /// `DELETE /api/me` answers success for an account that is already gone.
+  String get deleteAccountTimedOut => isRu
+      ? 'Сервер не ответил вовремя. Нажмите «Удалить» ещё раз — повторное нажатие безопасно.'
+      : "Server o'z vaqtida javob bermadi. «O'chirish» tugmasini yana bosing — buni takrorlash xavfsiz.";
+
+  /// Maps [AuthController.deleteAccountErrorCode] onto the sentence the user reads.
+  ///
+  /// The same code-to-string shape the shop and product screens use. An unrecognised code falls
+  /// back to the general failure rather than throwing: a new code shipped by a future version of
+  /// the controller should read slightly vague, not crash the dialog that reports it.
+  String deleteAccountErrorFor(String? code) => switch (code) {
+        'timeout' => deleteAccountTimedOut,
+        _ => deleteAccountFailed,
+      };
   String get selectLanguage => isRu ? 'Выберите язык' : 'Tilni tanlang';
   String get version => 'Domix • 1.0.0';
 
@@ -125,6 +170,17 @@ class AppLocalizations {
   String get basketPrice => isRu ? 'Цена корзины' : 'Savat narxi';
   String get basketPriceShort => isRu ? 'Корзина' : 'Savat';
 
+  /// Shown to a *customer* on the shop's card in place of the price, for a shop that has not priced
+  /// its whole catalogue and is therefore out of the comparison entirely (migration 000013).
+  ///
+  /// Worded as the shop's state rather than the app's: "нет данных" would read as something broken
+  /// on our side, and this is a shop that simply has not finished. It says nothing about how much is
+  /// left - that is the owner's business, and a customer counting somebody else's unfilled fields is
+  /// not information they can act on.
+  String get basketPriceIncomplete => isRu
+      ? 'Магазин ещё не указал все цены, поэтому сравнения нет'
+      : "Do'kon hali barcha narxlarni ko'rsatmagan, shuning uchun taqqoslash yo'q";
+
   /// The average price of one product inside a single category, shown on the category drill-down.
   /// Deliberately worded differently from [priceIndex]: it is a price in so'm, not a comparison.
   String get categoryAveragePriceShort => isRu ? 'Сред. цена' : "O'rt. narx";
@@ -165,6 +221,34 @@ class AppLocalizations {
       : "Bu kategoriyada hali hech kim narx ko'rsatmagan. Keyinroq qarang.";
   String get categoryProductsLoadError =>
       isRu ? 'Не удалось загрузить товары' : "Mahsulotlarni yuklab bo'lmadi";
+
+  // product search, opened from the home screen's field. it lands on the same screen the category
+  // tiles open, so it borrows that screen's error and count strings and only needs its own heading
+  // and empty state.
+  // the heading is the query itself in guillemets, not "Результаты поиска: цемент" - the screen is
+  // already obviously a result list, and the one thing worth confirming is what was actually
+  // searched for. `searchNoResults` is the map panel's and is reused verbatim: two screens saying
+  // "nothing found" differently would be two translations of one sentence.
+  String searchResultsTitle(String query) => '«$query»';
+  String get searchNoResultsHint => isRu
+      ? 'Попробуйте другое название или загляните в категории на главной.'
+      : "Boshqa nom bilan urinib ko'ring yoki bosh sahifadagi kategoriyalarga qarang.";
+
+  // the search screen before anything has been searched. it is a real state with a real sentence
+  // rather than a blank page: an empty screen under a focused text field reads as a screen that
+  // failed to load, and this is the first thing anyone sees after tapping the search bar.
+  String get searchPromptTitle => isRu ? 'Что вы ищете?' : 'Nimani qidiryapsiz?';
+  String get searchPromptHint => isRu
+      ? 'Введите название товара — например «цемент» или «плитка» — и нажмите поиск на клавиатуре.'
+      : "Mahsulot nomini kiriting — masalan «sement» yoki «plitka» — va klaviaturadagi qidiruvni bosing.";
+
+  /// Shown once one character has been typed, because at that point the keyboard's search key is
+  /// live and pressing it does nothing - the backend refuses a one-character query (it matches a
+  /// large share of the catalogue and costs a full scan to return noise). Saying so beats a search
+  /// key that silently ignores the press.
+  String get searchMinLengthHint => isRu
+      ? 'Введите минимум два символа.'
+      : "Kamida ikkita belgi kiriting.";
 
   String get currencySom => isRu ? 'сум' : "so'm";
 
@@ -215,6 +299,13 @@ class AppLocalizations {
 
   // map screen (shop pins)
   String get noShopsYet => isRu ? 'Пока нет магазинов' : "Hozircha do'konlar yo'q";
+
+  /// Shown over the map while it is zoomed too far out to draw pins. Carries the count, because the
+  /// whole job of this line is to say there *is* something to zoom into - without it, an empty map
+  /// and a city with no shops look identical.
+  String zoomInForShops(int count) => isRu
+      ? 'Приблизьте карту · ${shopsCountLabel(count)}'
+      : "Xaritani yaqinlashtiring · ${shopsCountLabel(count)}";
   String get mapLoadError =>
       isRu ? 'Не удалось загрузить магазины' : "Do'konlarni yuklab bo'lmadi";
   String get loadingShops => isRu ? 'Загружаем магазины...' : "Do'konlar yuklanmoqda...";
@@ -271,7 +362,9 @@ class AppLocalizations {
 
   String get shopCategoryUniversal => isRu ? 'Универсальный' : 'Universal';
   String get shopCategoryPlumbing => isRu ? 'Сантехника' : 'Santexnika';
-  String get shopCategoryWood => isRu ? 'Дерево' : "Yog'och";
+  // the code behind this stays 'wood' - renaming a stored value is a data migration, and this is a
+  // display change. "Дерево" named the material; a shop sells материалы out of it.
+  String get shopCategoryWood => isRu ? 'Древесные материалы' : "Yog'och materiallar";
   String get shopCategoryWallpaper => isRu ? 'Обои' : 'Oboylar';
 
   String get shopCategoryUniversalHint => isRu
@@ -282,10 +375,12 @@ class AppLocalizations {
       : "Quvurlar, fitinglar, smesitellar, isitish";
   String get shopCategoryWoodHint => isRu
       ? 'Пиломатериалы, фанера, вагонка, ДСП'
-      : "Yog'och materiallar, faner, vagonka, DSP";
+      : "Xodalar, faner, vagonka, DSP";
+  // обои are the one category whose catalogue is places rather than products, and the owner has to
+  // know that before they pick it - not afterwards, when the category can no longer be changed
   String get shopCategoryWallpaperHint => isRu
-      ? 'Обои всех видов, клей, бордюры'
-      : "Har xil oboylar, yelim, bordyurlar";
+      ? '10 мест под ваши обои: премиум, стандарт, эконом'
+      : "Oboylaringiz uchun 10 ta joy: premium, standart, ekonom";
 
   /// "Готовый каталог: 50 товаров" - shown under each category in the picker
   String readyCatalogLabel(int count) => isRu
@@ -385,6 +480,20 @@ class AppLocalizations {
         return isRu
             ? 'Сессия истекла. Войдите в аккаунт заново.'
             : "Seans tugadi. Hisobingizga qayta kiring.";
+      // the request went out and nothing came back in time. almost always transient, and the right
+      // advice is "press save again" - which is why it cannot share the default's wording, since
+      // that one tells the owner to go and check a connection that is working.
+      case 'timeout':
+        return isRu
+            ? 'Сервер не ответил вовремя. Нажмите «Сохранить» ещё раз.'
+            : "Server javob bermadi. «Saqlash»ni yana bosing.";
+      // the server answered, and with something we did not plan for. saying so is worth more than
+      // guessing at a cause: it is not the phone's network, and the owner retrying forever will not
+      // help. the underlying exception goes to the log - see ProductsController._mutate.
+      case 'server_error':
+        return isRu
+            ? 'Ошибка на сервере. Попробуйте позже.'
+            : "Serverda xatolik. Keyinroq urinib ko'ring.";
       default:
         return isRu
             ? 'Не удалось сохранить. Проверьте подключение и попробуйте снова.'
@@ -419,10 +528,28 @@ class AppLocalizations {
   /// after a shop is created - it is the whole to-do list.
   String get priceNotSet => isRu ? 'Цена не указана' : "Narx ko'rsatilmagan";
 
-  /// "Цены указаны: 12 из 50" - the progress line at the top of the owner's grid
+  /// "Цены указаны: 12 из 50" - the progress line at the top of the owner's grid. counts the
+  /// category template only, because that is the count with a consequence attached (see below).
   String pricedProgressLabel(int priced, int total) => isRu
       ? 'Цены указаны: $priced из $total'
       : "Narxlar ko'rsatilgan: $total dan $priced";
+
+  /// What finishing the template actually buys, said in the one place the owner can act on it.
+  ///
+  /// Since migration 000013 a shop joins the price comparison only once every template product has a
+  /// price - one missing row keeps it out of Лучшие предложения, off the badges and out of every
+  /// other shop's market average. That rule is invisible from anywhere else in the app: the owner
+  /// would simply never see a badge and have nothing to connect it to.
+  ///
+  /// Two strings rather than one conditional sentence, because the completed state is not a weaker
+  /// version of the warning - it is a different message, and the only positive confirmation the
+  /// owner ever gets that the work was worth doing.
+  String priceIndexNeedsEveryPrice(int remaining) => isRu
+      ? 'Осталось $remaining — магазин попадёт в сравнение цен, когда указаны все'
+      : "$remaining ta qoldi - barchasi ko'rsatilganda do'kon narx taqqoslashiga qo'shiladi";
+  String get priceIndexParticipating => isRu
+      ? 'Магазин участвует в сравнении цен'
+      : "Do'kon narx taqqoslashida ishtirok etmoqda";
 
   /// badge on a product the owner added themselves, as opposed to one from the category template
   String get ownProductBadge => isRu ? 'Свой товар' : "O'z mahsuloti";
@@ -474,6 +601,18 @@ class AppLocalizations {
   String get templateProductHint => isRu
       ? 'Товар из готового каталога. Такие товары одинаковы во всех магазинах категории — поэтому здесь можно указать только цену и наличие, а удалить товар нельзя. Свои товары редактируются полностью.'
       : "Tayyor katalogdagi mahsulot. Bunday mahsulotlar kategoriyadagi barcha do'konlarda bir xil — shuning uchun bu yerda faqat narx va mavjudligini ko'rsatish mumkin, o'chirib bo'lmaydi. O'z mahsulotlaringiz to'liq tahrirlanadi.";
+
+  /// the обои case: a template row whose product the owner supplies. it explains a *different*
+  /// rule from the one above - the name is theirs to write - so it is a separate string rather
+  /// than a paragraph appended to that one.
+  String get slotProductHint => isRu
+      ? 'Место под ваши обои. Класс и страну менять нельзя — по ним ваш магазин сравнивается с другими. Впишите свою коллекцию, цену за рулон и наличие. Удалить это место нельзя.'
+      : "Sizning oboylaringiz uchun joy. Sinf va davlatni o'zgartirib bo'lmaydi — do'koningiz shular bo'yicha boshqalar bilan taqqoslanadi. O'z kolleksiyangizni, rulon narxini va mavjudligini kiriting. Bu joyni o'chirib bo'lmaydi.";
+
+  /// placeholder in the name field of a слот, where the label alone would say nothing useful
+  String get slotProductNameHint => isRu
+      ? 'Например: Erismann Vlies 1,06 м'
+      : "Masalan: Erismann Vlies 1,06 m";
 
   /// badge over the read-only fields of a template product
   String get templateFieldLocked => isRu ? 'Не изменяется' : "O'zgarmaydi";
@@ -532,6 +671,20 @@ class AppLocalizations {
         return isRu
             ? 'Сессия истекла. Войдите в аккаунт заново.'
             : "Seans tugadi. Hisobingizga qayta kiring.";
+      // the request went out and nothing came back in time. almost always transient, and the right
+      // advice is "press save again" - which is why it cannot share the default's wording, since
+      // that one tells the owner to go and check a connection that is working.
+      case 'timeout':
+        return isRu
+            ? 'Сервер не ответил вовремя. Нажмите «Сохранить» ещё раз.'
+            : "Server javob bermadi. «Saqlash»ni yana bosing.";
+      // the server answered, and with something we did not plan for. saying so is worth more than
+      // guessing at a cause: it is not the phone's network, and the owner retrying forever will not
+      // help. the underlying exception goes to the log - see ProductsController._mutate.
+      case 'server_error':
+        return isRu
+            ? 'Ошибка на сервере. Попробуйте позже.'
+            : "Serverda xatolik. Keyinroq urinib ko'ring.";
       default:
         return isRu
             ? 'Не удалось сохранить. Проверьте подключение и попробуйте снова.'

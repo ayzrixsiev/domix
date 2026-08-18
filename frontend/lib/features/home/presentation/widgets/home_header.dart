@@ -38,23 +38,35 @@ class HomeHeader extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           const _DomixBrandButton(),
-          Row(
-            children: [
-              _CityChip(
-                // falls back to the localized default until the user has picked one
-                city: selectedCity ?? strings.cityName,
-                semanticsLabel: strings.changeCityLabel,
-                onTap: () => _pickCity(context),
-              ),
-              const SizedBox(width: 8),
-              _IconChip(
-                icon: LucideIcons.bell,
-                semanticsLabel: strings.notificationsTitle,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+          // Flexible, or this group demands its natural width and the row overflows.
+          //
+          // _CityChip caps itself at 150px, but a cap is not the same as permission to shrink: on a
+          // 360dp phone - the most common android width there is - the pill, the bell and the DOMIX
+          // button together were 2px wider than the screen even with the default "Ташкент", and a
+          // longer name picked from Nominatim ("Мирзо-Улугбекский район") only made it worse. the
+          // two Flexibles hand the shrinking down to the chip's own ellipsis.
+          Flexible(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: _CityChip(
+                    // falls back to the localized default until the user has picked one
+                    city: selectedCity ?? strings.cityName,
+                    semanticsLabel: strings.changeCityLabel,
+                    onTap: () => _pickCity(context),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 8),
+                _IconChip(
+                  icon: LucideIcons.bell,
+                  semanticsLabel: strings.notificationsTitle,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

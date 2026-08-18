@@ -354,6 +354,12 @@ class _ShopStatsRow extends StatelessWidget {
         // the owner's own view of what a customer sees. worth showing even though it is a
         // customer-facing comparison: "your basket is 6% above the market" is the single most
         // actionable thing this screen can tell a shop owner.
+        //
+        // nothing at all when the shop has no index, which since migration 000013 means it has not
+        // priced its whole template. there is no half-state to render here: a basket price without a
+        // tier used to mean "priced, but no market to compare within" and the view can no longer
+        // produce that combination. the reason, and the count of what is left, live one tap away on
+        // ShopProductsScreen, where the prices themselves are.
         if (shop.priceTier case final tier?)
           Flexible(
             child: PriceTierBadge(
@@ -361,16 +367,6 @@ class _ShopStatsRow extends StatelessWidget {
               differencePercent: shop.priceDifferencePercent,
               strings: strings,
               compact: true,
-            ),
-          )
-        else if (shop.basketPrice case final basket?)
-          // priced, but in a market too thin to compare within - the number is still true
-          Text(
-            strings.somAmount(basket),
-            style: const TextStyle(
-              color: AppColors.textDark,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
             ),
           ),
       ],

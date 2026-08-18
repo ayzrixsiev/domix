@@ -45,7 +45,31 @@ erDiagram
         timestamp created_at "Creation timestamp"
         timestamp updated_at "Update timestamp"
     }
+
+    Shop ||--o| ShopBasketIndex : "derived, one row per shop that has priced >=30% of its template"
+
+    ShopBasketIndex {
+        bigint shop_id PK, FK "Refers to shops.id"
+        bigint basket_price "Shop's full template basket, unpriced rows imputed at market rate"
+        bigint price_index "basket_price / category market average x 100 - never sent to the app"
+        bigint priced_products "How many template rows this shop has priced"
+        bigint basket_products "Template size for this shop's category (50, 99, 10...)"
+    }
 ```
+
+`ShopBasketIndex` is not a table - it is the `shop_basket_index` SQL **view** (migration 000008,
+amended by 000010/000011), recomputed on every query rather than stored. It only has a row for a shop
+once `priced_products` reaches 30% of `basket_products`; below that floor the shop is simply absent
+here; See §6 in CLAUDE.md for the full derivation.
+
+
+
+
+
+
+
+
+
 
 ## Database system design
 
@@ -68,6 +92,10 @@ In our backend we have a concept called "Context" AKA ctx, which is designed to 
 Parent context in this function means that we need to pass it an existing ctx which can be taken in two ways:
 1. From incoming http requests (which are not timers, but rather guards that watch whether user e.g turned off his internet or left the app).
 2. Or create ourselfs by using context.Background()
+
+
+
+
 
 
 

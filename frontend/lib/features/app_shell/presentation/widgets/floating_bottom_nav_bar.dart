@@ -22,8 +22,20 @@ class FloatingBottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // the gesture pill or the three navigation buttons at the bottom of the phone.
+    //
+    // Scaffold does not inset a custom bottomNavigationBar - flutter's own BottomNavigationBar adds
+    // this padding itself, and a hand-rolled one has to do the same. without it the bar is laid out
+    // flush with the physical bottom of the screen, so on a phone with three-button navigation its
+    // lowest 48px sit *behind* the back/home/recents buttons: the tab labels are covered and the
+    // bottom half of every touch target is swallowed by the system before it reaches us.
+    //
+    // viewPadding rather than padding, because padding collapses to zero while the keyboard is open
+    // and the bar would drop into the system buttons for as long as somebody is typing.
+    final systemInset = MediaQuery.viewPaddingOf(context).bottom;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+      padding: EdgeInsets.fromLTRB(18, 0, 18, 8 + systemInset),
       child: Container(
         height: 76,
         decoration: BoxDecoration(

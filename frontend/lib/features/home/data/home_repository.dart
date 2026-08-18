@@ -38,6 +38,29 @@ class HomeRepository {
   /// thrown away on every launch.
   Future<List<CategoryProduct>> fetchProductsByCategory(ProductCategory category) async {
     final uri = Uri.parse('${ApiConfig.serverRoot}/api/categories/${category.code}/products');
+    return _fetchProducts(uri);
+  }
+
+  /// Products matching a search term, across every shop - what the home screen's field submits to.
+  ///
+  /// The backend answers with the exact shape `fetchProductsByCategory` gets, so the results render
+  /// through the same screen and the same grid. A search result and a category result are the same
+  /// object arriving by a different door.
+  ///
+  /// `Uri`'s `queryParameters` rather than string concatenation: the query is whatever the customer
+  /// typed, which is Cyrillic at minimum and may contain `&`, `#` or `%`. Pasted into a url by hand,
+  /// any of those three silently truncates the search or breaks the parse.
+  Future<List<CategoryProduct>> searchProducts(String query) async {
+    final uri = Uri.parse('${ApiConfig.serverRoot}/api/products/search')
+        .replace(queryParameters: {'q': query});
+    return _fetchProducts(uri);
+  }
+
+  /// The shared half of the two calls above: fetch, check, decode a list of products.
+  ///
+  /// `as List<dynamic>` is the line that makes the backend's `make([]T, 0, n)` load-bearing - a
+  /// `null` body would throw here rather than decode to an empty list.
+  Future<List<CategoryProduct>> _fetchProducts(Uri uri) async {
     final response = await http.get(uri).timeout(const Duration(seconds: 10));
 
     if (response.statusCode != 200) {

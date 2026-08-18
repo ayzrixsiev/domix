@@ -42,6 +42,7 @@ class StoresRepository {
         .timeout(const Duration(seconds: 10));
 
     if (response.statusCode != 200) {
+      AuthService.handleUnauthorized(response);
       throw Exception('Failed to load your shops (${response.statusCode})');
     }
 
@@ -91,6 +92,7 @@ class StoresRepository {
         .timeout(const Duration(seconds: 10));
 
     if (response.statusCode != 201) {
+      AuthService.handleUnauthorized(response);
       String message = 'Failed to create shop';
       try {
         message = (jsonDecode(response.body) as Map<String, dynamic>)['error'] as String? ?? message;
@@ -166,6 +168,11 @@ class StoresRepository {
   // a failed edit/delete should never surface as a raw decode crash, so anything unparseable
   // collapses into the same generic code the ui already knows how to render
   ShopMutationException _mutationExceptionFrom(http.Response response) {
+    // a 401 means the stored token will never work again - the account was deleted, or the
+    // signature expired. sign out here rather than in each caller: every failed authenticated
+    // request in this file already funnels through this one function.
+    AuthService.handleUnauthorized(response);
+
     try {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       return ShopMutationException(

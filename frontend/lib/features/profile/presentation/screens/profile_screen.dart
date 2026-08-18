@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
+import 'package:frontend/core/widgets/destructive_confirm_dialog.dart';
 import '../controllers/auth_controller.dart';
 
 const Color _kPrimaryOrange = Color(0xFFFF6F00);
@@ -386,7 +387,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (currentError != null && currentError != _lastHandledError) {
       _lastHandledError = currentError;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _showErrorDialog(currentError);
+        // the login path deliberately shows instructions rather than the exception: "Could not open
+        // Telegram" names a cause the user cannot act on, while "check Telegram is installed" is
+        // the same fact turned into something they can do. the raw string goes to the log instead.
+        if (mounted) {
+          _showErrorDialog(
+            title: _strings.errorDialogTitle,
+            body: _strings.errorDialogInstructions,
+            detail: currentError,
+          );
+        }
       });
     } else if (currentError == null) {
       _lastHandledError = null;
@@ -473,6 +483,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
 
+          // account deletion, in a card of its own below the menu rather than as one more row inside
+          // it. the split is the same one MyShopsScreen makes between "manage" and "destroy": a
+          // permanently irreversible action sharing a list with "Язык приложения" is an action
+          // somebody eventually taps on the way to something else.
+          //
+          // **This exists because Google Play requires it.** Any app that lets a user create an
+          // account must let them delete it from inside the app, and a listing without this path is
+          // rejected at review - it is not an optional courtesy.
+          if (!currentProfile.isGuest) ...[
+            const SizedBox(height: 16),
+            _MenuGroupCard(
+              rows: [
+                _MenuRowData(
+                  icon: CupertinoIcons.trash,
+                  title: _strings.deleteAccount,
+                  textColor: _kDanger,
+                  iconColor: _kDanger,
+                  iconBackground: _kDangerSoft,
+                  // a spinner in the trailing slot rather than a disabled row: the request takes a
+                  // round trip and a shop owner with a large catalogue will notice it, and a row that
+                  // simply stops responding reads as the app freezing
+                  trailing: authController.isDeletingAccount
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: _kDanger),
+                        )
+                      : null,
+                  onTap: authController.isDeletingAccount ? null : _confirmDeleteAccount,
+                ),
+              ],
+            ),
+          ],
+
           const SizedBox(height: 32),
           Center(
             child: Text(
@@ -515,10 +559,71 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // centered, modal error dialog: user reads the message and instructions, then must press ok to dismiss
-  void _showErrorDialog(String message) {
-    // log the raw technical detail for our own debugging; users only ever see the friendly instructions below
-    debugPrint('Auth error: $message');
+  /// Asks once, then destroys the account on the server and signs out locally.
+  ///
+  /// **The confirmation lives here and not on the backend.** `DELETE /api/me` does what it is told;
+  /// "are you sure" belongs on the screen with the button, where the user can still change their
+  /// mind and where the sentence can name what is about to disappear - for a shop owner that is
+  /// their whole catalogue, not just a login.
+  ///
+  /// [AuthController.deleteAccount] does the server call *before* touching local storage, so a
+  /// failure here leaves the session exactly as it was and the user can try again. All this has to
+  /// do is report it.
+  Future<void> _confirmDeleteAccount() async {
+    final strings = _strings;
+    final controller = context.read<AuthController>();
+
+    final confirmed = await DestructiveConfirmDialog.show(
+      context,
+      title: strings.deleteAccountConfirmTitle,
+      body: strings.deleteAccountConfirmBody,
+      confirmLabel: strings.deleteAccountConfirmAction,
+      cancelLabel: strings.cancelButton,
+    );
+    // `mounted` after every await, not once at the top: the dialog is a route, and the user can
+    // background the app or pop this screen while it is open
+    if (!confirmed || !mounted) return;
+
+    // collapse the shop submenu first - the rows behind it are about shops that are being deleted
+    setState(() => _showShopsSubMenu = false);
+
+    final deleted = await controller.deleteAccount();
+    if (!mounted) return;
+
+    if (!deleted) {
+      // its own headline, not the login one. "Что-то пошло не так" over Telegram instructions is
+      // what this screen used to say here, and it sent the founder looking for a Telegram problem
+      // that did not exist - the account was still there and the button just needed pressing again.
+      _showErrorDialog(
+        title: strings.deleteAccountFailedTitle,
+        // a code, localized here - the same contract the product and shop endpoints already use.
+        // the controller never holds a russian sentence, so the message follows the app's language
+        // even if it changed while the request was in flight.
+        body: strings.deleteAccountErrorFor(controller.deleteAccountErrorCode),
+      );
+      return;
+    }
+    // on success the controller has already dropped to the guest state, so this screen has rebuilt
+    // itself into the signed-out version - there is nothing left to navigate away from
+  }
+
+  /// The app's one modal error: an icon, a headline, a sentence, and an OK the user has to press.
+  ///
+  /// **It takes its wording from the caller, and that is a fix rather than a refactor.** It used to
+  /// take a `message` argument, ignore it, and print `errorDialogTitle` + `errorDialogInstructions`
+  /// - which are the *login* strings: «Что-то пошло не так / Проверьте, что Telegram установлен».
+  /// So a failed account deletion told the user to check their Telegram installation. The argument
+  /// was there, it was even passed the right sentence, and nothing rendered it.
+  ///
+  /// The shape of the bug is worth recognising: a widget whose text is hardcoded while its API
+  /// pretends otherwise cannot be caught by the analyzer or by a type - `message` was used (in the
+  /// `debugPrint`), so it was not even an unused-parameter warning. The only thing that finds this
+  /// is reading the body, or a user hitting the second caller.
+  ///
+  /// [detail] is the raw technical string. It is logged and never drawn: «Could not delete the
+  /// account (503)» is the line that debugs this, and it is also the line no shop owner can act on.
+  void _showErrorDialog({required String title, required String body, String? detail}) {
+    if (detail != null) debugPrint('Auth error: $detail');
 
     showDialog(
       context: context,
@@ -545,7 +650,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 16),
               Text(
-                _strings.errorDialogTitle,
+                title,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: _kTextPrimary,
@@ -555,7 +660,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 10),
               Text(
-                _strings.errorDialogInstructions,
+                body,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: _kTextPrimary,

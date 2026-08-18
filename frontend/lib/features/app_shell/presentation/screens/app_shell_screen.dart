@@ -33,12 +33,23 @@ class _AppShellScreenState extends State<AppShellScreen> {
     ShellNavItem(icon: LucideIcons.user, label: strings.profileTab),
   ];
 
+  /// Where [MapScreen] sits in [_buildPages]. Named rather than written as a bare 2 in two places,
+  /// since the two would have to be changed together and only one of them would fail loudly.
+  static const _mapTabIndex = 2;
+
   // built per-frame (like _buildNavItems below) rather than as a static field, since ProfileScreen
   // needs a BuildContext to navigate to AddStoreScreen when its "add store" row is tapped
   List<Widget> _buildPages(BuildContext context) => [
     const HomeScreen(showScaffold: false, bottomPadding: _bottomPadding),
     const TicketsScreen(showScaffold: false, bottomPadding: _bottomPadding),
-    const MapScreen(showScaffold: false, bottomPadding: _bottomPadding),
+    // **IndexedStack builds every child and paints one**, so the map has no way of its own to know
+    // it has come back into view - and it needs to, since its shop list is a snapshot that can go
+    // stale (a shop added, or an account deleted with its shops). this bool is that signal.
+    MapScreen(
+      showScaffold: false,
+      bottomPadding: _bottomPadding,
+      isActive: _currentIndex == _mapTabIndex,
+    ),
     const MessagesScreen(showScaffold: false, bottomPadding: _bottomPadding),
     ProfileScreen(
       showScaffold: false,

@@ -143,7 +143,7 @@ const Map<ProductCategory, List<HomeShopPreview>> _showcaseCatalogue = {
 
 /// How many items a showcase basket holds - the size of the Универсальный template. Only used to
 /// turn a basket total back into a plausible per-item price for the category drill-down.
-const int _showcaseBasketItems = 50;
+const int _showcaseBasketItems = 100;
 
 /// Which shop category each showcase shop belongs to - the tabs of "Лучшие предложения".
 ///
@@ -279,6 +279,8 @@ List<CategoryProduct> showcaseProductsForCategory(ProductCategory category) {
             price: unit + i * (unit ~/ 4),
             availability: ProductAvailability.inStock,
             isTemplate: true,
+            // none of the showcase categories are обои, so no showcase row is a slot
+            nameEditable: false,
           ),
         ),
       );

@@ -147,64 +147,88 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
     }
 
     final customCount = controller.customCountFor(widget.shop.id);
+    final (priced, total) = controller.templatePricingProgressFor(widget.shop.id);
 
-    return ListView(
+    // **A CustomScrollView, not a ListView, and the grid below is a sliver rather than a
+    // shrink-wrapped GridView.** The difference is not cosmetic. A shrink-wrapped grid has to
+    // measure its own height, so it lays out every child - all 100 tiles of a Универсальный
+    // catalogue mount at once and each one's Image.network fires immediately. The visible symptom
+    // was not slow images: it was that **saving a price failed** for the ~30 seconds they took to
+    // arrive, because the PUT queued behind them and tripped its own timeout without ever reaching
+    // the server. See ProductSliverGrid.
+    //
+    // Everything above the grid stays in one SliverToBoxAdapter because it is a fixed handful of
+    // widgets that are always on screen; only the grid is worth making lazy.
+    return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
-      children: [
-        _CatalogueSummary(
-          shop: widget.shop,
-          strings: strings,
-          priced: controller.pricedCountFor(widget.shop.id),
-          total: products.length,
-        ),
-        const SizedBox(height: 18),
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+          sliver: SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _CatalogueSummary(
+                  shop: widget.shop,
+                  strings: strings,
+                  priced: priced,
+                  total: total,
+                ),
+                const SizedBox(height: 18),
 
-        if (products.isEmpty) ...[
-          _CenteredMessage(
-            icon: CupertinoIcons.cube_box,
-            title: strings.noProductsInShop,
-            subtitle: strings.noProductsInShopHint,
+                if (products.isEmpty) ...[
+                  _CenteredMessage(
+                    icon: CupertinoIcons.cube_box,
+                    title: strings.noProductsInShop,
+                    subtitle: strings.noProductsInShopHint,
+                  ),
+                  const SizedBox(height: 18),
+                ],
+              ],
+            ),
           ),
-          const SizedBox(height: 18),
-        ],
+        ),
 
-        ProductGrid(
-          // shrink-wrapped because it sits inside this ListView: two scrollables competing for one
-          // drag gesture is how a grid ends up refusing to move
-          shrinkWrap: true,
-          tiles: [
-            for (final product in products)
-              ProductTile(
-                product: product,
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          sliver: ProductSliverGrid(
+            tiles: [
+              for (final product in products)
+                ProductTile(
+                  product: product,
+                  strings: strings,
+                  showOwnBadge: true,
+                  onTap: () => _openEditor(product: product),
+                ),
+              // last cell, in the flow of the grid rather than on a button below it - "add one of
+              // your own" belongs where the eye already is
+              AddProductTile(
                 strings: strings,
-                showOwnBadge: true,
-                onTap: () => _openEditor(product: product),
+                used: customCount,
+                max: kMaxCustomProducts,
+                onTap: () => _openEditor(),
               ),
-            // last cell, in the flow of the grid rather than on a button below it - "add one of
-            // your own" belongs where the eye already is
-            AddProductTile(
-              strings: strings,
-              used: customCount,
-              max: kMaxCustomProducts,
-              onTap: () => _openEditor(),
-            ),
-          ],
+            ],
+          ),
         ),
 
-        if (customCount >= kMaxCustomProducts) ...[
-          const SizedBox(height: 14),
-          Text(
-            strings.ownProductsLimitReachedHint(kMaxCustomProducts),
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: AppColors.textFaint,
-              fontSize: 12,
-              height: 1.45,
-              fontWeight: FontWeight.w400,
-            ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+          sliver: SliverToBoxAdapter(
+            child: customCount >= kMaxCustomProducts
+                ? Text(
+                    strings.ownProductsLimitReachedHint(kMaxCustomProducts),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: AppColors.textFaint,
+                      fontSize: 12,
+                      height: 1.45,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  )
+                : const SizedBox.shrink(),
           ),
-        ],
+        ),
       ],
     );
   }
@@ -247,9 +271,15 @@ class _FullPageState extends StatelessWidget {
   }
 }
 
-// the header strip: which template stocked this shop, and how far through pricing it the owner is.
-// the progress line is the point of the screen - a freshly created shop has 50 products and 0
-// prices, and that number going up is the whole task.
+// the header strip: which template stocked this shop, how far through pricing it the owner is, and
+// what reaching the end of it buys them.
+//
+// the progress line is the point of the screen - a freshly created shop has 99 products and 0
+// prices, and that number going up is the whole task. since migration 000013 it is also a threshold
+// rather than just a tally: at 99 of 99 the shop enters the price comparison, and at 98 it is not in
+// it at all. the line under the bar is the only place in the app that says so, which is why the bar
+// counts template rows and not the owner's own added products - those are not in the shared basket,
+// so they cannot be what the bar is measuring.
 class _CatalogueSummary extends StatelessWidget {
   const _CatalogueSummary({
     required this.shop,
@@ -339,6 +369,24 @@ class _CatalogueSummary extends StatelessWidget {
               color: isComplete ? AppColors.success : AppColors.primaryOrange,
             ),
           ),
+
+          // hidden only for a shop with no template at all, which no real shop has - all four
+          // categories seed one. a "0 left" line under an empty bar would be a promise about a
+          // catalogue that isn't there.
+          if (total > 0) ...[
+            const SizedBox(height: 10),
+            Text(
+              isComplete
+                  ? strings.priceIndexParticipating
+                  : strings.priceIndexNeedsEveryPrice(total - priced),
+              style: TextStyle(
+                color: isComplete ? AppColors.success : AppColors.textGrey,
+                fontSize: 12,
+                height: 1.4,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ],
       ),
     );

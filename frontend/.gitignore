@@ -51,3 +51,7 @@ app.*.map.json
 env.json
 env.*.json
 !env.example.json
+# env.prod.json is the exception and is committed on purpose: it holds the production API address
+# and a Mapbox public token, neither of which is secret (both are readable out of any shipped APK -
+# see the file's own note). Keeping it in git is what makes a release reproducible by anyone.
+!env.prod.json

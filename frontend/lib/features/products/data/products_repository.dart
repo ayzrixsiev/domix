@@ -113,6 +113,11 @@ class ProductsRepository {
   // a failed request should never surface as a raw decode crash, so anything unparseable collapses
   // into the same generic code the ui already knows how to render
   ProductMutationException _exceptionFrom(http.Response response) {
+    // a 401 means the stored token will never work again - the account was deleted, or the
+    // signature expired. sign out here rather than in each caller: every failed authenticated
+    // request in this file already funnels through this one function.
+    AuthService.handleUnauthorized(response);
+
     try {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       return ProductMutationException(

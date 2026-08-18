@@ -1,0 +1,540 @@
+package db_test
+
+// the home screen's three sections are the first thing in this project whose *correctness is a
+// number* rather than a rendered widget - "which shop is cheapest" is either right or it silently
+// isn't, and no amount of looking at the app tells you which. so these run against a real postgres
+// with the real schema, not against a mock: the whole point is to check what the database computes,
+// and a mock of the database would be checking what this test believes it computes.
+//
+// every test opens a transaction and rolls it back, so the founder's own data is never touched -
+// nothing here commits. that also means each test sees only the rows it inserted, which is what lets
+// them assert on exact list contents.
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/joho/godotenv"
+
+	"domix/backend/db"
+	"domix/backend/internal/catalog"
+)
+
+// begins a transaction against the local database and registers its rollback.
+//
+// t.Skip rather than t.Fatal when there is no database: `go test ./...` has to stay runnable on a
+// machine that has never set one up (and in a CI job that has no postgres), so a missing DB_URL
+// means "not applicable here", not "broken".
+func beginTx(t *testing.T) (context.Context, pgx.Tx, *db.Queries) {
+	t.Helper()
+
+	if os.Getenv("DB_URL") == "" {
+		// the same ../.env the api itself loads, resolved from this package's directory
+		_ = godotenv.Load(filepath.Join("..", "..", ".env"))
+	}
+	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		t.Skip("DB_URL is not set - skipping the tests that need a real database")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	t.Cleanup(cancel)
+
+	conn, err := pgx.Connect(ctx, dbURL)
+	if err != nil {
+		t.Skipf("cannot reach the database (%v) - skipping", err)
+	}
+	t.Cleanup(func() { _ = conn.Close(context.Background()) })
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	// rolled back unconditionally: there is no commit anywhere in this file, so this is how every
+	// row these tests write stops existing
+	t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
+
+	// and this is how every row that *already* existed stops existing, for the length of the test.
+	//
+	// the Basket Price Index is a comparison against every other shop in the market, so unlike the
+	// old per-shop average it cannot be asserted on without controlling the whole population - one
+	// shop left over on the founder's laptop would shift every index in every test below, and the
+	// failure would look like arithmetic being wrong rather than like data being present. the
+	// transaction never commits, so nothing is actually deleted; it does hold row locks on shops for
+	// the second or two the test runs, which a locally running server would notice only if it tried
+	// to write in that window.
+	if _, err := tx.Exec(ctx, "DELETE FROM shops"); err != nil {
+		t.Fatalf("clear shops for the duration of the transaction: %v", err)
+	}
+
+	return ctx, tx, db.New(tx)
+}
+
+// a shop owner plus a shop of the given category, seeded with that category's whole template -
+// exactly what Shops.Create does, so the tests are looking at rows of the shape the app produces.
+func makeShopTx(t *testing.T, ctx context.Context, conn pgx.Tx, q *db.Queries, name string, category catalog.Category, vip bool) int64 {
+	t.Helper()
+
+	// phone is the unique identity column, so it has to differ per shop the test creates
+	user, err := q.CreateUser(ctx, db.CreateUserParams{
+		Name:  pgtype.Text{String: name + " owner", Valid: true},
+		Phone: "+998" + name,
+		Role:  "shop_owner",
+	})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	shop, err := q.CreateShop(ctx, db.CreateShopParams{
+		UserID:       user.ID,
+		Name:         name,
+		ContactPhone: "+998901234567",
+		Address:      "Tashkent",
+		Category:     string(category),
+		// tashkent, and in (longitude, latitude) order - the reverse of how they are spoken
+		StMakepoint:   69.2401,
+		StMakepoint_2: 41.2995,
+	})
+	if err != nil {
+		t.Fatalf("create shop: %v", err)
+	}
+
+	for _, item := range catalog.Template(string(category)) {
+		if err := q.SeedTemplateProduct(ctx, db.SeedTemplateProductParams{
+			ShopID:      shop.ID,
+			Name:        item.Name,
+			Category:    string(item.Category),
+			Unit:        item.Unit,
+			TemplateKey: pgtype.Text{String: item.Key, Valid: true},
+			ImagePath:   pgtype.Text{String: item.ImagePath(category), Valid: item.Image != ""},
+		}); err != nil {
+			t.Fatalf("seed %q: %v", item.Key, err)
+		}
+	}
+
+	if vip {
+		setVIP(t, ctx, q, shop.ID, time.Now().Add(30*24*time.Hour))
+	}
+
+	return shop.ID
+}
+
+// grants (or, with a past date, expires) a paid placement through the same query the admin endpoint
+// uses - so these tests exercise the real statement rather than a hand-written UPDATE that could
+// drift away from it.
+func setVIP(t *testing.T, ctx context.Context, q *db.Queries, shopID int64, until time.Time) {
+	t.Helper()
+
+	if _, err := q.SetShopVIP(ctx, db.SetShopVIPParams{
+		ID:       shopID,
+		VipUntil: pgtype.Timestamptz{Time: until, Valid: true},
+	}); err != nil {
+		t.Fatalf("set vip on shop %d: %v", shopID, err)
+	}
+}
+
+// prices the first n template products of a shop at the given price. returns nothing - the point is
+// the side effect on shop_basket_index.
+func priceProducts(t *testing.T, ctx context.Context, conn pgx.Tx, shopID int64, n int, price int64) {
+	t.Helper()
+
+	_, err := conn.Exec(ctx, `
+		UPDATE products SET price = $3
+		WHERE id IN (
+			SELECT id FROM products
+			WHERE shop_id = $1 AND template_key IS NOT NULL
+			ORDER BY id LIMIT $2
+		)`, shopID, n, price)
+	if err != nil {
+		t.Fatalf("price products: %v", err)
+	}
+}
+
+// the founder's worked example, run against the real view.
+//
+// four stores whose per-item prices are 100 / 106 / 98 / 96 thousand average out to 100 thousand, so
+// the indices are 100 / 106 / 98 / 96. every shop here prices its whole template, which since 000013
+// is the only way to be in the view at all - so this is the arithmetic in the spec run unmodified,
+// and it is the case where the implementation and the specification have to agree digit for digit.
+//
+// the four indices are literals while the four baskets are computed, and that asymmetry is the real
+// content of the example: a basket is n items, so it moves when the template does, but the index
+// divides one basket by the average of the others and n cancels out of both sides. an index that
+// changed when a product was added to /products.md would mean the view was measuring the wrong thing.
+func TestBasketIndexReproducesTheWorkedExample(t *testing.T) {
+	ctx, conn, q := beginTx(t)
+
+	full := catalog.UniversalSize
+
+	cases := []struct {
+		name      string
+		unitPrice int64
+		index     int64
+	}{
+		{"a", 100_000, 100},
+		{"b", 106_000, 106},
+		{"c", 98_000, 98},
+		{"d", 96_000, 96},
+	}
+
+	ids := make(map[string]int64, len(cases))
+	for _, c := range cases {
+		id := makeShopTx(t, ctx, conn, q, c.name, catalog.CategoryUniversal, false)
+		priceProducts(t, ctx, conn, id, full, c.unitPrice)
+		ids[c.name] = id
+	}
+
+	shops, err := q.ListShops(ctx)
+	if err != nil {
+		t.Fatalf("list shops: %v", err)
+	}
+
+	for _, c := range cases {
+		wantBasket := int64(full) * c.unitPrice
+
+		row := findShop(t, shops, ids[c.name])
+		if !row.BasketPrice.Valid || row.BasketPrice.Int64 != wantBasket {
+			t.Errorf("store %s: want basket %d, got %+v", c.name, wantBasket, row.BasketPrice)
+		}
+		if !row.PriceIndex.Valid || row.PriceIndex.Int64 != c.index {
+			t.Errorf("store %s: want index %d, got %+v", c.name, c.index, row.PriceIndex)
+		}
+	}
+}
+
+// a shop with one unpriced product is out of the index *and* out of the market it would otherwise
+// have been averaged into.
+//
+// the second half is the part worth pinning. excluding a shop from the rankings is the obvious
+// reading of the rule; excluding it from everyone else's baseline is what makes the remaining
+// numbers honest. the partial shop here is priced at a tenth of the market, so if its half-empty
+// basket leaked into the average, the finished shop's index would land far above 100 and it would
+// advertise "дороже рынка" against a market that is really just one unfinished neighbour.
+func TestBasketIndexExcludesShopsWithAnIncompleteBasket(t *testing.T) {
+	ctx, conn, q := beginTx(t)
+
+	full := catalog.UniversalSize
+
+	finished := makeShopTx(t, ctx, conn, q, "finished", catalog.CategoryUniversal, false)
+	partial := makeShopTx(t, ctx, conn, q, "partial", catalog.CategoryUniversal, false)
+
+	priceProducts(t, ctx, conn, finished, full, 100_000)
+	// one short of the whole template, and dirt cheap - the most tempting row to let in
+	priceProducts(t, ctx, conn, partial, full-1, 10_000)
+
+	shops, err := q.ListShops(ctx)
+	if err != nil {
+		t.Fatalf("list shops: %v", err)
+	}
+
+	got := findShop(t, shops, partial)
+	if got.BasketPrice.Valid || got.PriceIndex.Valid {
+		t.Fatalf("%d of %d priced is an incomplete basket and must publish nothing, got basket %+v "+
+			"index %+v", full-1, full, got.BasketPrice, got.PriceIndex)
+	}
+
+	// the finished shop is now the only member of its market, so it is its own average: exactly 100.
+	// any other value means the excluded shop was still counted somewhere.
+	finishedRow := findShop(t, shops, finished)
+	if !finishedRow.PriceIndex.Valid || finishedRow.PriceIndex.Int64 != 100 {
+		t.Fatalf("the only complete basket in the category is the market, so it should read 100, "+
+			"got %+v - the incomplete shop is still in the average", finishedRow.PriceIndex)
+	}
+	if wantBasket := int64(full) * 100_000; finishedRow.BasketPrice.Int64 != wantBasket {
+		t.Errorf("want a basket of %d, got %d", wantBasket, finishedRow.BasketPrice.Int64)
+	}
+}
+
+// the boundary is the last product, straddled from both sides.
+//
+// "all of them" sounds like a rule with no off-by-one in it, but the view expresses it as
+// `COUNT(price) = COUNT(*)`, and a `>=` slipped in there would pass every test that prices a
+// comfortable amount on each side of a line.
+func TestBasketIndexNeedsEveryTemplateProductPriced(t *testing.T) {
+	ctx, conn, q := beginTx(t)
+
+	full := catalog.UniversalSize
+
+	// a second, fully priced shop so there is a market to be indexed against at all
+	reference := makeShopTx(t, ctx, conn, q, "reference", catalog.CategoryUniversal, false)
+	priceProducts(t, ctx, conn, reference, full, 100_000)
+
+	shop := makeShopTx(t, ctx, conn, q, "under", catalog.CategoryUniversal, false)
+	priceProducts(t, ctx, conn, shop, full-1, 100_000)
+
+	shops, err := q.ListShops(ctx)
+	if err != nil {
+		t.Fatalf("list shops: %v", err)
+	}
+	if row := findShop(t, shops, shop); row.PriceIndex.Valid {
+		t.Fatalf("%d of %d priced should publish no index, got %d", full-1, full, row.PriceIndex.Int64)
+	}
+
+	// the last one is what tips it over
+	priceProducts(t, ctx, conn, shop, full, 100_000)
+
+	shops, err = q.ListShops(ctx)
+	if err != nil {
+		t.Fatalf("list shops after pricing: %v", err)
+	}
+	if row := findShop(t, shops, shop); !row.PriceIndex.Valid {
+		t.Fatalf("all %d priced is a complete basket and should publish an index", full)
+	}
+}
+
+// each tab of "Лучшие предложения" is one shop category and nothing else - which is the whole
+// reason the section grew tabs. a Обои shop's basket is ten items and a Универсальный shop's is
+// fifty, so the two were never really rankable against each other even with the index normalising
+// the ordering: the *badges* would be comparing different markets on adjacent rows.
+func TestBestOffersAreScopedToOneShopCategory(t *testing.T) {
+	ctx, conn, q := beginTx(t)
+
+	// two wallpaper shops: 10 x 50 000 = 500 000 and 10 x 100 000 = 1 000 000, averaging 750 000,
+	// so their indices are 67 and 133
+	cheapWallpaper := makeShopTx(t, ctx, conn, q, "cheapwall", catalog.CategoryWallpaper, false)
+	dearWallpaper := makeShopTx(t, ctx, conn, q, "dearwall", catalog.CategoryWallpaper, false)
+	priceProducts(t, ctx, conn, cheapWallpaper, catalog.WallpaperSize, 50_000)
+	priceProducts(t, ctx, conn, dearWallpaper, catalog.WallpaperSize, 100_000)
+
+	// the only universal shop, so it is its own market: 5 000 000 and an index of exactly 100
+	universal := makeShopTx(t, ctx, conn, q, "universal", catalog.CategoryUniversal, false)
+	priceProducts(t, ctx, conn, universal, catalog.UniversalSize, 100_000)
+
+	wallpaper := bestOffersIn(t, ctx, q, catalog.CategoryWallpaper, 10)
+	if len(wallpaper) != 2 {
+		t.Fatalf("want the two wallpaper shops in the обои tab, got %d", len(wallpaper))
+	}
+	if wallpaper[0].ID != cheapWallpaper || wallpaper[1].ID != dearWallpaper {
+		t.Fatalf("want cheapest first, got %v (indices %v)", offerIDs(wallpaper), offerIndices(wallpaper))
+	}
+	if wallpaper[0].PriceIndex != 67 || wallpaper[1].PriceIndex != 133 {
+		t.Fatalf("want indices [67 133], got %v", offerIndices(wallpaper))
+	}
+	// the universal shop's 5 000 000 basket is by far the biggest number here, and it must not
+	// appear in this tab at all
+	for _, o := range wallpaper {
+		if o.ID == universal {
+			t.Fatal("a универсальный shop leaked into the обои tab")
+		}
+	}
+
+	if universalTab := bestOffersIn(t, ctx, q, catalog.CategoryUniversal, 10); len(universalTab) != 1 ||
+		universalTab[0].ID != universal {
+		t.Fatalf("want only the universal shop in its own tab, got %v", offerIDs(universalTab))
+	}
+
+	// and a category nobody stocks produces no tab at all rather than an empty one
+	if wood := bestOffersIn(t, ctx, q, catalog.CategoryWood, 10); len(wood) != 0 {
+		t.Fatalf("nobody sells wood, want 0 rows, got %d", len(wood))
+	}
+}
+
+func TestBestOffersExcludeShopsWithNoIndex(t *testing.T) {
+	ctx, conn, q := beginTx(t)
+
+	priced := makeShopTx(t, ctx, conn, q, "priced", catalog.CategoryUniversal, false)
+	empty := makeShopTx(t, ctx, conn, q, "empty", catalog.CategoryUniversal, false)
+
+	priceProducts(t, ctx, conn, priced, catalog.UniversalSize, 100_000)
+	// `empty` gets nothing - it must not appear at all, rather than appearing first with a 0
+
+	offers := bestOffersIn(t, ctx, q, catalog.CategoryUniversal, 10)
+	if len(offers) != 1 || offers[0].ID != priced {
+		t.Fatalf("want only the priced shop, got %v", offerIDs(offers))
+	}
+	for _, o := range offers {
+		if o.ID == empty {
+			t.Fatal("a shop with no priced products must not be ranked as a best offer")
+		}
+	}
+}
+
+// the "Популярные категории" drill-down: every priced product in one category, across every shop,
+// cheapest first.
+func TestProductsByCategoryListsEveryShopsPricedRows(t *testing.T) {
+	ctx, conn, q := beginTx(t)
+
+	dear := makeShopTx(t, ctx, conn, q, "dear", catalog.CategoryUniversal, false)
+	cheap := makeShopTx(t, ctx, conn, q, "cheap", catalog.CategoryUniversal, false)
+
+	if _, err := conn.Exec(ctx,
+		`UPDATE products SET price = 90000 WHERE shop_id = $1 AND category = 'mixes'`, dear); err != nil {
+		t.Fatalf("price dear mixes: %v", err)
+	}
+	if _, err := conn.Exec(ctx,
+		`UPDATE products SET price = 40000 WHERE shop_id = $1 AND category = 'mixes'`, cheap); err != nil {
+		t.Fatalf("price cheap mixes: %v", err)
+	}
+	// blocks stays unpriced everywhere, and must not leak into the mixes list either way
+
+	rows, err := q.ListProductsByCategory(ctx, db.ListProductsByCategoryParams{
+		Category: "mixes",
+		Limit:    100,
+	})
+	if err != nil {
+		t.Fatalf("products by category: %v", err)
+	}
+	if len(rows) == 0 {
+		t.Fatal("both shops price mixes, so the list cannot be empty")
+	}
+
+	// cheapest first, and every row names the shop selling it - a price with no seller attached is
+	// not actionable
+	if rows[0].Price.Int64 != 40_000 || rows[0].ShopName != "cheap" {
+		t.Fatalf("want the cheapest shop's row first, got %q at %d", rows[0].ShopName, rows[0].Price.Int64)
+	}
+	if rows[len(rows)-1].Price.Int64 != 90_000 {
+		t.Fatalf("want the dearest row last, got %d", rows[len(rows)-1].Price.Int64)
+	}
+	for _, row := range rows {
+		if row.Category != "mixes" {
+			t.Fatalf("a %q row leaked into the mixes list", row.Category)
+		}
+		if !row.Price.Valid {
+			t.Fatal("an unpriced product reached a customer-facing list")
+		}
+		if row.ShopName == "" {
+			t.Fatal("every row must name its shop")
+		}
+	}
+
+	// a category nobody prices comes back empty rather than erroring
+	none, err := q.ListProductsByCategory(ctx, db.ListProductsByCategoryParams{
+		Category: "tools",
+		Limit:    100,
+	})
+	if err != nil {
+		t.Fatalf("products by an unstocked category: %v", err)
+	}
+	if len(none) != 0 {
+		t.Fatalf("nobody priced a tool, want 0 products, got %d", len(none))
+	}
+}
+
+// a product the owner added themselves shows up in the category drill-down - "can I buy плитка
+// here" is answered just as truthfully by their own row - but never moves the basket index, which
+// has to stay a comparison of the same shared basket.
+//
+// since 000013 there is a second, sharper reason to hold this line. the index now requires every row
+// of the basket to be priced, so if the owner's own products were ever counted as part of it, a
+// single custom row left without a price would silently delete the shop's badge - and the owner
+// would have no way to connect the two.
+func TestCustomProductsAppearInACategoryButNotInTheIndex(t *testing.T) {
+	ctx, conn, q := beginTx(t)
+
+	shop := makeShopTx(t, ctx, conn, q, "custom", catalog.CategoryWallpaper, false)
+	priceProducts(t, ctx, conn, shop, catalog.WallpaperSize, 100_000)
+
+	before, err := q.ListShops(ctx)
+	if err != nil {
+		t.Fatalf("list shops: %v", err)
+	}
+	baseline := findShop(t, before, shop).BasketPrice
+
+	// now one very expensive product of the owner's own, in a category the template never touches
+	if _, err := q.CreateCustomProduct(ctx, db.CreateCustomProductParams{
+		ShopID:       shop,
+		Name:         "Перфоратор",
+		Price:        pgtype.Int8{Int64: 5_000_000, Valid: true},
+		Category:     "tools",
+		Unit:         "шт",
+		Availability: "in_stock",
+	}); err != nil {
+		t.Fatalf("create custom product: %v", err)
+	}
+
+	// and one the owner has not priced at all, which is the row that would knock the shop out of the
+	// index entirely if custom products counted toward the "every product priced" rule
+	if _, err := q.CreateCustomProduct(ctx, db.CreateCustomProductParams{
+		ShopID:       shop,
+		Name:         "Стремянка",
+		Category:     "tools",
+		Unit:         "шт",
+		Availability: "in_stock",
+	}); err != nil {
+		t.Fatalf("create unpriced custom product: %v", err)
+	}
+
+	after, err := q.ListShops(ctx)
+	if err != nil {
+		t.Fatalf("list shops after custom product: %v", err)
+	}
+	row := findShop(t, after, shop)
+	if !row.PriceIndex.Valid {
+		t.Fatal("an unpriced product of the owner's own has cost the shop its index - only template " +
+			"rows are the shared basket")
+	}
+	if row.BasketPrice.Int64 != baseline.Int64 {
+		t.Fatalf("a custom product moved the basket from %d to %d - the shared basket stopped being "+
+			"shared", baseline.Int64, row.BasketPrice.Int64)
+	}
+
+	// but it does show up under `tools`
+	tools, err := q.ListProductsByCategory(ctx, db.ListProductsByCategoryParams{
+		Category: "tools",
+		Limit:    100,
+	})
+	if err != nil {
+		t.Fatalf("products by tools: %v", err)
+	}
+	if len(tools) != 1 || tools[0].Name != "Перфоратор" {
+		t.Fatalf("the owner's own tool must appear under tools - got %d rows", len(tools))
+	}
+	if tools[0].ShopName != "custom" {
+		t.Fatalf("want the shop name on the row, got %q", tools[0].ShopName)
+	}
+}
+
+// -- small helpers -----------------------------------------------------------------------------
+
+func findShop(t *testing.T, shops []db.ListShopsRow, id int64) db.ListShopsRow {
+	t.Helper()
+	for _, s := range shops {
+		if s.ID == id {
+			return s
+		}
+	}
+	t.Fatalf("shop %d not in the list", id)
+	return db.ListShopsRow{}
+}
+
+func bestOffersIn(t *testing.T, ctx context.Context, q *db.Queries, category catalog.Category, limit int32) []db.ListBestOffersInCategoryRow {
+	t.Helper()
+	rows, err := q.ListBestOffersInCategory(ctx, db.ListBestOffersInCategoryParams{
+		Category: string(category),
+		Limit:    limit,
+	})
+	if err != nil {
+		t.Fatalf("best offers in %s: %v", category, err)
+	}
+	return rows
+}
+
+func vipIDs(shops []db.ListVipShopsRow) []int64 {
+	ids := make([]int64, 0, len(shops))
+	for _, s := range shops {
+		ids = append(ids, s.ID)
+	}
+	return ids
+}
+
+func offerIDs(shops []db.ListBestOffersInCategoryRow) []int64 {
+	ids := make([]int64, 0, len(shops))
+	for _, s := range shops {
+		ids = append(ids, s.ID)
+	}
+	return ids
+}
+
+func offerIndices(shops []db.ListBestOffersInCategoryRow) []int64 {
+	out := make([]int64, 0, len(shops))
+	for _, s := range shops {
+		out = append(out, s.PriceIndex)
+	}
+	return out
+}

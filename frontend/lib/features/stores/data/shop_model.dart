@@ -45,9 +45,13 @@ class Shop {
   /// server: they are guesses until there is real data, and a guess baked into a Flutter build
   /// takes an App Store release to change.
   ///
-  /// **Null when the shop has no index yet** - it has priced less than 30% of its catalogue, the
-  /// `shop_basket_index` floor. Null in exactly the same circumstances as [basketPrice], since the
-  /// two come from the same view row. The UI shows no badge.
+  /// **Null until the owner has priced every product in the shop's template.** One unpriced row is
+  /// enough (the `shop_basket_index` view, tightened in migration 000013), so expect this to be null
+  /// for most shops early on - the shop is still a pin on the map, it just publishes no comparison.
+  ///
+  /// Null in exactly the same circumstances as [basketPrice], since the two come from the same view
+  /// row and the view has no partial state. Code that branches on one having checked the other is
+  /// handling something the backend cannot send.
   final PriceTier? priceTier;
 
   /// The X in "X% cheaper than market" - unsigned, since [priceTier] carries the direction. Null
@@ -56,8 +60,7 @@ class Shop {
 
   /// What the shared basket costs here, in so'm - the index's own first step, before the division.
   ///
-  /// Null when the owner hasn't priced at least 30% of their catalogue (the `shop_basket_index`
-  /// view in migration 000008).
+  /// Null under the same condition as [priceTier]: every template product priced, or nothing.
   final int? basketPrice;
 
   /// Whether this shop currently holds a paid placement - the home screen's VIP carousel.
@@ -77,6 +80,23 @@ class Shop {
   // full, directly-loadable url for Image.network, built from the relative path above
   String? get imageFullUrl =>
       imageUrl == null ? null : '${ApiConfig.serverRoot}$imageUrl';
+
+  /// Whether this shop has a rating worth showing at all.
+  ///
+  /// **Today this is always false, and that is the point.** `shops.rating` is a stored column and
+  /// nothing writes to it - there is no reviews table yet - so every shop in the database reads
+  /// 0.0. Printed unconditionally that renders as `⭐ 0.0`, which a shop owner opening the app reads
+  /// as "customers rated us zero out of five" rather than as "nobody has rated us". Those are
+  /// opposite meanings and the second one is the true one.
+  ///
+  /// The alternative was to invent a number - default to 5.0, or hide the zero behind a `?? 4.5` -
+  /// which would put a rating this app cannot justify on every card. Showing nothing is the honest
+  /// version: absence of a star says "no reviews" without claiming anything.
+  ///
+  /// **When a reviews table lands, this getter is the only thing that changes.** Every screen that
+  /// draws a star already asks it, so ratings appear everywhere at once and cannot appear on one
+  /// screen and not another.
+  bool get hasRating => rating > 0;
 
   factory Shop.fromJson(Map<String, dynamic> json) {
     return Shop(

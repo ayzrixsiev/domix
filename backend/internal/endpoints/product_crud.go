@@ -22,8 +22,8 @@ import (
 //
 //	GET    /api/shops/{id}/products  - public, the catalogue grid on a shop's card
 //	POST   /api/shops/{id}/products  - owner adds one of their own products
-//	PUT    /api/products/{id}        - owner edits one product (price/stock always; the rest only
-//	                                   on their own products, never on a template row)
+//	PUT    /api/products/{id}        - owner edits one product (price/stock always; the name also on
+//	                                   a обои slot; everything only on their own products)
 //	DELETE /api/products/{id}        - owner removes one of their own products
 //
 // most rows in a shop are not created here at all: picking a category when the shop is created
@@ -78,6 +78,41 @@ type ProductResponse struct {
 	// true for a row seeded from the category template. the app uses it for the "ваш товар" badge
 	// and to keep template rows undeletable; the key itself stays server-side.
 	IsTemplate bool `json:"is_template"`
+
+	// whether the owner may write this product's name. two booleans rather than one, because the
+	// edit form asks two independent questions and a обои slot answers them differently: it *is* a
+	// template row (locked category and unit, no delete button) whose name is nonetheless the
+	// owner's to write - that is what a slot is. for every other row the two agree.
+	NameEditable bool `json:"name_editable"`
+
+	// root-relative, e.g. "/static/products/universal/001.jpg". null for a product with no photo,
+	// which the app draws as the placeholder banner it drew for every product before this existed.
+	ImageURL *string `json:"image_url"`
+}
+
+// where the api serves product photos. the database stores only the path inside the images folder
+// ("universal/001.jpg"), because the host differs between the ngrok tunnel, staging and production
+// and a stored absolute url would be wrong in two of the three. the app prepends the host.
+const productImageURLPrefix = "/static/products/"
+
+func productImageURL(path pgtype.Text) *string {
+	if !path.Valid || path.String == "" {
+		return nil
+	}
+	url := productImageURLPrefix + path.String
+	return &url
+}
+
+// the two flags above, derived from the one column that carries the fact. kept in a single function
+// so the three response sites and the Update branch can never disagree about what a slot is.
+//
+// an invalid pgtype.Text reads as the empty string, which IsOwnerNamedSlot answers false for - so a
+// product the owner added themselves comes out (false, true): not a template row, name is theirs.
+func templateFlags(key pgtype.Text) (isTemplate, nameEditable bool) {
+	if !key.Valid {
+		return false, true
+	}
+	return true, catalog.IsOwnerNamedSlot(key.String)
 }
 
 // the availability values the database CHECK constraint accepts (db/migrations/000004). the app
@@ -95,7 +130,7 @@ func (p *Products) RouteByShop(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		p.ListByShop(w, r)
 	case http.MethodPost:
-		auth.RequireAuth(p.JWTSecret, p.Create)(w, r)
+		auth.RequireAuth(p.JWTSecret, p.Queries, p.Create)(w, r)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
@@ -106,9 +141,9 @@ func (p *Products) RouteByShop(w http.ResponseWriter, r *http.Request) {
 func (p *Products) RouteByID(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPut:
-		auth.RequireAuth(p.JWTSecret, p.Update)(w, r)
+		auth.RequireAuth(p.JWTSecret, p.Queries, p.Update)(w, r)
 	case http.MethodDelete:
-		auth.RequireAuth(p.JWTSecret, p.Delete)(w, r)
+		auth.RequireAuth(p.JWTSecret, p.Queries, p.Delete)(w, r)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
@@ -136,6 +171,7 @@ func (p *Products) ListByShop(w http.ResponseWriter, r *http.Request) {
 
 	response := make([]ProductResponse, 0, len(products))
 	for _, product := range products {
+		isTemplate, nameEditable := templateFlags(product.TemplateKey)
 		response = append(response, ProductResponse{
 			ID:           product.ID,
 			ShopID:       product.ShopID,
@@ -144,7 +180,9 @@ func (p *Products) ListByShop(w http.ResponseWriter, r *http.Request) {
 			Unit:         product.Unit,
 			Price:        nullableInt64(product.Price),
 			Availability: product.Availability,
-			IsTemplate:   product.TemplateKey.Valid,
+			IsTemplate:   isTemplate,
+			NameEditable: nameEditable,
+			ImageURL:     productImageURL(product.ImagePath),
 		})
 	}
 
@@ -168,8 +206,7 @@ func (p *Products) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req productRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeAPIError(w, http.StatusBadRequest, "invalid_body", "invalid json body")
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -221,6 +258,8 @@ func (p *Products) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	isTemplate, nameEditable := templateFlags(product.TemplateKey)
+
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(ProductResponse{
 		ID:           product.ID,
@@ -230,7 +269,9 @@ func (p *Products) Create(w http.ResponseWriter, r *http.Request) {
 		Unit:         product.Unit,
 		Price:        nullableInt64(product.Price),
 		Availability: product.Availability,
-		IsTemplate:   product.TemplateKey.Valid,
+		IsTemplate:   isTemplate,
+		NameEditable: nameEditable,
+		ImageURL:     productImageURL(product.ImagePath),
 	})
 }
 
@@ -245,6 +286,10 @@ func (p *Products) Create(w http.ResponseWriter, r *http.Request) {
 //     arrives unpriced. its name, category and unit are what make it the *same* product as the one
 //     in the shop down the road - let one owner reword them and the shared basket the map's average
 //     check is computed over stops being shared.
+//   - a slot: name, price and availability. a обои slot names a *kind* of product ("премиальные
+//     российские обои") rather than a product, precisely because no two обои shops stock the same
+//     rolls - so writing in the collection the shop actually sells is the point of the row, not an
+//     attack on it. category and unit stay locked, which is what keeps the ten slots a basket.
 //   - the owner's own row: everything, since nothing outside this shop refers to it.
 func (p *Products) Update(w http.ResponseWriter, r *http.Request) {
 	existing, ok := p.authorizeProductAccess(w, r)
@@ -253,8 +298,7 @@ func (p *Products) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req productRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeAPIError(w, http.StatusBadRequest, "invalid_body", "invalid json body")
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -268,7 +312,28 @@ func (p *Products) Update(w http.ResponseWriter, r *http.Request) {
 		err     error
 	)
 
-	if existing.TemplateKey.Valid {
+	isTemplate, nameEditable := templateFlags(existing.TemplateKey)
+
+	switch {
+	case isTemplate && nameEditable:
+		// a slot. the name is validated the same way a custom product's is - the owner typed it, so
+		// it can be blank or over-long in exactly the same ways - while category and unit are left
+		// out of the statement entirely, same as the plain template path below.
+		fields, accessErr := req.validateSlot()
+		if accessErr != nil {
+			accessErr.write(w)
+			return
+		}
+		var slot db.UpdateProductSlotRow
+		slot, err = p.Queries.UpdateProductSlot(ctx, db.UpdateProductSlotParams{
+			ID:           existing.ID,
+			Name:         fields.name,
+			Price:        fields.price,
+			Availability: fields.availability,
+		})
+		product = db.UpdateProductRow(slot)
+
+	case isTemplate:
 		// the name/category/unit the app sent are ignored rather than rejected: the edit form shows
 		// them read-only and submits them back unchanged, so a 400 here would only punish an honest
 		// client for being consistent. UpdateProductPricing has no column for them at all, which is
@@ -287,7 +352,8 @@ func (p *Products) Update(w http.ResponseWriter, r *http.Request) {
 		// the two generated row types have identical fields but are distinct named types, so the
 		// conversion has to be written out; sqlc emits one struct per query by design
 		product = db.UpdateProductRow(priced)
-	} else {
+
+	default:
 		fields, accessErr := req.validate()
 		if accessErr != nil {
 			accessErr.write(w)
@@ -324,13 +390,19 @@ func (p *Products) Update(w http.ResponseWriter, r *http.Request) {
 		Unit:         product.Unit,
 		Price:        nullableInt64(product.Price),
 		Availability: product.Availability,
-		IsTemplate:   product.TemplateKey.Valid,
+		IsTemplate:   isTemplate,
+		NameEditable: nameEditable,
+		ImageURL:     productImageURL(product.ImagePath),
 	})
 }
 
 // authenticated: remove one of the owner's own products. template rows are refused - they are the
 // shared basket every shop of this category is measured on, and a shop that deleted half of them
 // would look cheap by simply not stocking the expensive items.
+//
+// slots are refused on the same rule and by the same line, which is why this branches on
+// TemplateKey rather than on templateFlags: an обои shop is ranked on ten slots, so deleting the
+// премиум ones would be the same trick with the same payoff.
 func (p *Products) Delete(w http.ResponseWriter, r *http.Request) {
 	existing, ok := p.authorizeProductAccess(w, r)
 	if !ok {
@@ -421,24 +493,25 @@ type productFields struct {
 	price                              pgtype.Int8
 }
 
-// the full check, for a product the owner owns outright.
+// the full check, for a product the owner owns outright. the three checks nest - pricing, then
+// pricing plus the name, then everything - so a field can never be validated one way on one path
+// and another way on the next.
 func (req productRequest) validate() (productFields, *accessError) {
-	f, accessErr := req.validatePricing()
+	f, accessErr := req.validateSlot()
 	if accessErr != nil {
 		return f, accessErr
 	}
 
-	f.name = strings.TrimSpace(req.Name)
 	f.category = strings.TrimSpace(req.Category)
 	f.unit = strings.TrimSpace(req.Unit)
 
-	if f.name == "" || f.category == "" || f.unit == "" {
+	if f.category == "" || f.unit == "" {
 		return f, &accessError{http.StatusBadRequest, "missing_fields", "name, category and unit are required"}
 	}
 
 	// rune count, not len(): these are cyrillic strings, where one character is two bytes, and
 	// postgres counts varchar limits in characters
-	if utf8.RuneCountInString(f.name) > maxNameLen || utf8.RuneCountInString(f.unit) > maxUnitLen {
+	if utf8.RuneCountInString(f.unit) > maxUnitLen {
 		return f, &accessError{http.StatusBadRequest, "field_too_long", "a field is longer than allowed"}
 	}
 
@@ -448,6 +521,30 @@ func (req productRequest) validate() (productFields, *accessError) {
 	// behind it (see IsValidProductCategory for why).
 	if !catalog.IsValidProductCategory(f.category) {
 		return f, &accessError{http.StatusBadRequest, "invalid_category", "unknown product category"}
+	}
+
+	return f, nil
+}
+
+// a slot: the two pricing fields plus the name the owner writes in, and nothing else.
+//
+// the name check is lifted out of validate() rather than repeated, so a name that would be refused
+// on a custom product is refused here too - the column it lands in is the same one, with the same
+// 150-character limit. what it deliberately does *not* do is validate category and unit: the app
+// draws those as locked text and submits them back unchanged, and UpdateProductSlot has no column
+// for either, so validating them would only turn a truthful client into a 400.
+func (req productRequest) validateSlot() (productFields, *accessError) {
+	f, accessErr := req.validatePricing()
+	if accessErr != nil {
+		return f, accessErr
+	}
+
+	f.name = strings.TrimSpace(req.Name)
+	if f.name == "" {
+		return f, &accessError{http.StatusBadRequest, "missing_fields", "name is required"}
+	}
+	if utf8.RuneCountInString(f.name) > maxNameLen {
+		return f, &accessError{http.StatusBadRequest, "field_too_long", "a field is longer than allowed"}
 	}
 
 	return f, nil

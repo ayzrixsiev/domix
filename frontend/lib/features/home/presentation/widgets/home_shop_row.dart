@@ -78,21 +78,26 @@ class HomeShopRow extends StatelessWidget {
                   const SizedBox(height: 3),
                   Row(
                     children: [
-                      const Icon(
-                        CupertinoIcons.star_fill,
-                        color: AppColors.starYellow,
-                        size: 11,
-                      ),
-                      const SizedBox(width: 3),
-                      Text(
-                        shop.rating.toStringAsFixed(1),
-                        style: const TextStyle(
-                          color: AppColors.textDark,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
+                      // the star block only exists when there is something to put in it. with no
+                      // reviews table every shop reads 0.0, and "⭐ 0.0" says the opposite of what
+                      // is true - see Shop.hasRating. the address slides left into the space.
+                      if (shop.hasRating) ...[
+                        const Icon(
+                          CupertinoIcons.star_fill,
+                          color: AppColors.starYellow,
+                          size: 11,
                         ),
-                      ),
-                      const SizedBox(width: 6),
+                        const SizedBox(width: 3),
+                        Text(
+                          shop.rating.toStringAsFixed(1),
+                          style: const TextStyle(
+                            color: AppColors.textDark,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
                       Expanded(
                         child: Text(
                           shop.address,

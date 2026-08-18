@@ -15,6 +15,8 @@ import 'package:frontend/features/home/data/home_showcase_content.dart';
 import 'package:frontend/features/home/presentation/controllers/home_controller.dart';
 import 'package:frontend/features/home/data/category_product.dart';
 import 'package:frontend/features/home/presentation/screens/category_products_screen.dart';
+import 'package:frontend/features/home/presentation/screens/product_search_screen.dart';
+import 'package:frontend/features/home/presentation/widgets/search_and_like_bar.dart';
 import 'package:frontend/features/products/data/product_model.dart';
 import 'package:frontend/features/home/presentation/screens/home_screen.dart';
 import 'package:frontend/features/location/presentation/controllers/city_controller.dart';
@@ -25,13 +27,20 @@ import 'package:frontend/features/stores/data/shop_category.dart';
 
 /// Stands in for the network. Returns whatever it is given, or throws if given an error.
 class _FakeHomeRepository implements HomeRepository {
-  _FakeHomeRepository({this.content, this.error, this.categoryProducts = const []});
+  _FakeHomeRepository({
+    this.content,
+    this.error,
+    this.categoryProducts = const [],
+    this.searchResults = const [],
+  });
 
   final HomeContent? content;
   final Object? error;
   final List<CategoryProduct> categoryProducts;
+  final List<CategoryProduct> searchResults;
 
   ProductCategory? requestedCategory;
+  String? requestedQuery;
 
   @override
   Future<HomeContent> fetchHomeContent() async {
@@ -43,6 +52,12 @@ class _FakeHomeRepository implements HomeRepository {
   Future<List<CategoryProduct>> fetchProductsByCategory(ProductCategory category) async {
     requestedCategory = category;
     return categoryProducts;
+  }
+
+  @override
+  Future<List<CategoryProduct>> searchProducts(String query) async {
+    requestedQuery = query;
+    return searchResults;
   }
 }
 
@@ -194,6 +209,7 @@ void main() {
             price: 88000,
             availability: ProductAvailability.inStock,
             isTemplate: true,
+            nameEditable: false,
           ),
         ),
       ],
@@ -210,6 +226,98 @@ void main() {
     expect(find.text('88 000 сум'), findsOneWidget);
     // the shop's name is on the tile - a price with no seller attached is not actionable
     expect(find.text('Смеси Оптом'), findsOneWidget);
+  });
+
+  // the home search bar spent three versions being a control that misbehaved - a styled `Text`, then
+  // a real TextField with an empty `onSubmitted`, then a real TextField whose keyboard could not be
+  // dismissed. these pin what it is now, because a regression in any of it is invisible: the bar
+  // still looks right, and a query that never leaves the screen looks exactly like a search that
+  // found nothing.
+  //
+  // **the home screen has no TextField at all any more**, which is the load-bearing half of the
+  // keyboard fix - the field lives one route up, on ProductSearchScreen, where back dismisses it.
+  testWidgets('the home search bar is a button, not a field', (tester) async {
+    await _pumpHome(tester, _FakeHomeRepository(content: _content()));
+
+    expect(find.byType(SearchAndLikeBar), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byType(ProductSearchScreen), findsNothing);
+
+    await tester.tap(find.byType(SearchAndLikeBar));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ProductSearchScreen), findsOneWidget);
+    // autofocused, so the keyboard is already up when the screen arrives - the user tapped a search
+    // bar to get here and should not have to tap a second one
+    expect(find.byType(TextField), findsOneWidget);
+  });
+
+  testWidgets('submitting the search field opens the results for what was typed', (tester) async {
+    final repo = _FakeHomeRepository(
+      content: _content(
+        offers: {
+          ShopCategory.universal: [
+            _shop(id: 2, name: 'Настоящий', priceTier: PriceTier.cheaper,
+                differencePercent: 12, basketPrice: 4400000),
+          ],
+        },
+      ),
+      searchResults: [
+        CategoryProduct(
+          shopName: 'Смеси Оптом',
+          product: const Product(
+            id: 3,
+            shopId: 9,
+            name: 'Цемент М400, 50 кг',
+            category: 'mixes',
+            unit: 'мешок',
+            price: 88000,
+            availability: ProductAvailability.inStock,
+            isTemplate: true,
+            nameEditable: false,
+          ),
+        ),
+      ],
+    );
+    await _pumpHome(tester, repo);
+
+    await tester.tap(find.byType(SearchAndLikeBar));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, '  цемент  ');
+    // testTextInput.receiveAction is how a widget test presses the keyboard's own search key -
+    // there is no key to tap, so tapping cannot exercise onSubmitted at all
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+
+    // trimmed before it goes anywhere: the backend counts characters to decide the query is long
+    // enough, and leading spaces would buy a search past that check with nothing in it
+    expect(repo.requestedQuery, 'цемент');
+    expect(find.text('Цемент М400, 50 кг'), findsOneWidget);
+    expect(find.text('Смеси Оптом'), findsOneWidget);
+    // the results replace the prompt on the same screen rather than pushing a second route - the
+    // field stays reachable, which is what as-you-type will need
+    expect(find.byType(ProductSearchScreen), findsOneWidget);
+  });
+
+  testWidgets('a one-letter search goes nowhere', (tester) async {
+    // one character matches a large share of the catalogue, so the backend answers 400. this is the
+    // app's half: the user is mid-word, and neither an error nor a screenful of noise is the right
+    // response to that.
+    final repo = _FakeHomeRepository(content: _content());
+    await _pumpHome(tester, repo);
+
+    await tester.tap(find.byType(SearchAndLikeBar));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, 'ц');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+
+    expect(repo.requestedQuery, isNull);
+    // and the screen says why, rather than swallowing the press. the prompt is still on screen with
+    // the "at least two characters" line under it.
+    expect(find.text('Введите минимум два символа.'), findsOneWidget);
   });
 
   testWidgets('the category tiles carry no shop counts', (tester) async {

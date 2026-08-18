@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"domix/backend/db"
 	"domix/backend/internal/auth"
 	"domix/backend/internal/endpoints"
+	"domix/backend/internal/ratelimit"
 	"domix/backend/internal/telegram"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -21,6 +23,10 @@ import (
 )
 
 func main() {
+
+
+	
+
 
 	// 1. loading env attributes
 	if err := godotenv.Load("../.env"); err != nil {
@@ -46,10 +52,12 @@ func main() {
 
 
 
+
 	// 2. postgresql connection pool (configured) set up and handed over to the Queries struct
 	dbPool := mustConnectDB(dbURL)
 	// and returned an address to it
 	queries := db.New(dbPool)
+
 
 
 
@@ -59,46 +67,72 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to the bot: %v", err)
 	}
-	bot.Debug = true
+	// off unless asked for. Debug logs every update the bot receives in full, which in production is
+	// a firehose containing users' phone numbers and names - the exact data that should not be
+	// sitting in a log aggregator.
+	bot.Debug = os.Getenv("TELEGRAM_DEBUG") == "true"
 	log.Printf("Authorized successfully on account: %s", bot.Self.UserName)
 
 
 
 
+	
 	// 4. initialize session manager
 	sessionMgr := auth.NewSessionManager()
 
-	
-
-
 	// 5. wire up http routes - this section's job is just plugging dependencies into each endpoint
 	// the actual handler logic lives in api/endpoints
-	authEndpoints := &endpoints.Auth{SessionMgr: sessionMgr, BotUsername: bot.Self.UserName}
-	http.HandleFunc("/api/auth/init", endpoints.WithCORS("POST", authEndpoints.Init))
-	http.HandleFunc("/api/auth/status", endpoints.WithCORS("GET", authEndpoints.Status))
+	//
+	// two rate limiters, because the two halves of the api are abused differently.
+	//
+	// `loginLimiter` guards the unauthenticated handshake. /api/auth/status is polled by the app
+	// every ~2s (0.5 req/s) for up to two minutes, so the sustained rate has to stay above that -
+	// but a caller trying to guess session ids wants thousands per second, and 1/s ends that. the
+	// burst of 30 covers an app that reconnects and catches up.
+	//
+	// `apiLimiter` is the general ceiling: generous enough that no honest screen ever meets it (the
+	// busiest, the home screen, makes one request), low enough to stop a loop hammering the database.
+	//
+	// idle callers are forgotten after 10 minutes so the limiter's own map cannot grow without bound.
+	loginLimiter := ratelimit.New(1, 30, 10*time.Minute)
+	apiLimiter := ratelimit.New(20, 60, 10*time.Minute)
+
+	authEndpoints := &endpoints.Auth{Queries: queries, SessionMgr: sessionMgr, BotUsername: bot.Self.UserName}
+	http.HandleFunc("/api/auth/init", endpoints.WithCORS("POST", loginLimiter.Wrap(authEndpoints.Init)))
+	http.HandleFunc("/api/auth/status", endpoints.WithCORS("GET", loginLimiter.Wrap(authEndpoints.Status)))
+	// the app's own account: GET is "is this session still real, and who am I now", checked on launch
+	// and on every return to the foreground; DELETE destroys it, which Google Play requires every app
+	// with accounts to offer from inside the app. both are the caller acting on their own row, so one
+	// RequireAuth covers the pair and RouteMe splits them by method.
+	//
+	// on the general limiter, not the login one: a signed-in app calls GET routinely, where the login
+	// endpoints are the ones a stranger hammers.
+	http.HandleFunc("/api/me", endpoints.WithCORS("GET, DELETE", apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, authEndpoints.RouteMe))))
 
 	shopsEndpoints := &endpoints.Shops{Pool: dbPool, Queries: queries, JWTSecret: jwtSecret}
-	http.HandleFunc("/api/shops", endpoints.WithCORS("GET, POST", shopsEndpoints.Route))
-	http.HandleFunc("/api/shops/mine", endpoints.WithCORS("GET", auth.RequireAuth(jwtSecret, shopsEndpoints.ListMine)))
-	// {id} is a go 1.22+ servemux wildcard, read back inside the handler with r.PathValue("id").
-	// it does not shadow /api/shops/mine above: when two patterns both match, the mux picks the more
-	// specific one, and a literal segment always beats a wildcard.
-	http.HandleFunc("/api/shops/{id}", endpoints.WithCORS("PUT, DELETE", shopsEndpoints.RouteByID))
+	http.HandleFunc("/api/shops", endpoints.WithCORS("GET, POST", apiLimiter.Wrap(shopsEndpoints.Route)))
+	http.HandleFunc("/api/shops/mine", endpoints.WithCORS("GET", apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, shopsEndpoints.ListMine))))
+	http.HandleFunc("/api/shops/{id}", endpoints.WithCORS("PUT, DELETE", apiLimiter.Wrap(shopsEndpoints.RouteByID)))
 
-	// no Pool here, unlike Shops above: seeding a catalogue is many statements that must land
-	// together, whereas every products endpoint is a single statement and has nothing to wrap in a
-	// transaction. the excel upload was the one that did, and it is gone.
 	productsEndpoints := &endpoints.Products{Queries: queries, JWTSecret: jwtSecret}
-	// a shop's catalogue: GET is public (a customer browsing the map has no account), POST adds one
-	// of the owner's own products. RouteByShop does that split itself, so no RequireAuth here.
-	http.HandleFunc("/api/shops/{id}/products", endpoints.WithCORS("GET, POST", productsEndpoints.RouteByShop))
-	// one product, by its own id
-	http.HandleFunc("/api/products/{id}", endpoints.WithCORS("PUT, DELETE", productsEndpoints.RouteByID))
+	http.HandleFunc("/api/shops/{id}/products", endpoints.WithCORS("GET, POST", apiLimiter.Wrap(productsEndpoints.RouteByShop)))
+	http.HandleFunc("/api/products/{id}", endpoints.WithCORS("PUT, DELETE", apiLimiter.Wrap(productsEndpoints.RouteByID)))
 
+	homeEndpoints := &endpoints.Home{Queries: queries}
+	http.HandleFunc("/api/home", endpoints.WithCORS("GET", apiLimiter.Wrap(homeEndpoints.Get)))
+	http.HandleFunc("/api/categories/{code}/products", endpoints.WithCORS("GET", apiLimiter.Wrap(homeEndpoints.ProductsByCategory)))
+	// the home screen's search field. public like the rest of Home, and on the same limiter - a
+	// leading-wildcard ILIKE is the most expensive read in the api, so the 20-per-minute bucket is
+	// doing real work here rather than being a formality.
+	http.HandleFunc("/api/products/search", endpoints.WithCORS("GET", apiLimiter.Wrap(homeEndpoints.SearchProducts)))
+
+	// there is deliberately no admin route here. granting a VIP placement is done with SQL against
+	// the database by whoever runs Domix - see §7 of CLAUDE.md for the statement. an admin *api*
+	// would need an admin role, and a role that can be requested over the network is a role somebody
+	// will eventually request; the founder is building a separate admin panel instead.
+
+	http.Handle("/static/products/", staticFiles("/static/products/", productImagesDir()))
 	http.HandleFunc("/health", healthCheck(dbPool))
-
-
-
 
 	// 6. webhook setup for telegram to talk
 	wh, err := tgbotapi.NewWebhook(webhookURL)
@@ -121,9 +155,6 @@ func main() {
 	// store here whatever we got from telegram webhook
 	updates := bot.ListenForWebhook("/webhook")
 
-
-
-
 	// 7. run the http server and the telegram update loop concurrently, each in its own
 	// goroutine, so main() itself is free to just wait for a shutdown signal (step 8)
 	srv := &http.Server{Addr: ":" + port}
@@ -137,15 +168,10 @@ func main() {
 	telegramHandler := &telegram.Handler{Bot: bot, SessionMgr: sessionMgr, Queries: queries, JWTSecret: jwtSecret}
 	go telegramHandler.ProcessUpdates(updates)
 
-
-
-
 	// 8. block here until the os asks us to stop (ctrl+c locally, or however this
 	// gets stopped in production), then shut down cleanly instead of being killed mid-request
 	waitForShutdown(srv, dbPool)
 }
-
-
 
 // connection pool configuration
 func mustConnectDB(dbURL string) *pgxpool.Pool {
@@ -158,7 +184,7 @@ func mustConnectDB(dbURL string) *pgxpool.Pool {
 	config.MinConns = envInt("DB_MIN_CONNS", 2)  // minimum ready to use connetion, avoid cold-start latency
 	config.MaxConnLifetime = time.Hour           // every connection that has been used longer than 1 hour should be cleaned
 	config.MaxConnIdleTime = 30 * time.Minute    // every connection that was not used at all gets cleaned
-	config.HealthCheckPeriod = time.Minute		 // every minute check on the connections and remove "bad" ones
+	config.HealthCheckPeriod = time.Minute       // every minute check on the connections and remove "bad" ones
 
 	// create an empty ctx - context.Background(), use it as parent for the WithTimeout function
 	// so the whole line means: "make a new context, based on the empty root context, that will automatically mark itself cancelled 5 seconds from now
@@ -191,6 +217,28 @@ func envInt(key string, def int32) int32 {
 		return def
 	}
 	return int32(n)
+}
+
+func productImagesDir() string {
+	if dir := os.Getenv("PRODUCT_IMAGES_DIR"); dir != "" {
+		return dir
+	}
+	return filepath.Join("..", "photos")
+}
+
+// check whether images folder available
+func staticFiles(prefix, dir string) http.Handler {
+	if _, err := os.Stat(dir); err != nil {
+		log.Printf("WARNING: product images directory %q is unreadable (%v) - photos will 404", dir, err)
+	} else {
+		log.Printf("Serving product images from %s at %s", dir, prefix)
+	}
+
+	files := http.StripPrefix(prefix, http.FileServer(http.Dir(dir)))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		files.ServeHTTP(w, r)
+	})
 }
 
 // load balaner will hit /health http enpoint to see whether this server's db connection is fine

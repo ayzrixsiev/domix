@@ -149,7 +149,11 @@ void main() {
     }
   });
 
-  testWidgets('a shop with no published index shows its price and no badge', (tester) async {
+  // a defensive case, not a reachable one: ListBestOffersInCategory inner-joins the index, and since
+  // migration 000013 a basket price and a tier are produced together or not at all. what this pins
+  // is that the row widget draws its two facts independently rather than assuming both - so a
+  // backend that grows a third state doesn't take the section down with it.
+  testWidgets('a row renders a price without a badge rather than breaking', (tester) async {
     await _pump(tester, [
       CategoryOffers(
         category: ShopCategory.wallpaper,

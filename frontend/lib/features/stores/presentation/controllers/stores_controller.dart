@@ -17,6 +17,13 @@ class StoresController extends ChangeNotifier {
   bool _isLoading = false;
   String? _loadError;
 
+  /// When [_stores] was last successfully fetched, or null if it never has been.
+  ///
+  /// **This list is a snapshot of somebody else's database and there is no push channel.** Shops
+  /// appear, move and disappear without the app being told, so the only honest question the map can
+  /// ask is "how old is what I am showing" - see [isStoresStale].
+  DateTime? _storesFetchedAt;
+
   // only the current owner's own shops, for the management list
   List<Shop> _myShops = [];
   bool _isLoadingMyShops = false;
@@ -38,6 +45,28 @@ class StoresController extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get loadError => _loadError;
 
+  /// How long a fetched shop list is trusted before the map re-fetches it on the next visit.
+  ///
+  /// Two minutes is short enough that a shop added or deleted while the app is open shows up
+  /// without a restart, and long enough that flicking between tabs does not put the map on the
+  /// network every time. It is not a correctness guarantee and cannot be - see [isStoresStale].
+  static const Duration storesFreshFor = Duration(minutes: 2);
+
+  /// Whether the map should re-fetch before drawing again.
+  ///
+  /// True when nothing has ever loaded, when the last attempt failed, or when the snapshot has aged
+  /// past [storesFreshFor]. The map calls [refreshStoresIfStale] each time its tab becomes visible,
+  /// which is what fixes both halves of the bug this was written for: a load that failed used to
+  /// leave a permanent «Не удалось загрузить магазины» that not even restarting the app cleared,
+  /// because [MapScreen.initState] runs once per app session and the IndexedStack keeps the State
+  /// alive across every tab switch.
+  bool get isStoresStale {
+    if (_loadError != null) return true;
+    final fetchedAt = _storesFetchedAt;
+    if (fetchedAt == null) return true;
+    return DateTime.now().difference(fetchedAt) > storesFreshFor;
+  }
+
   List<Shop> get myShops => _myShops;
   bool get isLoadingMyShops => _isLoadingMyShops;
   String? get myShopsError => _myShopsError;
@@ -50,17 +79,70 @@ class StoresController extends ChangeNotifier {
 
 
   Future<void> loadStores() async {
+    // a second call while one is already in flight is a no-op. without it, switching to the map tab
+    // while a ten-second timeout is still counting down would stack a second request behind the
+    // first - and with the backend down, one per tab switch.
+    if (_isLoading) return;
+
     _isLoading = true;
     notifyListeners();
 
     try {
       _stores = await _repo.fetchStores();
       _loadError = null;
+      _storesFetchedAt = DateTime.now();
     } catch (e) {
       _loadError = e.toString().replaceAll('Exception: ', '');
+      // printed as well as stored. the banner shows a fixed russian sentence, so without this the
+      // difference between "the tunnel moved" and "the server returned 500" is invisible from the
+      // console - and those need completely different fixes.
+      debugPrint('loadStores failed: $e');
     }
 
     _isLoading = false;
+    notifyListeners();
+  }
+
+  /// Re-fetches the map's shop list, but only if what we hold is no longer trustworthy.
+  ///
+  /// Called every time the map tab becomes visible. The cheap answer - "we already have a list,
+  /// don't ask again" - is what left deleted shops on the map and a dead error banner on screen;
+  /// the expensive one - fetch on every tab switch - puts a ten-second timeout in the way of a map
+  /// that was working a second ago. [isStoresStale] is where the line between them is drawn.
+  Future<void> refreshStoresIfStale() async {
+    if (!isStoresStale) return;
+    await loadStores();
+  }
+
+  /// The session ended: forget whatever belonged to it.
+  ///
+  /// **Two different facts, which is why this takes a flag rather than just clearing everything.**
+  ///
+  ///   * [_myShops] always goes. It is the management list, and there is nobody left to manage it.
+  ///   * [_stores] is the *public* map, and a logout changes nothing about it - those shops are
+  ///     still open, still on the map, still somebody's. Wiping it on logout would blank the map
+  ///     for a user who simply signed out.
+  ///
+  /// When the account was **deleted**, the second sentence stops being true: the schema cascades, so
+  /// the server destroyed that owner's shops and every product in them in the same statement. Those
+  /// pins are wrong from that moment, and the app knows exactly which ones they are - it is holding
+  /// the list. So they are dropped here, the same way [deleteShop] drops one, rather than waiting
+  /// for a re-fetch: the pin has to leave the map at the same moment the account does, and a round
+  /// trip cannot promise that.
+  ///
+  /// The snapshot is marked stale either way, so the next visit to the map re-syncs with the server
+  /// rather than trusting a list assembled by arithmetic.
+  void handleSessionEnded(bool accountDeleted) {
+    if (accountDeleted && _myShops.isNotEmpty) {
+      final deletedIds = {for (final shop in _myShops) shop.id};
+      _stores = [for (final s in _stores) if (!deletedIds.contains(s.id)) s];
+    }
+
+    _myShops = [];
+    _myShopsError = null;
+    _isLoadingMyShops = false;
+    _storesFetchedAt = null;
+
     notifyListeners();
   }
 

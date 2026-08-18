@@ -1,3 +1,5 @@
+import 'package:flutter/widgets.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 
 // the kind of shop, picked once on the "add store" form and never changed afterwards. it decides
@@ -8,8 +10,8 @@ import 'package:frontend/core/localization/app_localizations.dart';
 // [code] is what actually travels over the wire and sits in shops.category. the russian/uzbek names
 // live in AppLocalizations, so the display language never leaks into the database.
 enum ShopCategory {
-  universal('universal', 50),
-  plumbing('plumbing', 50),
+  universal('universal', 100),
+  plumbing('plumbing', 58),
   wood('wood', 10),
   wallpaper('wallpaper', 10);
 
@@ -61,5 +63,58 @@ enum ShopCategory {
         ShopCategory.plumbing => strings.shopCategoryPlumbingHint,
         ShopCategory.wood => strings.shopCategoryWoodHint,
         ShopCategory.wallpaper => strings.shopCategoryWallpaperHint,
+      };
+
+  /// What this kind of shop looks like on the map, inside its pin.
+  ///
+  /// Every pin used to be the same generic building, which meant the map answered "there is a shop
+  /// here" and nothing else - a customer hunting for обои had to open pins one at a time to find
+  /// out. The glyph turns forty identical markers into four readable groups.
+  ///
+  /// **Chosen as a set, not one at a time.** All four are ~20px of white stroke on an orange circle,
+  /// so what matters is that no two share a silhouette: a spanner, a tub on legs, a conifer and a
+  /// roller on a handle are told apart at a glance in a way that four abstract marks are not. Judge
+  /// a candidate by rendering it at 22px on the orange circle, never by its name - the pipeline for
+  /// that is in CLAUDE.md §8.
+  ///
+  /// **Three of the four are the founder's pick (2026-08-18), and each overrides an argument that
+  /// used to be recorded here.** The thread running through all three: name the *material* the shop
+  /// sells, not something adjacent to it.
+  /// - `wrench` for универсальный, replacing `hammer` (itself a replacement for `store`).
+  /// - `tree_pine` for древесные материалы, replacing `fence`. The objection on record was that a
+  ///   tree is a *landmark* on a map and OSM tiles are full of them - but this glyph is white
+  ///   inside an orange teardrop, which no map tile ever is, so that collision is weaker in place
+  ///   than it reads on paper. A conifer also says "wood" to someone who has never parsed a picket
+  ///   fence as boards.
+  /// - `paint_roller` for обои, replacing `scroll`. `scroll` was accurate about the *unit* обои are
+  ///   sold in (за рулон) and still had to be explained; a roller is what the trade's own signage
+  ///   uses.
+  ///
+  /// **Known cost, accepted:** all three now share a glyph with a [ProductCategory] tile on the
+  /// home screen - `wrench` with Инструменты, `tree_pine` with Пиломатериалы, `paint_roller` with
+  /// Краски. The two lists mean different things (a kind of *shop* against a kind of *product*) and
+  /// never appear on the same surface, so nothing is ambiguous in place. What it costs is that a
+  /// customer who learns the home grid first arrives at the map with those three glyphs already
+  /// meaning something narrower than the shop they mark.
+  ///
+  /// Earlier picks and why they failed, kept because the same traps come back:
+  /// - **`wallpaper` is a monitor.** Lucide draws it as a screen with a picture in it - the desktop-
+  ///   background sense of the word. `swatch_book` (a sample fan) was accurate and still too
+  ///   abstract to read at pin size.
+  /// - **`logs` is a log *file*** - three lines with bullets, the programmer's sense. There is no
+  ///   timber glyph in the family at all, which is what sent древесные материалы through `axe` and
+  ///   then `fence` before landing on a tree.
+  /// - **`droplets` is a weather forecast.** A tub says сантехника without being told, and `bath`
+  ///   is the one of the four that has never moved.
+  /// - **Not `hard_hat`** for универсальный - the Заявки tab in the bottom bar already wears that
+  ///   one, and the same glyph must not mean "workers" in the nav and "магазин" on the map.
+  ///
+  /// On the enum for the same reason [label] is: a fifth category becomes a compile error here
+  /// rather than a blank pin nobody notices until it is on the map.
+  IconData get icon => switch (this) {
+        ShopCategory.universal => LucideIcons.wrench,
+        ShopCategory.plumbing => LucideIcons.bath,
+        ShopCategory.wood => LucideIcons.tree_pine,
+        ShopCategory.wallpaper => LucideIcons.paint_roller,
       };
 }

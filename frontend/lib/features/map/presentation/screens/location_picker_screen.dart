@@ -1,12 +1,11 @@
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import '../../data/geocoding_service.dart';
+import '../widgets/domix_map.dart';
 import '../widgets/shop_marker.dart';
 
 // what the caller gets back once the user confirms a location
@@ -33,18 +32,20 @@ class LocationPickerScreen extends StatefulWidget {
   const LocationPickerScreen({super.key});
 
   // tashkent, since that's where domix currently operates - a sensible default center
-  static const _defaultCenter = LatLng(41.2995, 69.2401);
+  static const _defaultLatitude = 41.2995;
+  static const _defaultLongitude = 69.2401;
 
   @override
   State<LocationPickerScreen> createState() => _LocationPickerScreenState();
 }
 
 class _LocationPickerScreenState extends State<LocationPickerScreen> {
-  final _mapController = MapController();
+  DomixMapController? _map;
   final _geocodingService = GeocodingService();
   final _searchController = TextEditingController();
 
-  LatLng _currentCenter = LocationPickerScreen._defaultCenter;
+  double _centerLatitude = LocationPickerScreen._defaultLatitude;
+  double _centerLongitude = LocationPickerScreen._defaultLongitude;
   String? _resolvedAddress;
   String? _resolvedCity;
   bool _isResolvingAddress = false;
@@ -76,8 +77,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
     _debounce = Timer(const Duration(milliseconds: 700), () async {
       final result = await _geocodingService.reverseGeocodeDetailed(
-        _currentCenter.latitude,
-        _currentCenter.longitude,
+        _centerLatitude,
+        _centerLongitude,
         languageCode: languageCode,
       );
       if (!mounted) return;
@@ -104,10 +105,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   }
 
   void _selectSearchResult(GeocodeResult result) {
-    final target = LatLng(result.latitude, result.longitude);
-    _mapController.move(target, 16);
+    _map?.flyTo(result.latitude, result.longitude, zoom: 16);
     setState(() {
-      _currentCenter = target;
+      _centerLatitude = result.latitude;
+      _centerLongitude = result.longitude;
       _searchResults = [];
       _searchController.text = result.displayName;
     });
@@ -117,10 +118,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   void _confirm() {
     Navigator.of(context).pop(
       LocationPickResult(
-        latitude: _currentCenter.latitude,
-        longitude: _currentCenter.longitude,
+        latitude: _centerLatitude,
+        longitude: _centerLongitude,
         address: _resolvedAddress ??
-            '${_currentCenter.latitude.toStringAsFixed(5)}, ${_currentCenter.longitude.toStringAsFixed(5)}',
+            '${_centerLatitude.toStringAsFixed(5)}, ${_centerLongitude.toStringAsFixed(5)}',
         city: _resolvedCity,
       ),
     );
@@ -133,32 +134,20 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: _currentCenter,
-              initialZoom: 15,
-              // matches map_screen.dart: north stays up. this screen's pin is a fixed overlay rather
-              // than a map marker so it wouldn't tilt, but a picker that can end up facing an
-              // arbitrary direction is disorienting, and two maps behaving differently is worse.
-              interactionOptions: InteractionOptions(
-                flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                cursorKeyboardRotationOptions: CursorKeyboardRotationOptions.disabled(),
-              ),
-              onPositionChanged: (camera, hasGesture) {
-                _currentCenter = camera.center;
-                if (hasGesture) _resolveAddressForCurrentCenter();
-              },
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'uz.domix.app',
-              ),
-              const SimpleAttributionWidget(
-                source: Text('OpenStreetMap contributors'),
-              ),
-            ],
+          DomixMap(
+            initialLatitude: LocationPickerScreen._defaultLatitude,
+            initialLongitude: LocationPickerScreen._defaultLongitude,
+            initialZoom: 15,
+            onControllerReady: (controller) => _map = controller,
+            // fires only once the camera has come to rest, which is what the old `hasGesture` check
+            // was standing in for. DomixMap does the filtering, so this no longer has to distinguish
+            // a user drag from a programmatic move - both should re-resolve the address, and the
+            // 700ms debounce below still absorbs a burst.
+            onCenterChanged: (latitude, longitude) {
+              _centerLatitude = latitude;
+              _centerLongitude = longitude;
+              _resolveAddressForCurrentCenter();
+            },
           ),
 
           // the pin stays fixed at the exact screen center; the map moves underneath it instead of

@@ -22,6 +22,13 @@ import '../widgets/product_category_field.dart';
 // stops being shared the moment one owner can rename an item or move it to another category. the
 // backend enforces that (UpdateProductPricing has no column for the rest); this screen simply
 // doesn't offer the controls.
+//
+// обои are the exception, and the reason there are two flags on Product rather than one. an обои
+// template row is a *slot* - it names a class of wallpaper and a country, not a product, because no
+// two обои shops stock the same rolls. so its name is a text field the owner fills in while its
+// category and unit stay locked and it still cannot be deleted. read [Product.nameEditable] for the
+// name field and [Product.isTemplate] for everything else; conflating them is what would put the
+// name back under lock.
 class ProductEditScreen extends StatefulWidget {
   const ProductEditScreen({
     super.key,
@@ -109,12 +116,13 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   Future<void> _save() async {
     final existing = widget.product;
     final isTemplate = existing?.isTemplate ?? false;
+    final nameEditable = existing?.nameEditable ?? true;
 
-    // a template row's name, category and unit are read straight off the product rather than out of
-    // form controls, because on that path there are no form controls - they are rendered as locked
-    // text. the backend ignores whatever arrives in those three fields for a template row anyway,
-    // so this is about sending something truthful, not about being trusted.
-    final name = isTemplate ? existing!.name : _nameController.text.trim();
+    // whatever is rendered as locked text is read straight off the product rather than out of a
+    // form control, because on that path there is no form control. the backend ignores these fields
+    // for a template row anyway, so this is about sending something truthful, not about being
+    // trusted - and the two conditions differ for an обои slot, where the name *is* a control.
+    final name = nameEditable ? _nameController.text.trim() : existing!.name;
     final categoryCode = isTemplate ? existing!.category : (_pickedCategory?.code ?? '');
     final unit = isTemplate ? existing!.unit : _unitController.text.trim();
 
@@ -151,6 +159,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
           price: price,
           availability: _availability,
           isTemplate: false,
+          nameEditable: true,
         ),
       );
     } else {
@@ -219,6 +228,10 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     final isBusy = controller.isSaving;
     final product = widget.product;
     final isTemplate = product?.isTemplate ?? false;
+    final nameEditable = product?.nameEditable ?? true;
+    // a template row whose name the owner writes - the обои case, and the only combination where
+    // the two flags disagree
+    final isSlot = isTemplate && nameEditable;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -248,13 +261,16 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
             // three of the inputs on this screen are text; read last, it explains a layout the
             // owner has already decided is broken
             if (isTemplate) ...[
-              _HintCard(message: strings.templateProductHint),
+              // a slot's rule is a different rule, so it gets a different sentence. telling an обои
+              // owner "название изменить нельзя" over a name field they can type in is worse than
+              // saying nothing.
+              _HintCard(message: isSlot ? strings.slotProductHint : strings.templateProductHint),
               const SizedBox(height: 20),
             ],
 
             StoreFormLabel(strings.productNameLabel),
             const SizedBox(height: 8),
-            if (isTemplate)
+            if (!nameEditable)
               ProductLockedField(
                 value: product!.name,
                 icon: CupertinoIcons.cube_box,
@@ -263,7 +279,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
             else
               StoreFormTextField(
                 controller: _nameController,
-                hint: strings.productNameLabel,
+                // on a slot the seeded name is the instruction ("Обои премиум (Россия)"), so the
+                // hint says what to type instead of repeating the label
+                hint: isSlot ? strings.slotProductNameHint : strings.productNameLabel,
                 errorText: _nameError,
                 icon: CupertinoIcons.cube_box,
                 // guarded: without the check this would rebuild the whole screen on every keystroke

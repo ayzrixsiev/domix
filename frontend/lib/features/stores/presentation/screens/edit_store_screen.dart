@@ -5,6 +5,7 @@ import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
+import 'package:frontend/core/widgets/destructive_confirm_dialog.dart';
 import 'package:frontend/features/map/presentation/screens/location_picker_screen.dart';
 import 'package:frontend/features/products/presentation/controllers/products_controller.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
@@ -120,11 +121,16 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
 
   Future<void> _confirmDelete() async {
     final strings = _strings;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => _DeleteConfirmDialog(shop: widget.shop, strings: strings),
+    // names the shop and counts what disappears with it. a bare "are you sure?" gives the owner
+    // nothing to check their intent against, which is precisely when people confirm the wrong thing.
+    final confirmed = await DestructiveConfirmDialog.show(
+      context,
+      title: strings.deleteStoreConfirmTitle,
+      body: strings.deleteStoreConfirmBody(widget.shop.name, widget.shop.productCount),
+      confirmLabel: strings.deleteStoreConfirmAction,
+      cancelLabel: strings.cancelButton,
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
 
     final controller = context.read<StoresController>();
     final productsController = context.read<ProductsController>();
@@ -295,123 +301,6 @@ class _DangerZone extends StatelessWidget {
           onTap: onDelete,
         ),
       ],
-    );
-  }
-}
-
-// names the shop and counts what disappears with it. a bare "are you sure?" gives the owner nothing
-// to check their intent against, which is precisely when people confirm the wrong thing.
-class _DeleteConfirmDialog extends StatelessWidget {
-  const _DeleteConfirmDialog({required this.shop, required this.strings});
-
-  final Shop shop;
-  final AppLocalizations strings;
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.white,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 32),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(22, 24, 22, 18),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              alignment: Alignment.center,
-              decoration: const BoxDecoration(color: AppColors.dangerSoft, shape: BoxShape.circle),
-              child: const Icon(CupertinoIcons.trash_fill, color: AppColors.danger, size: 22),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              strings.deleteStoreConfirmTitle,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.textDark,
-                fontSize: 17,
-                height: 1.3,
-                letterSpacing: -0.2,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 9),
-            Text(
-              strings.deleteStoreConfirmBody(shop.name, shop.productCount),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.textGrey,
-                fontSize: 13.5,
-                height: 1.45,
-                fontWeight: FontWeight.w400,
-              ),
-            ),
-            const SizedBox(height: 22),
-            // cancel first and visually heavier than confirm: the safe choice should be the one the
-            // thumb lands on and the one the eye reads as the default
-            Row(
-              children: [
-                Expanded(
-                  child: _DialogButton(
-                    label: strings.cancelButton,
-                    background: AppColors.surfaceMuted,
-                    foreground: AppColors.textDark,
-                    onTap: () => Navigator.of(context).pop(false),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _DialogButton(
-                    label: strings.deleteStoreConfirmAction,
-                    background: AppColors.danger,
-                    foreground: Colors.white,
-                    onTap: () => Navigator.of(context).pop(true),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DialogButton extends StatelessWidget {
-  const _DialogButton({
-    required this.label,
-    required this.background,
-    required this.foreground,
-    required this.onTap,
-  });
-
-  final String label;
-  final Color background;
-  final Color foreground;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: background,
-      borderRadius: BorderRadius.circular(AppRadius.sm),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        onTap: onTap,
-        child: SizedBox(
-          height: 48,
-          child: Center(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: foreground, fontSize: 14.5, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

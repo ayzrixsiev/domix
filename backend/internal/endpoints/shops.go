@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -24,33 +25,17 @@ type Shops struct {
 	JWTSecret string
 }
 
-// one universal return type for all handlers here, two reasons why sqlc generated structs are not suitable here
-// 1. for different function: ListShops and ListShopsByOwnerRow have almost identical struct, except second func has additonal row
-// 2. those sqlc structs have internal pgtype.Numeric, pgtype.Text types, we do not want to send them to flutter like this
-type ShopResponse struct {
-	ID           	int64  	`json:"id"`
-	Name         	string 	`json:"name"`
-	ContactPhone 	string 	`json:"contact_phone"`
-	ImageURL     	string 	`json:"image_url,omitempty"`
-	Address      	string 	`json:"address"`
-	Category 	 	string 	`json:"category"`
-	Rating          float64 `json:"rating"`
-	AveragePaycheck int64   `json:"average_paycheck"`
-	Latitude        float64 `json:"latitude"`
-	Longitude       float64 `json:"longitude"`
-	ProductCount 	int64 	`json:"product_count,omitempty"`
-}
+// the ShopResponse DTO and the mappers that build it from each sqlc row type live in shop_dto.go -
+// there are seven of those row types now, and the mapping was the longest thing in this file.
 
-// every shop endpoint will carry erros, we format them cleanly here
+// every shop endpoint will carry erros, we format them cleanly here.
+//
+// an alias for writeAPIError (authz.go) rather than a second implementation: the two had drifted to
+// the same three lines, and two spellings of "how this api reports an error" is how a shop endpoint
+// ends up with a response shape the product endpoints don't use.
 func writeShopError(w http.ResponseWriter, status int, code, message string) {
-	// send a status code like: 404
-	w.WriteHeader(status)
-	// write a JSON message to the flutter, the code: 404 and human readable message: not found, flutter outputs error based on the code
-	json.NewEncoder(w).Encode(map[string]string{"error": message, "code": code})
+	writeAPIError(w, status, code, message)
 }
-
-
-
 
 // dispatches /api/shops by method, since GET and POST share the same url but need very different handling
 // (list is public, create requires a logged-in shop owner)
@@ -60,29 +45,23 @@ func (s *Shops) Route(w http.ResponseWriter, r *http.Request) {
 		s.List(w, r)
 	case http.MethodPost:
 		// only shop owners with a valid credentials may create a shop; RequireAuth checks the jwt before we touch the db
-		auth.RequireAuth(s.JWTSecret, s.Create)(w, r)
+		auth.RequireAuth(s.JWTSecret, s.Queries, s.Create)(w, r)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed) // error 405
 	}
 }
 
-
-
-
 // dispatches /api/shops/{id} by method both methods here mutate one specific existing shop, so both need the authorization
 func (s *Shops) RouteByID(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPut:
-		auth.RequireAuth(s.JWTSecret, s.Update)(w, r)
+		auth.RequireAuth(s.JWTSecret, s.Queries, s.Update)(w, r)
 	case http.MethodDelete:
-		auth.RequireAuth(s.JWTSecret, s.Delete)(w, r)
+		auth.RequireAuth(s.JWTSecret, s.Queries, s.Delete)(w, r)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
-
-
-
 
 // the shared gate in front of Update and Delete: pull {id} out of the path, then ask
 // authorizeShopAccess (authz.go) whether this caller may modify that shop.
@@ -119,26 +98,16 @@ func (s *Shops) List(w http.ResponseWriter, r *http.Request) {
 	shops, err := s.Queries.ListShops(ctx)
 	if err != nil {
 		log.Printf("CRITICAL: failed to list shops: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "failed to load shops"})
+		writeShopError(w, http.StatusInternalServerError, "server_error", "failed to load shops")
 		return
 	}
 
+	// make(..., 0, len) and not `var response []ShopResponse`: a nil slice encodes as `null`, not
+	// `[]`, and the app's `jsonDecode(...) as List` would throw on it. the difference only shows up
+	// when there are no shops at all, which is exactly the state a fresh install is in.
 	response := make([]ShopResponse, 0, len(shops))
 	for _, shop := range shops {
-		ratingF8, _ := shop.Rating.Float64Value()
-		response = append(response, ShopResponse{
-			ID:              shop.ID,
-			Name:            shop.Name,
-			ContactPhone:    shop.ContactPhone,
-			ImageURL:        shop.ImageUrl.String,
-			Address:         shop.Address,
-			Category:        shop.Category,
-			Rating:          ratingF8.Float64,
-			AveragePaycheck: int64(shop.AveragePaycheck),
-			Latitude:        shop.Latitude,
-			Longitude:       shop.Longitude,
-		})
+		response = append(response, shopFromList(shop))
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -153,8 +122,7 @@ func (s *Shops) List(w http.ResponseWriter, r *http.Request) {
 func (s *Shops) ListMine(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.UserIDFromContext(r.Context())
 	if !ok {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+		writeShopError(w, http.StatusUnauthorized, "unauthorized", "unauthorized")
 		return
 	}
 
@@ -164,27 +132,13 @@ func (s *Shops) ListMine(w http.ResponseWriter, r *http.Request) {
 	shops, err := s.Queries.ListShopsByOwner(ctx, userID)
 	if err != nil {
 		log.Printf("CRITICAL: failed to list shops for owner %d: %v", userID, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "failed to load shops"})
+		writeShopError(w, http.StatusInternalServerError, "server_error", "failed to load shops")
 		return
 	}
 
 	response := make([]ShopResponse, 0, len(shops))
 	for _, shop := range shops {
-		ratingF8, _ := shop.Rating.Float64Value()
-		response = append(response, ShopResponse{
-			ID:              shop.ID,
-			Name:            shop.Name,
-			ContactPhone:    shop.ContactPhone,
-			ImageURL:        shop.ImageUrl.String,
-			Address:         shop.Address,
-			Category:        shop.Category,
-			Rating:          ratingF8.Float64,
-			AveragePaycheck: int64(shop.AveragePaycheck),
-			Latitude:        shop.Latitude,
-			Longitude:       shop.Longitude,
-			ProductCount:    shop.ProductCount,
-		})
+		response = append(response, shopFromOwned(shop))
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -196,8 +150,7 @@ func (s *Shops) ListMine(w http.ResponseWriter, r *http.Request) {
 func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.UserIDFromContext(r.Context())
 	if !ok {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+		writeShopError(w, http.StatusUnauthorized, "unauthorized", "unauthorized")
 		return
 	}
 
@@ -212,13 +165,11 @@ func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 	role, err := s.Queries.GetUserRole(ctx, userID)
 	if err != nil {
 		log.Printf("CRITICAL: failed to look up role for user %d: %v", userID, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "failed to verify permissions"})
+		writeShopError(w, http.StatusInternalServerError, "server_error", "failed to verify permissions")
 		return
 	}
 	if role != "shop_owner" && role != "admin" {
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(map[string]string{"error": "only shop owners can create a shop"})
+		writeShopError(w, http.StatusForbidden, "forbidden_role", "only shop owners can create a shop")
 		return
 	}
 
@@ -230,9 +181,7 @@ func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 		Latitude     float64 `json:"latitude"`
 		Longitude    float64 `json:"longitude"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "invalid json body"})
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -242,8 +191,15 @@ func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 	category := strings.TrimSpace(req.Category)
 
 	if name == "" || contactPhone == "" || address == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "name, contact_phone and address are required"})
+		writeShopError(w, http.StatusBadRequest, "missing_fields", "name, contact_phone and address are required")
+		return
+	}
+
+	// mirrors the varchar widths in db/migrations/000001 and 000003. postgres rejects an over-long
+	// value too, but as a constraint violation the handler can only report as a 500 - the owner
+	// would see "не удалось" with no hint that the name is simply too long.
+	if accessErr := validateShopFieldLengths(name, contactPhone, address); accessErr != nil {
+		accessErr.write(w)
 		return
 	}
 
@@ -253,6 +209,11 @@ func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 	// that template in.
 	if !catalog.IsValidCategory(category) {
 		writeShopError(w, http.StatusBadRequest, "invalid_category", "unknown shop category")
+		return
+	}
+
+	if accessErr := validateCoordinates(req.Latitude, req.Longitude); accessErr != nil {
+		accessErr.write(w)
 		return
 	}
 
@@ -284,25 +245,28 @@ func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log.Printf("CRITICAL: failed to create shop for user %d: %v", userID, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "failed to create shop"})
+		writeShopError(w, http.StatusInternalServerError, "server_error", "failed to create shop")
 		return
 	}
 
-	// a plain loop of single-row inserts rather than one bulk COPY: it is at most 50 statements,
-	// runs once in a shop's lifetime, and reuses the query sqlc already generated. worth revisiting
-	// only if templates ever grow into the thousands.
+	// a plain loop of single-row inserts rather than one bulk COPY: it is at most 99 statements (the
+	// универсальный template), runs once in a shop's lifetime, and reuses the query sqlc already
+	// generated. worth revisiting only if templates ever grow into the thousands.
 	template := catalog.Template(category)
 	for _, item := range template {
+		imagePath := item.ImagePath(catalog.Category(category))
 		if err := qtx.SeedTemplateProduct(ctx, db.SeedTemplateProductParams{
-			ShopID:      shop.ID,
-			Name:        item.Name,
+			ShopID: shop.ID,
+			Name:   item.Name,
 			// ProductCategory is a named string type, so the conversion is explicit. it is typed in
 			// the template list precisely so a typo there fails to compile instead of quietly
 			// filing a product under a category the app has no label for.
 			Category:    string(item.Category),
 			Unit:        item.Unit,
 			TemplateKey: pgtype.Text{String: item.Key, Valid: true},
+			// null rather than "" for a template with no photo set, so the column means the same
+			// thing as products.price does: absent, not empty
+			ImagePath: pgtype.Text{String: imagePath, Valid: imagePath != ""},
 		}); err != nil {
 			log.Printf("CRITICAL: failed to seed template product %q into shop %d: %v", item.Key, shop.ID, err)
 			writeShopError(w, http.StatusInternalServerError, "server_error", "failed to create shop")
@@ -318,23 +282,11 @@ func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Shop %d created for user %d (category %s, %d template products)", shop.ID, userID, category, len(template))
 
-	ratingF8, _ := shop.Rating.Float64Value()
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(ShopResponse{
-		ID:              shop.ID,
-		Name:            shop.Name,
-		ContactPhone:    shop.ContactPhone,
-		ImageURL:        shop.ImageUrl.String,
-		Address:         shop.Address,
-		Category:        shop.Category,
-		Rating:          ratingF8.Float64,
-		AveragePaycheck: int64(shop.AveragePaycheck),
-		Latitude:        shop.Latitude,
-		Longitude:       shop.Longitude,
-		// the app appends this shop straight into its in-memory list instead of re-fetching, so
-		// without this the brand-new shop would show "нет товаров" despite having just been seeded
-		ProductCount: int64(len(template)),
-	})
+	// the template size is passed in because the app appends this shop straight into its in-memory
+	// list instead of re-fetching - without it the brand-new shop would show "нет товаров" despite
+	// having just been seeded with fifty
+	json.NewEncoder(w).Encode(shopFromCreate(shop, int64(len(template))))
 }
 
 // PUT /api/shops/{id} - the "edit shop" form. the form always submits all four editable fields, so
@@ -353,8 +305,7 @@ func (s *Shops) Update(w http.ResponseWriter, r *http.Request) {
 		Latitude     float64 `json:"latitude"`
 		Longitude    float64 `json:"longitude"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeShopError(w, http.StatusBadRequest, "invalid_body", "invalid json body")
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -364,6 +315,19 @@ func (s *Shops) Update(w http.ResponseWriter, r *http.Request) {
 
 	if name == "" || contactPhone == "" || address == "" {
 		writeShopError(w, http.StatusBadRequest, "missing_fields", "name, contact_phone and address are required")
+		return
+	}
+
+	if accessErr := validateShopFieldLengths(name, contactPhone, address); accessErr != nil {
+		accessErr.write(w)
+		return
+	}
+
+	// the same check Create does. it matters more here, if anything: the edit form is where an owner
+	// drags the map pin, and a location that failed to resolve would silently move the shop to
+	// (0, 0) - off the map, with the row still reporting success.
+	if accessErr := validateCoordinates(req.Latitude, req.Longitude); accessErr != nil {
+		accessErr.write(w)
 		return
 	}
 
@@ -393,20 +357,32 @@ func (s *Shops) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ratingF8, _ := shop.Rating.Float64Value()
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(ShopResponse{
-		ID:              shop.ID,
-		Name:            shop.Name,
-		ContactPhone:    shop.ContactPhone,
-		ImageURL:        shop.ImageUrl.String,
-		Address:         shop.Address,
-		Category:        shop.Category,
-		Rating:          ratingF8.Float64,
-		AveragePaycheck: int64(shop.AveragePaycheck),
-		Latitude:        shop.Latitude,
-		Longitude:       shop.Longitude,
-	})
+	json.NewEncoder(w).Encode(shopFromUpdate(shop))
+}
+
+// the varchar widths from db/migrations/000001 (name) and 000003 (contact_phone). address is TEXT
+// and so has no database limit at all, which is its own problem - an unbounded column is a place to
+// store a megabyte - so it gets an application limit instead, generous enough for any real address
+// a geocoder would return.
+//
+// rune counts, not len(): these are cyrillic strings where one character is two bytes, and postgres
+// counts varchar limits in characters. this mirrors the same check product_crud.go does on a
+// product's name and unit.
+func validateShopFieldLengths(name, contactPhone, address string) *accessError {
+	const (
+		maxShopNameLen  = 150
+		maxShopPhoneLen = 50
+		maxAddressLen   = 500
+	)
+
+	if utf8.RuneCountInString(name) > maxShopNameLen ||
+		utf8.RuneCountInString(contactPhone) > maxShopPhoneLen ||
+		utf8.RuneCountInString(address) > maxAddressLen {
+		return &accessError{http.StatusBadRequest, "field_too_long", "a field is longer than allowed"}
+	}
+
+	return nil
 }
 
 // DELETE /api/shops/{id}. the shop's products go with it through products.shop_id ON DELETE CASCADE,

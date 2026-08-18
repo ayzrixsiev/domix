@@ -2,8 +2,10 @@
     <!-- unlike the debug/profile manifests, this one is used for release builds too - without this,
          every network call (auth, map tiles, geocoding) would silently fail once shipped -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- the name under the launcher icon. it was "frontend" - the flutter project's folder name -
+         which is what every user would have seen on their home screen. -->
     <application
-        android:label="frontend"
+        android:label="Domix"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -34,12 +36,33 @@
             android:name="flutterEmbedding"
             android:value="2" />
     </application>
-    <!-- Required to query activities that can process text, see:
-         https://developer.android.com/training/package-visibility and
-         https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
-
-         In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
+        <!-- **Android 11 made other apps invisible by default, and url_launcher depends on seeing
+             them.** From API 30 an app cannot enumerate or resolve intents against packages it has
+             not declared an interest in here. `canLaunchUrl` works by resolving the intent, so
+             without this block it returns **false for every https URL** - even with Telegram
+             installed and a browser on the phone - and the login flow reports "Telegram is not
+             installed" while Telegram sits on the home screen.
+
+             It fails on a real phone and nowhere else, and it fails *silently* in the sense that
+             nothing in logcat names package visibility. The evidence was on the server: the app
+             sent POST /api/auth/init and then never once polled /api/auth/status, because the throw
+             happened between the two. targetSdk is 36, so this applies to every build we ship. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
+        <!-- the shop sheet's call button (`tel:` in map_screen.dart) is the same trap one screen
+             over - it would resolve to nothing on the same phones. -->
+        <intent>
+            <action android:name="android.intent.action.DIAL"/>
+            <data android:scheme="tel"/>
+        </intent>
+        <!-- Required to query activities that can process text, see:
+             https://developer.android.com/training/package-visibility and
+             https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
+
+             In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>

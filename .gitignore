@@ -4,3 +4,5 @@ build/
 __pycache__/
 *.pyc
 backend/uploads/
+universal/
+plumbing/

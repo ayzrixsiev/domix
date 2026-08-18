@@ -50,6 +50,13 @@ class HomeShopPreview {
   final int? basketPrice;
 
   final bool isVip;
+
+  /// Whether there is a rating worth drawing. Mirrors [Shop.hasRating] deliberately: the home feed
+  /// carries its own lighter model, and a star that appears on the map but not on the home screen
+  /// would look like one of the two was broken. Both are false today - nothing writes
+  /// `shops.rating`, so every shop reads 0.0, and `⭐ 0.0` claims a bad rating where the truth is
+  /// no rating. When a reviews table exists, these two getters flip together.
+  bool get hasRating => rating > 0;
 }
 
 /// One tab of "Лучшие предложения": a shop category and its cheapest shops.

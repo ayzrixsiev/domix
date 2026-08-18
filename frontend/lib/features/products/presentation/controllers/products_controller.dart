@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../data/product_model.dart';
 import '../../data/products_repository.dart';
@@ -41,10 +43,25 @@ class ProductsController extends ChangeNotifier {
   int customCountFor(int shopId) =>
       productsFor(shopId).where((p) => !p.isTemplate).length;
 
-  /// how many have a price set - the number an owner is actually working through after creating a
-  /// shop, since every template product arrives without one
-  int pricedCountFor(int shopId) =>
-      productsFor(shopId).where((p) => p.hasPrice).length;
+  /// how many of the *category template's* rows have a price, out of how many there are - the pair
+  /// an owner is working through after creating a shop, since every template product arrives without
+  /// a price.
+  ///
+  /// template rows only, and that is not a detail. the basket price index counts a shop only once
+  /// every template row is priced (migration 000013), and the owner's own added products are not
+  /// part of the shared basket at all - so a progress bar that counted them would reach 100% at the
+  /// wrong moment in one direction and refuse to reach it in the other, on a bar whose completion
+  /// now means "your shop is in the comparison".
+  (int priced, int total) templatePricingProgressFor(int shopId) {
+    var priced = 0;
+    var total = 0;
+    for (final product in productsFor(shopId)) {
+      if (!product.isTemplate) continue;
+      total++;
+      if (product.hasPrice) priced++;
+    }
+    return (priced, total);
+  }
 
   /// [force] re-fetches a shop already in the cache, which is what a pull-to-refresh wants. without
   /// it, a screen opening on a shop it has seen before shows the cached list immediately.
@@ -116,7 +133,17 @@ class ProductsController extends ChangeNotifier {
       result = await action();
     } on ProductMutationException catch (e) {
       _saveError = e;
+    } on TimeoutException catch (e) {
+      // its own code, because "the request did not come back in ten seconds" and "the server said
+      // no" need different words. this one is nearly always transient and the right advice is to
+      // press save again, which is the opposite of what a generic failure message suggests.
+      _saveError = ProductMutationException(code: 'timeout', message: e.toString());
     } catch (e) {
+      // **the real exception used to end here and go no further.** it was stored in `message`,
+      // which nothing renders, while the ui printed the switch's default - a sentence blaming the
+      // user's connection for whatever this actually was. logging it is what makes the next one
+      // ten minutes of `adb logcat` instead of an afternoon.
+      debugPrint('ProductsController: unexpected error during mutation: $e');
       _saveError = ProductMutationException(code: 'server_error', message: e.toString());
     }
 

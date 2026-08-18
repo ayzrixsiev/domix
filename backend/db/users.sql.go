@@ -54,6 +54,57 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 	return i, err
 }
 
+const deleteUser = `-- name: DeleteUser :exec
+DELETE FROM users WHERE id = $1
+`
+
+// backs DELETE /api/me. the account and everything hanging off it, in one statement.
+//
+// one statement is all it takes because every child relation was declared ON DELETE CASCADE back in
+// migration 000001: this row goes, its shops go with it, and each shop takes its products. writing
+// the three deletes by hand would be a second description of the same rule, and the two would
+// eventually disagree - the schema is the one that postgres actually enforces.
+//
+// :exec, not :execrows, and that is a deliberate choice about what DELETE means here. the caller is
+// asking for a state ("this account no longer exists"), not for an event, so a row that was already
+// gone is a success, not a 404. RequireAuth read the row a moment earlier anyway; the only way to
+// reach a no-op is deleting twice from two devices at once, and both of those users got what they
+// asked for.
+func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteUser, id)
+	return err
+}
+
+const getUserByID = `-- name: GetUserByID :one
+SELECT id, name, phone, role FROM users WHERE id = $1
+`
+
+type GetUserByIDRow struct {
+	ID    int64       `json:"id"`
+	Name  pgtype.Text `json:"name"`
+	Phone string      `json:"phone"`
+	Role  string      `json:"role"`
+}
+
+// backs GET /api/me, which the app calls on launch and whenever it comes back to the foreground.
+//
+// it exists so the app can find out its session is dead *before* the user taps anything. the token
+// alone cannot tell it: a JWT is valid until it expires no matter what happened to the account, so
+// without asking the server a deleted user sees their own profile screen until they happen to press
+// something. this is also where a role change (customer -> shop_owner) reaches an app that has been
+// installed since before the upgrade.
+func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error) {
+	row := q.db.QueryRow(ctx, getUserByID, id)
+	var i GetUserByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Phone,
+		&i.Role,
+	)
+	return i, err
+}
+
 const getUserByPhone = `-- name: GetUserByPhone :one
 SELECT id, name, phone, telegram_chat_id, role, created_at, updated_at
 FROM users
