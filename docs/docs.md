@@ -7,12 +7,12 @@ erDiagram
     %% Relationship definitions
     User ||--o{ Shop : "User owns zero or many Shops (Cascade Delete)"
     Shop ||--o{ Product : "Shop contains zero or many Products (Cascade Delete)"
+    User ||--o{ SupportMessage : "User has one thread of Support Messages (Cascade Delete)"
 
     User {
         bigint id PK "Internal Sequential ID"
         varchar name "Contact Name (Nullable)"
         varchar phone UK "Unique Phone Number"
-        bigint telegram_chat_id UK "Unique Telegram Chat ID (Nullable)"
         varchar role "Role (customer, shop_owner, admin)"
         timestamp created_at "Creation timestamp"
         timestamp updated_at "Update timestamp"
@@ -23,10 +23,10 @@ erDiagram
         bigint user_id FK "Refers to users.id"
         varchar name "Shop name"
         varchar contact_phone "Contact number shown on shop card"
-        varchar image_url "Shop banner image URL (Nullable, unused for now)"
+        varchar image_url "Shop banner image URL (Nullable, nothing writes it yet)"
         text address "Physical text address"
         varchar category "universal, plumbing, wood, wallpaper - fixed at creation"
-        numeric rating "Shop rating (0.0 to 5.0)"
+        numeric rating "Shop rating 0.0-5.0 (stored, nothing writes it - the app hides the star)"
         timestamp vip_until "Paid placement runs until this moment (Nullable) - VIP while it is in the future"
         geometry location "PostGIS spatial point (stored as longitude, latitude)"
         timestamp created_at "Creation timestamp"
@@ -42,25 +42,39 @@ erDiagram
         varchar unit "Unit of measurement: шт, м², мешок ..."
         varchar availability "in_stock, on_order, unavailable"
         varchar template_key "Which template row this came from - NULL means the owner's own"
+        varchar image_path "Relative path, never a URL. 'universal/001.jpg' = shared catalogue shot, 'uploads/<random>.jpg' = this owner's upload (Nullable)"
         timestamp created_at "Creation timestamp"
         timestamp updated_at "Update timestamp"
     }
 
-    Shop ||--o| ShopBasketIndex : "derived, one row per shop that has priced >=30% of its template"
+    ProductTemplate {
+        bigint id PK "Internal Sequential ID - also the seeding order, which is the order the owner prices them in"
+        varchar shop_category "Which of the four catalogues this row belongs to. No FK - the codes are a Go enum"
+        varchar template_key UK "Unique across the whole table. Identifies 'the same product in every shop' - must stay stable forever"
+        varchar name "Copied verbatim into products.name at seeding"
+        varchar category "One of the 12 product codes"
+        varchar unit "шт, кг, мешок ..."
+        text image_path "Catalogue photo, e.g. 'universal/001.jpg' (Nullable - wood and wallpaper have none)"
+        timestamp created_at "Creation timestamp"
+        timestamp updated_at "Update timestamp"
+    }
+
+    SupportMessage {
+        bigint id PK "Internal Sequential ID"
+        bigint user_id FK "Whose thread this is - on both sides. There is no threads table"
+        boolean from_support "Which side wrote it. A role, not a sender id - set by the handler, never read from a request body"
+        text body "TEXT, not VARCHAR(n) - the 2000-rune limit is enforced in Go so retuning it is a deploy, not a migration"
+        timestamp created_at "Creation timestamp"
+    }
+
+    Shop ||--o| ShopBasketIndex : "derived, one row per shop that has priced its ENTIRE template"
 
     ShopBasketIndex {
         bigint shop_id PK, FK "Refers to shops.id"
-        bigint basket_price "Shop's full template basket, unpriced rows imputed at market rate"
+        bigint basket_price "Sum of this shop's template rows - every сум of it typed by its own owner"
         bigint price_index "basket_price / category market average x 100 - never sent to the app"
-        bigint priced_products "How many template rows this shop has priced"
-        bigint basket_products "Template size for this shop's category (50, 99, 10...)"
     }
 ```
-
-`ShopBasketIndex` is not a table - it is the `shop_basket_index` SQL **view** (migration 000008,
-amended by 000010/000011), recomputed on every query rather than stored. It only has a row for a shop
-once `priced_products` reaches 30% of `basket_products`; below that floor the shop is simply absent
-here; See §6 in CLAUDE.md for the full derivation.
 
 
 
@@ -130,6 +144,6 @@ sm.sessions.Store(sessionID, SessionData{
 ### LOCAL TESTING
 
 - TRUNCATE TABLE users RESTART IDENTITY CASCADE;          
-- ngrok http 8080                 
-- flutter run --dart-define-from-file=env.json            
+- ngrok http 8080                           
 - go run ./cmd/api    
+- make test-apk

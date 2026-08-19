@@ -11,15 +11,27 @@ import (
 type Product struct {
 	ID           int64              `json:"id"`
 	ShopID       int64              `json:"shop_id"`
+	TemplateKey  pgtype.Text        `json:"template_key"`
 	Name         string             `json:"name"`
-	Price        pgtype.Int8        `json:"price"`
 	Category     string             `json:"category"`
+	Unit         string             `json:"unit"`
+	Price        pgtype.Int8        `json:"price"`
+	Availability string             `json:"availability"`
+	ImagePath    pgtype.Text        `json:"image_path"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ProductTemplate struct {
+	ID           int64              `json:"id"`
+	ShopCategory string             `json:"shop_category"`
+	TemplateKey  string             `json:"template_key"`
+	Name         string             `json:"name"`
+	Category     string             `json:"category"`
 	Unit         string             `json:"unit"`
-	Availability string             `json:"availability"`
-	TemplateKey  pgtype.Text        `json:"template_key"`
 	ImagePath    pgtype.Text        `json:"image_path"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Shop struct {
@@ -27,29 +39,35 @@ type Shop struct {
 	UserID       int64              `json:"user_id"`
 	Name         string             `json:"name"`
 	Address      string             `json:"address"`
-	Rating       pgtype.Numeric     `json:"rating"`
-	Location     interface{}        `json:"location"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 	ContactPhone string             `json:"contact_phone"`
 	ImageUrl     pgtype.Text        `json:"image_url"`
 	Category     string             `json:"category"`
+	Rating       pgtype.Numeric     `json:"rating"`
 	VipUntil     pgtype.Timestamptz `json:"vip_until"`
+	Location     interface{}        `json:"location"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
 
 type ShopBasketIndex struct {
-	ShopID         int64 `json:"shop_id"`
-	BasketPrice    int64 `json:"basket_price"`
-	PriceIndex     int64 `json:"price_index"`
-	BasketProducts int64 `json:"basket_products"`
+	ShopID      int64 `json:"shop_id"`
+	BasketPrice int64 `json:"basket_price"`
+	PriceIndex  int64 `json:"price_index"`
+}
+
+type SupportMessage struct {
+	ID          int64              `json:"id"`
+	UserID      int64              `json:"user_id"`
+	FromSupport bool               `json:"from_support"`
+	Body        string             `json:"body"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
 type User struct {
-	ID             int64              `json:"id"`
-	Name           pgtype.Text        `json:"name"`
-	Phone          string             `json:"phone"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	TelegramChatID pgtype.Int8        `json:"telegram_chat_id"`
-	Role           string             `json:"role"`
+	ID        int64              `json:"id"`
+	Name      pgtype.Text        `json:"name"`
+	Phone     string             `json:"phone"`
+	Role      string             `json:"role"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }

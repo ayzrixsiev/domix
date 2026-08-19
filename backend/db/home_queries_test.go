@@ -72,7 +72,9 @@ func beginTx(t *testing.T) (context.Context, pgx.Tx, *db.Queries) {
 		t.Fatalf("clear shops for the duration of the transaction: %v", err)
 	}
 
-	return ctx, tx, db.New(tx)
+	q := db.New(tx)
+	loadTemplates(t, ctx, q)
+	return ctx, tx, q
 }
 
 // a shop owner plus a shop of the given category, seeded with that category's whole template -
@@ -111,7 +113,7 @@ func makeShopTx(t *testing.T, ctx context.Context, conn pgx.Tx, q *db.Queries, n
 			Category:    string(item.Category),
 			Unit:        item.Unit,
 			TemplateKey: pgtype.Text{String: item.Key, Valid: true},
-			ImagePath:   pgtype.Text{String: item.ImagePath(category), Valid: item.Image != ""},
+			ImagePath:   pgtype.Text{String: item.ImagePath, Valid: item.ImagePath != ""},
 		}); err != nil {
 			t.Fatalf("seed %q: %v", item.Key, err)
 		}
@@ -169,7 +171,7 @@ func priceProducts(t *testing.T, ctx context.Context, conn pgx.Tx, shopID int64,
 func TestBasketIndexReproducesTheWorkedExample(t *testing.T) {
 	ctx, conn, q := beginTx(t)
 
-	full := catalog.UniversalSize
+	full := len(catalog.Template(string(catalog.CategoryUniversal)))
 
 	cases := []struct {
 		name      string
@@ -218,7 +220,7 @@ func TestBasketIndexReproducesTheWorkedExample(t *testing.T) {
 func TestBasketIndexExcludesShopsWithAnIncompleteBasket(t *testing.T) {
 	ctx, conn, q := beginTx(t)
 
-	full := catalog.UniversalSize
+	full := len(catalog.Template(string(catalog.CategoryUniversal)))
 
 	finished := makeShopTx(t, ctx, conn, q, "finished", catalog.CategoryUniversal, false)
 	partial := makeShopTx(t, ctx, conn, q, "partial", catalog.CategoryUniversal, false)
@@ -258,7 +260,7 @@ func TestBasketIndexExcludesShopsWithAnIncompleteBasket(t *testing.T) {
 func TestBasketIndexNeedsEveryTemplateProductPriced(t *testing.T) {
 	ctx, conn, q := beginTx(t)
 
-	full := catalog.UniversalSize
+	full := len(catalog.Template(string(catalog.CategoryUniversal)))
 
 	// a second, fully priced shop so there is a market to be indexed against at all
 	reference := makeShopTx(t, ctx, conn, q, "reference", catalog.CategoryUniversal, false)
@@ -298,12 +300,12 @@ func TestBestOffersAreScopedToOneShopCategory(t *testing.T) {
 	// so their indices are 67 and 133
 	cheapWallpaper := makeShopTx(t, ctx, conn, q, "cheapwall", catalog.CategoryWallpaper, false)
 	dearWallpaper := makeShopTx(t, ctx, conn, q, "dearwall", catalog.CategoryWallpaper, false)
-	priceProducts(t, ctx, conn, cheapWallpaper, catalog.WallpaperSize, 50_000)
-	priceProducts(t, ctx, conn, dearWallpaper, catalog.WallpaperSize, 100_000)
+	priceProducts(t, ctx, conn, cheapWallpaper, len(catalog.Template(string(catalog.CategoryWallpaper))), 50_000)
+	priceProducts(t, ctx, conn, dearWallpaper, len(catalog.Template(string(catalog.CategoryWallpaper))), 100_000)
 
 	// the only universal shop, so it is its own market: 5 000 000 and an index of exactly 100
 	universal := makeShopTx(t, ctx, conn, q, "universal", catalog.CategoryUniversal, false)
-	priceProducts(t, ctx, conn, universal, catalog.UniversalSize, 100_000)
+	priceProducts(t, ctx, conn, universal, len(catalog.Template(string(catalog.CategoryUniversal))), 100_000)
 
 	wallpaper := bestOffersIn(t, ctx, q, catalog.CategoryWallpaper, 10)
 	if len(wallpaper) != 2 {
@@ -340,7 +342,7 @@ func TestBestOffersExcludeShopsWithNoIndex(t *testing.T) {
 	priced := makeShopTx(t, ctx, conn, q, "priced", catalog.CategoryUniversal, false)
 	empty := makeShopTx(t, ctx, conn, q, "empty", catalog.CategoryUniversal, false)
 
-	priceProducts(t, ctx, conn, priced, catalog.UniversalSize, 100_000)
+	priceProducts(t, ctx, conn, priced, len(catalog.Template(string(catalog.CategoryUniversal))), 100_000)
 	// `empty` gets nothing - it must not appear at all, rather than appearing first with a 0
 
 	offers := bestOffersIn(t, ctx, q, catalog.CategoryUniversal, 10)
@@ -428,7 +430,7 @@ func TestCustomProductsAppearInACategoryButNotInTheIndex(t *testing.T) {
 	ctx, conn, q := beginTx(t)
 
 	shop := makeShopTx(t, ctx, conn, q, "custom", catalog.CategoryWallpaper, false)
-	priceProducts(t, ctx, conn, shop, catalog.WallpaperSize, 100_000)
+	priceProducts(t, ctx, conn, shop, len(catalog.Template(string(catalog.CategoryWallpaper))), 100_000)
 
 	before, err := q.ListShops(ctx)
 	if err != nil {
@@ -537,4 +539,30 @@ func offerIndices(shops []db.ListBestOffersInCategoryRow) []int64 {
 		out = append(out, s.PriceIndex)
 	}
 	return out
+}
+
+// the templates live in `product_templates` since migration 000014 and are held in memory by
+// internal/catalog, loaded once at startup by main.go. tests do not run main.go, so every harness
+// that seeds a shop has to load them first - without it catalog.Template returns nothing and every
+// shop is created with an empty catalogue, which fails as a wrong *count* three assertions later
+// rather than as a missing setup step.
+func loadTemplates(t *testing.T, ctx context.Context, q *db.Queries) {
+	t.Helper()
+
+	rows, err := q.ListProductTemplates(ctx)
+	if err != nil {
+		t.Fatalf("read product_templates: %v", err)
+	}
+	if len(rows) == 0 {
+		t.Fatal("product_templates is empty - run `migrate -database \"$DB_URL\" -path db/migrations up`")
+	}
+
+	loaded := make([]catalog.Row, 0, len(rows))
+	for _, row := range rows {
+		loaded = append(loaded, catalog.Row{
+			ShopCategory: row.ShopCategory, Key: row.TemplateKey, Name: row.Name,
+			Category: row.Category, Unit: row.Unit, ImagePath: row.ImagePath.String,
+		})
+	}
+	catalog.Load(loaded)
 }

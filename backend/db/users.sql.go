@@ -12,41 +12,24 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (name, phone, telegram_chat_id, role)
-VALUES ($1, $2, $3, $4)
-RETURNING id, name, phone, telegram_chat_id, role, created_at, updated_at
+INSERT INTO users (name, phone, role)
+VALUES ($1, $2, $3)
+RETURNING id, name, phone, role, created_at, updated_at
 `
 
 type CreateUserParams struct {
-	Name           pgtype.Text `json:"name"`
-	Phone          string      `json:"phone"`
-	TelegramChatID pgtype.Int8 `json:"telegram_chat_id"`
-	Role           string      `json:"role"`
+	Name  pgtype.Text `json:"name"`
+	Phone string      `json:"phone"`
+	Role  string      `json:"role"`
 }
 
-type CreateUserRow struct {
-	ID             int64              `json:"id"`
-	Name           pgtype.Text        `json:"name"`
-	Phone          string             `json:"phone"`
-	TelegramChatID pgtype.Int8        `json:"telegram_chat_id"`
-	Role           string             `json:"role"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
-	row := q.db.QueryRow(ctx, createUser,
-		arg.Name,
-		arg.Phone,
-		arg.TelegramChatID,
-		arg.Role,
-	)
-	var i CreateUserRow
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, createUser, arg.Name, arg.Phone, arg.Role)
+	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Phone,
-		&i.TelegramChatID,
 		&i.Role,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -58,18 +41,6 @@ const deleteUser = `-- name: DeleteUser :exec
 DELETE FROM users WHERE id = $1
 `
 
-// backs DELETE /api/me. the account and everything hanging off it, in one statement.
-//
-// one statement is all it takes because every child relation was declared ON DELETE CASCADE back in
-// migration 000001: this row goes, its shops go with it, and each shop takes its products. writing
-// the three deletes by hand would be a second description of the same rule, and the two would
-// eventually disagree - the schema is the one that postgres actually enforces.
-//
-// :exec, not :execrows, and that is a deliberate choice about what DELETE means here. the caller is
-// asking for a state ("this account no longer exists"), not for an event, so a row that was already
-// gone is a success, not a 404. RequireAuth read the row a moment earlier anyway; the only way to
-// reach a no-op is deleting twice from two devices at once, and both of those users got what they
-// asked for.
 func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, deleteUser, id)
 	return err
@@ -86,13 +57,6 @@ type GetUserByIDRow struct {
 	Role  string      `json:"role"`
 }
 
-// backs GET /api/me, which the app calls on launch and whenever it comes back to the foreground.
-//
-// it exists so the app can find out its session is dead *before* the user taps anything. the token
-// alone cannot tell it: a JWT is valid until it expires no matter what happened to the account, so
-// without asking the server a deleted user sees their own profile screen until they happen to press
-// something. this is also where a role change (customer -> shop_owner) reaches an app that has been
-// installed since before the upgrade.
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error) {
 	row := q.db.QueryRow(ctx, getUserByID, id)
 	var i GetUserByIDRow
@@ -106,29 +70,18 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, er
 }
 
 const getUserByPhone = `-- name: GetUserByPhone :one
-SELECT id, name, phone, telegram_chat_id, role, created_at, updated_at
+SELECT id, name, phone, role, created_at, updated_at
 FROM users
 WHERE phone = $1
 `
 
-type GetUserByPhoneRow struct {
-	ID             int64              `json:"id"`
-	Name           pgtype.Text        `json:"name"`
-	Phone          string             `json:"phone"`
-	TelegramChatID pgtype.Int8        `json:"telegram_chat_id"`
-	Role           string             `json:"role"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) GetUserByPhone(ctx context.Context, phone string) (GetUserByPhoneRow, error) {
+func (q *Queries) GetUserByPhone(ctx context.Context, phone string) (User, error) {
 	row := q.db.QueryRow(ctx, getUserByPhone, phone)
-	var i GetUserByPhoneRow
+	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Phone,
-		&i.TelegramChatID,
 		&i.Role,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -150,43 +103,25 @@ func (q *Queries) GetUserRole(ctx context.Context, id int64) (string, error) {
 const updateUserProfile = `-- name: UpdateUserProfile :one
 UPDATE users
 SET name = $2,
-    telegram_chat_id = $3,
-    role = $4,
+    role = $3,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, name, phone, telegram_chat_id, role, created_at, updated_at
+RETURNING id, name, phone, role, created_at, updated_at
 `
 
 type UpdateUserProfileParams struct {
-	ID             int64       `json:"id"`
-	Name           pgtype.Text `json:"name"`
-	TelegramChatID pgtype.Int8 `json:"telegram_chat_id"`
-	Role           string      `json:"role"`
+	ID   int64       `json:"id"`
+	Name pgtype.Text `json:"name"`
+	Role string      `json:"role"`
 }
 
-type UpdateUserProfileRow struct {
-	ID             int64              `json:"id"`
-	Name           pgtype.Text        `json:"name"`
-	Phone          string             `json:"phone"`
-	TelegramChatID pgtype.Int8        `json:"telegram_chat_id"`
-	Role           string             `json:"role"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error) {
-	row := q.db.QueryRow(ctx, updateUserProfile,
-		arg.ID,
-		arg.Name,
-		arg.TelegramChatID,
-		arg.Role,
-	)
-	var i UpdateUserProfileRow
+func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserProfile, arg.ID, arg.Name, arg.Role)
+	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Phone,
-		&i.TelegramChatID,
 		&i.Role,
 		&i.CreatedAt,
 		&i.UpdatedAt,
