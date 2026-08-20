@@ -5,9 +5,9 @@ things load on demand instead:
 
 | where | what | loads when |
 | --- | --- | --- |
-| `frontend/CLAUDE.md` | Flutter commands, toolchain, emulator, per-screen guidance | working under `frontend/` |
+| `frontend/CLAUDE.md` | Flutter commands, toolchain, emulator, per-screen guidance | working under frontend/ |
 | `shipping-to-play` skill | Android build, signing, MapKit, device testing, pre-release TODO | release or Android work |
-| `admin-panel` skill | `/admin`, `/delete-account`, `RequireAdmin`, anomalies, support inbox, template sync | working on `internal/webui/` or `admin.go` |
+| `admin-panel` skill | /admin, /delete-account, RequireAdmin, anomalies, support inbox, template sync | working on internal/webui/ or admin.go |
 
 ---
 
@@ -26,46 +26,61 @@ until asked.**
 ## 2. Working with this repo
 
 The founder is building this while learning Go, Flutter and system design from scratch. It is a real
-product headed for production and paying customers: **hold the code to production standards while
-explaining it at a beginner-friendly level.**
+product headed for production and paying customers: hold the code to production standards while
+explaining it at a beginner-friendly level.
 
 ### How to explain
 
 Whenever you touch something non-trivial, cover:
 
-- **Syntax** — any Go/Dart feature the founder may not have met (goroutines, channels, `sync.Map`,
-  `late`, `Future`/`async`, mixins, extension methods, pattern matching) and why it fits here. Don't
-  re-explain what has clearly been learned.
-- **Data flow** — the whole path when a feature spans layers: tap → controller → repository → HTTP →
-  handler → sqlc → Postgres → response → decode → `ChangeNotifier` → rebuild.
-- **Design rationale** — the *why*, including the rejected alternative. If a decision was pragmatic
-  (budget, timeline) rather than principled, say so; don't dress a shortcut up as architecture.
+- Syntax — explain unfamiliar Go/Dart syntax and language features clearly. This includes things like
+  goroutines, channels, `sync.Map`, `late`, `Future`/`async`, mixins, extension methods, pattern
+  matching, etc.
+
+  "Word by word" is a trigger for detailed syntax explanation. When the founder asks for something
+  word by word, explain the syntax token by token: each relevant keyword, operator, symbol, type,
+  modifier, and construct, what it means, and why it is used there. Do not skip unfamiliar syntax.
+
+- Data flow — explain the whole path when a feature spans layers:
+  tap → controller → repository → HTTP → handler → sqlc → Postgres → response → decode →
+  `ChangeNotifier` → rebuild.
+
+- Design rationale — explain why the approach was chosen and the important alternatives that were
+  rejected. If a decision is pragmatic because of budget, timeline, or MVP constraints, say so;
+  don't dress a shortcut up as architecture.
 
 Plain language, never at the cost of hiding the real mechanism.
 
 ### Confirmed working style
 
-- **When the founder restates something in their own words, check the restatement point by point** —
+- When the founder asks for a high-level explanation, explain the subject from the text they sent,
+  before looking at or walking through the code. Assume they have not read the implementation yet.
+  Explain what it is, why it exists, how it works, where it fits, and what happens when it breaks.
+
+- When the founder restates something in their own words, check the restatement point by point —
   quote it, say whether it is right, explain why. A fresh explanation that skips validating their
   attempt is much less useful.
-- **Always paste the real code inline**, paired with `file_path:line_number`.
-- **"Word by word" means word by word** — define every keyword, operator and symbol.
-- **Never explain jargon with more jargon.** Prefer mechanical precision to analogy; correct a wrong
+
+- Always paste the real code inline, paired with `file_path:line_number`.
+
+- Never explain jargon with more jargon. Prefer mechanical precision to analogy. Correct a wrong
   mental model plainly.
-- **Comments are lowercase** and explain non-obvious *why*, never restate the code.
-- **Build one thing at a time.** Implement what was asked, then stop.
-- **Keep the repo minimal — the founder holds it in their head, and clutter is a real cost.** Do not
-  add a file, a script, a flag or an abstraction that only pays off in a hypothetical future; the
-  bar is "does this earn its place today". A helper script that automates a chore nobody actually
-  performs is worse than the chore. **This never trades away performance or correctness** — it is
-  about the number of moving parts, not about doing less engineering. When something has stopped
-  earning its place, say so and delete it rather than leaving it lying around.
-- **Explain at the altitude asked for.** "Explain X" from the founder means *high level first* —
-  assume they have not read the code and will read it afterwards. Say what the thing is, where it
-  physically lives, who pays for it and what happens when it breaks, in plain words, **before** any
-  file path, function name or Go/Dart syntax. Answering a conceptual question with a code tour is
-  the wrong answer even when every line of it is correct.
-- **Documentation goes in this file.** Don't edit `docs/docs.md` unless asked.
+
+- Comments are lowercase and explain non-obvious why, never restate the code.
+
+- Keep the repo minimal — the founder is minimalist and loves to keep the system and flow of it in
+  his head, and clutter is a real cost. Do not add a file, script, flag or abstraction that only
+  pays off in a hypothetical future; the bar is "does this earn its place today". This never trades
+  away performance or correctness — it is about the number of moving parts, not about doing less
+  engineering. When something has stopped earning its place, say so and delete it rather than
+  leaving it lying around.
+
+- Explain at the altitude asked for. Do not turn a high-level question into a code tour. Do not give
+  a word-by-word syntax lecture unless the founder asks for it.
+
+### Documentation
+
+Documentation goes in this file. Don't edit `docs/docs.md` unless asked.
 
 ---
 
@@ -88,8 +103,7 @@ migrate -database "$DB_URL" -path db/migrations up
 Required `.env` at the repo root: `DB_URL`, `TELEGRAM_BOT_TOKEN`, `WEBHOOK_URL`, `PORT`,
 `JWT_SECRET`. `SUPPORT_EMAIL` is optional but must be set before submitting to Play.
 
-Optional and both silent when wrong: `TELEGRAM_DEBUG=true` logs every bot update (**off by default —
-the firehose contains phone numbers**); `TRUST_PROXY=true` makes the rate limiter read
+Optional and silent when wrong: `TRUST_PROXY=true` makes the rate limiter read
 `X-Forwarded-For`, correct **only once something in front always rewrites it** — otherwise the
 limiter either buckets the whole internet together or hands attackers a fresh identity per request.
 
@@ -341,7 +355,7 @@ the point to switch `POST /api/shops` to multipart, not before.
   so the prefix is the only thing telling them apart — `imagestore.Store.Remove` refuses everything
   outside `uploads/`, which is what stops one shop replacing its photo from unlinking the file forty
   others draw. **Removing a photo from a seeded row restores the catalogue path rather than clearing
-  the column** (§7).
+  the column**, and a seeded row the catalogue *has* a shot for refuses an upload outright (§7).
 - **`products.category` holds one of twelve locale-neutral codes** (`mixes`, `blocks`, `lumber`,
   `metal`, `fasteners`, `roofing`, `insulation`, `electrical`, `plumbing`, `paints`, `finishing`,
   `tools`) — the same list the home grid renders. Free text meant "Крепёж" and "крепеж" were two
@@ -467,14 +481,32 @@ twelve tiles is what the home grid's two-page pager is built around.
 
 ### Owner-uploaded product photos
 
-**Every product in an owner's own shop can carry a photo they upload, template rows included.** What
-makes two shops' baskets comparable is the `template_key`, the name and the unit — and the upload
-endpoint can touch none of them (`SetProductImage` has no column for them). A photograph is not part
-of that: обои slots name a *kind* of wallpaper and have no catalogue shot at all, five of the twelve
-product categories have never been photographed, and a shop stocking a different brand of the same
-seeded item describes itself more honestly with its own picture than with somebody else's. The cost
-is that a shop can put a misleading photo on a shared row, which is moderation — the panel's job —
-rather than something to prevent by refusing.
+**An owner may photograph what we have not photographed, and nothing we have.** In practice that is
+their own products always, the ten обои slots, and the ten древесные материалы rows — and *not* the
+универсальный and сантехника catalogues, which are the founder's own shots.
+
+**The rule is asked of the template, never of the shop's category**: `templateFlags` answers
+`photoEditable` as `catalog.TemplateImage(key) == ""`, and `POST /api/products/{id}/image` returns
+**403 `template_photo`** when it is false — before the rate limiter and before a byte of the body is
+read. A hand-kept list of "the unphotographed categories" would be a second copy of a fact the
+template already holds, the same argument that keeps the обои slot keys derived (`IsOwnerNamedSlot`).
+It also means **shooting a catalogue is the whole change**: those rows lock themselves, with nothing
+to remember afterwards.
+
+**`DELETE …/image` is deliberately *not* gated by the same rule.** Removal can only move a row
+*towards* the catalogue, so refusing it protects nothing — and it would strand the owner who
+photographed a wood row the month before the wood catalogue was shot, holding the one picture the
+rule says should not be there with no way to put the shared one back.
+
+The opposite rule held until 2026-08-20 — every row, template ones included — on the reasoning that
+what makes two baskets comparable is the `template_key`, the name and the unit, none of which the
+upload endpoint can touch (`SetProductImage` has no column for them), so a photograph is not part of
+the comparison; and that a shop stocking a different brand of the same seeded item describes itself
+more honestly with its own picture. What that missed is what the shared catalogue *is*: **one file on
+disk that every shop of the category draws**, while the index insists the two rows are the same
+product. An owner swapping it puts two different objects on two tiles of one product, and it is the
+customer comparing the shops who is misled. The answer offered was moderation; moderating a hundred
+rows in every shop by hand is not an answer.
 
 `POST /api/products/{id}/image` is multipart with one field, `image`. Deliberately **not** a field on
 `PUT /api/products/{id}`: the photo arrives as bytes while the rest of that form is json, and it is
@@ -508,11 +540,16 @@ save" by someone whose photo saved perfectly. A new name is a new url; the old f
 the row stops pointing at it. Write, then point the row, then unlink: the opposite order has a window
 where the row names a file that is gone, which is a broken tile everywhere the product appears.
 
-`ProductResponse` carries **`own_image`** beside `image_url` — whether the photo is this shop's own
-upload or the shared catalogue's. The app needs it because "удалить фото" means two different things:
-on an upload the photo goes, on a seeded row the catalogue shot comes back, and on a row *already*
-showing the catalogue shot it would do nothing at all. Without the flag the button is dead on most of
-a fresh shop's catalogue.
+`ProductResponse` carries **two booleans about the photo**, and they answer different questions.
+`own_image` is whether the picture on the row is this shop's own upload or the shared catalogue's —
+needed because "удалить фото" means two different things: on an upload the photo goes, on a seeded
+row the catalogue shot comes back, and on a row *already* showing the catalogue shot it would do
+nothing at all, so without it the button is dead on most of a fresh shop's catalogue.
+`photo_editable` is whether the owner may put one there at all, and it is **sent rather than derived
+in the app** for the reason `name_editable` is: what it really asks is what the template holds, which
+only the server knows, and a Flutter build that worked it out from the shop's category would go
+wrong the day a catalogue is photographed. It defaults to `true` when absent — which is exactly what
+a backend from before the rule did.
 
 **Directory listings are off** (`noListing` in `main.go`) — harmless while the root held only
 catalogue photos, and an index of every photo in the market once uploads live under it.
@@ -557,7 +594,7 @@ undeletable, category and unit locked. Only the name is the owner's.
 | POST | `/api/shops/{id}/products` | owner; capped at 20 of their own (`template_key IS NULL`) |
 | PUT | `/api/products/{id}` | owner; branches on `template_key` |
 | DELETE | `/api/products/{id}` | owner; **refuses template rows** |
-| POST | `/api/products/{id}/image` | owner; multipart, field `image` — any row in their shop |
+| POST | `/api/products/{id}/image` | owner; multipart, field `image` — **refuses a template row the catalogue has a photo for** |
 | DELETE | `/api/products/{id}/image` | owner; restores the catalogue photo on a seeded row |
 
 Seeded rows are deliberately **outside** the 20-product budget — counting them is what made a fresh
@@ -594,13 +631,20 @@ so in field names.
   mirrored by `VipShopsCarousel.slotCount`). That number is *inventory*, not a page size: VIP placement
   is a product with five units, and an unsold slot is the advertisement for it — it tells a shop owner
   scrolling the home screen that a place is still available. Raising it is a pricing decision.
-- **Лучшие предложения is 15 places per tab** (`bestOffersLimit = 15` /
+- **Лучшие предложения is four tabs of 15 places** (`bestOffersLimit = 15` /
   `BestOffersList.slotCount = 15`). Here an open place means the *ranking* has room: an owner halfway
-  through pricing sees how many places in their category are unclaimed. **A category with no ranked
-  shops is still not a tab** — a strip option that filters to fifteen empty rows is a dead end, and the
-  tab strip is a filter. But with *no* category ranked at all — where the app launches — **the section
-  still draws its fifteen places, with no strip above them**: it used to vanish, and a feed missing a
-  whole section reads as broken rather than as empty.
+  through pricing sees how many places in their category are unclaimed. **The strip is
+  `ShopCategory.values`, all four, always — never the categories the response happened to contain.**
+  The server still omits a category with no ranking, and that list is now only what goes *inside* a
+  tab.
+  The opposite rule held until 2026-08-20 (one segment per group, no strip below two of them) on the
+  reasoning that an option filtering to fifteen empty rows is a dead end. Three things outweighed it:
+  the four categories are this section's **axis**, so the strip is its table of contents rather than a
+  filter over what exists; an empty tab says "no shop of this kind has finished pricing", which is the
+  same message the open places under it carry; and a strip built from the response **changes shape
+  between two refreshes** as shops qualify, which is a control moving under the reader's finger. With
+  a constant four segments, `_selected` can no longer point past the end of the list either — that
+  clamp is gone.
 - **All three sections are always on screen.** There is no "omit it when it has nothing" rule left
   anywhere on the home feed, and no «Пока нет магазинов» block either — a screenful of designed-empty
   cards followed by a notice explaining that it is empty says the same thing twice. A failed *load*
@@ -957,7 +1001,7 @@ implies otherwise, the second caller is what discovers it.**
 
 **Visual tokens live in `frontend/lib/core/constants/app_theme.dart` (`AppRadius`, `AppShadows`,
 `AppMotion`) plus the ramp in `app_colors.dart`** (`hairline`, `surfaceMuted`, `trackGrey`,
-`textFaint`, `primarySoft`, `primaryTint`, `success`/`successSoft`, `danger`/`dangerSoft`,
+`textFaint`, `textMuted`, `primarySoft`, `primaryTint`, `success`/`successSoft`, `danger`/`dangerSoft`,
 `warning`/`warningSoft`). New UI pulls radius, shadow and colour from these rather than inlining hex —
 before they existed, nine corner radii and about nine ad-hoc greys were in use at once, which is what
 made screens look unrelated. The scale is deliberately short: radius `xs 8 / sm 14 / md 20 / lg 28`;
@@ -974,8 +1018,20 @@ shadows `card` (barely-there lift) / `raised` (content cards that must separate 
   pill slides in, and the illusion only works if the track is recessed. It is therefore the token for
   **anything that must read as grey while sitting directly on the page**; `cardGrey` is for a grey block
   on a *white* surface and is invisible anywhere else.
+- **`textMuted` (`0xFF646B76`) is a token for *glyphs*, not for prose.** One icon at `textDark` is a
+  detail; twelve of them in a grid is the darkest thing on the screen, which is what Популярные
+  категории looked like. `textGrey` is the obvious softer choice and sits at ~2.5:1 on `trackGrey`,
+  under the 3:1 WCAG asks of a non-text mark; this one is ~4.3:1 on the same fill. A token rather than
+  `textDark.withValues(alpha: 0.62)`, which composites to almost the same colour and silently changes
+  the moment the fill behind it does.
 - `warning`/`warningSoft` exist for the price badge's middle state — deliberately not `starYellow`,
   which reads as a highlight and is spoken for by ratings.
+- **The one sanctioned exception to a brand-only palette is `ShopCategoryBanner`** — four deep,
+  desaturated gradients, one per shop category, on the cover of the shop card. Brand orange is for
+  actions and active state, so four orange covers would say nothing about *which* shop was opened;
+  giving each category its own hue is what makes the cover carry information rather than decorate.
+  They appear on exactly one surface and every one of them holds white text at over 5.5:1. `frontend/
+  CLAUDE.md` §7 has the rest.
 - **Brand orange is not an accessible text colour on light surfaces** — `#FF6F00` is ~2.6:1 against
   `primarySoft` and 2.8:1 against white, where WCAG AA wants 4.5:1. Brand-level, not per-widget:
   white-on-orange buttons have the same ratio. Accepted for brand moments; don't reach for it where a

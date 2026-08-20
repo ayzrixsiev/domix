@@ -59,15 +59,24 @@ class SearchAndLikeBar extends StatelessWidget {
           child: Ink(
             height: _height,
             padding: const EdgeInsets.symmetric(horizontal: 14),
+            // **A recessed grey field, not a white card.** It was white with a hairline border and a
+            // lift, which is the treatment every *content* card on this feed wears - so the one
+            // control at the top of the screen looked like the first row of the feed rather than
+            // like an input. A search field is a well you type into.
+            //
+            // `trackGrey` and not `surfaceMuted` or `cardGrey`, for the reason spelled out on the
+            // token: those two are at or *above* the page (#EFF1F5), so a box filled with either
+            // reads as white sitting on grey. trackGrey is the one step below the page, which is
+            // what makes it read as cut into it. No border and no shadow with it - `hairline` is
+            // lighter than the fill, so an outline would ring a darker box in a paler line, and a
+            // shadow under something recessed is a contradiction.
             decoration: BoxDecoration(
-              color: AppColors.surfaceWhite,
+              color: AppColors.trackGrey,
               borderRadius: borderRadius,
-              border: Border.all(color: AppColors.hairline),
-              boxShadow: AppShadows.card,
             ),
             child: Row(
               children: [
-                const Icon(Icons.search_rounded, color: AppColors.textFaint, size: 19),
+                const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 19),
                 const SizedBox(width: 10),
                 // the hint text, styled exactly as the real field's hint on the screen this opens,
                 // so pressing it reads as the same control moving up into that app bar
@@ -76,8 +85,10 @@ class SearchAndLikeBar extends StatelessWidget {
                     strings.searchHint,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    // a step darker than the `textFaint` it was: the fill under it is darker now, and
+                    // a hint that was already pale against white is unreadable against a grey well
                     style: const TextStyle(
-                      color: AppColors.textFaint,
+                      color: AppColors.textGrey,
                       fontSize: 14.5,
                       fontWeight: FontWeight.w400,
                     ),

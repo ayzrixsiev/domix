@@ -265,21 +265,22 @@ func (h *Home) SearchProducts(w http.ResponseWriter, r *http.Request) {
 // turns one product row into the wire shape, for the two endpoints that return products across
 // shops. it exists so a change to what a product looks like on the wire happens once.
 func categoryProductFromRow(row db.ListProductsByCategoryRow) CategoryProductResponse {
-	isTemplate, nameEditable := templateFlags(row.TemplateKey)
+	isTemplate, nameEditable, photoEditable := templateFlags(row.TemplateKey)
 	imageURL, ownImage := productImage(row.ImagePath)
 	return CategoryProductResponse{
 		ProductResponse: ProductResponse{
-			ID:           row.ID,
-			ShopID:       row.ShopID,
-			Name:         row.Name,
-			Category:     row.Category,
-			Unit:         row.Unit,
-			Price:        nullableInt64(row.Price),
-			Availability: row.Availability,
-			IsTemplate:   isTemplate,
-			NameEditable: nameEditable,
-			ImageURL:     imageURL,
-			OwnImage:     ownImage,
+			ID:            row.ID,
+			ShopID:        row.ShopID,
+			Name:          row.Name,
+			Category:      row.Category,
+			Unit:          row.Unit,
+			Price:         nullableInt64(row.Price),
+			Availability:  row.Availability,
+			IsTemplate:    isTemplate,
+			NameEditable:  nameEditable,
+			ImageURL:      imageURL,
+			OwnImage:      ownImage,
+			PhotoEditable: photoEditable,
 		},
 		ShopName: row.ShopName,
 	}

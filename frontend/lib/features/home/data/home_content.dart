@@ -80,7 +80,10 @@ class HomeContent {
   final List<HomeShopPreview> vipShops;
 
   /// One entry per shop category that actually has ranked shops, in the backend's canonical order.
-  /// The tab strip is built from this, so a category with nothing in it is simply not a tab.
+  ///
+  /// **This is the contents of the tabs, not the tabs themselves.** The strip is all four
+  /// [ShopCategory] values whatever arrives here, so a category the server said nothing about is
+  /// still a segment - it just opens onto fifteen open places. See [BestOffersList.groups].
   final List<CategoryOffers> bestOffers;
 
   static HomeContent fromJson(Map<String, dynamic> json) {

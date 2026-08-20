@@ -29,6 +29,12 @@ import (
 
 func main() {
 
+
+
+
+
+
+
 	// 1. loading env attributes
 	if err := godotenv.Load("../.env"); err != nil {
 		log.Println("WARNING: No .env file found")
@@ -50,6 +56,12 @@ func main() {
 		log.Fatal("Critical error: jwtSercet is not configured")
 	}
 
+
+
+
+
+
+
 	// 2. postgresql connection pool (configured) set up and handed over to the Queries struct
 	dbPool := mustConnectDB(dbURL)
 	// and returned an address to it
@@ -68,16 +80,24 @@ func main() {
 	// migration 000014 not having been run.
 	mustLoadTemplates(queries)
 
+
+
+
+
+
+
 	// 3. initialize telegram bot api
 	bot, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {
 		log.Fatalf("Failed to connect to the bot: %v", err)
 	}
-	// off unless asked for. Debug logs every update the bot receives in full, which in production is
-	// a firehose containing users' phone numbers and names - the exact data that should not be
-	// sitting in a log aggregator.
-	bot.Debug = os.Getenv("TELEGRAM_DEBUG") == "true"
 	log.Printf("Authorized successfully on account: %s", bot.Self.UserName)
+
+
+
+
+
+
 
 	// 4. initialize session manager
 	sessionMgr := auth.NewSessionManager()
@@ -244,6 +264,12 @@ func main() {
 	http.HandleFunc("/admin", webui.Page("admin.html", nil))
 	http.HandleFunc("/admin/", webui.Redirect("/admin"))
 
+
+
+
+
+
+
 	// 6. webhook setup for telegram to talk
 	wh, err := tgbotapi.NewWebhook(webhookURL)
 	if err != nil {
@@ -265,6 +291,12 @@ func main() {
 	// store here whatever we got from telegram webhook
 	updates := bot.ListenForWebhook("/webhook")
 
+
+
+
+
+
+
 	// 7. run the http server and the telegram update loop concurrently, each in its own
 	// goroutine, so main() itself is free to just wait for a shutdown signal (step 8)
 	srv := &http.Server{Addr: ":" + port}
@@ -278,9 +310,22 @@ func main() {
 	telegramHandler := &telegram.Handler{Bot: bot, SessionMgr: sessionMgr, Queries: queries, JWTSecret: jwtSecret}
 	go telegramHandler.ProcessUpdates(updates)
 
+
+
+
+
+
+
 	// 8. block here until the os asks us to stop (ctrl+c locally, or however this
 	// gets stopped in production), then shut down cleanly instead of being killed mid-request
 	waitForShutdown(srv, dbPool)
+
+
+
+
+
+
+
 }
 
 // reads product_templates into internal/catalog's in-memory copy, or dies trying.

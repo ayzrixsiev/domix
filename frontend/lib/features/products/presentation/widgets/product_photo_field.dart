@@ -26,6 +26,7 @@ class ProductPhotoField extends StatelessWidget {
     required this.localFile,
     required this.isBusy,
     required this.isPendingUpload,
+    required this.isLocked,
     required this.onPick,
     required this.onRemove,
   });
@@ -47,6 +48,17 @@ class ProductPhotoField extends StatelessWidget {
   /// that stops the wait reading as a failed upload.
   final bool isPendingUpload;
 
+  /// This row's photograph is the catalogue's and not the owner's to change - see
+  /// `Product.photoEditable`.
+  ///
+  /// **The picture still shows, with a lock chip on it.** It is deliberately not hidden and
+  /// deliberately not a disabled-looking frame: this is the same treatment [ProductLockedField]
+  /// gives a template row's name, unit and category one screen-length above, and it is chosen for
+  /// the same reason. The owner is entitled to see what a customer sees on their own tile; what they
+  /// are not offered is a control. A greyed-out «Заменить» would still look like a button that ought
+  /// to work, and the owner finds out by pressing it.
+  final bool isLocked;
+
   final VoidCallback onPick;
 
   /// null when there is nothing to remove, which is what hides the button rather than disabling it.
@@ -67,8 +79,9 @@ class ProductPhotoField extends StatelessWidget {
         PressableScale(
           // a tap anywhere on the frame opens the picker, which is what the empty state promises -
           // and disabled outright while a request is in flight, so a second pick cannot race the
-          // first upload
-          onTap: isBusy ? null : onPick,
+          // first upload. null on a locked row leaves the frame inert *and* unanimated, which is
+          // what stops it reading as a control that swallowed the tap.
+          onTap: isBusy || isLocked ? null : onPick,
           child: Container(
             height: _height,
             width: double.infinity,
@@ -76,18 +89,33 @@ class ProductPhotoField extends StatelessWidget {
               color: _hasPhoto ? AppColors.surfaceWhite : AppColors.surfaceMuted,
               borderRadius: BorderRadius.circular(AppRadius.md),
               border: Border.all(
-                color: _hasPhoto ? AppColors.hairline : AppColors.primaryTint,
+                color: _hasPhoto || isLocked ? AppColors.hairline : AppColors.primaryTint,
                 // the empty state is an invitation, so its edge is heavier - the same weight the
-                // add-product tile uses at the end of the catalogue grid
-                width: _hasPhoto ? 1 : 1.4,
+                // add-product tile uses at the end of the catalogue grid. a locked row is not an
+                // invitation, so it keeps the plain hairline even with nothing in it.
+                width: _hasPhoto || isLocked ? 1 : 1.4,
               ),
             ),
             clipBehavior: Clip.antiAlias,
             child: Stack(
               fit: StackFit.expand,
               children: [
-                if (_hasPhoto) _Photo(localFile: localFile, imageUrl: imageUrl) else _EmptyPrompt(strings: strings),
+                if (_hasPhoto)
+                  _Photo(localFile: localFile, imageUrl: imageUrl)
+                else if (isLocked)
+                  const _PhotoUnavailable()
+                else
+                  _EmptyPrompt(strings: strings),
                 if (isBusy) const _BusyScrim(),
+                if (isLocked)
+                  Positioned(
+                    left: 10,
+                    bottom: 10,
+                    child: _Caption(
+                      label: strings.templateFieldLocked,
+                      icon: CupertinoIcons.lock_fill,
+                    ),
+                  ),
                 if (isPendingUpload && !isBusy)
                   Positioned(
                     left: 10,
@@ -98,7 +126,7 @@ class ProductPhotoField extends StatelessWidget {
             ),
           ),
         ),
-        if (_hasPhoto) ...[
+        if (_hasPhoto && !isLocked) ...[
           const SizedBox(height: 10),
           Row(
             children: [
@@ -229,9 +257,13 @@ class _BusyScrim extends StatelessWidget {
 // a solid white pill over the picture, for the same reason the grid tile's chips are solid: a
 // translucent one that reads correctly over a pale photo disappears over a dark one
 class _Caption extends StatelessWidget {
-  const _Caption({required this.label});
+  const _Caption({required this.label, this.icon = CupertinoIcons.clock});
 
   final String label;
+
+  /// A clock while a pick waits for a product that does not exist yet, a padlock on a row whose
+  /// photo is the catalogue's. Same pill, and the glyph is what says which of the two it is.
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -245,7 +277,7 @@ class _Caption extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(CupertinoIcons.clock, color: AppColors.textGrey, size: 11),
+          Icon(icon, color: AppColors.textGrey, size: 11),
           const SizedBox(width: 5),
           Text(
             label,

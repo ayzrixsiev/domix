@@ -295,6 +295,12 @@ class _CategoryTile extends StatelessWidget {
           //
           // No border with it: hairline is lighter than trackGrey, so it would draw a pale ring
           // round a darker fill. The fill carries the shape on its own now.
+          //
+          // **The glyph is `textMuted`, not `textDark`.** One near-black mark on a page is a detail;
+          // eight of them in a grid is the heaviest thing on the home screen, and the section read as
+          // a row of stamps punched into it. The weight has to come down without the glyph going
+          // faint - a category tile is a control, and `textGrey` on this fill is under the 3:1 a
+          // non-text mark wants. See AppColors.textMuted.
           Container(
             height: _glyphBox,
             width: _glyphBox,
@@ -303,7 +309,7 @@ class _CategoryTile extends StatelessWidget {
               color: AppColors.trackGrey,
               borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
-            child: Icon(icon, color: AppColors.textDark, size: 28),
+            child: Icon(icon, color: AppColors.textMuted, size: 27),
           ),
           const SizedBox(height: 7),
           // Expanded, so the label owns the whole strip under the glyph box no matter how many lines

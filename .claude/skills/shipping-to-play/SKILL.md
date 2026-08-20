@@ -377,6 +377,5 @@ than on effort, and the vault takes ten minutes and removes the worst outcome on
 - **No refresh token.** The user-existence check in `RequireAuth` covers deletion, but a *stolen* token
   belonging to a live account works until it expires. Revoking one without deleting the account needs a
   `token_version` column bumped on logout.
-- **`TELEGRAM_DEBUG` must stay off in production** — the firehose contains real phone numbers. Same for
-  `TRUST_PROXY`: only turn it on once something in front *always* rewrites `X-Forwarded-For`, since both
-  ways of getting it wrong fail silently.
+- **`TRUST_PROXY`**: only turn it on once something in front *always* rewrites `X-Forwarded-For`, since
+  both ways of getting it wrong fail silently.

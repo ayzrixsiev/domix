@@ -725,6 +725,12 @@ class AppLocalizations {
       ? 'Магазин ещё не указал цены на товары'
       : "Do'kon hali mahsulot narxlarini ko'rsatmagan";
 
+  /// The filter over one shop's own catalogue. Names what it searches - a Универсальный shop is a
+  /// hundred tiles, and «Поиск» alone on a screen that already has a search bar elsewhere would not
+  /// say which of the two this one is.
+  String get shopProductsSearchHint =>
+      isRu ? 'Поиск по товарам магазина' : "Do'kon mahsulotlari bo'yicha qidirish";
+
   // product add/edit/delete failures - keyed off the backend's machine-readable `code` (see
   // writeAPIError in backend/internal/endpoints/authz.go), same contract as the two above
   String productErrorMessage(String code, {int? limit}) {
@@ -825,6 +831,16 @@ class AppLocalizations {
       ? 'Покупатели видят это фото в каталоге магазина.'
       : "Xaridorlar bu rasmni do'kon katalogida ko'radi.";
 
+  /// Why the picture on a seeded row is not a control.
+  ///
+  /// Worded as what the photo *is* rather than as what the owner may not do: the rule is that this
+  /// picture is the same in every shop of the category, and once that is said the restriction
+  /// explains itself. «Вы не можете изменить фото» would be the same sentence with an accusation in
+  /// it, over a photo they have done nothing to.
+  String get cataloguePhotoNote => isRu
+      ? 'Это фото из общего каталога — оно одинаковое во всех магазинах вашей категории, поэтому его нельзя заменить. Свои фото можно ставить на товары, которые вы добавили сами.'
+      : "Bu umumiy katalogdagi rasm — u sizning kategoriyangizdagi barcha do'konlarda bir xil, shuning uchun uni almashtirib bo'lmaydi. O'z rasmlaringizni o'zingiz qo'shgan mahsulotlarga qo'ya olasiz.";
+
   String get addPhotoAction => isRu ? 'Добавить фото' : "Rasm qo'shish";
   String get changePhotoAction => isRu ? 'Заменить' : "Almashtirish";
   String get removePhotoAction => isRu ? 'Удалить фото' : "Rasmni o'chirish";
@@ -872,6 +888,13 @@ class AppLocalizations {
         return isRu
             ? 'Слишком много фото подряд. Подождите немного.'
             : "Ketma-ket juda ko'p rasm. Biroz kuting.";
+      // the screen hides the control on a locked row, so this only ever arrives on an app that is a
+      // build behind the rule - or one talking to a backend where a catalogue was photographed
+      // between opening the form and pressing the button. it says the rule rather than "forbidden".
+      case 'template_photo':
+        return isRu
+            ? 'Фото товара из общего каталога изменить нельзя.'
+            : "Umumiy katalogdagi mahsulot rasmini o'zgartirib bo'lmaydi.";
       // the picker itself refused - no camera on the device, or the owner declined access. it never
       // reaches the network, so it has no server code and gets one of its own.
       case 'picker_failed':

@@ -19,9 +19,19 @@ import 'package:frontend/features/stores/data/shop_model.dart';
 import 'package:frontend/features/stores/presentation/screens/shop_card_screen.dart';
 import 'package:frontend/features/products/data/product_category.dart';
 
-/// the page gutter every block shares - the same 16 the header and search bar sit on, so section
-/// headings line up with them down the left edge
-const EdgeInsets _gutter = EdgeInsets.symmetric(horizontal: 16);
+/// The page gutter every block on this feed shares, header included - so the DOMIX pill, the search
+/// bar and every section heading line up down one left edge.
+///
+/// **10, down from 16, and the number it is really set against is the nav bar's own inset**
+/// (`FloatingBottomNavBar`, 22). The bar is *supposed* to look narrower than the page it floats over
+/// - that gap is the entire reason it reads as floating rather than as a docked strip - and at 16
+/// against 18 the two edges were 2dp apart, which no eye resolves. Widening the content was chosen
+/// over narrowing the bar because the bar is five touch targets and the content is not: the feed had
+/// room to give and the bar did not.
+///
+/// **Not applied here.** Each block takes it itself, which is what lets [VipShopsCarousel] opt out
+/// and bleed to the screen edges while every heading still lines up.
+const EdgeInsets _gutter = EdgeInsets.symmetric(horizontal: 10);
 
 /// The home feed: VIP Магазины, Популярные категории, Лучшие предложения.
 ///
@@ -89,7 +99,10 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const HomeHeader(),
+          // the header sits on the shared gutter like every other block rather than carrying its own
+          // copy of the number - two constants that have to agree is how the DOMIX pill ends up a
+          // few pixels out of line with the search bar under it
+          const Padding(padding: _gutter, child: HomeHeader()),
           Expanded(
             child: RefreshIndicator(
               color: AppColors.primaryOrange,
@@ -130,11 +143,11 @@ class _HomeScreenState extends State<HomeScreen> {
   /// **All three sections always draw, whatever the database holds**, and only the very first paint
   /// (before the fetch lands) is different.
   ///
-  /// VIP Магазины is five slots whether or not any are sold; Лучшие предложения is fifteen places
-  /// per category, and with no category ranked it draws fifteen open ones with no tab strip;
-  /// Популярные категории is always all twelve tiles. **A section that vanished when it was empty
-  /// read as a screen missing a chunk of itself**, and the empty places are the honest version: this
-  /// is the shape the feed has, and it fills itself in as shops finish pricing.
+  /// VIP Магазины is five slots whether or not any are sold; Лучшие предложения is four segments -
+  /// every shop category, always - over fifteen places each; Популярные категории is always all
+  /// twelve tiles. **A section that vanished when it was empty read as a screen missing a chunk of
+  /// itself**, and the empty places are the honest version: this is the shape the feed has, and it
+  /// fills itself in as shops finish pricing.
   ///
   /// None of the headings carries a "see all" action. Each already shows everything it has: the VIP
   /// carousel loops endlessly in both directions, the categories grid pages through all twelve, and

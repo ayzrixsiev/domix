@@ -887,20 +887,21 @@ func (a *Admin) ListShopProducts(w http.ResponseWriter, r *http.Request) {
 
 	products := make([]ProductResponse, 0, len(rows))
 	for _, row := range rows {
-		isTemplate, nameEditable := templateFlags(row.TemplateKey)
+		isTemplate, nameEditable, photoEditable := templateFlags(row.TemplateKey)
 		imageURL, ownImage := productImage(row.ImagePath)
 		products = append(products, ProductResponse{
-			ID:           row.ID,
-			ShopID:       row.ShopID,
-			Name:         row.Name,
-			Category:     row.Category,
-			Unit:         row.Unit,
-			Price:        nullableInt64(row.Price),
-			Availability: row.Availability,
-			IsTemplate:   isTemplate,
-			NameEditable: nameEditable,
-			ImageURL:     imageURL,
-			OwnImage:     ownImage,
+			ID:            row.ID,
+			ShopID:        row.ShopID,
+			Name:          row.Name,
+			Category:      row.Category,
+			Unit:          row.Unit,
+			Price:         nullableInt64(row.Price),
+			Availability:  row.Availability,
+			IsTemplate:    isTemplate,
+			NameEditable:  nameEditable,
+			ImageURL:      imageURL,
+			OwnImage:      ownImage,
+			PhotoEditable: photoEditable,
 		})
 	}
 
@@ -1016,7 +1017,7 @@ func (a *Admin) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("ADMIN %d updated product %d (shop %d)", adminID, productID, updated.ShopID)
 
-	isTemplate, nameEditable := templateFlags(updated.TemplateKey)
+	isTemplate, nameEditable, photoEditable := templateFlags(updated.TemplateKey)
 	imageURL, ownImage := productImage(updated.ImagePath)
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(ProductResponse{
@@ -1024,7 +1025,7 @@ func (a *Admin) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		Category: updated.Category, Unit: updated.Unit,
 		Price: nullableInt64(updated.Price), Availability: updated.Availability,
 		IsTemplate: isTemplate, NameEditable: nameEditable,
-		ImageURL: imageURL, OwnImage: ownImage,
+		ImageURL: imageURL, OwnImage: ownImage, PhotoEditable: photoEditable,
 	})
 }
 

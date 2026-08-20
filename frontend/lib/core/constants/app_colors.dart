@@ -41,6 +41,16 @@ class AppColors {
   static const Color textFaint = Color(0xFFA9AEB8);
   static const Color textLight = Color(0xFFFFFFFF);
 
+  // the step between `textDark` and `textGrey`, and it exists for *glyphs* rather than for prose.
+  // one icon at textDark is a detail; twelve of them in a grid is the darkest thing on the screen,
+  // which is exactly what Популярные категории looked like - a wall of near-black marks over a pale
+  // page. textGrey is the obvious softer choice and is too soft: on trackGrey it lands at about
+  // 2.5:1, under the 3:1 WCAG asks of a non-text mark. This sits at ~4.3:1 on that same fill.
+  //
+  // A token rather than `textDark.withValues(alpha: 0.62)`, which composites to almost this colour
+  // and silently changes the moment the fill behind it does.
+  static const Color textMuted = Color(0xFF646B76);
+
   // Accents
   static const Color starYellow = Color(0xFFFFB800);
   static const Color accentBlue = Color(0xFF2A85FF);

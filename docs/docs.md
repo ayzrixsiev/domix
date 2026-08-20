@@ -76,15 +76,6 @@ erDiagram
     }
 ```
 
-
-
-
-
-
-
-
-
-
 ## Database system design
 
 ### Connection pool
@@ -108,19 +99,18 @@ Parent context in this function means that we need to pass it an existing ctx wh
 2. Or create ourselfs by using context.Background()
 
 
-
-
-
-
-
-
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
 
 
 # Auth
 
 Our authentication works around SessionManager struct, which contains two sync.Map, one called `session` for linking sessionID and data that we got from flutter app - name and role, this data is saved inside another struct named SessionData, another sync map called chatToSession links telegram chatID to sessionID. We used sync.Map deliberately to avoid race condition (two or more goroutines e.g from http requests trying to allocate a store inside one shared container), so sync.Map saves us from concurrency problem. Each sync map contains their entries, and i set up goroutines to watch those entries, if one of the entries in sessions sync.Map get older than 10 minutes it gets cleaned up, if user stuck in the telegram chat without sending a phone number, session and session data will be deleted after 10 minuets as i described above, which will create an orphaned chatToSession - chat id pointing to non existing session id, so the same goroutine cleans it up as soon as it cleand sessions entry.
 
-### Auth via telegram bot backend flow
 1. User presses create account in flutter app then he is prompted to choose a role (customer or shop owner) and write down his name, after that he presses "Verify through telegram" button.
 2. Flutter app hits http point api/auth/init and sends a json containing gathered info: role, name.
 3. Our backend receives this json data and generates random sessionID, after that using SessionManager's sync map called sessions, it links this sessionID with SessionData, like this:
@@ -132,16 +122,20 @@ sm.sessions.Store(sessionID, SessionData{
 	CreatedAt: time.Now(),              
 })      
 ```                                
-4. Our backend sends telegram link and attaches to it sessionID to the flutter app, flutter app opens a telegram with that sessionID, sessionID is then send by telegram bot back to our backend with telegram's chatID.
-5. Our backend using SessionManager's sync map called chatToSession, connects that sessionID with chatID, and this way we know who's phone number we will get from this particular chat.
-6. After that we prompt a user to send his phone number, once he does that, telegram sends chatID along side his phone number to our backend, we check whether the user exists (if yes we check whether his role and name changed, if yes we edit it), if he does we log in, if no we sign him up and generate jwt token and send it to the flutter app.
+1. Our backend sends telegram link and attaches to it sessionID to the flutter app, flutter app opens a telegram with that sessionID, sessionID is then send by telegram bot back to our backend with telegram's chatID.
+2. Our backend using SessionManager's sync map called chatToSession, connects that sessionID with chatID, and this way we know who's phone number we will get from this particular chat.
+3. After that we prompt a user to send his phone number, once he does that, telegram sends chatID along side his phone number to our backend, we check whether the user exists (if yes we check whether his role and name changed, if yes we edit it), if he does we log in, if no we sign him up and generate jwt token and send it to the flutter app.
+   
 
-### Auth via telegram bot flluter flow:
-1. frontend/lib/features/profile/data/auth_service.dart - file that contains code for initializing handshake with go backend. It sends collected data to the backend, does polling to check the status of a login ticket and stores JWT and role inside user's hardware encrypted storage.
-2. frontend/lib/features/profile/presentation/controllers/auth_controller.dart - file that orchestrates the whole auth process, by initializing authService, initializing handshake with backend, setting up pollling, based on the incoming output dictates how to render the page in profile section.
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
 
 
-### LOCAL TESTING
+# LOCAL TESTING
 
 - TRUNCATE TABLE users RESTART IDENTITY CASCADE;          
 - ngrok http 8080                           

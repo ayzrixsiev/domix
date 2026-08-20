@@ -34,8 +34,13 @@ class FloatingBottomNavBar extends StatelessWidget {
     // and the bar would drop into the system buttons for as long as somebody is typing.
     final systemInset = MediaQuery.viewPaddingOf(context).bottom;
 
+    // 22, and it is set against the home feed's own gutter (10) rather than picked on its own. a bar
+    // that floats has to be visibly narrower than the page under it - that gap is the whole effect -
+    // and at 18 against a 16dp gutter the two edges were 2dp apart, which reads as one flush block.
+    // most of the correction was made by widening the content, since this bar is five touch targets
+    // and cannot give up much width; these 4dp are the rest of it.
     return Padding(
-      padding: EdgeInsets.fromLTRB(18, 0, 18, 8 + systemInset),
+      padding: EdgeInsets.fromLTRB(22, 0, 22, 8 + systemInset),
       child: Container(
         height: 76,
         decoration: BoxDecoration(

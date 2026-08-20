@@ -137,16 +137,20 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  /// Opens the shop card.
+  /// Opens the shop card **as a draggable sheet over the map**.
   ///
-  /// **The same screen a VIP card and a Лучшие предложения row open**, which is the point: a shop is
-  /// one object and it should look like one wherever it is reached from. This used to be a modal
-  /// sheet built here in this file, so the map owned a screen three other surfaces needed and could
-  /// not have - see the class comment on [ShopCardScreen] for why it became a route.
+  /// The card itself is the same one a VIP card and a Лучшие предложения row open, and that is the
+  /// point: a shop is one object and it should look like one wherever it is reached from. Only the
+  /// chrome differs, and only here - see the class comment on [ShopCardScreen].
+  ///
+  /// **Why a sheet again, when the sheet was the thing that got deleted.** What was deleted was a
+  /// shop card *built inside this file*: the map owned a screen three other surfaces needed, so a
+  /// paid VIP placement was a card that did nothing when it was tapped. Pushing a route fixed that by
+  /// making the card reachable from anywhere, and cost the map the thing a map is for - a tap
+  /// replaced the map entirely, so comparing three nearby shops was three pushes and three pops, each
+  /// one rebuilding the map. The shop card stays shared; the map gets its overlay back.
   void _openShopCard(BuildContext context, Shop shop) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => ShopCardScreen(shop: shop)),
-    );
+    showShopCardSheet(context, shop);
   }
 
   @override

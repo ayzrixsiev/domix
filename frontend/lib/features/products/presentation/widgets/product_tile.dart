@@ -187,21 +187,26 @@ class _ProductBanner extends StatelessWidget {
   }
 }
 
-// a near-neutral surface with the faintest warm tint, not a saturated block of brand colour: a
-// placeholder should not be the loudest thing on the card. same idea as ShopBanner in map_screen.
+// **Plain white, and that is about the photos rather than about the empty state.**
+//
+// This is painted *under* every tile, and the photo on top of it is `contain` - so on a portrait
+// shot it is the two bars either side of the picture and on a landscape one the two above and
+// below. It used to be a peach-to-grey gradient (`primarySoft` → `surfaceMuted`), which meant a
+// catalogue shot cut out on white sat in a frame that was warm on one side and grey on the other:
+// the photo read as pasted onto the tile instead of being the tile. White is the same white the
+// photos are shot and flattened onto (`imagestore` composites alpha onto white), so the seam
+// disappears entirely.
+//
+// The cost is that a product with no photo is now a white band with one glyph in it, where the tint
+// used to fill it. That is the right way round - a tile with a picture is the normal case and a
+// tile without one is the exception, so the exception is what should look plainer.
 class _BannerPlaceholder extends StatelessWidget {
   const _BannerPlaceholder();
 
   @override
   Widget build(BuildContext context) {
-    return const DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.primarySoft, AppColors.surfaceMuted],
-        ),
-      ),
+    return const ColoredBox(
+      color: AppColors.surfaceWhite,
       child: Center(
         child: Icon(CupertinoIcons.cube_box_fill, color: AppColors.textFaint, size: 30),
       ),

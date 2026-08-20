@@ -417,11 +417,10 @@ void main() {
     }
   });
 
-  // **the VIP heading now stays even with nothing sold, and Лучшие предложения still does not.**
-  // The two look inconsistent and are not: five placements exist as a product whether or not anybody
-  // has bought one, so their empty slots say "available". Лучшие предложения builds its tabs from
-  // the data, so with nothing ranked there is no tab - and fifteen open places under a heading with
-  // no filter above them would be a section about nothing.
+  // **every heading stays, whatever the database holds.** Five VIP placements exist as a product
+  // whether or not anybody has bought one, so their empty slots say "available"; the four shop
+  // categories exist whether or not anybody has finished pricing, so their segments say the same
+  // thing about a ranking. Neither section is allowed to disappear when it is empty.
   testWidgets('the VIP section is drawn with nothing sold', (tester) async {
     final strings = AppLocalizations(AppLanguage.ru);
 

@@ -130,9 +130,17 @@ server root from the same `API_BASE_URL`; anything that isn't an auth call build
 spinner, one error state instead of three that can disagree.
 
 `home_screen.dart` puts **no horizontal padding on its scroll view** — each block applies the shared
-`_gutter` (16px) itself, which keeps headings aligned with the DOMIX pill while letting
-`VipShopsCarousel` bleed to the edges. **Sections are separated by whitespace alone (26px) — no
-section containers anywhere on the feed.**
+`_gutter` itself, which keeps headings aligned with the DOMIX pill while letting `VipShopsCarousel`
+bleed to the edges. **Sections are separated by whitespace alone (26px) — no section containers
+anywhere on the feed.**
+
+**The gutter is 10, and the number it is set against is `FloatingBottomNavBar`'s own inset (22).** A
+floating bar has to look visibly narrower than the page it floats over — that gap *is* the effect —
+and at 16 against 18 the two edges were 2dp apart, so the bar read as a docked strip. Most of the
+correction came from widening the content rather than narrowing the bar, which is five touch targets
+and had nothing to give. **`HomeHeader` no longer carries its own copy of the number**: it applies
+vertical padding only and the screen wraps it in `_gutter`, because two constants that have to agree
+by hand is how the DOMIX pill ends up a few pixels out of line with the search bar under it.
 
 ### Slots: both shop sections are a fixed number of places
 
@@ -182,6 +190,16 @@ is unbounded *forwards only*, so it opens at page `5000 × slots.length + slots.
 the index with `%` (Euclidean in Dart, so it holds below the origin too). **Guard the empty list —
 `index % 0` throws.** The `+ length ~/ 2` is what parks it on the centre slot.
 
+**The cards float, and the `Clip.none` under them is what makes that true.** `_cardSurface` is
+`AppShadows.floating` with **no border** — the two are one decision: `floating` is a wide 30px ambient
+blur plus a tight contact shadow, and an outline round a lifted shape redraws the edge the shadow was
+softening. It was `raised` inside a hairline, the recipe for a card lying *on* the page; this is the
+one strip on the home screen that should look picked up off it, because these five places are the
+thing Domix sells. The `PageView`'s viewport is exactly `cardHeight` tall, so its default hard edge
+**cuts the shadow off at the card's own bottom edge** — turning the change back into no change.
+`clipBehavior: Clip.none` lets the blur spill into the whitespace above and below, which is where a
+lift lives; the pages either side already extend past the screen and are clipped by the screen.
+
 **The `initialPage` trap is designed out now, not worked around.** A `PageController`'s `initialPage`
 cannot change after it is built, and the opening page used to depend on a shop count that lands after
 the first frame — hence the `ValueKey` forcing a fresh `State`. The slot count is a constant, so the
@@ -201,17 +219,21 @@ other edge showing. **Widening the card takes from it, and so does deepening the
 
 Today: `0.87 / 4 / 0.04`, giving `23.4 − 4 − 6.3 ≈ 13dp` on a 360dp phone. That is *the same peek* the
 previous `0.84 / 5 / 0.07` gave — the card was widened by ~13dp and paid for out of the recede, which
-is now subtle. `cardHeight` went 232 → 252 with it (banner 120 → 132).
+is now subtle.
+
+**`cardHeight` is 232 (banner 120), where the width is not.** The same pass raised it to 252/132 and
+it was put back the next day: taller read as heavy rather than as important and pushed Популярные
+категории off the first screenful. **Height and width are independent dials here** — only the width
+trades against the peek — so reverting one left the other alone.
+
+**"Stronger recede" and "leave an edge of the neighbours visible" are the same dial pulled opposite
+ways.** A card scales about its own centre, so every point of shrink eats the neighbour's sliver
+directly. 12% plus a fade was tried on 2026-08-18 and reverted the same day — the neighbours had all
+but vanished. Wanting the recede back means narrowing the card again; there is nowhere else to find
+the pixels.
 
 **`test/home_screen_test.dart` measures this at 360dp** rather than at the 800dp test default, so the
-next person to widen the card finds out from a failing test instead of from a phone. Wanting the
-recede back means narrowing the card again; there is nowhere else to find the pixels.
-
-**An off-centre card recedes 7%, and the number is capped by `viewportFraction` (0.84).** A card scales
-about its own centre, so every point of shrink eats the neighbour's visible sliver — ~16px of peek at
-5%, ~6px at 12% on a 360dp phone. **"Stronger effect" and "leave an edge of the neighbours visible"
-are the same dial pulled opposite ways**; 12% was tried and reverted. Wanting more means bringing
-`viewportFraction` down with it (0.80 buys back what 12% costs) and a narrower card everywhere.
+next person to widen the card finds out from a failing test instead of from a phone.
 
 **A card opens `ShopCardScreen`** (§7) — through `PressableScale`, not an ink ripple, whose
 `onTapCancel` also matters here specifically: the `PageView` claims the gesture the moment a swipe
@@ -230,21 +252,24 @@ Cheapest shops, **one segment per shop category**. A comparison only means somet
 a Сантехника basket is a different list of goods from a Универсальный one, so "на 4% дешевле рынка"
 refers to a different market on each row, and stacking them in one column would invite comparing 4%
 against 6% when the two are measured off different baselines. All groups arrive in one response
-(bounded at 4 × 15), so switching is never a request. **Only categories with ranked shops become
-segments**, and with one populated category the control is not drawn at all rather than showing a
-single permanently-selected pill. It is **not** a proximity list — there is no location input, which
-is why the rows show no distance. **A row opens `ShopCardScreen`** (§7); `HomeShopRow` takes a plain
-`VoidCallback?` and the screen builds the closure, so navigation stays out of the leaf widget.
+(bounded at 4 × 15), so switching is never a request. It is **not** a proximity list — there is no
+location input, which is why the rows show no distance. **A row opens `ShopCardScreen`** (§7);
+`HomeShopRow` takes a plain `VoidCallback?` and the screen builds the closure, so navigation stays out
+of the leaf widget.
 
 **Each tab is `BestOffersList.slotCount` (15) places**, real shops first and `EmptyShopRow` for the
 rest.
 
-**With *no* category ranked — where the app launches — the section still draws its fifteen places,
-with no tab strip.** It used to disappear entirely, which read as a screen missing a chunk of itself.
-There is no strip because the tabs come from the data and there is none; that is a different thing
-from "a tab set to no category", which would be a filter that filters to nothing. `groups.isEmpty` is
-handled in `BestOffersList.build`, not by the screen, so the screen renders the section
-unconditionally.
+**The strip is `ShopCategory.values` — all four, always, whatever the response held.** `groups` is now
+only the *contents* of a tab: `_shopsIn(category)` scans it for a match and returns `const []` when
+there is none, so an unranked category is a segment over fifteen open places. Root §7 has why the
+opposite rule (one segment per group, no strip below two) was reversed on 2026-08-20.
+
+Two consequences worth keeping straight. The state the app launches in — nothing ranked at all — draws
+the full strip and fifteen open places, where it used to draw the section with no strip and, before
+that, nothing at all. And **`_selected` needs no clamp and no `didUpdateWidget` guard**: the segment
+count is a compile-time constant, so a refresh can no longer leave the index pointing past the end of
+the list. That hazard was the price of building the tabs out of the response.
 
 The filter is an **iOS-style segmented control**: a recessed `trackGrey` track with a white pill
 sliding over `AppMotion.base`. **Every segment is exactly the same width**, taken from the container and
@@ -267,6 +292,10 @@ exhaustive `switch`es — so a thirteenth category is a compile error rather tha
   (`#EFF1F5`), so with no panel behind them the tiles read as white. **A fill is grey relative to what
   is behind it, so moving a surface out from under a widget can silently invert what its fill means.**
   No border — `hairline` is lighter than `trackGrey` and would ring a darker fill in a paler line.
+- **The glyph inside it is `textMuted`, not `textDark`.** One near-black mark is a detail; eight in a
+  grid is the heaviest thing on the home screen, and the section read as a row of stamps punched into
+  it. `textGrey` is the obvious softer choice and lands at ~2.5:1 on this fill, under the 3:1 a
+  non-text mark wants — hence the token (§9).
 - **The label is top-aligned under the glyph box, not centred in the cell.** Centring drops the box
   half a line on whichever tiles wrap to two lines, so a row of four gets its icons at two heights —
   and which tiles wrap changes with the display language. `Expanded` round the `Text` gives it a tight
@@ -328,11 +357,24 @@ to fall into twice. **The bar became a button because an inline field trapped th
   keystroke past two characters is a sequential scan (root §7). The app enforces the two-rune floor
   before navigating (`SearchResultsScreen.isSearchable`); the server's check is the backstop.
 - **The filter button was deleted, not disabled** — it was a `Container` with `onTap: () {}`.
+- **The bar is a recessed grey well, not a white card.** It was white, hairline-bordered and lifted —
+  the treatment every *content* card on this feed wears — so the one control at the top of the screen
+  looked like the first row of the feed. `trackGrey` and not `surfaceMuted`/`cardGrey` for the reason
+  on the token: those two are at or above the page, so a box filled with either reads as white sitting
+  on grey. No border and no shadow with it (`hairline` is lighter than the fill; a shadow under
+  something recessed is a contradiction), and the hint went `textFaint` → `textGrey`, which was
+  already pale on white and unreadable on a darker fill. **The shop card's catalogue search wears the
+  identical recipe** (§7), so the two read as one control even though one is a field and one is a
+  button.
 
 ### Header
 
 All controls are real (`home_header.dart`), where they were once non-interactive `Container`s that
-looked like buttons. The **city pill** opens the same `LocationPickerScreen` the add-store form uses
+looked like buttons. **Both of them lift off the page now** — `AppShadows.card`, 40px, and the city
+chip's chevron at `textMuted`. They were flat white inside a hairline, which is the recipe for an
+*inert* surface, so on a page whose other elements are all shadowed cards they read as the palest
+thing on screen rather than as the two things you can press. The smallest shadow in the scale is
+enough: anything heavier would put more shadow under a chip than under the VIP cards below it. The **city pill** opens the same `LocationPickerScreen` the add-store form uses
 and keeps only the city; `CityController` ignores a blank city and a case-insensitive match, so moving
 the pin within one city rebuilds nothing. The **bell** opens a permanently-empty notifications screen,
 because an icon that does nothing reads as broken where an empty state reads as "nothing yet". Known
@@ -411,14 +453,16 @@ scannable at that size, a coloured dot and `−4%`.
 
 ### Opening a shop, and search
 
-**Tapping a pin pushes `ShopCardScreen` (§7).** It used to open a modal sheet built inside
-`map_screen.dart`, which meant the map owned a screen three other surfaces needed — a VIP card and a
-Лучшие предложения row could not open a shop at all. The sheet and its section widgets are **deleted**,
-not moved: `_ShopDetailsSheet`, `_ShopMetaLine`, `_BasketPriceBlock`, `_DetailRow`, `_CallButton`,
-`_SheetGrabber`, `ShopBanner` and the rest live on only in `git log`.
+**Tapping a pin opens the shop card as a draggable sheet** — `showShopCardSheet` (§7), one line in
+`map_screen.dart` and not a screen built there. The distinction is the whole point: the sheet that
+*was* deleted was a shop card written inside this file, which is why a VIP card and a Лучшие
+предложения row could not open a shop at all. `_ShopDetailsSheet`, `_ShopMetaLine`,
+`_BasketPriceBlock`, `_DetailRow`, `_CallButton`, `_SheetGrabber`, `ShopBanner` and the rest live on
+only in `git log`, and **must not come back** — the card is shared now, and only its chrome differs
+here.
 
-Picking a search result flies the camera *before* pushing, so popping the card lands on a map already
-centred on the shop that was chosen.
+Picking a search result flies the camera *before* opening, so the sheet comes up over a map already
+centred on the shop that was chosen — and dismissing it leaves that camera where it is.
 
 `map_search_panel.dart` searches two sources and labels them separately — shops matched
 **synchronously in memory** from the loaded list, addresses through Nominatim (debounced 450ms, 3+
@@ -447,35 +491,116 @@ tapped: a failure with no error anywhere, on the one card somebody had paid for.
 **It takes a whole `Shop`, never an id to look up.** Every entry point already holds one: the map has
 the list it drew its pins from, and `GET /api/home` sends full shop rows that `HomeShopPreview` merely
 projects down for the feed. So the card paints complete on its first frame — no spinner, no second
-round trip for facts the app already had. That is why `HomeShopPreview` now carries the row it came
-from, and why that field is **nullable**: `home_showcase_content.dart` invents its rows, there is no
-shop behind them, and a `const` preview cannot produce one. A showcase card is therefore simply inert
-rather than opening a card about a business that does not exist. `test/shop_card_test.dart` pins all
-three cases.
+round trip for facts the app already had. That is why `HomeShopPreview` carries the row it came from.
+`test/shop_card_test.dart` pins the three routes in, including the one that must *not* open a card:
+an unsold VIP slot.
 
-**A pushed route rather than a bottom sheet**, for three reasons in order of weight: it is reached
-from lists now, and a list opening a modal sheet on top of itself is not a pattern used anywhere else
-here; it can be a `CustomScrollView`, which is what makes the catalogue a **sliver** and kills the
-second copy of the `shrinkWrap` bug (root §8); and a sheet's height is a compromise between covering
-the map and having room, where a route has the screen. The cost is real and accepted: from the map a
-tap now replaces the map, so comparing three nearby shops is three pushes and three pops. Back returns
-to the same camera.
+#### One content, two chromes
 
-Laid out as **white cards on the grey page** rather than one flat surface with hairline dividers:
-identity → basket price → the two actions → contacts → catalogue. Notes worth keeping:
+`ShopCardView` is written once and arrives two ways, and the split is the whole design.
 
-- **No cover band.** The obvious marketplace layout opens with a full-width hero image, and nothing
-  writes `shops.image_url` — so it would be 200px of placeholder on every shop in the market, which is
-  the exact mistake the old sheet's saturated orange banner was. The shop's photo goes in the 52px
-  category tile when there is one.
-- The **category glyph is the pin's own** (`ShopCategory.icon`) and the line under the name says in
-  words what it meant. Someone arriving from the map has just tapped a teardrop with a wrench in it;
-  this is the only place in the app that translates it.
-- **Позвонить is filled and Маршрут is outlined** — they are not peers. The route link is an ordinary
-  `https://yandex.uz/maps/?rtext=~lat,lng` url, so Yandex Maps claims it as an App Link when installed
-  and a browser answers when it is not, and it needs no new `<queries>` entry.
-- **`launchUrl`'s return value is the signal, never `canLaunchUrl`** — root §8.
-- Pull-to-refresh re-reads the catalogue, the only thing on the screen that changes while it is open.
+- **From the map: a draggable sheet** (`showShopCardSheet`), over the map rather than replacing it.
+  `DraggableScrollableSheet` at `initial = max = 0.92`, `min = 0.5`, `snap: true` — 0.92 is "most of
+  the screen, not all of it", and the strip of map left showing is what says the map is still there.
+  Dragged down to 0.5 it dismisses itself (`shouldCloseOnMinExtent`, the default), which is why there
+  is **no close button anywhere on it** and does not need to be one. The `ScrollController` the
+  builder hands out must end up on the card's `CustomScrollView` and nowhere else: that is what hands
+  a drag between the list and the sheet, and without it the sheet is draggable only by its grabber.
+  `expand: false`, or the route fills the viewport with a transparent slab that swallows every tap
+  meant for the barrier.
+- **From anywhere else: the full-screen route.** A list opening a modal sheet on top of itself is not
+  a pattern used anywhere here, and there is no map underneath worth keeping in view.
+
+**The map's sheet is not the sheet that was deleted.** What was deleted was a shop card *built inside
+`map_screen.dart`*, which is why three other surfaces could not open a shop at all. Pushing a route
+fixed that and cost the map the thing a map is for: a tap replaced it, so comparing three nearby shops
+was three pushes and three pops, each rebuilding the map. The card stays shared; the map got its
+overlay back.
+
+Two consequences to keep straight:
+
+- **No `RefreshIndicator` on the sheet.** A pull at the top of the list is the gesture that puts the
+  sheet away; a spinner competing for it would mean the sheet sometimes refreshes and sometimes
+  closes depending on how far the thumb travelled. The route keeps pull-to-refresh — the catalogue is
+  the only thing on screen that changes while it is open.
+- **The sheet body is wrapped in a transparent `Scaffold`, and that is not decoration.** A modal
+  bottom sheet is a route with no Scaffold, so `ScaffoldMessenger.showSnackBar` from inside it lands
+  in the *map's* Scaffold — underneath the sheet, where nobody sees it. `resizeToAvoidBottomInset` is
+  off, because the draggable sheet already owns its height and two things resizing for one keyboard
+  fight.
+
+#### What is on it, in order
+
+**A cover, then three white cards on the grey page, then the catalogue.**
+
+- **`ShopCategoryBanner` — one painted picture per shop category** (`ShopCategory`), 200 tall, and the
+  reason it is painted is that nothing writes `shops.image_url`: a hero backed by that column would be
+  an empty rectangle on every shop in the market, which is what "no cover band" used to be the answer
+  to. Four stock photographs would be pictures of somebody else's shop and the only raster assets in
+  the app. A painted cover has neither problem and one advantage — **it is the same picture for every
+  Сантехника shop, which makes it information**: a customer learns the teal one is plumbing before
+  reading a word. Deep two-stop gradient + the category's own Lucide glyph tiled on a tilted grid +
+  one large copy anchored bottom-right, drawn through a `TextPainter` (a Lucide icon *is* a character
+  in a font, so thirty of them are one layout and a loop rather than thirty widgets). `isComplex` /
+  `willChange: false` so the engine caches the raster instead of repainting it every scroll frame.
+  **The four palettes are the one place in the app with colour that is not the brand's**, deliberately
+  — brand orange is for actions, and four orange covers would say nothing about which shop you opened.
+  All four carry white at over 5.5:1 before the scrim. The day `image_url` arrives, the photograph
+  goes inside this widget with the same overlay and corners, and no layout is rethought.
+- **The shop's name is on the cover and nowhere else.** `contentInset` lifts it clear of the identity
+  card lapped over the bottom — at the default a two-line name spends its second line behind that
+  card, which is invisible in a mock-up and true of half the shops in the market.
+- **Identity: the category, then the address. Two lines, no chips and no pills.** That block was a row
+  of them (a category chip, a rating chip, a VIP pill) and a card opening with four small rounded
+  boxes reads as a filter bar. Hierarchy carries it instead. The glyph is the pin's own
+  (`ShopCategory.icon`) and the words beside it are what that glyph meant — this is still the only
+  place in the app that translates it. The placement mark moved onto the cover, where there is a
+  picture to sit on; it is a star and three letters, not a capsule.
+- **Comparison first, amount second.** «на 4% дешевле рынка» is the fact a customer came for and
+  «4 850 000 сум» is what it is 4% of, so a reader who stops after one line has still read the useful
+  one. Both come from one condition — the view has no partial state — and the empty case is a sentence
+  about the shop, never a blank.
+- **Contacts is the phone number and the two buttons. The address is not repeated there**; printing it
+  twice made the block look like a form nobody finished. The number is drawn large and is **not** a
+  control: the call button is six points below it, and two affordances for one action is what people
+  press twice and then report as broken.
+- **Позвонить filled, Маршрут outlined** — not peers.
+
+#### «Маршрут» asks the phone, not the web
+
+`geo:` first, the `https://yandex.uz/maps/?rtext=~lat,lng` url only as a fallback. `geo:` is the
+Android platform's own maps scheme rather than any one app's, so every maps app installed registers
+for it and the system shows a chooser — where the url opened Yandex Maps *if installed* and handed a
+phone with Google Maps and no Yandex a **web page**. It is free, needs no package and no key, and
+wants a `<queries>` entry beside the `https` one (root §8).
+
+**What `geo:` cannot do is ask for a route**, and there is no route form of the scheme — the per-app
+ones (`google.navigation:`, `yandexmaps://`) are each a single app again. So the platform link drops a
+named pin and the maps app's own «Маршрут» is one tap away, while the url underneath still asks for
+the route outright. Trying them in that order is what makes both true. Parentheses delimit the label
+in a `geo:` uri and `Uri.encodeComponent` deliberately leaves them alone, so they are stripped from
+the name first.
+
+**`launchUrl`'s return value is the signal, never `canLaunchUrl`** — root §8 — and it *throws* rather
+than returning false when nothing claims a scheme, which is why the catch is part of the answer.
+
+#### The catalogue search
+
+A `TextField` over the shop's own products, drawn only once there are **8 or more priced** — two per
+row, so eight is about a screenful and the point at which scrolling stops being the obvious way to
+find something. Under that a field would filter a list already entirely on screen.
+
+**It filters in memory and sends nothing.** The whole catalogue arrived in the one request this screen
+makes, so a keystroke is a `contains` over a list. That is the difference from the home feed's search
+bar, which is a *button* precisely because its search is a sequential scan on the server (root §7) —
+the argument against as-you-type there does not exist here. Matched on the name only: the shop is the
+page, and the unit would match most of the list.
+
+Three empty states and they are different sentences: the request failed, the shop has priced nothing,
+this query matched nothing. **The failure wins over the filter** — telling a reader to try another
+word sends them typing at a screen with no data behind it. The heading's count is of everything
+priced, not of what the filter left, or the number would fall to 3 while typing and read as the
+catalogue shrinking.
 
 `stores_repository.dart` talks to the real backend. On create, the new `Shop` is appended directly to
 `StoresController`'s in-memory list so it appears on the map immediately.
@@ -524,6 +649,15 @@ place orange is used for something other than a button, because on a fresh shop 
 and it *is* the owner's to-do list; and an availability chip appears only for `on_order`/`unavailable`,
 since in-stock is normal and a badge on every tile says nothing.
 
+**`_BannerPlaceholder` is plain `surfaceWhite`, and that is a decision about the photos rather than
+about the empty state.** It is painted *under* the photo, never instead of it, and the photo is
+`contain` — so it is the letterbox bars either side of the picture. It was a `primarySoft` →
+`surfaceMuted` gradient until 2026-08-20, which framed every catalogue shot in warm on one edge and
+grey on the other and made the photo read as pasted onto the tile. White is the same white the shots
+are flattened onto server-side (`imagestore` composites alpha onto white), so the seam disappears.
+The cost is that a product with no photo is a white band with one glyph in it — right way round, since
+a tile with a picture is the normal case.
+
 **The customer grid shows only priced products.** An unpriced row is useful to the *owner*, which is
 why their own grid shows it, but to a customer it is a tile that answers no question. A shop with
 nothing priced gets a line saying so rather than a hidden section, because a missing section reads as
@@ -548,8 +682,15 @@ Product counts live on `Shop` (only `/api/shops/mine` computes them), so the edi
 `ProductPhotoField` on `ProductEditScreen`, backed by `image_picker`. The rules and the endpoint are
 root §7; what belongs here is the app's half.
 
-- **Every product in the owner's own shop can take one, template rows included** — including an обои
-  slot, which is the case that has no catalogue photo at all.
+- **Only what the catalogue has not photographed can take one** — the owner's own products, обои slots
+  and древесные материалы. On a locked row `ProductPhotoField` still **shows the picture, with a
+  padlock chip on it**: it is the same treatment `ProductLockedField` gives a template row's name one
+  screen-length above, and for the same reason. The owner is entitled to see what a customer sees on
+  their own tile; what they are not offered is a control, and a greyed-out «Заменить» still looks like
+  a button that ought to work. A `_HintCard` under it says why, separately from the one at the top of
+  the form — that one explains the *fields*, this one explains a picture 400px further down that the
+  owner has just tried to tap. `isLocked` comes from `Product.photoEditable`, which the **server**
+  decides (root §7); a product being created has no server row and is never locked.
 - **Uploaded the instant it is picked, not on «Сохранить».** The file is on the phone and the row
   already exists, so waiting would leave the owner looking at a picture that is nowhere with nothing
   saying so. It is a separate request with its own busy flag and its own error line on
@@ -586,6 +727,11 @@ root §7; what belongs here is the app's half.
   **Conflating them back into one flag is what would silently re-lock the name.** The hint card
   branches too (`slotProductHint`) — telling an обои owner "название изменить нельзя" over a name field
   they can type in is worse than saying nothing.
+
+**There is a third flag now and it lines up with neither**: `product.photoEditable`. A wood row's name
+is locked and its photo is not; a slot's name is editable and its photo is too; a универсальный row
+locks both. Three independent questions, three booleans, and the server answers all three — root §7
+has why the photo one cannot be worked out here.
 
 `Product.fromJson` defaults `name_editable` to `!is_template`, so an app talking to a pre-slot backend
 behaves exactly as before. The rule card explaining the locks sits *above* the fields: read first it

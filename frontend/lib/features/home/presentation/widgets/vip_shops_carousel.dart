@@ -83,15 +83,16 @@ class VipShopsCarousel extends StatefulWidget {
   /// Fixed, because a `PageView` needs a bounded height and a carousel whose cards changed height
   /// per shop would jolt as it snapped.
   ///
-  /// 252, up from 232 - the section is the one the eye should land on first and it was reading small
-  /// beside a full-width row. The extra 20 is split 12 into the banner and 8 into the content block,
-  /// so the proportions are unchanged and every line keeps the slack it had.
+  /// **232. It was raised to 252 on 2026-08-19 and put back the next day** - taller read as heavy
+  /// rather than as important, and it pushed Популярные категории off the first screenful. The width
+  /// gained in the same pass ([viewportFraction], [cardGap]) was kept: the card was too narrow and is
+  /// not too tall, and those two are independent dials.
   ///
   /// **A `Column` inside a fixed-height card fails by overflowing, not by scrolling** - silent in
   /// release, a 12px striped bar in debug - so adding a line here means raising this number. Growing
   /// it is always safe; shrinking it is what needs checking. **The empty card is built to exactly the
   /// same height**, or the section would change height as placements were sold.
-  static const double cardHeight = 252;
+  static const double cardHeight = 232;
 
   /// Opens the shop card. **A paid placement that does nothing when it is tapped is the worst card
   /// on the screen to have that bug**, which is what this carousel had until the shop card became a
@@ -182,6 +183,12 @@ class _VipShopsCarouselState extends State<VipShopsCarousel> {
         // unbounded: the builder is asked for whatever page the user swipes to, forever
         itemCount: null,
         padEnds: true,
+        // **the viewport is exactly [cardHeight] tall, so its default hard edge cuts the shadow
+        // off at the card's own bottom edge** - which turns `AppShadows.floating` back into no
+        // shadow at all, the thing it was changed *from*. Clip.none lets the 30px ambient blur
+        // spill into the whitespace above and below the strip, which is where a lift lives. The
+        // pages either side already extend past the screen and are clipped by the screen itself.
+        clipBehavior: Clip.none,
         itemBuilder: (context, index) {
           final slot = widget.slots[index % widget.slots.length];
 
@@ -241,15 +248,18 @@ class _VipShopsCarouselState extends State<VipShopsCarousel> {
 /// The chrome every card in this carousel wears, sold or not.
 ///
 /// One `const` rather than two identical `BoxDecoration`s, because the moment they are two, one of
-/// them grows a different shadow. `raised` and not `card`: this is the section the eye should land on
-/// first, and it is the one surface here big enough that a barely-there shadow just looks like a
-/// rendering artefact rather than depth.
+/// them grows a different shadow.
+///
+/// **`floating`, and the border went with the change.** It was `raised` inside a hairline outline,
+/// which is the recipe for a card lying *on* the page - and this is the one strip on the home screen
+/// that is meant to look picked up off it, because these five places are the thing Domix sells. The
+/// two changes are one decision: `floating` is a wide 30px ambient blur plus a tight contact
+/// shadow, and an outline drawn round a shape that is already lifted flattens it again by redrawing
+/// the edge the shadow was busy softening. The shadow is the edge now.
 const BoxDecoration _cardSurface = BoxDecoration(
   color: AppColors.surfaceWhite,
   borderRadius: BorderRadius.all(Radius.circular(AppRadius.md)),
-  // `Border.fromBorderSide`, not `Border.all` - the latter is a factory and cannot be const
-  border: Border.fromBorderSide(BorderSide(color: AppColors.hairline)),
-  boxShadow: AppShadows.raised,
+  boxShadow: AppShadows.floating,
 );
 
 /// The padding around a card's content block. 14 all round, and 16 at the bottom: the badge is the
@@ -266,9 +276,10 @@ class _VipShopCard extends StatelessWidget {
   final HomeShopPreview shop;
   final AppLocalizations strings;
 
-  /// 132, up from 120 with the card's own height. The cover is the largest single element here, so it
-  /// takes most of the extra rather than leaving a taller card with the same picture in it.
-  static const double bannerHeight = 132;
+  /// 120, and it moves with [VipShopsCarousel.cardHeight] rather than independently - the cover is
+  /// the largest single element on the card, so a height change that left it alone would show up as
+  /// the card's proportions shifting rather than as the card resizing.
+  static const double bannerHeight = 120;
 
   @override
   Widget build(BuildContext context) {

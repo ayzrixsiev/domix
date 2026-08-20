@@ -16,6 +16,7 @@ class Product {
     required this.availability,
     required this.isTemplate,
     required this.nameEditable,
+    this.photoEditable = true,
     this.imageUrl,
     this.ownImage = false,
   });
@@ -47,6 +48,24 @@ class Product {
   /// kind of product - "премиальные российские обои" - and the shop supplies the collection it
   /// actually stocks. for every other row the two flags agree.
   final bool nameEditable;
+
+  /// Whether the owner may put their own photograph on this row.
+  ///
+  /// **The rule is "an owner photographs what we have not photographed".** Their own products
+  /// always; обои slots, which name a *kind* of wallpaper and so have no object to shoot; and
+  /// древесные материалы, which has never been shot. The универсальный and сантехника catalogues are
+  /// ours - one file on disk shared by every shop of the category - and the basket index says a
+  /// seeded row is *the same product* as its counterpart across the road, so one owner swapping the
+  /// picture puts two different objects on two tiles of one product.
+  ///
+  /// **Decided by the server and sent, never worked out here**, for the reason [nameEditable] is:
+  /// what it really asks is whether the template names a photo for this row, which is a fact only
+  /// the backend holds - and an app that inferred it from the shop's category would go wrong the day
+  /// the wood catalogue is photographed.
+  ///
+  /// Defaults to true, which is what a backend from before the rule existed meant: it accepted a
+  /// photo on any row in the owner's shop.
+  final bool photoEditable;
 
   /// The product's photo, ready to hand to `Image.network`, or null when it has no photo.
   ///
@@ -81,6 +100,8 @@ class Product {
       // defaults to "not a template row's rule", i.e. editable, so a build talking to a backend
       // from before slots existed behaves exactly as it did then: `!is_template`
       nameEditable: json['name_editable'] as bool? ?? !(json['is_template'] as bool? ?? false),
+      // true on a backend from before the rule existed, which is what that backend did
+      photoEditable: json['photo_editable'] as bool? ?? true,
       imageUrl: _absoluteImageUrl(json['image_url'] as String?),
       // false on a backend from before uploads existed, which is exactly right there: every photo it
       // could send is a catalogue one
@@ -125,6 +146,7 @@ class Product {
       availability: availability ?? this.availability,
       isTemplate: isTemplate,
       nameEditable: nameEditable,
+      photoEditable: photoEditable,
       imageUrl: imageUrl,
       ownImage: ownImage,
     );

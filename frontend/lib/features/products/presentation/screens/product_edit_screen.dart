@@ -374,6 +374,11 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     // a template row whose name the owner writes - the обои case, and the only combination where
     // the two flags disagree
     final isSlot = isTemplate && nameEditable;
+    // a *third* independent question, and it does not line up with either of the other two: an обои
+    // slot and a wood row are both photographable, a wood row's name is not editable, and a slot's
+    // is. the server answers it (Product.photoEditable); a product being created has no server row
+    // yet and is always the owner's own.
+    final photoEditable = product?.photoEditable ?? true;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -539,12 +544,24 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
               // only while a picked file is waiting for a product that does not exist yet. on an
               // existing product the upload has already gone.
               isPendingUpload: product == null && _pickedPhoto != null,
+              // the catalogue's photograph is not the owner's to change - see Product.photoEditable
+              // for the rule and who decides it. a product being *created* is always the owner's
+              // own, so it is never locked.
+              isLocked: !photoEditable,
               onPick: _pickPhoto,
               // hidden, not disabled, when there is nothing of the owner's to remove: on a seeded
               // row still showing the catalogue's photo, "удалить" would put back the picture that
               // is already there. see Product.ownImage.
               onRemove: (product?.ownImage ?? false) || _pickedPhoto != null ? _removePhoto : null,
             ),
+            if (isTemplate && !photoEditable) ...[
+              const SizedBox(height: 10),
+              // the rule spelled out where it is being applied, rather than folded into the hint
+              // card at the top: that card explains the *fields*, and this one explains a picture
+              // 400px further down that the owner has just tried to tap. the same card, because it
+              // is the same kind of statement - a rule, not a problem.
+              _HintCard(message: strings.cataloguePhotoNote),
+            ],
             if (_photoErrorCode(controller) case final code?) ...[
               const SizedBox(height: 12),
               StoreInlineErrorCard(message: strings.photoErrorMessage(code)),

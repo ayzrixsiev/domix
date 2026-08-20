@@ -52,11 +52,20 @@
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="https"/>
         </intent>
-        <!-- the shop sheet's call button (`tel:` in map_screen.dart) is the same trap one screen
-             over - it would resolve to nothing on the same phones. -->
+        <!-- the shop card's call button (`tel:`) is the same trap one screen over - it would
+             resolve to nothing on the same phones. -->
         <intent>
             <action android:name="android.intent.action.DIAL"/>
             <data android:scheme="tel"/>
+        </intent>
+        <!-- «Маршрут» on the shop card. `geo:` is the platform's own maps scheme rather than any one
+             app's, so every maps app installed on the phone answers it and Android shows a chooser -
+             which is the whole point: the previous version opened a yandex.uz url, so a phone with
+             Google Maps and no Yandex got a web page instead of the app it already had. The url is
+             still the fallback, and it is covered by the VIEW+https entry above. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="geo"/>
         </intent>
         <!-- Required to query activities that can process text, see:
              https://developer.android.com/training/package-visibility and

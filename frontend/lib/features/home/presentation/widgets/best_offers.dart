@@ -5,6 +5,7 @@ import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/home/data/home_content.dart';
+import 'package:frontend/features/stores/data/shop_category.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 import 'package:frontend/features/home/presentation/widgets/home_shop_row.dart';
 
@@ -22,6 +23,11 @@ import 'package:frontend/features/home/presentation/widgets/home_shop_row.dart';
 /// entire meaning of the section, and a list sorted twice by two different rules is a list that
 /// disagrees with itself.
 ///
+/// **The strip is always all four shop categories**, whatever the backend sent - see [groups]. Each
+/// tab then holds [slotCount] places, filled from the top by whatever shops have qualified, so a
+/// category nobody has finished pricing is a segment over fifteen open places rather than a missing
+/// segment.
+///
 /// This was "Магазины рядом с вами", a distance-ordered list. The ranking is now purely by price,
 /// with no location input at all, so the rows show no distance: keeping "0.5 км" next to a list
 /// that ignores location would imply a proximity guarantee the section does not make.
@@ -34,13 +40,20 @@ class BestOffersList extends StatefulWidget {
   /// costs an extra row rather than a hidden shop.
   static const int slotCount = 15;
 
-  /// One entry per shop category that has ranked shops, already sorted and trimmed by the server.
+  /// The rankings the server actually sent - one entry per shop category that has any, already
+  /// sorted and trimmed by it.
   ///
-  /// **A category with no ranked shops is not sent and is therefore not a tab.** That rule survived
-  /// the move to fixed slots deliberately: fifteen open places under a tab nobody has qualified for
-  /// is not an invitation, it is a dead end - and the tab strip is a filter, so an option that
-  /// filters to nothing is a broken control. Open places mean something *inside* a category that
-  /// already exists.
+  /// **This is not the tab strip.** The strip is [ShopCategory.values], all four, always; this list
+  /// only decides what is *inside* a tab. A category the server said nothing about is still a
+  /// segment, and opening it shows fifteen open places.
+  ///
+  /// The opposite rule was in force until 2026-08-20 - one segment per group, no strip at all below
+  /// two of them - on the reasoning that a filter offering an option that filters to nothing is a
+  /// broken control. What that missed is that this section is a *ranking* and the four categories
+  /// are its axis: the strip is the section's own table of contents, so an empty tab says "no shop
+  /// of this kind has finished pricing yet", which is a fact worth reading and is exactly what the
+  /// open places under it are for. The strip also stops appearing and disappearing as shops qualify,
+  /// which is what made the section change shape between two refreshes.
   final List<CategoryOffers> groups;
 
   /// Opens the shop card. Passed down to every row rather than handled here, so navigation stays out
@@ -52,52 +65,49 @@ class BestOffersList extends StatefulWidget {
 }
 
 class _BestOffersListState extends State<BestOffersList> {
+  /// **The strip is the four shop categories, not whatever came back.** It is a `const` list off the
+  /// enum, which is what makes the control's shape independent of the response: the number of
+  /// segments, their order and their labels are the same on a fresh install as on a full market, so
+  /// nothing about this section moves while a refresh is in flight. A fifth category becomes a fifth
+  /// segment here the moment the enum grows one.
+  static const List<ShopCategory> _categories = ShopCategory.values;
+
   int _selected = 0;
 
-  @override
-  void didUpdateWidget(BestOffersList oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // the tab list changes shape when a refresh brings back a different set of categories - a
-    // category emptying out would otherwise leave _selected pointing past the end of the list
-    if (_selected >= widget.groups.length) _selected = 0;
+  /// The ranking for one category, or nothing if the server sent none.
+  ///
+  /// A linear scan over at most four entries, per frame, rather than a map built in
+  /// `didUpdateWidget` - four comparisons cost less than the bookkeeping that keeps a cache honest
+  /// across a refresh.
+  List<HomeShopPreview> _shopsIn(ShopCategory category) {
+    for (final group in widget.groups) {
+      if (group.category == category) return group.shops;
+    }
+    return const [];
   }
 
   @override
   Widget build(BuildContext context) {
     final strings = Provider.of<LanguageProvider>(context).strings;
 
-    // **no groups is a real state that still draws its places**, and it is where the app launches:
-    // nobody has priced a whole catalogue yet, so no category has a ranking. The section used to
-    // disappear entirely, which read as a screen missing a chunk of itself.
-    //
-    // What it shows instead is the shape the section will have - the open places fill themselves in
-    // as shops finish pricing, with nothing to change here. There is no tab strip, because the tabs
-    // come from the data and there is none; that is also why this is not "a tab with no category",
-    // which would be a filter set to nothing.
-    //
-    // clamped rather than trusted: didUpdateWidget catches a shrink between builds, but the very
-    // first build after a hot reload can arrive with a stale index and `groups[_selected]` would
-    // throw rather than degrade.
-    final index = widget.groups.isEmpty ? 0 : _selected.clamp(0, widget.groups.length - 1);
-    final shops = widget.groups.isEmpty
-        ? const <HomeShopPreview>[]
-        : widget.groups[index].shops;
+    // no clamp and no didUpdateWidget guard any more: the strip is a constant, so `_selected` can
+    // only ever be an index this list has. that a refresh could leave it pointing past the end was
+    // the whole hazard of building the tabs out of the response.
+    final shops = _shopsIn(_categories[_selected]);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // one category means nothing to switch between, so the strip is not drawn at all rather
-        // than drawn with a single permanently-selected pill. this is the state the app launches
-        // in, and a lone tab reads as a control that is broken.
-        if (widget.groups.length > 1) ...[
-          _CategoryTabs(
-            groups: widget.groups,
-            selected: index,
-            strings: strings,
-            onSelected: (i) => setState(() => _selected = i),
-          ),
-          const SizedBox(height: 12),
-        ],
+        // drawn unconditionally, including on the empty database the app launches against. the
+        // section is a ranking and these four are its axis, so the strip is the section's own table
+        // of contents rather than a filter that appears once there is something to filter.
+        _CategoryTabs(
+          categories: _categories,
+          selected: _selected,
+          strings: strings,
+          onSelected: (i) => setState(() => _selected = i),
+        ),
+        const SizedBox(height: 12),
         // the ranking padded out to a fixed number of places. `slots` is rebuilt per frame rather
         // than cached: it is a list of fifteen references over a list the controller already holds,
         // and caching it would mean deciding when it goes stale.
@@ -140,13 +150,16 @@ class _BestOffersListState extends State<BestOffersList> {
 /// to their labels.
 class _CategoryTabs extends StatelessWidget {
   const _CategoryTabs({
-    required this.groups,
+    required this.categories,
     required this.selected,
     required this.strings,
     required this.onSelected,
   });
 
-  final List<CategoryOffers> groups;
+  /// The segments, in enum order. **Categories rather than the groups they may or may not have** -
+  /// this control's shape must not depend on the response, or the section grows and loses segments
+  /// between two refreshes while somebody is looking at it.
+  final List<ShopCategory> categories;
   final int selected;
   final AppLocalizations strings;
   final ValueChanged<int> onSelected;
@@ -174,14 +187,14 @@ class _CategoryTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final scrolls = groups.length > _fitLimit;
+        final scrolls = categories.length > _fitLimit;
         final segmentWidth = scrolls
             ? _scrollingSegmentWidth
-            : (constraints.maxWidth - _inset * 2) / groups.length;
+            : (constraints.maxWidth - _inset * 2) / categories.length;
 
         final track = Container(
           height: _height,
-          width: scrolls ? segmentWidth * groups.length + _inset * 2 : null,
+          width: scrolls ? segmentWidth * categories.length + _inset * 2 : null,
           padding: const EdgeInsets.all(_inset),
           decoration: BoxDecoration(
             color: AppColors.trackGrey,
@@ -210,11 +223,11 @@ class _CategoryTabs extends StatelessWidget {
               ),
               Row(
                 children: [
-                  for (var i = 0; i < groups.length; i++)
+                  for (var i = 0; i < categories.length; i++)
                     SizedBox(
                       width: segmentWidth,
                       child: _Segment(
-                        label: groups[i].category.label(strings),
+                        label: categories[i].label(strings),
                         isActive: i == selected,
                         onTap: () => onSelected(i),
                       ),

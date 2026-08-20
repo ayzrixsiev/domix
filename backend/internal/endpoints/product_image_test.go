@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"domix/backend/db"
 	"domix/backend/internal/auth"
@@ -174,28 +175,102 @@ func TestAnOwnerPutsAPhotoOnTheirOwnProduct(t *testing.T) {
 	t.Fatal("the product is missing from its own shop's catalogue")
 }
 
-// **the founder's rule.** a seeded row is shared by name and by key, not by photograph: обои slots
-// have no catalogue shot at all, and a shop stocking a different brand of the same item shows it
-// more honestly with its own picture.
-func TestAPhotoCanGoOntoASeededRowIncludingAWallpaperSlot(t *testing.T) {
-	products, root, ctx, tx, q := imageProductsUnderTest(t)
+// **the founder's rule, positive half: an owner photographs what the catalogue has not.**
+//
+// The two categories that qualify today qualify for different reasons, so both are here. An обои
+// slot names a *kind* of wallpaper - "премиум (Россия)" - and there is no such object to photograph,
+// so the shop's own roll is the only picture that could ever be on that tile. Древесные материалы
+// names real products and simply has not been shot yet.
+//
+// The rule is read off the template rather than off this list of categories (see templateFlags), so
+// what this test really pins is that both of those end up on the permissive side of it.
+func TestAnOwnerPhotographsWhatTheCatalogueHasNot(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		category catalog.Category
+		key      string
+	}{
+		{"обои slot", catalog.CategoryWallpaper, "wallpaper.premium_ru"},
+		{"unphotographed wood row", catalog.CategoryWood, "wood.board_25x150"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			products, root, ctx, tx, q := imageProductsUnderTest(t)
 
-	shop := makeSeededShop(t, ctx, tx, q, "Oboi", catalog.CategoryWallpaper, false)
+			shop := makeSeededShop(t, ctx, tx, q, "Foto"+tc.key, tc.category, false)
+			owner := shopOwnerID(t, ctx, tx, shop)
+			row := seededProductID(t, ctx, tx, shop, tc.key)
+
+			rec := callUpload(t, ctx, products, row, owner, "roll.jpg", testPhoto(t, 900, 900))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+			}
+
+			saved := decodeProduct(t, rec)
+			if !saved.IsTemplate {
+				t.Fatal("uploading a photo must not turn a template row into an ordinary product")
+			}
+			if !saved.PhotoEditable {
+				t.Error("photo_editable is false on a row the endpoint just accepted a photo for")
+			}
+			if _, err := os.Stat(storedFile(t, root, saved.ImageURL)); err != nil {
+				t.Fatalf("the file the response names is not on disk: %v", err)
+			}
+		})
+	}
+}
+
+// **the founder's rule, refusing half.** a универсальный row points at a photograph we took, shared
+// by every универсальный shop in the market - and the basket index says that row is *the same
+// product* as its counterpart across the road. An owner replacing the picture makes two tiles of one
+// product show two different objects, and it is the customer comparing the two shops who is misled.
+//
+// The 403 has to arrive before the bytes do, which is why the check sits above the rate limiter and
+// above readUploadedImage: refusing a six-megabyte upload after receiving it spends exactly what the
+// refusal exists to save.
+func TestTheCataloguesOwnPhotographCannotBeReplaced(t *testing.T) {
+	products, _, ctx, tx, q := imageProductsUnderTest(t)
+
+	shop := makeSeededShop(t, ctx, tx, q, "Zamok", catalog.CategoryUniversal, false)
 	owner := shopOwnerID(t, ctx, tx, shop)
-	slot := seededProductID(t, ctx, tx, shop, "wallpaper.premium_ru")
+	row := seededProductID(t, ctx, tx, shop, photographedUniversalKey(t))
 
-	rec := callUpload(t, ctx, products, slot, owner, "roll.jpg", testPhoto(t, 900, 900))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	rec := callUpload(t, ctx, products, row, owner, "mine.jpg", testPhoto(t, 800, 800))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("want 403, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	saved := decodeProduct(t, rec)
-	if !saved.IsTemplate {
-		t.Fatal("uploading a photo must not turn a template row into an ordinary product")
+	var body map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode %s: %v", rec.Body.String(), err)
 	}
-	if _, err := os.Stat(storedFile(t, root, saved.ImageURL)); err != nil {
-		t.Fatalf("the file the response names is not on disk: %v", err)
+	// the machine-readable code the app turns into a sentence, and the flag it draws the control off
+	if body["code"] != "template_photo" {
+		t.Fatalf("want template_photo, got %q", body["code"])
 	}
+	for _, listed := range listProducts(t, ctx, products, shop) {
+		if listed.ID == row {
+			if listed.PhotoEditable {
+				t.Fatal("photo_editable is true on a row whose photo the endpoint refuses to replace")
+			}
+			return
+		}
+	}
+	t.Fatal("the product is missing from its own shop's catalogue")
+}
+
+// the first универсальный row the catalogue actually has a photograph of - which is all of them
+// today, and is looked up rather than written down so that a template edit cannot silently turn this
+// test into one about a row with no photo.
+func photographedUniversalKey(t *testing.T) string {
+	t.Helper()
+
+	for _, item := range catalog.Template(string(catalog.CategoryUniversal)) {
+		if item.ImagePath != "" {
+			return item.Key
+		}
+	}
+	t.Skip("no photographed row in the universal template - there is no rule to test")
+	return ""
 }
 
 // replacing is the common case - photograph it again in better light - and every replacement leaves
@@ -229,23 +304,21 @@ func TestReplacingAPhotoUnlinksTheOneItReplaced(t *testing.T) {
 // **the guard that protects the catalogue.** a seeded universal row points at a photo shared by
 // every universal shop; removing the owner's own upload must put that path back and must not touch
 // the file it names.
+//
+// **The upload is written straight onto the row rather than posted**, because the endpoint refuses
+// exactly this combination now (see TestTheCataloguesOwnPhotographCannotBeReplaced) - and removal is
+// deliberately *not* gated by the same rule, for the case this test is standing in for: rows that
+// were photographed by their owner before the rule existed, and rows whose catalogue is shot after
+// the fact. Those are the ones with something to restore to, and with the delete path closed as well
+// their owners would be stuck with a picture the catalogue is supposed to override.
 func TestRemovingAPhotoRestoresTheCatalogueShot(t *testing.T) {
 	products, root, ctx, tx, q := imageProductsUnderTest(t)
 
 	shop := makeSeededShop(t, ctx, tx, q, "Vozvrat", catalog.CategoryUniversal, false)
 	owner := shopOwnerID(t, ctx, tx, shop)
 
-	// a seeded row that the catalogue does have a photo for
-	var key, catalogueImage string
-	for _, item := range catalog.Template(string(catalog.CategoryUniversal)) {
-		if item.ImagePath != "" {
-			key, catalogueImage = item.Key, item.ImagePath
-			break
-		}
-	}
-	if key == "" {
-		t.Skip("no photographed row in the universal template - nothing to restore to")
-	}
+	key := photographedUniversalKey(t)
+	catalogueImage := catalog.TemplateImage(key)
 	product := seededProductID(t, ctx, tx, shop, key)
 
 	// stand the shared file up inside this test's own root, so a deletion would be visible
@@ -257,8 +330,19 @@ func TestRemovingAPhotoRestoresTheCatalogueShot(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	uploaded := decodeProduct(t, callUpload(t, ctx, products, product, owner, "mine.jpg", testPhoto(t, 640, 480)))
-	uploadedPath := storedFile(t, root, uploaded.ImageURL)
+	stored, err := products.Images.Save(testPhoto(t, 640, 480))
+	if err != nil {
+		t.Fatalf("save an upload: %v", err)
+	}
+	uploaded, err := q.SetProductImage(ctx, db.SetProductImageParams{
+		ID:        product,
+		ImagePath: pgtype.Text{String: stored, Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("point the row at it: %v", err)
+	}
+	uploadedURL, _ := productImage(uploaded.ImagePath)
+	uploadedPath := storedFile(t, root, uploadedURL)
 
 	rec := callRemoveImage(t, ctx, products, product, owner)
 	if rec.Code != http.StatusOK {
@@ -318,13 +402,18 @@ func TestOnlyTheShopsOwnerMayChangeAProductsPhoto(t *testing.T) {
 }
 
 // the extension and the Content-Type are both written by the client, so the only real check is the
-// decode - and its failure has to reach the owner as a sentence about the file, not as a 500
+// decode - and its failure has to reach the owner as a sentence about the file, not as a 500.
+//
+// on a product of the owner's own, because a seeded универсальный row is refused a step earlier now
+// and would answer template_photo whatever bytes were attached to it.
 func TestSomethingThatIsNotAPhotoIsRefused(t *testing.T) {
 	products, _, ctx, tx, q := imageProductsUnderTest(t)
 
 	shop := makeSeededShop(t, ctx, tx, q, "Nefoto", catalog.CategoryUniversal, false)
 	owner := shopOwnerID(t, ctx, tx, shop)
-	product := seededProductID(t, ctx, tx, shop, catalog.Template(string(catalog.CategoryUniversal))[0].Key)
+	product := decodeProduct(t, callProductInShop(t, ctx, products, shop, owner, `{
+		"name": "Уровень", "category": "tools", "unit": "шт", "price": 90000, "availability": "in_stock"
+	}`)).ID
 
 	rec := callUpload(t, ctx, products, product, owner, "malware.jpg", []byte("MZ\x90\x00 definitely not a jpeg"))
 	if rec.Code != http.StatusBadRequest {

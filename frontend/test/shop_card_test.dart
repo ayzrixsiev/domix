@@ -211,9 +211,98 @@ void main() {
 
     await tester.tap(find.text('Стройбаза').hitTestable().first);
     await tester.pumpAndSettle();
+    // the catalogue is below the cover, the identity block, the price card and the contacts card, so
+    // it is a sliver that has not been built yet - scrolling is what asks for it
+    await _scrollToCatalogue(tester);
 
     expect(find.text('Цемент М400'), findsOneWidget);
     expect(find.text('Гипсокартон'), findsNothing);
     expect(find.byType(ProductTile), findsOneWidget);
   });
+
+  // the reason the field exists: a Универсальный shop is a hundred tiles, and scrolling all of them
+  // to find one is not a way to find anything. it filters what is already on the phone - the whole
+  // catalogue came in the one request this screen makes - so there is no request behind a keystroke.
+  testWidgets('the catalogue search filters the grid', (tester) async {
+    await _pumpHome(
+      tester,
+      content: _content(vip: [_shop(id: 1, name: 'Стройбаза', isVip: true)]),
+      products: [
+        for (var i = 0; i < 9; i++) _product(id: 20 + i, name: 'Саморез $i', price: 1000 + i),
+        _product(id: 40, name: 'Цемент М400', price: 55000),
+      ],
+    );
+
+    await tester.tap(find.text('Стройбаза').hitTestable().first);
+    await tester.pumpAndSettle();
+    await _scrollToCatalogue(tester);
+
+    await tester.enterText(find.byType(TextField), 'цемент');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Цемент М400'), findsOneWidget);
+    expect(find.text('Саморез 0'), findsNothing);
+  });
+
+  // under the threshold the field is not drawn at all. a search box over three products filters a
+  // list that is already entirely on screen, which is a control that can only ever hide things.
+  testWidgets('a short catalogue gets no search field', (tester) async {
+    await _pumpHome(
+      tester,
+      content: _content(vip: [_shop(id: 1, name: 'Стройбаза', isVip: true)]),
+      products: [_product(id: 10, name: 'Цемент М400', price: 55000)],
+    );
+
+    await tester.tap(find.text('Стройбаза').hitTestable().first);
+    await tester.pumpAndSettle();
+    await _scrollToCatalogue(tester);
+
+    expect(find.byType(ProductTile), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+  });
+
+  // the map's half of the card: the same content in a sheet that a downward drag puts away. there is
+  // no close button on it, so if the drag ever stops dismissing there is no way out but the back
+  // gesture - which is exactly the kind of failure nobody notices until a phone is in a hand.
+  testWidgets('the map sheet opens the same card and a drag down closes it', (tester) async {
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => LanguageProvider()),
+          ChangeNotifierProvider(
+            create: (_) => ProductsController(repository: _FakeProductsRepository()),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showShopCardSheet(context, _shop(id: 7, name: 'Стройбаза')),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ShopCardView), findsOneWidget);
+    expect(find.text('+998901112233'), findsOneWidget);
+
+    // from the top of the list, a downward drag is the sheet's and not the scroll view's - that
+    // handover is what DraggableScrollableSheet's controller does, and it is the whole gesture
+    await tester.drag(find.byType(ShopCardView), const Offset(0, 500));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ShopCardView), findsNothing);
+  });
+}
+
+/// The catalogue is the last thing on a card that now opens with a full-width cover, so every
+/// assertion about a tile has to build the sliver first.
+Future<void> _scrollToCatalogue(WidgetTester tester) async {
+  await tester.drag(find.byType(ShopCardView), const Offset(0, -600));
+  await tester.pumpAndSettle();
 }

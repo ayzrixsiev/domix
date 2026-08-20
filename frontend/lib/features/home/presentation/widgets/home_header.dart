@@ -32,8 +32,11 @@ class HomeHeader extends StatelessWidget {
     final strings = Provider.of<LanguageProvider>(context).strings;
     final selectedCity = context.watch<CityController>().city;
 
+    // vertical only: the horizontal gutter is applied by the home screen, which owns it for every
+    // block on the feed. this header carried its own copy of the number and the two had to agree by
+    // hand, which is how the DOMIX pill ends up a few pixels out of line with the search bar.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      padding: const EdgeInsets.only(top: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -77,6 +80,20 @@ class HomeHeader extends StatelessWidget {
 // pill-shaped rather than on the radius scale on purpose: these are single-line controls, and a
 // full stadium is the shape that reads as a chip. the scale governs rectangles - cards, sheets,
 // buttons - not this.
+//
+// **Both controls here lift off the page, and that is what they were missing.** They were flat white
+// with a hairline outline - the same recipe as an inert surface - so on a page whose only other
+// elements are shadowed cards they read as the palest thing on screen rather than as the two things
+// you can press. `AppShadows.card` is the smallest lift in the scale and it is enough: they are 40px
+// tall, and anything heavier would put more shadow under a chip than under the VIP cards below it.
+// The border stays, since a white shape on a light grey page still needs an edge to be a shape.
+const List<BoxShadow> _chipShadow = AppShadows.card;
+
+/// 40, up from 38. Two points is not a style change - it is the same nudge that takes these off
+/// Android's 38dp "small control" reading and onto the 40dp both the search bar under them and the
+/// nav bar's targets sit on.
+const double _chipHeight = 40;
+
 class _CityChip extends StatelessWidget {
   const _CityChip({
     required this.city,
@@ -107,14 +124,15 @@ class _CityChip extends StatelessWidget {
             borderRadius: borderRadius,
             onTap: onTap,
             child: Ink(
-              height: 38,
+              height: _chipHeight,
               decoration: BoxDecoration(
                 color: AppColors.surfaceWhite,
                 borderRadius: borderRadius,
                 border: Border.all(color: AppColors.hairline),
+                boxShadow: _chipShadow,
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 13),
                 child: Row(
                   // shrink to the label when it is short; the ConstrainedBox above is what makes
                   // the Flexible below legal, since a Flexible in an unbounded Row throws
@@ -127,15 +145,20 @@ class _CityChip extends StatelessWidget {
                         city,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        // w600: the city is a *value* the user picked, and at w500 it read as a
+                        // caption sitting beside the pin rather than as the answer to "where"
                         style: const TextStyle(
                           color: AppColors.textDark,
                           fontSize: 13,
-                          fontWeight: FontWeight.w500,
+                          letterSpacing: -0.1,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    const Icon(LucideIcons.chevron_down, color: AppColors.textFaint, size: 13),
+                    const SizedBox(width: 5),
+                    // textMuted, not textFaint: this chevron is the only thing saying the chip opens
+                    // something, and at #A9AEB8 on white it was close to invisible
+                    const Icon(LucideIcons.chevron_down, color: AppColors.textMuted, size: 14),
                   ],
                 ),
               ),
@@ -170,15 +193,16 @@ class _IconChip extends StatelessWidget {
           customBorder: const CircleBorder(),
           onTap: onTap,
           child: Ink(
-            height: 38,
-            width: 38,
+            height: _chipHeight,
+            width: _chipHeight,
             decoration: BoxDecoration(
               color: AppColors.surfaceWhite,
               shape: BoxShape.circle,
               border: Border.all(color: AppColors.hairline),
+              boxShadow: _chipShadow,
             ),
             child: Center(
-              child: Icon(icon, color: AppColors.textDark, size: 17),
+              child: Icon(icon, color: AppColors.textDark, size: 18),
             ),
           ),
         ),

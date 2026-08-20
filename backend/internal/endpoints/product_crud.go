@@ -115,6 +115,14 @@ type ProductResponse struct {
 	// still showing the catalogue's shot it would do nothing at all - so without this the app draws a
 	// delete button that is dead on most of a fresh shop's catalogue.
 	OwnImage bool `json:"own_image"`
+
+	// whether the owner may put their own photograph on this row at all. see templateFlags, which
+	// derives it - and product_image.go, which is what actually refuses.
+	//
+	// sent rather than re-derived in the app for the reason `name_editable` is: the rule is about
+	// what the *catalogue* holds, which is a fact only the server has, and a Flutter build that
+	// worked it out for itself would go stale the day a catalogue is photographed.
+	PhotoEditable bool `json:"photo_editable"`
 }
 
 // where the api serves product photos. the database stores only the path inside the images folder
@@ -133,16 +141,30 @@ func productImage(path pgtype.Text) (url *string, own bool) {
 	return &full, imagestore.IsUpload(path.String)
 }
 
-// the two flags above, derived from the one column that carries the fact. kept in a single function
-// so the three response sites and the Update branch can never disagree about what a slot is.
+// the three flags above, all derived from the one column that carries the fact. kept in a single
+// function so the five response sites and the Update branch can never disagree about what a slot is.
 //
-// an invalid pgtype.Text reads as the empty string, which IsOwnerNamedSlot answers false for - so a
-// product the owner added themselves comes out (false, true): not a template row, name is theirs.
-func templateFlags(key pgtype.Text) (isTemplate, nameEditable bool) {
+// an invalid pgtype.Text is a row the owner added themselves, and it comes out (false, true, true):
+// not a template row, the name is theirs, the photograph is theirs.
+//
+// **photoEditable is asked of the catalogue, not of the shop's category, and that is the whole
+// design.** The rule is "an owner may photograph what we have not photographed" - which today means
+// обои, whose slots name a *kind* of wallpaper and so have nothing to shoot, and древесные
+// материалы, which has simply never been shot. Everywhere else the picture is the catalogue's: one
+// file on disk shared by every shop of that category, and an owner replacing it makes their tile
+// disagree with the identical row in the shop across the road while the basket index says the two
+// are the same product.
+//
+// Written as `TemplateImage(key) == ""` rather than as a list of category codes because a hand-kept
+// list of "the unphotographed categories" is a second copy of a fact the template already holds -
+// the same argument that keeps the обои slot keys derived rather than written down (see
+// catalog.IsOwnerNamedSlot). It also means the day the wood catalogue is photographed, those rows
+// lock themselves: shooting a category is the whole change, with nothing to remember afterwards.
+func templateFlags(key pgtype.Text) (isTemplate, nameEditable, photoEditable bool) {
 	if !key.Valid {
-		return false, true
+		return false, true, true
 	}
-	return true, catalog.IsOwnerNamedSlot(key.String)
+	return true, catalog.IsOwnerNamedSlot(key.String), catalog.TemplateImage(key.String) == ""
 }
 
 // the availability values the database CHECK constraint accepts (db/migrations/000004). the app
@@ -201,20 +223,21 @@ func (p *Products) ListByShop(w http.ResponseWriter, r *http.Request) {
 
 	response := make([]ProductResponse, 0, len(products))
 	for _, product := range products {
-		isTemplate, nameEditable := templateFlags(product.TemplateKey)
+		isTemplate, nameEditable, photoEditable := templateFlags(product.TemplateKey)
 		imageURL, ownImage := productImage(product.ImagePath)
 		response = append(response, ProductResponse{
-			ID:           product.ID,
-			ShopID:       product.ShopID,
-			Name:         product.Name,
-			Category:     product.Category,
-			Unit:         product.Unit,
-			Price:        nullableInt64(product.Price),
-			Availability: product.Availability,
-			IsTemplate:   isTemplate,
-			NameEditable: nameEditable,
-			ImageURL:     imageURL,
-			OwnImage:     ownImage,
+			ID:            product.ID,
+			ShopID:        product.ShopID,
+			Name:          product.Name,
+			Category:      product.Category,
+			Unit:          product.Unit,
+			Price:         nullableInt64(product.Price),
+			Availability:  product.Availability,
+			IsTemplate:    isTemplate,
+			NameEditable:  nameEditable,
+			ImageURL:      imageURL,
+			OwnImage:      ownImage,
+			PhotoEditable: photoEditable,
 		})
 	}
 
@@ -290,22 +313,23 @@ func (p *Products) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isTemplate, nameEditable := templateFlags(product.TemplateKey)
+	isTemplate, nameEditable, photoEditable := templateFlags(product.TemplateKey)
 	imageURL, ownImage := productImage(product.ImagePath)
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(ProductResponse{
-		ID:           product.ID,
-		ShopID:       product.ShopID,
-		Name:         product.Name,
-		Category:     product.Category,
-		Unit:         product.Unit,
-		Price:        nullableInt64(product.Price),
-		Availability: product.Availability,
-		IsTemplate:   isTemplate,
-		NameEditable: nameEditable,
-		ImageURL:     imageURL,
-		OwnImage:     ownImage,
+		ID:            product.ID,
+		ShopID:        product.ShopID,
+		Name:          product.Name,
+		Category:      product.Category,
+		Unit:          product.Unit,
+		Price:         nullableInt64(product.Price),
+		Availability:  product.Availability,
+		IsTemplate:    isTemplate,
+		NameEditable:  nameEditable,
+		ImageURL:      imageURL,
+		OwnImage:      ownImage,
+		PhotoEditable: photoEditable,
 	})
 }
 
@@ -346,7 +370,7 @@ func (p *Products) Update(w http.ResponseWriter, r *http.Request) {
 		err     error
 	)
 
-	isTemplate, nameEditable := templateFlags(existing.TemplateKey)
+	isTemplate, nameEditable, photoEditable := templateFlags(existing.TemplateKey)
 
 	switch {
 	case isTemplate && nameEditable:
@@ -419,17 +443,18 @@ func (p *Products) Update(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(ProductResponse{
-		ID:           product.ID,
-		ShopID:       product.ShopID,
-		Name:         product.Name,
-		Category:     product.Category,
-		Unit:         product.Unit,
-		Price:        nullableInt64(product.Price),
-		Availability: product.Availability,
-		IsTemplate:   isTemplate,
-		NameEditable: nameEditable,
-		ImageURL:     imageURL,
-		OwnImage:     ownImage,
+		ID:            product.ID,
+		ShopID:        product.ShopID,
+		Name:          product.Name,
+		Category:      product.Category,
+		Unit:          product.Unit,
+		Price:         nullableInt64(product.Price),
+		Availability:  product.Availability,
+		IsTemplate:    isTemplate,
+		NameEditable:  nameEditable,
+		ImageURL:      imageURL,
+		OwnImage:      ownImage,
+		PhotoEditable: photoEditable,
 	})
 }
 
