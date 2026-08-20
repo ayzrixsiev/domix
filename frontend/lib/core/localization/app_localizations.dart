@@ -197,16 +197,13 @@ class AppLocalizations {
   String get slotComparisonLabel =>
       isRu ? 'Насколько дешевле рынка' : 'Bozordan qancha arzon';
 
-  /// Shown to a *customer* on the shop's card in place of the price, for a shop that has not priced
-  /// its whole catalogue and is therefore out of the comparison entirely (migration 000013).
-  ///
-  /// Worded as the shop's state rather than the app's: "нет данных" would read as something broken
-  /// on our side, and this is a shop that simply has not finished. It says nothing about how much is
-  /// left - that is the owner's business, and a customer counting somebody else's unfilled fields is
-  /// not information they can act on.
-  String get basketPriceIncomplete => isRu
-      ? 'Магазин ещё не указал все цены, поэтому сравнения нет'
-      : "Do'kon hali barcha narxlarni ko'rsatmagan, shuning uchun taqqoslash yo'q";
+  // `basketPriceIncomplete` lived here and is **deleted**. It was the sentence a customer got in
+  // place of the price on a shop that has not finished pricing its catalogue - "Магазин ещё не
+  // указал все цены, поэтому сравнения нет" - and the shop card now draws no price section at all
+  // in that case (see ShopCardScreen). A customer is not the audience for another business's
+  // unfinished admin, and a paragraph about it sat where the one number they opened the card for
+  // should be. **Don't bring it back as a shorter sentence either**: saying nothing is the accurate
+  // thing to say, and the owner's own copy of this rule is the progress bar on ShopProductsScreen.
 
   /// The average price of one product inside a single category, shown on the category drill-down.
   /// Deliberately worded differently from [priceIndex]: it is a price in so'm, not a comparison.
@@ -800,15 +797,19 @@ class AppLocalizations {
   // ShopCardScreen. These are the labels that exist only there; the address, phone, basket and
   // product strings above are shared with the rest of the app.
 
-  String get shopContactsTitle => isRu ? 'Контакты' : 'Kontaktlar';
+  // `shopContactsTitle` («Контакты») lived here and is **deleted** with the section title it named.
+  // The shop card separates its sections with a rule now, so the block already reads as a new
+  // section - and it carried a title *and* a field caption *and* a glyph over one phone number,
+  // which is three kinds of label for one fact. [phoneLabel] is the one that survived.
 
   /// Opens the phone's own maps app with a route to the shop. Named for the result rather than for
   /// the mechanism ("открыть в Яндекс.Картах"), because which app answers depends on the phone.
   String get routeButton => isRu ? 'Маршрут' : "Yo'nalish";
 
-  /// The paid placement, as a badge on the card. Not translated - it is the same three letters in
-  /// both languages and in the section heading above.
-  String get vipBadge => 'VIP';
+  // `vipBadge` lived here and is **deleted**: nothing had read it for some time. «VIP» is the name
+  // of the tier and is the same three letters in ru and uz, so the two places that draw it - the
+  // home feed's section heading and the shop card's identity block - spell it inline with a comment
+  // saying why, which is what a string that is not translated should look like.
 
   /// url_launcher came back false: nothing on the phone would take the tel: or the maps link. The
   /// number is on screen either way, which is what makes this a message rather than a failure.

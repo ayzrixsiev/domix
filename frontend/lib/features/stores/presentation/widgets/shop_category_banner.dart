@@ -3,276 +3,198 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'package:frontend/core/constants/app_colors.dart';
-import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/features/stores/data/shop_category.dart';
 
-/// The cover a shop card opens with: **one picture per shop category**, drawn rather than fetched.
+/// The cover a shop card opens with: **one painted picture per shop category**, in white and brand
+/// orange, running the full width of the screen and up to the very top of it.
 ///
 /// **Why it is painted and not a photograph.** Nothing writes `shops.image_url` - photo upload for
-/// shops is deferred - so a hero band backed by that column would be an empty grey rectangle on every
-/// shop in the market, which is the exact mistake the old map sheet's saturated orange banner was and
-/// the reason the previous card had no cover at all. Shipping four stock photographs instead would
-/// mean four files in the bundle that are a picture of *somebody else's* shop, and they would be the
-/// only raster assets in the app.
+/// shops is deferred - so a hero band backed by that column would be an empty grey rectangle on
+/// every shop in the market. Shipping four stock photographs instead would mean four files in the
+/// bundle that are a picture of *somebody else's* shop, and they would be the only raster assets in
+/// the app. A painted cover has neither problem, costs nothing to download, and is sharp at any
+/// density.
 ///
-/// A painted cover has none of those problems and one real advantage: it is the same picture for
-/// every Сантехника shop, which is what makes it *information*. A customer who has opened three shop
-/// cards learns the teal one is plumbing before reading a word - the same job the map pin's glyph
-/// does, in the one place there is room to do it properly.
+/// ## The composition, and why it is one picture rather than a texture
 ///
-/// **The four palettes are the one place in this app with colour that is not the brand's**, and that
-/// is deliberate rather than an oversight. Brand orange is reserved for primary actions and active
-/// state (CLAUDE.md §9); a cover is neither, and four orange covers would say nothing about which
-/// shop you are looking at. They are deep and desaturated - a material-yard palette, not a set of
-/// highlighter pens - and each is dark enough to carry white text at well over 4.5:1.
+/// It was a deep two-stop gradient per category with the category's glyph tiled thirty times across
+/// a tilted grid. Two things were wrong with it. The tiling read as patterned wrapping paper rather
+/// than as a cover - a *lot* of small marks is decoration, and decoration is what a reader skips.
+/// And the four palettes (graphite, teal, forest, plum) were the one place in the app with colour
+/// that was not the brand's, so the top of the most important screen in the product was the one
+/// surface that did not look like Domix.
 ///
-/// If [Shop.imageUrl] ever starts arriving, the photograph goes here on top of the gradient with the
-/// same overlay and the same rounded corners: this widget is the shape that layout is built around,
-/// so that day costs one `Image.network` and no rethinking.
+/// What replaced it is a single composition, built out of four elements and nothing else:
+///
+///  1. A near-white ground, warming to [AppColors.primarySoft] toward the bottom-right. **The top
+///     stays white on purpose** - on the pushed route this band runs underneath the status bar, and
+///     the clock and battery up there are painted dark (`SystemUiOverlayStyle.dark`).
+///  2. A faint orange draughting grid, [_gridStep] apart. It is a texture rather than a picture:
+///     what it does is stop the white half reading as an area that failed to load.
+///  3. **The ribbon** - one wide orange band across the lower half at [_tiltDegrees], running off
+///     both edges, with two thin parallels above it. This is the element carrying the brand, and it
+///     runs off the edges because a band that stopped short would read as a rectangle drawn on the
+///     cover rather than as the cover itself.
+///  4. **The mark** - a white disc with the category's own glyph inside it, sitting on the ribbon.
+///     It is the map pin's head with its colours swapped, which is the one piece of information
+///     this cover carries: someone who arrived by tapping an orange teardrop with a bath in it
+///     opens a card wearing the same bath.
+///
+/// **What the white-and-orange palette costs.** The old covers told you the category *by colour* -
+/// teal was plumbing before you read a word. With one palette for all four, the glyph in the disc
+/// is the only channel left, exactly as it is on the pin. That is a real loss and it was the
+/// founder's call: a cover that does not look like the rest of the app is the worse trade.
+///
+/// If [Shop.imageUrl] ever starts arriving, the photograph goes in as a fifth layer under the
+/// ribbon with the same height and the same corners: this widget is the shape the card's layout is
+/// built around, so that day costs one `Image.network` and no rethinking.
 class ShopCategoryBanner extends StatelessWidget {
   const ShopCategoryBanner({
     super.key,
     required this.category,
-    required this.name,
-    required this.isVip,
     this.height = defaultHeight,
-    this.contentInset = 16,
   });
 
   final ShopCategory category;
 
-  /// The shop's own name, laid over the picture. It is the only text on the cover, and it is here
-  /// rather than in the section below because that section answers "what kind of shop is this and
-  /// where" - a picture with the name on it is what tells you *whose* card you opened, in both the
-  /// pushed route (which has no title bar of its own) and the map's sheet (which has no bar at all).
-  final String name;
-
-  /// Draws the placement mark. **Not a pill** - VIP is set in white small-caps beside a star, on a
-  /// cover dark enough not to need a chip behind it. A white capsule up there would be a second
-  /// bright object competing with the name for the same band.
-  final bool isVip;
-
-  /// 200 in both the pushed card and the map's sheet, so the two are the same screen at different
-  /// sizes rather than two layouts. Tall enough to read as a cover, short enough that the price
-  /// comparison - the reason this app exists - is still on the first screenful under it.
-  static const double defaultHeight = 200;
+  /// 240 of visible picture, up from the 200 it was.
+  ///
+  /// The cover is now full-bleed - no page gutter either side, no rounded corners of its own - so
+  /// it had room to grow without pushing the price comparison off the first screenful. On the map's
+  /// sheet the sheet's own [AppRadius.lg] corners crop the top two, which is the shape this was
+  /// drawn for; on the pushed route the extra height is where the status bar sits.
+  static const double defaultHeight = 240;
 
   final double height;
 
-  /// How far above the cover's bottom edge the name sits.
-  ///
-  /// **A caller-supplied number because something is usually parked on that edge.** The shop card
-  /// laps its identity block a couple of dozen pixels onto the picture, and a name at the default
-  /// inset would spend its second line behind that card - visible in a mock-up, invisible on any
-  /// shop whose name wraps. The scrim moves with it, so the two cannot drift apart.
-  final double contentInset;
+  /// how far the ribbon and its parallels are tilted, anticlockwise
+  static const double _tiltDegrees = -15;
+
+  /// centre-to-centre spacing of the draughting grid
+  static const double _gridStep = 30;
 
   @override
   Widget build(BuildContext context) {
-    final palette = _paletteFor(category);
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      child: SizedBox(
-        height: height,
-        width: double.infinity,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [palette.light, palette.dark],
-                ),
-              ),
-            ),
-
-            // the motif. `isComplex`/`willChange: false` tells the engine this is worth rasterizing
-            // into a cached layer once - it is thirty-odd glyphs and it never changes, and without
-            // the hint it would be re-painted on every frame the card scrolls.
-            Positioned.fill(
-              child: CustomPaint(
-                painter: _MotifPainter(icon: category.icon),
-                isComplex: true,
-                willChange: false,
-              ),
-            ),
-
-            // a scrim under the name only. the gradient's own bottom-right corner is its darkest
-            // point, but the name sits bottom-*left*, which on some palettes is the lightest place
-            // on the cover - so the text gets its own floor rather than trusting the background.
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: contentInset + 84,
-              child: const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [Color(0x59000000), Color(0x00000000)],
-                  ),
-                ),
-              ),
-            ),
-
-            if (isVip)
-              const Positioned(top: 14, right: 16, child: _VipMark()),
-
-            Positioned(
-              left: 18,
-              right: 18,
-              bottom: contentInset,
-              child: Text(
-                name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 23,
-                  height: 1.18,
-                  letterSpacing: -0.4,
-                  fontWeight: FontWeight.w800,
-                  shadows: [
-                    Shadow(color: Color(0x40000000), blurRadius: 12, offset: Offset(0, 2)),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+    return SizedBox(
+      height: height,
+      width: double.infinity,
+      child: CustomPaint(
+        // one composition that never changes for the life of the card, so it is worth rasterizing
+        // into a cached layer instead of repainting on every scroll frame
+        painter: _CoverPainter(icon: category.icon),
+        isComplex: true,
+        willChange: false,
       ),
     );
   }
 }
 
-/// The placement mark: a star and three letters, no container.
+/// Everything on the cover, in one painter.
 ///
-/// «VIP» is not translated anywhere in this app - it is the name of the tier, the same three letters
-/// in ru and uz - so this needs no strings and takes none.
-class _VipMark extends StatelessWidget {
-  const _VipMark();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.star_rounded, color: AppColors.starYellow, size: 17),
-        SizedBox(width: 5),
-        Text(
-          'VIP',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-            letterSpacing: 1.6,
-            fontWeight: FontWeight.w800,
-            shadows: [Shadow(color: Color(0x40000000), blurRadius: 8)],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// The two gradient stops of one category's cover.
-class _Palette {
-  const _Palette(this.light, this.dark);
-
-  final Color light;
-  final Color dark;
-}
-
-/// **An exhaustive switch, for the same reason [ShopCategory.label] and [ShopCategory.icon] are
-/// ones:** a fifth shop category becomes a compile error here rather than a cover that silently
-/// falls back to somebody else's colour.
-///
-/// Chosen as a set rather than one at a time - what matters is that no two are confusable at a
-/// glance, which is the whole point of the cover carrying information at all. Graphite for the shop
-/// that sells a bit of everything, teal for water, forest for timber, plum for the decorative trade.
-_Palette _paletteFor(ShopCategory category) => switch (category) {
-      ShopCategory.universal => const _Palette(Color(0xFF4B566B), Color(0xFF232B39)),
-      ShopCategory.plumbing => const _Palette(Color(0xFF1E717B), Color(0xFF0E3D45)),
-      ShopCategory.wood => const _Palette(Color(0xFF4E7048), Color(0xFF283E27)),
-      ShopCategory.wallpaper => const _Palette(Color(0xFF6E4C77), Color(0xFF3D2A45)),
-    };
-
-/// The texture over the gradient: the category's own glyph, tiled small across a tilted grid, with
-/// one large copy anchored at the bottom right.
-///
-/// **The glyphs are drawn through a [TextPainter], because a Lucide icon *is* a character in a
-/// font.** An `Icon` widget could not be tiled thirty times without thirty widgets in the tree; this
-/// lays the codepoint out once per size and stamps it, which is one text layout and a loop.
-class _MotifPainter extends CustomPainter {
-  const _MotifPainter({required this.icon});
+/// **The glyph is drawn through a [TextPainter], because a Lucide icon *is* a character in a
+/// font.** That was true of the tiled version and is still the cheapest way to get one: it lays the
+/// codepoint out once and stamps it, with no widget in the tree.
+class _CoverPainter extends CustomPainter {
+  const _CoverPainter({required this.icon});
 
   final IconData icon;
 
-  /// how far apart the small glyphs sit, centre to centre
-  static const double _step = 58;
-
-  /// how far the grid is rotated, in radians. a few degrees is what stops it reading as graph paper
-  /// - a pattern that lines up with the card's own edges looks like a mistake in the layout rather
-  /// than like a texture.
-  static const double _tilt = -0.22;
-
   @override
   void paint(Canvas canvas, Size size) {
-    // a soft light from the top-left corner, which is what stops the gradient reading as a flat
-    // two-colour ramp. drawn before the glyphs so they sit in the light rather than under it.
-    final glow = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(-0.8, -1.0),
-        radius: 1.25,
-        colors: const [Color(0x26FFFFFF), Color(0x00FFFFFF)],
-      ).createShader(Offset.zero & size);
-    canvas.drawRect(Offset.zero & size, glow);
+    final rect = Offset.zero & size;
 
-    final small = _glyph(20, const Color(0x1AFFFFFF));
+    // **A CustomPaint does not clip, and every layer below overdraws deliberately.** Without this
+    // the ribbon - three screen widths wide and twice the cover tall - paints straight over the
+    // details and the catalogue underneath it, which is one solid orange screen: it looks like a
+    // rendering fault rather than a layout one, so it is worth an explicit line.
+    canvas.clipRect(rect);
+
+    // 1. the ground. warm at the bottom-right, white at the top - the status bar sits on the white.
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment(0.2, 1),
+          colors: [AppColors.surfaceWhite, AppColors.primarySoft],
+        ).createShader(rect),
+    );
+
+    // 2. the draughting grid
+    final grid = Paint()
+      ..color = AppColors.primaryOrange.withValues(alpha: 0.06)
+      ..strokeWidth = 1;
+    for (var x = ShopCategoryBanner._gridStep; x < size.width; x += ShopCategoryBanner._gridStep) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), grid);
+    }
+    for (var y = ShopCategoryBanner._gridStep; y < size.height; y += ShopCategoryBanner._gridStep) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
+    }
+
+    // 3. the ribbon, drawn in a rotated frame so the band and its two parallels cannot drift out of
+    // alignment with each other.
+    //
+    // it is deliberately over-drawn on every side - a full screen width past each edge and twice
+    // the cover's height downward - because the rotation swings the corners outward and a band cut
+    // to the box would leave a pale wedge in the bottom-left corner at some screen widths and not
+    // at others.
     canvas.save();
-    // rotate about the centre, then cover a box big enough that the corners are still filled once
-    // the grid is turned - `diagonal` is the safe over-draw for any rotation.
     canvas.translate(size.width / 2, size.height / 2);
-    canvas.rotate(_tilt);
-    final diagonal = math.sqrt(size.width * size.width + size.height * size.height);
-    for (var y = -diagonal / 2; y < diagonal / 2; y += _step) {
-      // every other row is offset half a step, so the glyphs read as a weave rather than as columns
-      final rowOffset = ((y / _step).round().isEven ? 0.0 : _step / 2) - diagonal / 2;
-      for (var x = rowOffset; x < diagonal / 2; x += _step) {
-        small.paint(canvas, Offset(x, y));
-      }
+    canvas.rotate(ShopCategoryBanner._tiltDegrees * math.pi / 180);
+    canvas.translate(-size.width / 2, -size.height / 2);
+
+    final bandTop = size.height * 0.52;
+    final bandRect = Rect.fromLTWH(-size.width, bandTop, size.width * 3, size.height * 2);
+    canvas.drawRect(
+      bandRect,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFF8A2B), Color(0xFFF25C00)],
+        ).createShader(bandRect),
+    );
+
+    // the two thin parallels above it. they are what makes the band read as one of a set of lines
+    // rather than as a block of colour that happens to be diagonal.
+    for (final (offset, alpha) in const [(13.0, 0.28), (28.0, 0.14)]) {
+      canvas.drawRect(
+        Rect.fromLTWH(-size.width, bandTop - offset, size.width * 3, 3),
+        Paint()..color = AppColors.primaryOrange.withValues(alpha: alpha),
+      );
     }
     canvas.restore();
 
-    // the anchor: one large glyph half off the bottom-right corner, which is what makes the cover
-    // read as a picture of something rather than as patterned paper
-    final large = _glyph(150, const Color(0x1FFFFFFF));
-    large.paint(
-      canvas,
-      Offset(size.width - large.width * 0.68, size.height - large.height * 0.62),
+    // 4. the mark: the map pin's head, inverted. a white disc with a soft shadow so it sits *on*
+    // the ribbon rather than looking punched out of it.
+    final centre = Offset(size.width * 0.74, size.height * 0.55);
+    const radius = 46.0;
+    canvas.drawCircle(
+      centre.translate(0, 4),
+      radius,
+      Paint()
+        ..color = const Color(0x387A3600)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9),
     );
-  }
+    canvas.drawCircle(centre, radius, Paint()..color = AppColors.surfaceWhite);
 
-  TextPainter _glyph(double fontSize, Color colour) {
-    return TextPainter(
+    final glyph = TextPainter(
       text: TextSpan(
         text: String.fromCharCode(icon.codePoint),
         style: TextStyle(
-          fontSize: fontSize,
+          fontSize: 44,
           fontFamily: icon.fontFamily,
           package: icon.fontPackage,
-          color: colour,
+          color: AppColors.primaryOrange,
         ),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
+    glyph.paint(canvas, centre - Offset(glyph.width / 2, glyph.height / 2));
   }
 
   // the icon is the only thing this painter reads, and it comes from the shop's category, which
   // cannot change while the card is open
   @override
-  bool shouldRepaint(_MotifPainter oldDelegate) => oldDelegate.icon != icon;
+  bool shouldRepaint(_CoverPainter oldDelegate) => oldDelegate.icon != icon;
 }

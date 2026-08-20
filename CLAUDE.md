@@ -302,6 +302,13 @@ shop in a category scores exactly 100 and reads as "market average", correct but
 four characters and forty are on screen. The average tier prints `≈` and no number: an unsigned "1%"
 beside a yellow dot invites exactly the question the tier exists to answer.
 
+`PriceTierBadgeSize` picks the size: `pill` (the default — the tinted capsule, on a VIP card),
+`compact` (no pill, smaller, inside a row that already has a container round it) and `headline` (the
+shop card's price block — no pill either, and large enough to be the thing the eye lands on). It
+replaced a `compact` bool when a third size arrived; **a second bool would have allowed a fourth
+combination that means nothing.** The point of it being one widget is that tier → colour → sentence is
+decided in one file, so a new surface cannot invent a fourth wording.
+
 ---
 
 ## 6. Schema
@@ -1026,12 +1033,15 @@ shadows `card` (barely-there lift) / `raised` (content cards that must separate 
   the moment the fill behind it does.
 - `warning`/`warningSoft` exist for the price badge's middle state — deliberately not `starYellow`,
   which reads as a highlight and is spoken for by ratings.
-- **The one sanctioned exception to a brand-only palette is `ShopCategoryBanner`** — four deep,
-  desaturated gradients, one per shop category, on the cover of the shop card. Brand orange is for
-  actions and active state, so four orange covers would say nothing about *which* shop was opened;
-  giving each category its own hue is what makes the cover carry information rather than decorate.
-  They appear on exactly one surface and every one of them holds white text at over 5.5:1. `frontend/
-  CLAUDE.md` §7 has the rest.
+- **There is no longer an exception to the brand-only palette.** `ShopCategoryBanner` — the shop
+  card's cover — used to be four deep desaturated gradients, one per shop category, on the reasoning
+  that four orange covers would say nothing about *which* shop was opened. It is **white and brand
+  orange** since 2026-08-20, one composition for all four: a near-white ground, a faint orange grid,
+  a wide orange ribbon across the lower half, and a white disc carrying the category's Lucide glyph
+  — the map pin's head with its colours swapped. **The cost is real and was accepted**: colour no
+  longer names the category, so the glyph in the disc is the only channel left, exactly as on the
+  pin. What it buys is that the top of the most important screen in the product is no longer the one
+  surface that does not look like Domix. `frontend/CLAUDE.md` §7 has the rest.
 - **Brand orange is not an accessible text colour on light surfaces** — `#FF6F00` is ~2.6:1 against
   `primarySoft` and 2.8:1 against white, where WCAG AA wants 4.5:1. Brand-level, not per-widget:
   white-on-orange buttons have the same ratio. Accepted for brand moments; don't reach for it where a

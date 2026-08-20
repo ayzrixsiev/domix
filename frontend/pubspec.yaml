@@ -43,7 +43,7 @@ dependencies:
   # smooth. two tools, two jobs - the emulator is where the map exists, this is where layout work is
   # comfortable. **remove before shipping** - see the release checklist in CLAUDE.md.
   device_preview: ^1.3.1
-  flutter_lucide: ^1.11.0
+  flutter_lucide: ^1.33.0
   http: ^1.6.0
   # the owner's camera roll, for product photos. always called with maxWidth/imageQuality set (see
   # ProductPhotoField): those parameters are what make the plugin re-encode to jpeg on the device,

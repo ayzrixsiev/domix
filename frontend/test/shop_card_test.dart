@@ -244,6 +244,33 @@ void main() {
     expect(find.text('Саморез 0'), findsNothing);
   });
 
+  // **the magnifier is part of the control, and it used not to be.** a TextField only takes focus
+  // where the TextField is, and this one is the Expanded in the middle of a row - so the padding,
+  // the magnifier and the gap after it were about 40px of dead surface at the left end of something
+  // that looks exactly like a button. pressing it and having nothing happen is the whole of "the
+  // search button does not work", and nothing about it is visible in a screenshot.
+  testWidgets('tapping the magnifier focuses the catalogue search', (tester) async {
+    await _pumpHome(
+      tester,
+      content: _content(vip: [_shop(id: 1, name: 'Стройбаза', isVip: true)]),
+      products: [
+        for (var i = 0; i < 9; i++) _product(id: 20 + i, name: 'Саморез $i', price: 1000 + i),
+      ],
+    );
+
+    await tester.tap(find.text('Стройбаза').hitTestable().first);
+    await tester.pumpAndSettle();
+    await _scrollToCatalogue(tester);
+
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.focusNode!.hasFocus, isFalse);
+
+    await tester.tap(find.byIcon(Icons.search_rounded));
+    await tester.pumpAndSettle();
+
+    expect(field.focusNode!.hasFocus, isTrue);
+  });
+
   // under the threshold the field is not drawn at all. a search box over three products filters a
   // list that is already entirely on screen, which is a control that can only ever hide things.
   testWidgets('a short catalogue gets no search field', (tester) async {

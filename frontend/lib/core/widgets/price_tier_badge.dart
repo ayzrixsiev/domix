@@ -5,6 +5,24 @@ import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/features/stores/data/price_tier.dart';
 
+/// The three sizes the badge is drawn at. An enum rather than the `compact` bool it replaced,
+/// because there are three of them now and two booleans would allow a fourth combination that has
+/// no meaning.
+enum PriceTierBadgeSize {
+  /// The default: the sentence on its own tinted pill. The VIP carousel's cards, where the badge
+  /// sits on white with nothing else separating it from the surface.
+  pill,
+
+  /// Pill dropped and the type shrunk, for rows where a container around it is already doing the
+  /// separating - a Лучшие предложения row, a shop in the owner's own list.
+  compact,
+
+  /// The shop card's price block, where this sentence is the largest thing said about the shop
+  /// after its name. No pill either - the card separates its sections with rules rather than with
+  /// boxes - so what makes it read as a signal is the size and the weight.
+  headline,
+}
+
 /// How a shop's basket compares to its market, as a coloured dot and a sentence:
 /// **🟢 на 4% дешевле рынка**.
 ///
@@ -26,7 +44,7 @@ class PriceTierBadge extends StatelessWidget {
     required this.tier,
     required this.differencePercent,
     required this.strings,
-    this.compact = false,
+    this.size = PriceTierBadgeSize.pill,
   });
 
   final PriceTier tier;
@@ -37,9 +55,7 @@ class PriceTierBadge extends StatelessWidget {
 
   final AppLocalizations strings;
 
-  /// Drops the surrounding pill and shrinks the type, for rows where the badge sits inside another
-  /// container that is already separating it from the background.
-  final bool compact;
+  final PriceTierBadgeSize size;
 
   @override
   Widget build(BuildContext context) {
@@ -56,15 +72,21 @@ class PriceTierBadge extends StatelessWidget {
       PriceTier.dearer => strings.priceTierDearer(percent),
     };
 
+    final (double dot, double fontSize, FontWeight weight) = switch (size) {
+      PriceTierBadgeSize.pill => (7, 12, FontWeight.w600),
+      PriceTierBadgeSize.compact => (6, 11, FontWeight.w600),
+      PriceTierBadgeSize.headline => (9, 15.5, FontWeight.w700),
+    };
+
     final content = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: compact ? 6 : 7,
-          height: compact ? 6 : 7,
+          width: dot,
+          height: dot,
           decoration: BoxDecoration(color: colour, shape: BoxShape.circle),
         ),
-        SizedBox(width: compact ? 5 : 6),
+        SizedBox(width: dot - 1),
         Flexible(
           child: Text(
             label,
@@ -72,9 +94,9 @@ class PriceTierBadge extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: colour,
-              fontSize: compact ? 11 : 12,
+              fontSize: fontSize,
               height: 1.2,
-              fontWeight: FontWeight.w600,
+              fontWeight: weight,
               letterSpacing: -0.1,
             ),
           ),
@@ -82,7 +104,7 @@ class PriceTierBadge extends StatelessWidget {
       ],
     );
 
-    if (compact) return content;
+    if (size != PriceTierBadgeSize.pill) return content;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

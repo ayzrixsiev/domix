@@ -192,69 +192,82 @@ class _SearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 42,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceWhite,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: AppColors.hairline),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.search_rounded, color: AppColors.textFaint, size: 19),
-          const SizedBox(width: 10),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              // the keyboard comes up with the screen. the user tapped a search bar to get here, so
-              // making them tap a second one would be asking twice for the same intent.
-              autofocus: true,
-              // makes the phone's keyboard show a "search" key instead of a newline, which is what
-              // fires onSubmitted. without it there is no way to submit from the keyboard at all.
-              textInputAction: TextInputAction.search,
-              textCapitalization: TextCapitalization.sentences,
-              cursorColor: AppColors.primaryOrange,
-              style: const TextStyle(
-                color: AppColors.textDark,
-                fontSize: 14.5,
-                fontWeight: FontWeight.w400,
-              ),
-              decoration: InputDecoration(
-                // isCollapsed strips the ~48px of default vertical padding a TextField reserves for
-                // a material label. without it the field cannot fit inside a 42px row and the text
-                // sits low instead of centred on the magnifier.
-                isCollapsed: true,
-                border: InputBorder.none,
-                hintText: hintText,
-                hintStyle: const TextStyle(
-                  color: AppColors.textFaint,
+    // **The same recessed grey well the home feed's bar is**, right down to the 48px height, the
+    // magnifier's colour and the hint's - so pressing that bar reads as one control travelling up
+    // into this app bar. It was white inside a `hairline` border at 42px, which is the *card*
+    // treatment: tapping a grey field and landing on a white one is two controls, and the illusion
+    // the home bar's comment claims was never actually true.
+    //
+    // The whole well takes the tap, not only the `TextField` in the middle of it: the magnifier and
+    // the padding either side of it are about 40px of a control that looks like a button, and a
+    // press there did nothing at all once the field had been unfocused. A tap that lands on the
+    // field still goes to the field - the innermost recogniser in the arena wins.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: focusNode.requestFocus,
+      child: Container(
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: AppColors.trackGrey,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 19),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextField(
+                controller: controller,
+                focusNode: focusNode,
+                // the keyboard comes up with the screen. the user tapped a search bar to get here, so
+                // making them tap a second one would be asking twice for the same intent.
+                autofocus: true,
+                // makes the phone's keyboard show a "search" key instead of a newline, which is what
+                // fires onSubmitted. without it there is no way to submit from the keyboard at all.
+                textInputAction: TextInputAction.search,
+                textCapitalization: TextCapitalization.sentences,
+                cursorColor: AppColors.primaryOrange,
+                style: const TextStyle(
+                  color: AppColors.textDark,
                   fontSize: 14.5,
                   fontWeight: FontWeight.w400,
                 ),
-              ),
-              onSubmitted: onSubmitted,
-            ),
-          ),
-          // rebuilds only this button as the text changes, rather than calling setState and
-          // rebuilding the whole bar (and the TextField inside it) on every keystroke.
-          // ValueListenableBuilder listens to the controller, which *is* a ValueNotifier.
-          ValueListenableBuilder<TextEditingValue>(
-            valueListenable: controller,
-            builder: (context, value, _) {
-              if (value.text.isEmpty) return const SizedBox.shrink();
-              return GestureDetector(
-                onTap: onClear,
-                behavior: HitTestBehavior.opaque,
-                child: const Padding(
-                  padding: EdgeInsets.only(left: 8),
-                  child: Icon(Icons.close_rounded, color: AppColors.textFaint, size: 18),
+                decoration: InputDecoration(
+                  // isCollapsed strips the ~48px of default vertical padding a TextField reserves
+                  // for a material label. without it the field cannot fit inside the row and the
+                  // text sits low instead of centred on the magnifier.
+                  isCollapsed: true,
+                  border: InputBorder.none,
+                  hintText: hintText,
+                  hintStyle: const TextStyle(
+                    color: AppColors.textGrey,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w400,
+                  ),
                 ),
-              );
-            },
-          ),
-        ],
+                onSubmitted: onSubmitted,
+              ),
+            ),
+            // rebuilds only this button as the text changes, rather than calling setState and
+            // rebuilding the whole bar (and the TextField inside it) on every keystroke.
+            // ValueListenableBuilder listens to the controller, which *is* a ValueNotifier.
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: controller,
+              builder: (context, value, _) {
+                if (value.text.isEmpty) return const SizedBox.shrink();
+                return GestureDetector(
+                  onTap: onClear,
+                  behavior: HitTestBehavior.opaque,
+                  child: const Padding(
+                    padding: EdgeInsets.only(left: 8),
+                    child: Icon(Icons.close_rounded, color: AppColors.textGrey, size: 18),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -363,9 +363,10 @@ to fall into twice. **The bar became a button because an inline field trapped th
   on the token: those two are at or above the page, so a box filled with either reads as white sitting
   on grey. No border and no shadow with it (`hairline` is lighter than the fill; a shadow under
   something recessed is a contradiction), and the hint went `textFaint` → `textGrey`, which was
-  already pale on white and unreadable on a darker fill. **The shop card's catalogue search wears the
-  identical recipe** (§7), so the two read as one control even though one is a field and one is a
-  button.
+  already pale on white and unreadable on a darker fill. **The shop card's catalogue search and
+  `ProductSearchScreen`'s own field both wear the identical recipe** (§7) — the second of those was
+  white inside a `hairline` at 42px until 2026-08-20, so tapping a grey well and landing on a white
+  field was two controls where the comment here claimed one.
 
 ### Header
 
@@ -421,11 +422,19 @@ groups; the label above it carries the *price comparison* only, as `PriceTierPin
 pin would have three price colours plus a fourth "no data" colour and the category would have nowhere
 left to live.
 
-**The current set is the founder's pick (2026-08-18) and must not be changed without asking:**
-универсальный `wrench`, сантехника `bath`, древесные материалы `tree_pine`, обои `paint_roller`. The
-thread through it is *name the material the shop sells, not something adjacent*. **Not `hard_hat`** for
-универсальный — the Заявки tab wears that one, and a glyph must not mean "workers" in the nav and
-"магазин" on the map.
+**The current set is the founder's pick and must not be changed without asking:** универсальный
+`wrench_off` (2026-08-20), сантехника `bath`, древесные материалы `tree_pine`, обои `paint_roller`
+(the last three from 2026-08-18). The thread through it is *name the material the shop sells, not
+something adjacent*. **Not `hard_hat`** for универсальный — the Заявки tab wears that one, and a glyph
+must not mean "workers" in the nav and "магазин" on the map.
+
+**`wrench_off` is Lucide's "no tools" glyph and it was picked on how it renders, not on its name** —
+at pin size the diagonal stroke reads as a second tool laid across the wrench, which is the
+crossed-tools mark a hardware shop's own signage uses. Written down because it cuts against the rule
+in the paragraph above: someone who knows the family's `_off` convention reads a prohibition sign. It
+also needs **`flutter_lucide` ≥ 1.33.0** — the app was pinned to 1.11.0, which has no such glyph. The
+bump is otherwise a visual no-op: every codepoint the app already uses is identical between the two
+versions, checked by rendering all thirty out of both fonts side by side.
 
 **Pick map glyphs by rendering them, not by their names** — Lucide's names lie often enough that three
 of four were wrong on the first pick (`wallpaper` is a desktop background; `logs` is a log *file*, so
@@ -531,40 +540,87 @@ Two consequences to keep straight:
 
 #### What is on it, in order
 
-**A cover, then three white cards on the grey page, then the catalogue.**
+**A full-bleed cover, one white surface with rules through it, then the catalogue on the grey page.**
+It was a boxed cover inside the page gutter, an identity card lapped over it and two more rounded
+white cards under that — **rewritten 2026-08-20, and what all three faults had in common is using a
+box to say "a new section starts here"**. Three stacked cards made a page about one shop read as a
+list of three unrelated things; a cover boxed inside a 16px gutter with its own radius read as an
+illustration pasted into the layout rather than as the top of the screen; and the map's sheet already
+has corners of its own, so a rounded cover inside them was two radii a few pixels apart.
 
-- **`ShopCategoryBanner` — one painted picture per shop category** (`ShopCategory`), 200 tall, and the
-  reason it is painted is that nothing writes `shops.image_url`: a hero backed by that column would be
-  an empty rectangle on every shop in the market, which is what "no cover band" used to be the answer
-  to. Four stock photographs would be pictures of somebody else's shop and the only raster assets in
-  the app. A painted cover has neither problem and one advantage — **it is the same picture for every
-  Сантехника shop, which makes it information**: a customer learns the teal one is plumbing before
-  reading a word. Deep two-stop gradient + the category's own Lucide glyph tiled on a tilted grid +
-  one large copy anchored bottom-right, drawn through a `TextPainter` (a Lucide icon *is* a character
-  in a font, so thirty of them are one layout and a loop rather than thirty widgets). `isComplex` /
-  `willChange: false` so the engine caches the raster instead of repainting it every scroll frame.
-  **The four palettes are the one place in the app with colour that is not the brand's**, deliberately
-  — brand orange is for actions, and four orange covers would say nothing about which shop you opened.
-  All four carry white at over 5.5:1 before the scrim. The day `image_url` arrives, the photograph
-  goes inside this widget with the same overlay and corners, and no layout is rethought.
-- **The shop's name is on the cover and nowhere else.** `contentInset` lifts it clear of the identity
-  card lapped over the bottom — at the default a two-line name spends its second line behind that
-  card, which is invisible in a mock-up and true of half the shops in the market.
-- **Identity: the category, then the address. Two lines, no chips and no pills.** That block was a row
-  of them (a category chip, a rating chip, a VIP pill) and a card opening with four small rounded
-  boxes reads as a filter bar. Hierarchy carries it instead. The glyph is the pin's own
-  (`ShopCategory.icon`) and the words beside it are what that glyph meant — this is still the only
-  place in the app that translates it. The placement mark moved onto the cover, where there is a
-  picture to sit on; it is a star and three letters, not a capsule.
+- **`ShopCategoryBanner` — one painted picture per shop category** (`ShopCategory`), **240 tall,
+  full-bleed, and running under the status bar**. It is painted because nothing writes
+  `shops.image_url`: a hero backed by that column would be an empty rectangle on every shop in the
+  market. Four stock photographs would be pictures of somebody else's shop and the only raster assets
+  in the app.
+  **It is white and brand orange now, and it is one composition rather than a texture.** Four layers:
+  a near-white ground warming to `primarySoft`; a faint orange draughting grid; **the ribbon**, one
+  wide orange band across the lower half at −15° running off both edges with two thin parallels above
+  it; and **the mark**, a white disc carrying the category's own Lucide glyph in orange — the map
+  pin's head with its colours swapped, so the card wears the same glyph as the teardrop that opened
+  it. The glyph goes through a `TextPainter` (a Lucide icon *is* a character in a font). `isComplex` /
+  `willChange: false` so the engine caches the raster instead of repainting every scroll frame.
+  **`canvas.clipRect` is load-bearing** — a `CustomPaint` does not clip, every layer overdraws on
+  purpose, and without it the ribbon paints over the details and the catalogue: one solid orange
+  screen that looks like a rendering fault rather than a layout one.
+  It was four deep desaturated gradients (graphite/teal/forest/plum) with the glyph tiled thirty times
+  across a tilted grid. **What that bought and this gives up: the category used to be readable by
+  colour** — teal was plumbing before you read a word — and with one palette for all four the glyph is
+  the only channel left, exactly as on the pin. The founder's call, and the reason is that the top of
+  the most important screen in the product was the one surface that did not look like Domix. The day
+  `image_url` arrives, the photograph goes in as a fifth layer under the ribbon and no layout moves.
+- **The shop's name is below the cover, not on it.** It was laid over the picture while the picture
+  was a dark gradient; on a white-and-orange one there is nowhere white text is safe and nowhere dark
+  text is either, and a scrim to make one work would be a grey band over a cover that was redesigned
+  to be clean. Below it, it is a heading — which is what it is. `contentInset` went with it.
+- **Identity: the category as an eyebrow, then the name, then the address.** No chips and no pills —
+  that block was a row of them (category, rating, VIP) and a card opening with four small rounded
+  boxes reads as a filter bar. **The category glyph is not repeated here**: it is already on the cover
+  forty pixels up, inside the disc, so this row is small caps and nothing else. The VIP mark sits
+  beside the eyebrow as a star and three letters in brand orange — a highlight, which is one of the
+  things orange is for, and **not a capsule**.
+- **Sections are separated by `_Rule`, a 1px `trackGrey` line inset by the gutter — never by a box.**
+  A line that stops short of both edges is what a rule is; one running wall to wall cuts the surface
+  in half, which is what the cards were doing. **`trackGrey`, not `hairline`**: `hairline` is the
+  border token for a white card standing on the *grey* page, where a shadow does most of the
+  separating; on white with nothing helping it is about 1.08:1 and does not appear at all.
 - **Comparison first, amount second.** «на 4% дешевле рынка» is the fact a customer came for and
   «4 850 000 сум» is what it is 4% of, so a reader who stops after one line has still read the useful
-  one. Both come from one condition — the view has no partial state — and the empty case is a sentence
-  about the shop, never a blank.
-- **Contacts is the phone number and the two buttons. The address is not repeated there**; printing it
-  twice made the block look like a form nobody finished. The number is drawn large and is **not** a
-  control: the call button is six points below it, and two affordances for one action is what people
-  press twice and then report as broken.
-- **Позвонить filled, Маршрут outlined** — not peers.
+  one. The comparison is `PriceTierBadge` at `PriceTierBadgeSize.headline` — **the pill is dropped**,
+  and the size and weight are what make it read as a signal. The caption «Цена корзины» goes *under*
+  the number: the number is what the eye should land on, and a label above it takes that position for
+  a word nobody is looking for.
+- **A shop with no basket gets no price section at all**, rules included. It used to get
+  `basketPriceIncomplete` — "Магазин ещё не указал все цены, поэтому сравнения нет" — **and that
+  string is deleted; don't reintroduce it in a shorter form.** A customer is not the audience for
+  another business's unfinished admin, and a paragraph about it sat exactly where the one number they
+  opened the card for should be. Saying nothing is the accurate thing to say; the owner's copy of the
+  rule is `ShopProductsScreen`'s progress card, which is still the only place it is explained.
+- **Contacts is one caption, the number, and the two buttons.** The address is not repeated there —
+  printing it twice made the block look like a form nobody finished. It carried a section title
+  («Контакты», now a deleted string) *and* a field caption *and* a glyph beside the number, which is
+  three kinds of label over one fact; the rule above it does the section's job and `phoneLabel` is the
+  one that survived. The number is drawn large with *positive* letter spacing — a phone number is read
+  in groups of digits, and tightening it makes one long number out of four short ones — and it is
+  **not** a control: the call button is directly below it, and two affordances for one action is what
+  people press twice and then report as broken.
+- **Позвонить filled, Маршрут outlined** — not peers. The outlined one is **white inside a `trackGrey`
+  edge**: it was `surfaceMuted` inside a `hairline`, a fill and an edge both within about 3% of the
+  white surface they sit on, which is a button-shaped area of nothing.
+- **The sheet's grabber floats over the cover** rather than sitting in a row above it — that strip of
+  page was the one thing stopping the picture from starting where the sheet does. `IgnorePointer` is
+  what keeps it free: a drag landing on the handle falls through to the scroll view, which is what the
+  sheet listens to. It is translucent black rather than `trackGrey`, which is invisible on a near-
+  white cover.
+- **The route's back button gained a `trackGrey` ring.** Its corner of the cover is the whitest part
+  of the picture, so a white disc with only a shadow under it had nothing making it a shape.
+- **The route has no top `SafeArea` any more** — that is what lets the picture run under the status
+  bar, and it is why the cover is near-white up there and why `SystemUiOverlayStyle.dark` (dark
+  glyphs) is asked for explicitly. The route's cover is `defaultHeight + MediaQuery.paddingOf().top`
+  tall, so the *visible* 240 is the same in both chromes.
+- **One `_gutter` (16) for everything** — text, rules, the search field, the product grid — so a rule
+  ends exactly where a line of text does. Two numbers that have to agree by hand is how they stop
+  agreeing.
 
 #### «Маршрут» asks the phone, not the web
 
@@ -596,11 +652,22 @@ bar, which is a *button* precisely because its search is a sequential scan on th
 the argument against as-you-type there does not exist here. Matched on the name only: the shop is the
 page, and the unit would match most of the list.
 
+**The whole well is the tap target, and that was a bug rather than a refinement.** A `TextField`
+takes focus only where the `TextField` is, and this one is the `Expanded` in the middle of a row — so
+the padding, the magnifier and the gap after it were about 40px of dead surface at the left end of
+something that looks exactly like a button. Pressing the magnifier and having nothing happen is the
+whole of "the search button does not work", and it is invisible in a screenshot. A `GestureDetector`
+round the well hands focus to the field, which the field owns via a `FocusNode` held by the screen; a
+tap landing *on* the field still resolves to the field, since the innermost recogniser in the arena
+wins. **`ProductSearchScreen`'s field had the same dead zone and got the same fix.** Pinned by
+`tapping the magnifier focuses the catalogue search`.
+
 Three empty states and they are different sentences: the request failed, the shop has priced nothing,
 this query matched nothing. **The failure wins over the filter** — telling a reader to try another
 word sends them typing at a screen with no data behind it. The heading's count is of everything
 priced, not of what the filter left, or the number would fall to 3 while typing and read as the
-catalogue shrinking.
+catalogue shrinking. The line is set plainly on the page: it was inside a `surfaceMuted` box with a
+`hairline` border, which on this page is a frame you cannot see round one sentence.
 
 `stores_repository.dart` talks to the real backend. On create, the new `Shop` is appended directly to
 `StoresController`'s in-memory list so it appears on the map immediately.

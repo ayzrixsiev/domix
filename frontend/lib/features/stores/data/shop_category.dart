@@ -80,7 +80,17 @@ enum ShopCategory {
   /// **Three of the four are the founder's pick (2026-08-18), and each overrides an argument that
   /// used to be recorded here.** The thread running through all three: name the *material* the shop
   /// sells, not something adjacent to it.
-  /// - `wrench` for универсальный, replacing `hammer` (itself a replacement for `store`).
+  /// - `wrench_off` for универсальный, the founder's pick on 2026-08-20, replacing `wrench` (itself
+  ///   a replacement for `hammer`, itself a replacement for `store`). **Lucide's name for it is
+  ///   literal**: it is the wrench with a diagonal stroke through it, the family's "disabled"
+  ///   variant, and the mark that means "no tools" everywhere else it appears. It was picked for
+  ///   how it renders rather than for what the name claims - at pin size the stroke reads as a
+  ///   second tool laid across the wrench, which is the crossed-tools mark a hardware shop's own
+  ///   signage uses. That is the whole case for it, and it is a real one, but the risk is worth
+  ///   writing down: a reader who knows the convention reads a prohibition sign.
+  ///   Requires `flutter_lucide` **1.33.0 or newer** - 1.11.0, which the app was pinned to, has no
+  ///   `wrench_off` at all. The bump is visually a no-op otherwise: every codepoint the app already
+  ///   uses is unchanged between the two versions and every glyph renders identically.
   /// - `tree_pine` for древесные материалы, replacing `fence`. The objection on record was that a
   ///   tree is a *landmark* on a map and OSM tiles are full of them - but this glyph is white
   ///   inside an orange teardrop, which no map tile ever is, so that collision is weaker in place
@@ -90,12 +100,13 @@ enum ShopCategory {
   ///   sold in (за рулон) and still had to be explained; a roller is what the trade's own signage
   ///   uses.
   ///
-  /// **Known cost, accepted:** all three now share a glyph with a [ProductCategory] tile on the
-  /// home screen - `wrench` with Инструменты, `tree_pine` with Пиломатериалы, `paint_roller` with
-  /// Краски. The two lists mean different things (a kind of *shop* against a kind of *product*) and
-  /// never appear on the same surface, so nothing is ambiguous in place. What it costs is that a
-  /// customer who learns the home grid first arrives at the map with those three glyphs already
-  /// meaning something narrower than the shop they mark.
+  /// **Known cost, accepted:** two of them still share a glyph with a [ProductCategory] tile on
+  /// the home screen - `tree_pine` with Пиломатериалы, `paint_roller` with Краски. (`wrench_off`
+  /// no longer collides with Инструменты, which is the one thing the slash buys.) The two lists
+  /// mean different things (a kind of *shop* against a kind of *product*) and never appear on the
+  /// same surface, so nothing is ambiguous in place. What it costs is that a customer who learns
+  /// the home grid first arrives at the map with those two glyphs already meaning something
+  /// narrower than the shop they mark.
   ///
   /// Earlier picks and why they failed, kept because the same traps come back:
   /// - **`wallpaper` is a monitor.** Lucide draws it as a screen with a picture in it - the desktop-
@@ -112,7 +123,7 @@ enum ShopCategory {
   /// On the enum for the same reason [label] is: a fifth category becomes a compile error here
   /// rather than a blank pin nobody notices until it is on the map.
   IconData get icon => switch (this) {
-        ShopCategory.universal => LucideIcons.wrench,
+        ShopCategory.universal => LucideIcons.wrench_off,
         ShopCategory.plumbing => LucideIcons.bath,
         ShopCategory.wood => LucideIcons.tree_pine,
         ShopCategory.wallpaper => LucideIcons.paint_roller,

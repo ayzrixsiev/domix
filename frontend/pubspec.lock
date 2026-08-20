@@ -183,10 +183,10 @@ packages:
     dependency: "direct main"
     description:
       name: flutter_lucide
-      sha256: d2866c9ba75b2300e73a888489f0d7ef1d225e1c352d7e7f5c7fdff7d04e294c
+      sha256: "585c589a49368e884307152b18c26521c3cd419bfadb1b82cd2fe9177f234789"
       url: "https://pub.dev"
     source: hosted
-    version: "1.11.0"
+    version: "1.33.0"
   flutter_plugin_android_lifecycle:
     dependency: transitive
     description:

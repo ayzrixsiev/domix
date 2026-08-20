@@ -12,6 +12,7 @@ import 'package:frontend/features/products/data/product_model.dart';
 import 'package:frontend/features/products/presentation/controllers/products_controller.dart';
 import 'package:frontend/features/products/presentation/widgets/product_grid.dart';
 import 'package:frontend/features/products/presentation/widgets/product_tile.dart';
+import 'package:frontend/features/stores/data/price_tier.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 import 'package:frontend/features/stores/presentation/widgets/shop_category_banner.dart';
 
@@ -26,7 +27,7 @@ import 'package:frontend/features/stores/presentation/widgets/shop_category_bann
 ///
 /// ## It is one screen with two chromes, and that split is the whole design
 ///
-/// The *content* is identical everywhere - the same cover, the same three cards, the same catalogue.
+/// The *content* is identical everywhere - the same cover, the same details, the same catalogue.
 /// What differs is how it arrives:
 ///
 ///  * **From the map it is a draggable sheet** ([showShopCardSheet]) sitting over the map rather than
@@ -42,6 +43,26 @@ import 'package:frontend/features/stores/presentation/widgets/shop_category_bann
 /// sheet's grid was `shrinkWrap: true`, which lays out every child to measure itself - a hundred
 /// tiles mounted at once, each firing an `Image.network` the moment it mounts. That is the bug in
 /// CLAUDE.md §8 whose symptom is not slow images but a *failed price save*.
+///
+/// ## How it is laid out, and what changed on 2026-08-20
+///
+/// It used to be a cover inset inside the page gutter, with an identity card lapped over it and two
+/// more rounded white cards under that, all floating on the grey page. Three things were wrong with
+/// it and all three came from the same habit - **using a box to say "a new section starts here"**:
+///
+///  * A card is a heavy separator. Three of them stacked, each with its own radius and shadow, made
+///    a page about one shop look like a list of three unrelated things.
+///  * The cover could not be a *picture*. Boxed inside a 16px gutter with its own rounded corners,
+///    it read as an illustration pasted into the layout rather than as the top of the screen.
+///  * The map's sheet already has rounded corners of its own, so a rounded cover inside them was
+///    two radii a few pixels apart.
+///
+/// So: the cover is **full-bleed and runs to the very top**, the details below it sit on one plain
+/// white surface, and the sections inside that surface are separated by **hairline rules inset from
+/// both edges** - a line that stops short of the screen is what a rule is, and it is the lightest
+/// separator that still separates. The catalogue keeps the grey page under it, which is what marks
+/// the one real break on the screen: everything above is *this shop*, everything below is *its
+/// goods*.
 class ShopCardScreen extends StatelessWidget {
   const ShopCardScreen({super.key, required this.shop});
 
@@ -55,17 +76,16 @@ class ShopCardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // there is no AppBar on this screen any more - the cover runs to the top of the content and the
-    // back button floats over it - so the status bar's icons have to be asked for explicitly rather
-    // than inherited from an AppBar that is no longer there.
+    // **No `SafeArea` at the top, and that is the point of the cover.** The picture runs underneath
+    // the status bar, so the clock and the battery sit on it - which is why the cover's own top is
+    // painted near-white and why the overlay style is asked for explicitly here rather than
+    // inherited from an AppBar this screen does not have. `dark` means *dark glyphs*, for a light
+    // background.
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
         backgroundColor: AppColors.background,
-        body: SafeArea(
-          bottom: false,
-          child: ShopCardView(shop: shop, chrome: ShopCardChrome.route),
-        ),
+        body: ShopCardView(shop: shop, chrome: ShopCardChrome.route),
       ),
     );
   }
@@ -140,10 +160,20 @@ class ShopCardView extends StatefulWidget {
   State<ShopCardView> createState() => _ShopCardViewState();
 }
 
+/// The one horizontal inset on the screen. Text, rules, the search field and the product grid all
+/// sit on it, so a rule ends exactly where a line of text does.
+const double _gutter = 16;
+
 class _ShopCardViewState extends State<ShopCardView> {
   /// The catalogue filter. Held here rather than in the sliver so the products heading, the field
   /// and the grid all read one value.
   final TextEditingController _search = TextEditingController();
+
+  /// **Owned here rather than inside the field, because the field's own `TextField` is not the whole
+  /// control.** Tapping the magnifier or the padding beside it has to focus the input too - see
+  /// [_CatalogueSearchField], which is where the bug that made this necessary is written down.
+  final FocusNode _searchFocus = FocusNode();
+
   String _query = '';
 
   /// Below this many priced products the search field is not drawn at all.
@@ -171,6 +201,7 @@ class _ShopCardViewState extends State<ShopCardView> {
   @override
   void dispose() {
     _search.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -275,9 +306,13 @@ class _ShopCardViewState extends State<ShopCardView> {
     final matches = _matching(priced);
     final isFirstLoad = controller.isLoadingFor(shop.id) && !controller.hasLoaded(shop.id);
 
-    // the page gutter. 16, not the 20 the app's form screens use: the cover is the widest object on
-    // the screen and wants the edges.
-    const gutter = EdgeInsets.symmetric(horizontal: 16);
+    // the pushed route draws its cover *under* the status bar, so the picture has to be that much
+    // taller for the same 240 of it to be visible below the clock. the sheet is opened with
+    // `useSafeArea`, so its own top edge is already clear of it and the height is the plain one.
+    final coverHeight = ShopCategoryBanner.defaultHeight +
+        (_isSheet ? 0 : MediaQuery.paddingOf(context).top);
+
+    const gutter = EdgeInsets.symmetric(horizontal: _gutter);
 
     final scrollView = CustomScrollView(
       controller: widget.scrollController,
@@ -287,44 +322,39 @@ class _ShopCardViewState extends State<ShopCardView> {
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
       slivers: [
-        SliverPadding(
-          padding: EdgeInsets.fromLTRB(16, _isSheet ? 4 : 8, 16, 0),
-          sliver: SliverToBoxAdapter(child: _Hero(shop: shop, strings: strings)),
+        // no padding of any kind around the cover: full width, hard against the top. on the sheet
+        // the surface's own Clip.antiAlias is what rounds its two upper corners.
+        SliverToBoxAdapter(
+          child: ShopCategoryBanner(category: shop.category, height: coverHeight),
         ),
-        SliverPadding(
-          padding: gutter.add(const EdgeInsets.only(top: 12)),
-          sliver: SliverToBoxAdapter(child: _BasketPriceCard(shop: shop, strings: strings)),
-        ),
-        SliverPadding(
-          padding: gutter.add(const EdgeInsets.only(top: 12)),
-          sliver: SliverToBoxAdapter(
-            child: _ContactsCard(
-              shop: shop,
-              strings: strings,
-              onCall: _dial,
-              onRoute: _route,
-            ),
+        SliverToBoxAdapter(
+          child: _DetailsSurface(
+            shop: shop,
+            strings: strings,
+            onCall: _dial,
+            onRoute: _route,
           ),
         ),
         SliverPadding(
-          padding: gutter.add(const EdgeInsets.only(top: 26)),
+          padding: gutter.add(const EdgeInsets.only(top: 24)),
           sliver: SliverToBoxAdapter(
             child: _ProductsHeading(count: priced.length, strings: strings),
           ),
         ),
         if (priced.length >= _searchThreshold)
           SliverPadding(
-            padding: gutter.add(const EdgeInsets.only(top: 12)),
+            padding: gutter.add(const EdgeInsets.only(top: 14)),
             sliver: SliverToBoxAdapter(
               child: _CatalogueSearchField(
                 controller: _search,
+                focusNode: _searchFocus,
                 strings: strings,
                 onChanged: (value) => setState(() => _query = value),
               ),
             ),
           ),
         SliverPadding(
-          padding: gutter.add(const EdgeInsets.only(top: 12)),
+          padding: gutter.add(const EdgeInsets.only(top: 14)),
           sliver: _ProductsSliver(
             products: matches,
             strings: strings,
@@ -368,8 +398,12 @@ class _ShopCardViewState extends State<ShopCardView> {
               onRefresh: _refresh,
               child: scrollView,
             ),
-            // inside the cover's own left edge (the 16 gutter) rather than straddling it
-            const Positioned(top: 16, left: 26, child: _BackButton()),
+            // clear of the status bar the cover now runs under
+            Positioned(
+              top: MediaQuery.paddingOf(context).top + 8,
+              left: 14,
+              child: const _BackButton(),
+            ),
           ],
         ),
       ShopCardChrome.sheet => _SheetSurface(child: scrollView),
@@ -385,6 +419,13 @@ class _ShopCardViewState extends State<ShopCardView> {
 /// this phone can open that" message inside the sheet, which is the only place it is any use.
 /// `resizeToAvoidBottomInset` is off because the draggable sheet already owns its own height, and
 /// two things resizing for one keyboard fight.
+///
+/// **The grabber floats over the content instead of sitting above it**, which is what lets the cover
+/// reach the sheet's own top edge and be cropped by its corners. It was a row in a `Column` above
+/// the scroll view, and the strip of page it occupied was the one thing stopping the picture from
+/// starting where the sheet does. `IgnorePointer` is what keeps the change free: a drag that lands
+/// on the handle falls through to the scroll view underneath, which is the thing the sheet listens
+/// to, so the handle stays draggable without being a gesture target of its own.
 class _SheetSurface extends StatelessWidget {
   const _SheetSurface({required this.child});
 
@@ -401,12 +442,17 @@ class _SheetSurface extends StatelessWidget {
           borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
         ),
         clipBehavior: Clip.antiAlias,
-        child: Column(
+        child: Stack(
           children: [
-            const _SheetGrabber(),
             // the scroll view, and it must be the *only* scrollable the sheet's controller reaches -
             // that is what hands a drag between the list and the sheet
-            Expanded(child: child),
+            Positioned.fill(child: child),
+            const Positioned(
+              top: 10,
+              left: 0,
+              right: 0,
+              child: IgnorePointer(child: Center(child: _SheetGrabber())),
+            ),
           ],
         ),
       ),
@@ -416,8 +462,9 @@ class _SheetSurface extends StatelessWidget {
 
 /// The handle: the one piece of chrome that says this thing can be dragged.
 ///
-/// It is not a button and does nothing when tapped, on purpose - a grabber that also closed the
-/// sheet would be a 38px close target sitting where a thumb rests to drag.
+/// Translucent black rather than [AppColors.trackGrey], because it now lies on the cover instead of
+/// on the page - and the cover's top is near-white, where a pale grey handle is not there at all.
+/// An ink of the background lets it darken whatever it happens to be over.
 class _SheetGrabber extends StatelessWidget {
   const _SheetGrabber();
 
@@ -426,9 +473,8 @@ class _SheetGrabber extends StatelessWidget {
     return Container(
       width: 40,
       height: 4,
-      margin: const EdgeInsets.only(top: 10, bottom: 6),
       decoration: BoxDecoration(
-        color: AppColors.trackGrey,
+        color: const Color(0x33101828),
         borderRadius: BorderRadius.circular(2),
       ),
     );
@@ -437,8 +483,11 @@ class _SheetGrabber extends StatelessWidget {
 
 /// The pushed route's way back, floating over the cover rather than sitting in an app bar.
 ///
-/// A white circle with a shadow, because it has to stay legible against two very different things:
-/// the dark cover at the top of the scroll, and the grey page once the reader has scrolled past it.
+/// A white circle with a shadow **and a hairline ring**. The ring is new and it is not trim: the
+/// cover is white-and-orange now, and its top-left corner - which is exactly where this sits - is
+/// the whitest part of it, so a white disc with only a soft shadow under it had nothing to make it a
+/// shape. The ring also has to survive the reader scrolling the cover away, which puts the same
+/// button over the grey page.
 class _BackButton extends StatelessWidget {
   const _BackButton();
 
@@ -454,9 +503,10 @@ class _BackButton extends StatelessWidget {
         child: Ink(
           width: 38,
           height: 38,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppColors.surfaceWhite,
             shape: BoxShape.circle,
+            border: Border.all(color: AppColors.trackGrey),
             boxShadow: AppShadows.floating,
           ),
           child: const Icon(CupertinoIcons.back, color: AppColors.textDark, size: 20),
@@ -466,113 +516,169 @@ class _BackButton extends StatelessWidget {
   }
 }
 
-/// The cover and the identity block, as one object - because the second overlaps the first.
+/// Everything the card says about the shop itself, on **one white surface**.
 ///
-/// **The overlap is a `Stack` sized by its unpositioned child**, not a negative margin (illegal) or
-/// a `Transform` (which would leave a hole in the layout the size of the shift). The banner is
-/// positioned at the top and the identity card is laid out at `bannerHeight - overlap`, so the stack
-/// measures exactly as tall as the two of them minus the bite - which is what a parent sliver needs
-/// in order to know how much room to give it.
-class _Hero extends StatelessWidget {
-  const _Hero({required this.shop, required this.strings});
+/// Three white cards used to do this job, one per section, each rounded and shadowed and floating in
+/// the page gutter. What they bought was separation; what they cost was the impression that a card
+/// about one business is three things. A single surface with rules through it says the same and says
+/// it more quietly - and it is what lets the cover above sit flush against it instead of leaving a
+/// strip of grey page between a picture and the name of the thing in it.
+///
+/// **The price section is skipped entirely when there is no basket**, rules and all. A shop is in
+/// the index only once its whole template is priced, so this is common early on, and what used to be
+/// here was a sentence explaining that the shop had not finished pricing. It is gone: a customer is
+/// not the audience for another business's unfinished admin, and reading one on the screen you
+/// opened to compare prices is worse than reading nothing. What is left is a card that simply makes
+/// no claim about this shop's prices, which is exactly the true statement.
+class _DetailsSurface extends StatelessWidget {
+  const _DetailsSurface({
+    required this.shop,
+    required this.strings,
+    required this.onCall,
+    required this.onRoute,
+  });
 
   final Shop shop;
   final AppLocalizations strings;
-
-  /// how far the identity card climbs onto the picture
-  static const double _overlap = 26;
+  final VoidCallback onCall;
+  final VoidCallback onRoute;
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          child: ShopCategoryBanner(
-            category: shop.category,
-            name: shop.name,
-            isVip: shop.isVip,
-            // clear of the card below by 12, or a two-line name spends its second line behind it
-            contentInset: _overlap + 12,
+    final basket = shop.basketPrice;
+    final tier = shop.priceTier;
+
+    return Container(
+      width: double.infinity,
+      color: AppColors.surfaceWhite,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _Identity(shop: shop, strings: strings),
+          // the two facts are drawn from one condition rather than one each: a shop is in the index
+          // only with its whole template priced, so basketPrice and priceTier are both present or
+          // both absent, and branching on them separately would be writing code for a state the
+          // database cannot produce.
+          if (basket != null && tier != null) ...[
+            const _Rule(),
+            _BasketPrice(shop: shop, basket: basket, tier: tier, strings: strings),
+          ],
+          const _Rule(),
+          _Contacts(
+            shop: shop,
+            strings: strings,
+            onCall: onCall,
+            onRoute: onRoute,
           ),
-        ),
-        Padding(
-          // inset from the cover's own edges, so the card reads as sitting *on* the picture rather
-          // than as the next full-width band under it
-          padding: const EdgeInsets.only(
-            top: ShopCategoryBanner.defaultHeight - _overlap,
-            left: 10,
-            right: 10,
-          ),
-          child: _IdentityCard(shop: shop, strings: strings),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-/// What kind of shop this is and where it is. Two lines, and deliberately nothing else.
+/// The separator, and the only one on this screen.
 ///
-/// **No chips and no pills anywhere in it.** This block was a row of them - a category chip, a
-/// rating chip, a VIP pill - and a card that opens with four small rounded boxes reads as a filter
-/// bar rather than as an identity. The hierarchy carries it instead: the category is set as a
-/// heading and the address as a caption under it, which is the same shape as every address on every
-/// listing anyone has ever read. The placement mark moved onto the cover, where there is a picture
-/// to sit on.
+/// **Inset from both edges**, so it reads as a rule under a block of text rather than as the seam
+/// between two panels - a line that runs wall to wall cuts the surface in half, which is the thing
+/// the white cards were doing and the reason they went.
 ///
-/// The category glyph is **the pin's own** ([ShopCategory.icon]) and the words beside it are what
-/// that glyph meant. Someone arriving here from the map has just tapped a teardrop with a wrench in
-/// it; this is the only place in the app that translates it.
-class _IdentityCard extends StatelessWidget {
-  const _IdentityCard({required this.shop, required this.strings});
+/// [AppColors.trackGrey] rather than `hairline`: `hairline` is the border token for a white card
+/// standing on the *grey* page, where a shadow is doing most of the separating anyway. On white with
+/// nothing else helping, it is about a 1.08:1 step and simply does not appear.
+class _Rule extends StatelessWidget {
+  const _Rule();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 1,
+      margin: const EdgeInsets.symmetric(horizontal: _gutter),
+      color: AppColors.trackGrey,
+    );
+  }
+}
+
+/// Whose card this is: the kind of shop, its name, where it is.
+///
+/// **The name is here rather than on the cover.** It was laid over the picture while the picture was
+/// a dark gradient; a white-and-orange cover has nowhere on it that white text is safe and nowhere
+/// that dark text is either, and a scrim added to make one work would be a grey band over a cover
+/// that was just redesigned to be clean. Below it the name is a heading, which is what it is.
+///
+/// **The category is an eyebrow above the name, not a chip and not a row with the glyph in it.** The
+/// glyph is already on the cover, forty pixels up, inside the white disc - printing it again under
+/// its own picture is the same mark twice. Small caps over a large name is the shape a listing has
+/// had since before there were phones, and it costs no colour and no box.
+class _Identity extends StatelessWidget {
+  const _Identity({required this.shop, required this.strings});
 
   final Shop shop;
   final AppLocalizations strings;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceWhite,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        // `raised`, not `card`: this one is half on top of a dark picture, and the barely-there
-        // shadow disappears entirely against it
-        boxShadow: AppShadows.raised,
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(_gutter, 20, _gutter, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(shop.category.icon, color: AppColors.textMuted, size: 18),
-              const SizedBox(width: 9),
-              Expanded(
+              Flexible(
                 child: Text(
-                  shop.category.label(strings),
+                  shop.category.label(strings).toUpperCase(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: AppColors.textDark,
-                    fontSize: 16,
+                    color: AppColors.textMuted,
+                    fontSize: 11.5,
                     height: 1.2,
-                    letterSpacing: -0.2,
+                    letterSpacing: 0.9,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
+              // the placement mark. it was on the cover in white; here it is a star and three
+              // letters in brand orange - a highlight, which is one of the things orange is for,
+              // and small enough not to compete with the name under it. **Not a capsule**: a pill
+              // beside an eyebrow is a chip, and a chip is what this block was rebuilt to be rid of.
+              if (shop.isVip) ...[
+                const SizedBox(width: 10),
+                const Icon(Icons.star_rounded, color: AppColors.primaryOrange, size: 15),
+                const SizedBox(width: 3),
+                const Text(
+                  'VIP',
+                  style: TextStyle(
+                    color: AppColors.primaryOrange,
+                    fontSize: 11.5,
+                    height: 1.2,
+                    letterSpacing: 1.1,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 7),
+          Text(
+            shop.name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.textDark,
+              fontSize: 24,
+              height: 1.16,
+              letterSpacing: -0.6,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Padding(
-                padding: EdgeInsets.only(top: 2, left: 2),
-                child: Icon(CupertinoIcons.location_solid, color: AppColors.textFaint, size: 13),
+                padding: EdgeInsets.only(top: 2),
+                child: Icon(CupertinoIcons.location_solid, color: AppColors.textFaint, size: 14),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -580,7 +686,7 @@ class _IdentityCard extends StatelessWidget {
                   shop.address,
                   style: const TextStyle(
                     color: AppColors.textGrey,
-                    fontSize: 13.5,
+                    fontSize: 14,
                     height: 1.35,
                     fontWeight: FontWeight.w400,
                   ),
@@ -597,104 +703,65 @@ class _IdentityCard extends StatelessWidget {
 /// How this shop compares to its market, and then what the shared basket costs here.
 ///
 /// **The comparison is first and the number is second**, which is the reverse of a price tag and is
-/// the point of the whole product: "на 4% дешевле рынка" is the fact a customer came for, and
-/// "4 850 000 сум" is what it is 4% of. A reader who stops after one line has still read the useful
+/// the point of the whole product: «на 4% дешевле рынка» is the fact a customer came for, and
+/// «4 850 000 сум» is what it is 4% of. A reader who stops after one line has still read the useful
 /// one.
 ///
-/// The two facts are drawn from one condition rather than one each: a shop is in the index only with
-/// its whole template priced, so `basketPrice` and `priceTier` are both present or both absent, and
-/// branching on them separately would be writing code for a state the database cannot produce.
-///
-/// **The empty case is a sentence, not a blank.** One unpriced row keeps a shop out, so this is the
-/// common case early on - and a customer who tapped a pin and found nothing where a price should be
-/// reads that as the app failing, where a line about the shop's own prices reads as the shop's state.
-class _BasketPriceCard extends StatelessWidget {
-  const _BasketPriceCard({required this.shop, required this.strings});
+/// Three lines, no box and no tint behind them. The comparison is the badge at
+/// [PriceTierBadgeSize.headline] - the same widget the pin and the feed use, so the wording and the
+/// three colours stay in one file - then the amount at the largest size on the screen, then the
+/// caption naming what the amount is. **The caption is under the number rather than over it**: the
+/// number is the thing the eye should land on, and a label above it takes that position for a word
+/// nobody is looking for.
+class _BasketPrice extends StatelessWidget {
+  const _BasketPrice({
+    required this.shop,
+    required this.basket,
+    required this.tier,
+    required this.strings,
+  });
 
   final Shop shop;
+  final int basket;
+  final PriceTier tier;
   final AppLocalizations strings;
 
   @override
   Widget build(BuildContext context) {
-    final basket = shop.basketPrice;
-    final tier = shop.priceTier;
-
-    if (basket == null || tier == null) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceMuted,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: AppColors.hairline),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Padding(
-              padding: EdgeInsets.only(top: 1),
-              child: Icon(CupertinoIcons.clock, color: AppColors.textFaint, size: 14),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Text(
-                strings.basketPriceIncomplete,
-                style: const TextStyle(
-                  color: AppColors.textGrey,
-                  fontSize: 13,
-                  height: 1.4,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 17),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceWhite,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        boxShadow: AppShadows.card,
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(_gutter, 18, _gutter, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // the full sentence rather than the compact form: this is where someone who tapped a pin
           // reading "−4%" finds out what those four characters meant
-          Align(
-            alignment: Alignment.centerLeft,
-            child: PriceTierBadge(
-              tier: tier,
-              differencePercent: shop.priceDifferencePercent,
-              strings: strings,
-            ),
+          PriceTierBadge(
+            tier: tier,
+            differencePercent: shop.priceDifferencePercent,
+            strings: strings,
+            size: PriceTierBadgeSize.headline,
           ),
-          const SizedBox(height: 14),
-          Text(
-            strings.basketPrice,
-            style: const TextStyle(
-              color: AppColors.textFaint,
-              fontSize: 11.5,
-              height: 1.2,
-              letterSpacing: 0.2,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 11),
           Text(
             strings.somAmount(basket),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: AppColors.textDark,
-              fontSize: 26,
+              fontSize: 27,
               height: 1.15,
-              letterSpacing: -0.7,
-              fontWeight: FontWeight.w700,
+              letterSpacing: -0.8,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            strings.basketPrice,
+            style: const TextStyle(
+              color: AppColors.textFaint,
+              fontSize: 12.5,
+              height: 1.2,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -705,16 +772,23 @@ class _BasketPriceCard extends StatelessWidget {
 
 /// The phone number, and the two things you can do with a shop you have decided to visit.
 ///
-/// **The address is not here any more.** It is two cards up, under the category, where the card
-/// introduces itself - and printing it twice on one screen made the contacts block look like a form
-/// nobody had finished filling in. What is left is exactly what a contacts block is for: a number to
-/// call and a way to get there.
+/// **The address is not here.** It is in the identity block, under the name, where the card
+/// introduces itself - and printing it twice on one screen made this block look like a form nobody
+/// had finished filling in.
 ///
-/// The number is drawn large and is not a control. The call button directly under it is the control,
-/// and a tappable number six points above a button that does the identical thing is two answers to
-/// one question - the kind of duplicate affordance people press twice and then report as broken.
-class _ContactsCard extends StatelessWidget {
-  const _ContactsCard({
+/// It read as an odd block for two more reasons, both now gone. It carried a section title
+/// («Контакты») *and* a field caption *and* a glyph beside the number, so three different kinds of
+/// label were stacked over one fact; the rule above it now does the section's job, leaving one
+/// caption naming one value. And its secondary button was filled [AppColors.surfaceMuted] with a
+/// `hairline` border - a fill and an edge that are both within about 3% of white, which on this
+/// surface is a button-shaped area of nothing.
+///
+/// The number is drawn large and is **not** a control. The call button directly under it is the
+/// control, and a tappable number six points above a button that does the identical thing is two
+/// answers to one question - the kind of duplicate affordance people press twice and then report as
+/// broken.
+class _Contacts extends StatelessWidget {
+  const _Contacts({
     required this.shop,
     required this.strings,
     required this.onCall,
@@ -728,48 +802,38 @@ class _ContactsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceWhite,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        boxShadow: AppShadows.card,
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(_gutter, 18, _gutter, 22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            strings.shopContactsTitle,
+            strings.phoneLabel,
             style: const TextStyle(
               color: AppColors.textFaint,
-              fontSize: 11.5,
-              letterSpacing: 0.2,
+              fontSize: 12,
+              height: 1.2,
+              letterSpacing: 0.3,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              const Icon(CupertinoIcons.phone_fill, color: AppColors.textMuted, size: 16),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Text(
-                  shop.contactPhone,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textDark,
-                    fontSize: 19,
-                    height: 1.2,
-                    letterSpacing: -0.2,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
+          const SizedBox(height: 5),
+          Text(
+            shop.contactPhone,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            // a *positive* letter spacing, where every other heading on this screen is negative: a
+            // phone number is read in groups of digits rather than as a word, and tightening it is
+            // what makes one long number out of four short ones.
+            style: const TextStyle(
+              color: AppColors.textDark,
+              fontSize: 20,
+              height: 1.2,
+              letterSpacing: 0.3,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           Row(
             children: [
               Expanded(
@@ -798,6 +862,10 @@ class _ContactsCard extends StatelessWidget {
 
 // the two things somebody who opened a shop wants to do. one filled, one outlined: they are not
 // peers - a phone number is the reason most of these cards are opened at all.
+//
+// the outlined one is white inside a `trackGrey` edge, which is the only outline that is actually
+// visible on a white surface. it was a surfaceMuted fill inside a hairline, and both of those are
+// within 3% of the surface they were drawn on.
 class _ActionButton extends StatelessWidget {
   const _ActionButton({
     required this.label,
@@ -823,7 +891,7 @@ class _ActionButton extends StatelessWidget {
         boxShadow: isPrimary ? AppShadows.accent(AppColors.primaryOrange) : null,
       ),
       child: Material(
-        color: isPrimary ? AppColors.primaryOrange : AppColors.surfaceMuted,
+        color: isPrimary ? AppColors.primaryOrange : AppColors.surfaceWhite,
         borderRadius: BorderRadius.circular(AppRadius.sm),
         child: InkWell(
           borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -831,10 +899,10 @@ class _ActionButton extends StatelessWidget {
           child: Ink(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(AppRadius.sm),
-              border: isPrimary ? null : Border.all(color: AppColors.hairline),
+              border: isPrimary ? null : Border.all(color: AppColors.trackGrey, width: 1.2),
             ),
             child: SizedBox(
-              height: 50,
+              height: 52,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -909,81 +977,96 @@ class _ProductsHeading extends StatelessWidget {
 /// button that opens a screen precisely because *its* search is a sequential scan on the server
 /// (CLAUDE.md §7): the argument against as-you-type there does not exist here.
 ///
-/// The well is `trackGrey` with no border, the same recipe the home feed's search bar now wears - so
-/// the two read as the same control even though one is a field and one is a button.
+/// **The whole well is the tap target, and that is a bug fix rather than a refinement.** A
+/// `TextField` only takes focus where the `TextField` is, and this one is the `Expanded` in the
+/// middle of a row - so the 14px of padding, the 19px magnifier and the 10px after it were about
+/// 43px of dead surface at the left end of a control that looks exactly like a button. Pressing the
+/// magnifier and having nothing happen is the whole of "the search button does not work". The outer
+/// `GestureDetector` hands focus to the field; a tap that lands *on* the field still resolves to the
+/// field's own recogniser, since the innermost one in the arena wins.
+///
+/// The well is [AppColors.trackGrey] with no border and no shadow - the home feed's search bar
+/// exactly, hint colour and heights included, so the two read as one control across two screens.
 class _CatalogueSearchField extends StatelessWidget {
   const _CatalogueSearchField({
     required this.controller,
+    required this.focusNode,
     required this.strings,
     required this.onChanged,
   });
 
   final TextEditingController controller;
+  final FocusNode focusNode;
   final AppLocalizations strings;
   final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 46,
-      padding: const EdgeInsets.symmetric(horizontal: 13),
-      decoration: BoxDecoration(
-        color: AppColors.trackGrey,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 19),
-          const SizedBox(width: 9),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              onChanged: onChanged,
-              textInputAction: TextInputAction.search,
-              cursorColor: AppColors.primaryOrange,
-              style: const TextStyle(
-                color: AppColors.textDark,
-                fontSize: 14.5,
-                fontWeight: FontWeight.w500,
-              ),
-              decoration: InputDecoration(
-                isDense: true,
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-                hintText: strings.shopProductsSearchHint,
-                hintStyle: const TextStyle(
-                  color: AppColors.textGrey,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: focusNode.requestFocus,
+      child: Container(
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: AppColors.trackGrey,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 19),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextField(
+                controller: controller,
+                focusNode: focusNode,
+                onChanged: onChanged,
+                textInputAction: TextInputAction.search,
+                cursorColor: AppColors.primaryOrange,
+                style: const TextStyle(
+                  color: AppColors.textDark,
                   fontSize: 14.5,
-                  fontWeight: FontWeight.w400,
+                  fontWeight: FontWeight.w500,
+                ),
+                decoration: InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                  hintText: strings.shopProductsSearchHint,
+                  hintStyle: const TextStyle(
+                    color: AppColors.textGrey,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w400,
+                  ),
                 ),
               ),
             ),
-          ),
-          // rebuilt off the field itself rather than from the parent's state, so clearing does not
-          // cost a rebuild of the whole card - the same reason the unit chips on the product form
-          // listen to their controller
-          ValueListenableBuilder<TextEditingValue>(
-            valueListenable: controller,
-            builder: (context, value, _) {
-              if (value.text.isEmpty) return const SizedBox.shrink();
-              return GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  controller.clear();
-                  onChanged('');
-                  // clearing is usually the last thing anyone wants from the field, so it takes the
-                  // keyboard with it rather than leaving it up over the results it just restored
-                  FocusScope.of(context).unfocus();
-                },
-                child: const Padding(
-                  padding: EdgeInsets.only(left: 8),
-                  child: Icon(CupertinoIcons.clear_circled_solid,
-                      color: AppColors.textGrey, size: 17),
-                ),
-              );
-            },
-          ),
-        ],
+            // rebuilt off the field itself rather than from the parent's state, so clearing does not
+            // cost a rebuild of the whole card - the same reason the unit chips on the product form
+            // listen to their controller
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: controller,
+              builder: (context, value, _) {
+                if (value.text.isEmpty) return const SizedBox.shrink();
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    controller.clear();
+                    onChanged('');
+                    // clearing is usually the last thing anyone wants from the field, so it takes the
+                    // keyboard with it rather than leaving it up over the results it just restored
+                    FocusScope.of(context).unfocus();
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.only(left: 8),
+                    child: Icon(CupertinoIcons.clear_circled_solid,
+                        color: AppColors.textGrey, size: 17),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -995,6 +1078,9 @@ class _CatalogueSearchField extends StatelessWidget {
 /// reads as "this app has no products area", which is a different and wrong message. A *search* that
 /// matched nothing gets a different line again - it is the reader's query that is empty, not the
 /// shop.
+///
+/// The line is set plainly on the page rather than inside a bordered box. It is one sentence in the
+/// place a grid would be, and the grid it replaces has no frame either.
 class _ProductsSliver extends StatelessWidget {
   const _ProductsSliver({
     required this.products,
@@ -1038,19 +1124,13 @@ class _ProductsSliver extends StatelessWidget {
       };
 
       return SliverToBoxAdapter(
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceMuted,
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(color: AppColors.hairline),
-          ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 18),
           child: Text(
             message,
             style: const TextStyle(
               color: AppColors.textGrey,
-              fontSize: 13,
+              fontSize: 13.5,
               height: 1.4,
               fontWeight: FontWeight.w400,
             ),

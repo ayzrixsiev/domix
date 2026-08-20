@@ -134,7 +134,7 @@ class HomeShopRow extends StatelessWidget {
                         tier: tier,
                         differencePercent: shop.priceDifferencePercent,
                         strings: strings,
-                        compact: true,
+                        size: PriceTierBadgeSize.compact,
                       ),
                     ],
                   ],
