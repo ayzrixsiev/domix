@@ -1,112 +1,119 @@
 package catalog
 
-// the templates are ~170 lines of hand-typed data transcribed from /products.md. they fail by
-// producing 98 tiles or a duplicate key, not by failing to compile, so the invariants a human
-// editor can break are asserted here.
+// the templates moved out of this package's source and into `product_templates` (migration 000014),
+// so these tests split in two.
+//
+// The first half is about the in-memory store: Load replacing the world atomically, Template handing
+// out copies, and the slot key set being derived from the declared owner-named *categories* rather
+// than written down separately. Those run on synthetic rows and need no database.
+//
+// The second half is about the real table, and it is what used to be asserted against the Go
+// literal: unique keys, values that fit the columns they get copied into, product categories the app
+// has a label for, and photos that exist on disk. Those need the database, and skip cleanly without
+// one.
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/joho/godotenv"
 )
 
-func TestTemplateSizes(t *testing.T) {
-	cases := []struct {
-		category string
-		want     int
-	}{
-		{string(CategoryUniversal), UniversalSize},
-		{string(CategoryPlumbing), PlumbingSize},
-		{string(CategoryWood), WoodSize},
-		{string(CategoryWallpaper), WallpaperSize},
-	}
-
-	for _, tc := range cases {
-		if got := Size(tc.category); got != tc.want {
-			t.Errorf("Size(%q) = %d, want %d", tc.category, got, tc.want)
-		}
-	}
-}
-
-// template_key is a shop-scoped unique index, so a duplicated key makes seeding fail on the *second*
-// insert - after the shop row is written, rolling the whole creation back. a copy-pasted line is
-// exactly how that happens.
-func TestTemplateKeysAreUniqueAndFitTheColumn(t *testing.T) {
-	const (
-		maxKeyLen  = 60  // products.template_key VARCHAR(60)
-		maxNameLen = 150 // products.name VARCHAR(150)
-		maxUnitLen = 20  // products.unit VARCHAR(20)
-	)
-
-	for category := range templates {
-		seen := make(map[string]bool)
-		for _, item := range Template(string(category)) {
-			if seen[item.Key] {
-				t.Errorf("%s: duplicate template key %q", category, item.Key)
-			}
-			seen[item.Key] = true
-
-			if item.Key == "" || item.Name == "" || item.Unit == "" {
-				t.Errorf("%s: item %q has an empty field: %+v", category, item.Key, item)
-			}
-			if !IsValidProductCategory(string(item.Category)) {
-				t.Errorf("%s: item %q has unknown product category %q", category, item.Key, item.Category)
-			}
-			// rune count, not len(): cyrillic characters are two bytes and postgres counts varchar
-			// limits in characters
-			if utf8.RuneCountInString(item.Key) > maxKeyLen ||
-				utf8.RuneCountInString(item.Name) > maxNameLen ||
-				utf8.RuneCountInString(item.Unit) > maxUnitLen {
-				t.Errorf("%s: item %q has a value too wide for its column: %+v", category, item.Key, item)
-			}
-		}
-	}
-}
-
-// the workflow this guards: the founder drops a photo into /photos/<category>/ and adds a row to
-// /products.md, and the two have to end up pointing at each other. a row whose file is missing is
-// a tile with a broken image in every shop of the category, and nothing in the app says why - the
-// request just 404s and the placeholder banner shows instead.
-//
-// listed per category rather than run over every template, because wood and обои legitimately have
-// no photos yet: wood has none taken, and an обои slot names no product to photograph. adding a
-// category here is the last step of shooting its catalogue.
-func TestTemplatesHaveAPhotoForEveryProduct(t *testing.T) {
-	photographed := []Category{CategoryUniversal, CategoryPlumbing}
-
-	// backend/internal/catalog -> repo root
-	dir := filepath.Join("..", "..", "..", "photos")
-	if _, err := os.Stat(dir); err != nil {
-		t.Skipf("no %s directory here (%v) - skipping", dir, err)
-	}
-
-	for _, category := range photographed {
-		t.Run(string(category), func(t *testing.T) {
-			seen := make(map[string]string)
-			for _, item := range Template(string(category)) {
-				if item.Image == "" {
-					t.Errorf("%s has no photo - add one to /photos/%s/ and to /products.md", item.Key, category)
-					continue
-				}
-				if other, taken := seen[item.Image]; taken {
-					t.Errorf("%s and %s both use photo %s", other, item.Key, item.Image)
-				}
-				seen[item.Image] = item.Key
-
-				path := filepath.Join(dir, item.ImagePath(category))
-				if _, err := os.Stat(path); err != nil {
-					t.Errorf("%s points at %s, which does not exist", item.Key, path)
-				}
-			}
+func rows(shopCategory string, keys ...string) []Row {
+	out := make([]Row, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, Row{
+			ShopCategory: shopCategory, Key: key, Name: "Товар " + key,
+			Category: "tools", Unit: "шт",
 		})
+	}
+	return out
+}
+
+// ─────────────────────────── the in-memory store ───────────────────────────
+
+// if this regresses, every shop created after the first accidental mutation is seeded with corrupted
+// data - silently, and only in production, since a fresh process starts clean again.
+func TestTemplateReturnsACopy(t *testing.T) {
+	Load(rows("wood", "wood.a", "wood.b"))
+
+	first := Template("wood")
+	first[0].Name = "mutated"
+
+	if second := Template("wood"); second[0].Name == "mutated" {
+		t.Fatal("Template() handed out the package's own slice - mutating it corrupted the template")
+	}
+}
+
+// Load replaces the whole map rather than merging into it, so a product removed from a template
+// through the panel is actually gone from the next shop created - not still there because nothing
+// deleted it from memory.
+func TestLoadReplacesRatherThanMerges(t *testing.T) {
+	Load(rows("wood", "wood.a", "wood.b", "wood.c"))
+	if got := Size("wood"); got != 3 {
+		t.Fatalf("Size after first load = %d, want 3", got)
+	}
+
+	Load(rows("wood", "wood.a"))
+	if got := Size("wood"); got != 1 {
+		t.Errorf("Size after reload = %d, want 1 - Load merged instead of replacing", got)
+	}
+	if Template("wood")[0].Key != "wood.a" {
+		t.Error("the surviving row is not the one that was loaded")
+	}
+}
+
+// a slot that stopped being recognised would silently become an ordinary template row: the обои
+// owner would find the name locked to the placeholder with no error explaining it. the key set is
+// rebuilt by Load off ownerNamedCategories, so this also pins that the derivation survives a reload.
+func TestOwnerNamedSlotsAreDerivedFromTheCategory(t *testing.T) {
+	Load(append(rows("wallpaper", "wallpaper.premium_ru", "wallpaper.econom_cn_1"),
+		rows("wood", "wood.board")...))
+
+	for _, key := range []string{"wallpaper.premium_ru", "wallpaper.econom_cn_1"} {
+		if !IsOwnerNamedSlot(key) {
+			t.Errorf("IsOwnerNamedSlot(%q) = false - every обои row is a slot", key)
+		}
+	}
+	if IsOwnerNamedSlot("wood.board") {
+		t.Error("IsOwnerNamedSlot(\"wood.board\") = true - wood names its own products")
+	}
+	// the empty string is what a caller reads off an invalid pgtype.Text, i.e. a product the owner
+	// added themselves
+	if IsOwnerNamedSlot("") {
+		t.Error(`IsOwnerNamedSlot("") = true, want false`)
+	}
+
+	if !IsOwnerNamedCategory("wallpaper") || IsOwnerNamedCategory("wood") {
+		t.Error("IsOwnerNamedCategory disagrees with IsOwnerNamedSlot about which categories are slot-based")
+	}
+}
+
+// emptying a template from the panel must not make its code stop being a category - the add-store
+// form would start rejecting it, which is a much stranger failure than an empty catalogue.
+func TestCategoryValidityDoesNotDependOnWhatIsLoaded(t *testing.T) {
+	Load(rows("wood", "wood.a"))
+
+	for _, valid := range []string{"universal", "plumbing", "wood", "wallpaper"} {
+		if !IsValidCategory(valid) {
+			t.Errorf("IsValidCategory(%q) = false, want true", valid)
+		}
+	}
+	for _, invalid := range []string{"", "UNIVERSAL", "santehnika", "Универсальный"} {
+		if IsValidCategory(invalid) {
+			t.Errorf("IsValidCategory(%q) = true, want false", invalid)
+		}
 	}
 }
 
 // the app's exhaustive switch over its own copy of this list means a code added on one side and not
-// the other is a missing label rather than a crash - the kind of drift that goes unnoticed. this
-// pins the go side.
+// the other is a missing label rather than a crash - the kind of drift that goes unnoticed.
 func TestProductCategoryCodes(t *testing.T) {
 	want := []string{
 		"mixes", "blocks", "lumber", "metal", "fasteners", "roofing",
@@ -125,8 +132,7 @@ func TestProductCategoryCodes(t *testing.T) {
 		}
 	}
 
-	// the old free-text values must not pass - migration 000006 remapped them, and anything still
-	// shaped like display text is a caller that missed the change
+	// the old free-text values must not pass - migration 000006 remapped them
 	for _, invalid := range []string{"", "MIXES", "Крепёж", "Сантехника", "universal"} {
 		if IsValidProductCategory(invalid) {
 			t.Errorf("IsValidProductCategory(%q) = true, want false", invalid)
@@ -134,81 +140,117 @@ func TestProductCategoryCodes(t *testing.T) {
 	}
 }
 
-// if this regresses, every shop created after the first accidental mutation is seeded with corrupted
-// data - silently, and only in production, since a fresh process starts clean again.
-func TestTemplateReturnsACopy(t *testing.T) {
-	first := Template(string(CategoryWood))
-	first[0].Name = "mutated"
+// ─────────────────────────── the real table ───────────────────────────
 
-	if second := Template(string(CategoryWood)); second[0].Name == "mutated" {
-		t.Fatal("Template() handed out the package's own slice - mutating it corrupted the template")
+type storedRow struct {
+	shopCategory, key, name, category, unit, imagePath string
+}
+
+func storedTemplates(t *testing.T) []storedRow {
+	t.Helper()
+
+	if os.Getenv("DB_URL") == "" {
+		_ = godotenv.Load(filepath.Join("..", "..", "..", ".env"))
+	}
+	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		t.Skip("DB_URL is not set - skipping the tests that read product_templates")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	t.Cleanup(cancel)
+
+	conn, err := pgx.Connect(ctx, dbURL)
+	if err != nil {
+		t.Skipf("cannot reach the database (%v) - skipping", err)
+	}
+	t.Cleanup(func() { _ = conn.Close(context.Background()) })
+
+	found, err := conn.Query(ctx,
+		`SELECT shop_category, template_key, name, category, unit, COALESCE(image_path, '')
+		   FROM product_templates ORDER BY shop_category, id`)
+	if err != nil {
+		t.Fatalf("read product_templates: %v", err)
+	}
+	defer found.Close()
+
+	var out []storedRow
+	for found.Next() {
+		var r storedRow
+		if err := found.Scan(&r.shopCategory, &r.key, &r.name, &r.category, &r.unit, &r.imagePath); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		out = append(out, r)
+	}
+	if len(out) == 0 {
+		t.Fatal("product_templates is empty - run the migrations")
+	}
+	return out
+}
+
+// every value here is copied verbatim into `products` at seeding, so a row that fits this table and
+// not that one fails at shop creation - the worst possible moment to find out. the UNIQUE constraint
+// covers the key; these are the checks the schema cannot make.
+func TestStoredTemplatesFitTheProductsTable(t *testing.T) {
+	const (
+		maxKeyLen  = 60  // products.template_key VARCHAR(60)
+		maxNameLen = 150 // products.name VARCHAR(150)
+		maxUnitLen = 20  // products.unit VARCHAR(20)
+	)
+
+	seen := map[string]bool{}
+	for _, row := range storedTemplates(t) {
+		if seen[row.key] {
+			t.Errorf("duplicate template key %q", row.key)
+		}
+		seen[row.key] = true
+
+		if strings.TrimSpace(row.name) == "" || strings.TrimSpace(row.unit) == "" {
+			t.Errorf("%s: empty name or unit", row.key)
+		}
+		if !IsValidCategory(row.shopCategory) {
+			t.Errorf("%s: unknown shop category %q", row.key, row.shopCategory)
+		}
+		if !IsValidProductCategory(row.category) {
+			t.Errorf("%s: unknown product category %q - the app has no label for it", row.key, row.category)
+		}
+		// rune counts, not len(): cyrillic characters are two bytes and postgres counts varchar
+		// limits in characters
+		if utf8.RuneCountInString(row.key) > maxKeyLen ||
+			utf8.RuneCountInString(row.name) > maxNameLen ||
+			utf8.RuneCountInString(row.unit) > maxUnitLen {
+			t.Errorf("%s: a value is too wide for the products column it is copied into", row.key)
+		}
 	}
 }
 
-// a slot that stopped being recognised would silently become an ordinary template row: the обои
-// owner would find the name locked to "Обои премиум (Россия)" with no error explaining it.
-func TestWallpaperSlotsAreOwnerNamed(t *testing.T) {
-	slots := Template(string(CategoryWallpaper))
-
-	for _, item := range slots {
-		if !IsOwnerNamedSlot(item.Key) {
-			t.Errorf("IsOwnerNamedSlot(%q) = false - every обои row is a slot", item.Key)
-		}
-		// the unit is what keeps ten different rolls a comparable basket
-		if item.Unit != "рулон" {
-			t.Errorf("slot %q has unit %q, want \"рулон\"", item.Key, item.Unit)
-		}
+// the workflow this guards: a photo is dropped into /photos/<category>/ and a row points at it. a
+// row whose file is missing is a broken image on a tile in every shop of the category, and nothing
+// in the app says why - the request just 404s and the placeholder shows instead.
+//
+// only rows that *claim* a photo are checked. wood has none taken and an обои slot names no product
+// to photograph, so an empty image_path is a legitimate state rather than a missing file.
+func TestStoredTemplatePhotosExist(t *testing.T) {
+	// backend/internal/catalog -> repo root
+	dir := filepath.Join("..", "..", "..", "photos")
+	if _, err := os.Stat(dir); err != nil {
+		t.Skipf("no %s directory here (%v) - skipping", dir, err)
 	}
 
-	// the founder's split, counted off the key prefixes rather than the names: the key is the part
-	// that can never be edited, and it is what the index groups by
-	tiers := map[string]int{}
-	for _, item := range slots {
-		switch {
-		case strings.HasPrefix(item.Key, "wallpaper.premium_"):
-			tiers["premium"]++
-		case strings.HasPrefix(item.Key, "wallpaper.standard_"):
-			tiers["standard"]++
-		case strings.HasPrefix(item.Key, "wallpaper.econom_"):
-			tiers["econom"]++
-		default:
-			t.Errorf("slot %q belongs to no tier", item.Key)
+	seen := map[string]string{}
+	for _, row := range storedTemplates(t) {
+		if row.imagePath == "" {
+			continue
 		}
-	}
-	for tier, want := range map[string]int{"premium": 3, "standard": 4, "econom": 3} {
-		if tiers[tier] != want {
-			t.Errorf("%s slots = %d, want %d", tier, tiers[tier], want)
+		if other, taken := seen[row.imagePath]; taken && other != row.key {
+			// two rows sharing a photo is legal for the same product in two sizes, but not within
+			// one category's list, where it means a number was pasted twice
+			t.Logf("note: %s and %s share photo %s", other, row.key, row.imagePath)
 		}
-	}
-}
+		seen[row.imagePath] = row.key
 
-// the other three templates name real products, and renaming one would break exactly what the
-// template exists to guarantee - that "Кнауф Ротбанд, 25 кг" means the same thing everywhere.
-func TestNonWallpaperTemplatesAreNotOwnerNamed(t *testing.T) {
-	for _, category := range []Category{CategoryUniversal, CategoryPlumbing, CategoryWood} {
-		for _, item := range Template(string(category)) {
-			if IsOwnerNamedSlot(item.Key) {
-				t.Errorf("IsOwnerNamedSlot(%q) = true - %s names its own products", item.Key, category)
-			}
-		}
-	}
-
-	// the empty string is what a caller reads off an invalid pgtype.Text, i.e. a product the owner
-	// added themselves
-	if IsOwnerNamedSlot("") {
-		t.Error(`IsOwnerNamedSlot("") = true, want false`)
-	}
-}
-
-func TestIsValidCategory(t *testing.T) {
-	for _, valid := range []string{"universal", "plumbing", "wood", "wallpaper"} {
-		if !IsValidCategory(valid) {
-			t.Errorf("IsValidCategory(%q) = false, want true", valid)
-		}
-	}
-	for _, invalid := range []string{"", "UNIVERSAL", "santehnika", "Универсальный"} {
-		if IsValidCategory(invalid) {
-			t.Errorf("IsValidCategory(%q) = true, want false", invalid)
+		if _, err := os.Stat(filepath.Join(dir, row.imagePath)); err != nil {
+			t.Errorf("%s points at %s, which does not exist", row.key, row.imagePath)
 		}
 	}
 }

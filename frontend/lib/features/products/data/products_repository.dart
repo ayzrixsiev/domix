@@ -12,6 +12,8 @@ import 'product_model.dart';
 //   POST   /api/shops/{id}/products  - owner adds one of their own products
 //   PUT    /api/products/{id}        - owner edits one product
 //   DELETE /api/products/{id}        - owner removes one of their own
+//   POST   /api/products/{id}/image  - owner uploads or replaces the product's photo (multipart)
+//   DELETE /api/products/{id}/image  - owner removes it
 class ProductsRepository {
   final AuthService _authService;
 
@@ -24,6 +26,17 @@ class ProductsRepository {
       Uri.parse('${ApiConfig.serverRoot}/api/shops/$shopId/products');
   static Uri _productUri(int productId) =>
       Uri.parse('${ApiConfig.serverRoot}/api/products/$productId');
+  static Uri _productImageUri(int productId) =>
+      Uri.parse('${ApiConfig.serverRoot}/api/products/$productId/image');
+
+  /// How long a photo upload may take.
+  ///
+  /// **Three times the other calls here, and that is the point of writing it out.** The rest of this
+  /// file sends a few hundred bytes of json; this pushes a few hundred *kilobytes* up a connection
+  /// whose upstream is the slow direction - a phone on a weak 3G cell can spend twenty seconds on it
+  /// honestly. Ten seconds would report a working upload as a failure, and the owner would retry,
+  /// which sends the same photo again over the same tired link.
+  static const Duration _uploadTimeout = Duration(seconds: 30);
 
   /// every product in one shop. public - this is what fills the grid on a shop's card, which any
   /// customer can open without logging in.
@@ -43,7 +56,7 @@ class ProductsRepository {
   }
 
   /// add a product of the owner's own, on top of whatever the category template already gave them.
-  /// the backend caps this at 20 and answers `product_limit_reached` past it.
+  /// the backend caps this at 30 and answers `product_limit_reached` past it.
   Future<Product> createProduct({required int shopId, required Product draft}) async {
     final token = await _requireToken();
 
@@ -100,6 +113,52 @@ class ProductsRepository {
     if (response.statusCode != 200) {
       throw _exceptionFrom(response);
     }
+  }
+
+  /// Uploads one photo and returns the product the server saved it against.
+  ///
+  /// Multipart rather than a base64 field on [updateProduct], because that is what the endpoint
+  /// takes and because a photo is saved the moment it is picked while the rest of the form waits for
+  /// «Сохранить» - see backend/internal/endpoints/product_image.go.
+  ///
+  /// The response is the whole product, not just a url, so the caller replaces its cached copy the
+  /// same way it does after any other mutation and cannot end up with a photo attached to a stale
+  /// price.
+  Future<Product> uploadProductImage({required int productId, required String filePath}) async {
+    final token = await _requireToken();
+
+    final request = http.MultipartRequest('POST', _productImageUri(productId))
+      ..headers['Authorization'] = 'Bearer $token'
+      // the field name the handler reads, and the only one it reads
+      ..files.add(await http.MultipartFile.fromPath('image', filePath));
+
+    // MultipartRequest streams, so this comes back as a StreamedResponse and has to be collected
+    // before the shared error mapper (which reads .body) can look at it
+    final streamed = await request.send().timeout(_uploadTimeout);
+    final response = await http.Response.fromStream(streamed);
+
+    if (response.statusCode != 200) {
+      throw _exceptionFrom(response);
+    }
+    return Product.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// Takes the owner's photo off a product.
+  ///
+  /// The product comes back with whatever photo it should have *now*, which for a row seeded from a
+  /// category template is the catalogue's own shot rather than nothing - the server decides that,
+  /// so the app never has to know which products have a default to fall back to.
+  Future<Product> removeProductImage(int productId) async {
+    final token = await _requireToken();
+
+    final response = await http
+        .delete(_productImageUri(productId), headers: {'Authorization': 'Bearer $token'})
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 200) {
+      throw _exceptionFrom(response);
+    }
+    return Product.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   Future<String> _requireToken() async {

@@ -3,17 +3,16 @@ import 'package:flutter/foundation.dart';
 import 'package:frontend/features/home/data/category_product.dart';
 import 'package:frontend/features/home/data/home_content.dart';
 import 'package:frontend/features/home/data/home_repository.dart';
-import 'package:frontend/features/home/data/home_showcase_content.dart';
 import 'package:frontend/features/products/data/product_category.dart';
 
 /// The viewmodel behind the home screen's three sections.
 ///
-/// **Where the showcase substitution happens, and why it happens here.** The widgets take
-/// [HomeShopPreview] and have no idea whether a row came from Postgres or from
-/// `home_showcase_content.dart`. That was the design goal: fallback logic spread across three
-/// widgets would be three places to remember to delete, and one of them would survive into
-/// production. It is one `if` in [_applyContent] instead, and removing it is what "get rid of the
-/// templates" means.
+/// **There is no fallback content any more, and there is nowhere for one to hide.** This class used
+/// to substitute invented shops from `home_showcase_content.dart` whenever the backend came back
+/// empty or unreachable, so the app would demo. That file and its one `if` are deleted: what the home
+/// screen shows is what the database holds, and an empty VIP slot or an empty category says so
+/// plainly. The substitution lived here rather than in the widgets precisely so that removing it
+/// would be this small.
 class HomeController extends ChangeNotifier {
   HomeController({HomeRepository? repository}) : _repo = repository ?? HomeRepository();
 
@@ -25,9 +24,11 @@ class HomeController extends ChangeNotifier {
   bool _isLoading = false;
   String? _loadError;
   bool _hasLoaded = false;
-  bool _isShowingShowcase = false;
 
+  /// The shops holding a live paid placement, in the backend's order - longest placement first. The
+  /// carousel arranges them into its slots; this list is only ever the real ones.
   List<HomeShopPreview> get vipShops => _vipShops;
+
   /// One entry per shop category with ranked shops - the tabs of "Лучшие предложения". Empty
   /// categories never appear, so a strip of dead tabs is impossible by construction.
   List<CategoryOffers> get bestOffers => _bestOffers;
@@ -39,11 +40,6 @@ class HomeController extends ChangeNotifier {
   /// up" from "genuinely has nothing", which are different things to draw.
   bool get hasLoaded => _hasLoaded;
 
-  /// True when what is on screen is invented. Nothing renders differently because of it today, but
-  /// it is the flag a "демо-данные" banner would hang off, and it makes the state visible to anyone
-  /// debugging why the home screen disagrees with the map.
-  bool get isShowingShowcase => _isShowingShowcase;
-
   /// [force] re-fetches even when content is already held, which is what a pull-to-refresh wants.
   Future<void> loadHome({bool force = false}) async {
     if (_isLoading) return; // a second call while one is in flight is a no-op
@@ -53,49 +49,22 @@ class HomeController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _applyContent(await _repo.fetchHomeContent());
+      final content = await _repo.fetchHomeContent();
+      _vipShops = content.vipShops;
+      _bestOffers = content.bestOffers;
       _loadError = null;
     } catch (e) {
+      // the sections are emptied as well as the error being recorded. leaving the last successful
+      // load on screen under a failure banner would be showing prices from an unknown time ago as
+      // though they were current - and this list is what a customer decides where to drive from.
+      _vipShops = const [];
+      _bestOffers = const [];
       _loadError = e.toString().replaceAll('Exception: ', '');
-      // an unreachable backend is the other case the showcase covers, and it is the one that shows
-      // up in a demo on bad wifi. without this the screen would be three error states, which is a
-      // worse answer than three plausible ones while the real cause sits in loadError.
-      _applyShowcase();
     }
 
     _isLoading = false;
     _hasLoaded = true;
     notifyListeners();
-  }
-
-  /// The whole of the temporary behaviour, in one place.
-  ///
-  /// All-or-nothing on purpose: the showcase stands in only when the backend has *no* shops to
-  /// rank. Topping a real list up with invented rows would put two kinds of thing in one list with
-  /// nothing distinguishing them, which is how a demo turns into a bug report.
-  void _applyContent(HomeContent content) {
-    if (kShowcaseFallbackEnabled && content.hasNoShops) {
-      _applyShowcase();
-      return;
-    }
-
-    _vipShops = content.vipShops;
-    _bestOffers = content.bestOffers;
-    _isShowingShowcase = false;
-  }
-
-  void _applyShowcase() {
-    if (!kShowcaseFallbackEnabled) {
-      // production: an empty screen is the truth, and the empty states are built for it
-      _vipShops = const [];
-      _bestOffers = const [];
-      _isShowingShowcase = false;
-      return;
-    }
-
-    _vipShops = kShowcaseVipShops;
-    _bestOffers = kShowcaseBestOffers;
-    _isShowingShowcase = true;
   }
 
   /// The products behind one category tile, cheapest first.
@@ -105,34 +74,19 @@ class HomeController extends ChangeNotifier {
   /// setting state, so the category screen owns its own loading and error handling rather than
   /// sharing fields with the home screen - the same separation StoresController keeps between the
   /// map's list and the owner's list.
-  Future<List<CategoryProduct>> productsForCategory(ProductCategory category) async {
-    if (_isShowingShowcase) return showcaseProductsForCategory(category);
+  ///
+  /// **Real products or nothing.** This used to answer from the showcase catalogue whenever the home
+  /// screen was showing invented shops, which meant a tapped tile opened onto plausible product names
+  /// at plausible prices from businesses that do not exist. A category nobody has priced anything in
+  /// now returns an empty list, and `ProductResultsView` draws the empty state that already existed
+  /// for it.
+  Future<List<CategoryProduct>> productsForCategory(ProductCategory category) {
     return _repo.fetchProductsByCategory(category);
   }
 
-  /// Products matching what the customer typed into the home screen's search field.
-  ///
-  /// Uncached and unstored for the same reasons as [productsForCategory], and routed through the
-  /// same showcase check - a demo with invented shops on the home screen and a real, empty search
-  /// behind them would be the one screen where the substitution shows through. Searching the
-  /// showcase happens in memory, since the showcase catalogue is a fixed list the app already holds.
-  Future<List<CategoryProduct>> searchProducts(String query) async {
-    if (_isShowingShowcase) return _searchShowcase(query);
+  /// Products matching what the customer typed into the home screen's search field. Uncached and
+  /// unstored for the same reasons as [productsForCategory], and against the same database.
+  Future<List<CategoryProduct>> searchProducts(String query) {
     return _repo.searchProducts(query);
-  }
-
-  /// The showcase's answer to a search: every invented product whose name contains the query.
-  ///
-  /// `toLowerCase()` on both sides is what makes it case-insensitive, matching the backend's ILIKE.
-  /// It is not a full match for postgres' rules - Dart lowercases by Unicode, postgres by the
-  /// database's collation - but the two only have to agree on data that exists in one of them, and
-  /// this data exists in neither.
-  List<CategoryProduct> _searchShowcase(String query) {
-    final needle = query.toLowerCase();
-    return [
-      for (final category in ProductCategory.values)
-        for (final entry in showcaseProductsForCategory(category))
-          if (entry.product.name.toLowerCase().contains(needle)) entry,
-    ]..sort((a, b) => (a.product.price ?? 0).compareTo(b.product.price ?? 0));
   }
 }

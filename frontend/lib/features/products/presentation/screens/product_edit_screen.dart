@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
@@ -12,6 +15,7 @@ import '../../data/product_category.dart';
 import '../../data/product_model.dart';
 import '../controllers/products_controller.dart';
 import '../widgets/product_category_field.dart';
+import '../widgets/product_photo_field.dart';
 
 // add or edit one product. one screen for both, because the fields are the same either way - the
 // differences are the title, which endpoint is called, and whether there is anything to delete.
@@ -58,6 +62,30 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
 
   late ProductAvailability _availability;
 
+  /// The product as it stands *now*, which is not always the one this screen was opened with.
+  ///
+  /// A photo is uploaded on its own request, the moment it is picked, so by the time the owner
+  /// presses «Сохранить» the row may already carry a url that `widget.product` - a snapshot taken
+  /// when the route was pushed - knows nothing about. Reading the widget's copy after an upload is
+  /// how a screen ends up sending a stale product back to the server.
+  ///
+  /// Null for a product being created, which is the same thing it means on `widget.product`.
+  Product? _product;
+
+  /// A photo the owner picked that the server has not been told about yet.
+  ///
+  /// It exists because a product being created has no id to upload against - the file waits here
+  /// until the create request comes back with one (see [_save]). It is also kept after a successful
+  /// upload on an existing product: it is the same picture, already decoded on this phone, so
+  /// keeping it avoids downloading back the file we just sent.
+  File? _pickedPhoto;
+
+  /// Set when the picker itself refused - no camera, or access declined. It never reaches the
+  /// network, so it has no server code and cannot live on the controller with the ones that do.
+  String? _pickerErrorCode;
+
+  final ImagePicker _picker = ImagePicker();
+
   /// null until picked. no default: a category chosen for the owner is a category they never look
   /// at, and a wrong one is worse than an empty one now that the value actually groups products.
   ProductCategory? _pickedCategory;
@@ -88,6 +116,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     _priceController = TextEditingController(text: product?.price?.toString() ?? '');
     _unitController = TextEditingController(text: product?.unit ?? '');
     _availability = product?.availability ?? ProductAvailability.inStock;
+    _product = product;
 
     // tryFromCode returns null for a category this app has no code for, which happens exactly once:
     // a product created before the shared vocabulary existed, whose category is free text. the
@@ -114,7 +143,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   AppLocalizations get _strings => Provider.of<LanguageProvider>(context, listen: false).strings;
 
   Future<void> _save() async {
-    final existing = widget.product;
+    final existing = _product;
     final isTemplate = existing?.isTemplate ?? false;
     final nameEditable = existing?.nameEditable ?? true;
 
@@ -182,14 +211,119 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       if (existing == null) {
         context.read<StoresController>().adjustProductCount(widget.shopId, 1);
       }
+
+      // **the photo is a second request, and it can only be made now.** a product being created has
+      // no id until this point, so a file picked earlier has been waiting on the phone. the two
+      // cannot be one request without either making the whole product form multipart or base64-ing
+      // a jpeg through a json field.
+      var photoFailed = false;
+      if (existing == null && _pickedPhoto != null) {
+        final withPhoto = await controller.uploadProductPhoto(
+          product: saved,
+          filePath: _pickedPhoto!.path,
+        );
+        photoFailed = withPhoto == null;
+      }
+
+      if (!mounted) return;
       Navigator.of(context).pop();
-      _showSnack(_strings.productSavedMessage);
+      // the product is saved either way, so this reports the half-success rather than treating it
+      // as a failure - the owner's work is not lost and the photo is one tap away from a retry
+      _showSnack(photoFailed ? _strings.productSavedWithoutPhoto : _strings.productSavedMessage);
     }
     // on failure controller.saveError is now set, and build() shows the inline error card
   }
 
+  /// Picks a photo, and - for a product that already exists - uploads it straight away.
+  ///
+  /// **Uploading on pick rather than on save is deliberate.** The file is on the phone the instant
+  /// the picker closes and the row already exists, so waiting would leave the owner looking at a
+  /// picture that is not yet anywhere, with nothing on screen saying so. Saving it immediately also
+  /// means the price field and the photo fail independently, which is what the separate busy flags
+  /// on ProductsController are for.
+  Future<void> _pickPhoto() async {
+    final strings = _strings;
+
+    final source = await showModalBottomSheet<PhotoSource>(
+      context: context,
+      backgroundColor: AppColors.surfaceWhite,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
+      builder: (_) => PhotoSourceSheet(strings: strings),
+    );
+    if (source == null || !mounted) return;
+
+    final XFile? picked;
+    try {
+      picked = await _picker.pickImage(
+        source: source == PhotoSource.camera ? ImageSource.camera : ImageSource.gallery,
+        // **these three parameters are what make the plugin re-encode on the device, and that is
+        // the point of passing them.** the resize bakes the EXIF rotation into the pixels and turns
+        // an iPhone HEIC into a jpeg, so what leaves the phone is something the server can decode
+        // and is already the right way up. it also cuts a 4 MB camera frame to a few hundred
+        // kilobytes, which on mobile data is the difference between two seconds and twenty.
+        maxWidth: 1440,
+        maxHeight: 1440,
+        imageQuality: 85,
+      );
+    } on PlatformException catch (e) {
+      // no camera on the device, or access declined. the plugin reports both this way.
+      debugPrint('ProductEditScreen: the picker refused: $e');
+      if (mounted) setState(() => _pickerErrorCode = 'picker_failed');
+      return;
+    }
+    if (picked == null || !mounted) return; // dismissed without choosing
+
+    final file = File(picked.path);
+    setState(() {
+      _pickedPhoto = file;
+      _pickerErrorCode = null;
+    });
+
+    final product = _product;
+    if (product == null) return; // nothing to attach it to yet - [_save] sends it
+
+    final saved = await context
+        .read<ProductsController>()
+        .uploadProductPhoto(product: product, filePath: file.path);
+    if (!mounted) return;
+
+    if (saved == null) {
+      // the upload failed, so the file on screen is not what the server holds. dropping it puts the
+      // real photo back, and the error card under the field says why.
+      setState(() => _pickedPhoto = null);
+      return;
+    }
+    setState(() => _product = saved);
+    _showSnack(strings.photoSavedMessage);
+  }
+
+  /// Removes the photo. On a row seeded from a category template the server answers with the
+  /// catalogue's own shot rather than with nothing, so this is not always "the picture goes away" -
+  /// which is exactly why the new url is taken from the response instead of being assumed.
+  Future<void> _removePhoto() async {
+    final strings = _strings;
+    final product = _product;
+
+    if (product == null) {
+      // a product that does not exist yet: there is nothing on the server, only the pick
+      setState(() => _pickedPhoto = null);
+      return;
+    }
+
+    final saved = await context.read<ProductsController>().removeProductPhoto(product);
+    if (!mounted || saved == null) return;
+
+    setState(() {
+      _product = saved;
+      _pickedPhoto = null;
+    });
+    _showSnack(strings.photoRemovedMessage);
+  }
+
   Future<void> _confirmDelete() async {
-    final product = widget.product;
+    final product = _product;
     if (product == null) return;
 
     final strings = _strings;
@@ -210,6 +344,14 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     }
   }
 
+  /// The photo's error, wherever it came from.
+  ///
+  /// Two sources, because they fail in different places: the picker refuses on the device (no
+  /// camera, access declined) and never reaches the network, while everything else is the server
+  /// answering. The owner is looking at one photo and needs one sentence about it.
+  String? _photoErrorCode(ProductsController controller) =>
+      _pickerErrorCode ?? controller.photoError?.code;
+
   void _showSnack(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -226,7 +368,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     final strings = Provider.of<LanguageProvider>(context).strings;
     final controller = Provider.of<ProductsController>(context);
     final isBusy = controller.isSaving;
-    final product = widget.product;
+    final product = _product;
     final isTemplate = product?.isTemplate ?? false;
     final nameEditable = product?.nameEditable ?? true;
     // a template row whose name the owner writes - the обои case, and the only combination where
@@ -380,6 +522,33 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
               strings: strings,
               onChanged: (value) => setState(() => _availability = value),
             ),
+            const SizedBox(height: 18),
+
+            // **the photo sits below the fields rather than above them, and that is a workflow
+            // decision rather than a visual one.** the job this screen is opened for most often, by
+            // a very long way, is typing one price into one seeded row - a hundred times over on a
+            // new shop. a 190px picture at the top pushes the price field under the fold on every
+            // one of those visits to save a scroll on the rarer visit that is about a photo.
+            StoreFormLabel(strings.productPhotoLabel),
+            const SizedBox(height: 8),
+            ProductPhotoField(
+              strings: strings,
+              imageUrl: product?.imageUrl,
+              localFile: _pickedPhoto,
+              isBusy: controller.isPhotoBusy,
+              // only while a picked file is waiting for a product that does not exist yet. on an
+              // existing product the upload has already gone.
+              isPendingUpload: product == null && _pickedPhoto != null,
+              onPick: _pickPhoto,
+              // hidden, not disabled, when there is nothing of the owner's to remove: on a seeded
+              // row still showing the catalogue's photo, "удалить" would put back the picture that
+              // is already there. see Product.ownImage.
+              onRemove: (product?.ownImage ?? false) || _pickedPhoto != null ? _removePhoto : null,
+            ),
+            if (_photoErrorCode(controller) case final code?) ...[
+              const SizedBox(height: 12),
+              StoreInlineErrorCard(message: strings.photoErrorMessage(code)),
+            ],
 
             if (controller.saveError != null) ...[
               const SizedBox(height: 18),

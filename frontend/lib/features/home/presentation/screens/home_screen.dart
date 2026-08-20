@@ -5,6 +5,8 @@ import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
+import 'package:frontend/core/widgets/primary_action_button.dart';
+import 'package:frontend/features/home/data/home_content.dart';
 import 'package:frontend/features/home/presentation/controllers/home_controller.dart';
 import 'package:frontend/features/home/presentation/screens/category_products_screen.dart';
 import 'package:frontend/features/home/presentation/widgets/home_header.dart';
@@ -13,6 +15,8 @@ import 'package:frontend/features/home/presentation/widgets/best_offers.dart';
 import 'package:frontend/features/home/presentation/widgets/popular_categories_grid.dart';
 import 'package:frontend/features/home/presentation/widgets/search_and_like_bar.dart';
 import 'package:frontend/features/home/presentation/widgets/vip_shops_carousel.dart';
+import 'package:frontend/features/stores/data/shop_model.dart';
+import 'package:frontend/features/stores/presentation/screens/shop_card_screen.dart';
 import 'package:frontend/features/products/data/product_category.dart';
 
 /// the page gutter every block shares - the same 16 the header and search bar sit on, so section
@@ -25,9 +29,11 @@ const EdgeInsets _gutter = EdgeInsets.symmetric(horizontal: 16);
 /// stateful now only because something has to kick that fetch off - the widgets themselves are
 /// still pure renderers taking a list.
 ///
-/// While the database has no shops, the controller substitutes the showcase rows in
-/// `home_showcase_content.dart`, and nothing here can tell. That is deliberate: the sections below
-/// contain no fallback logic to remember to delete.
+/// **Everything on this screen is either a real row from the database or an empty slot that says so.**
+/// There used to be a file of invented shops the controller substituted whenever the backend came
+/// back empty, so the app would demo; it is deleted. The two sections that are a fixed number of
+/// places draw those places whether or not anything is in them, and the category tiles open onto the
+/// real catalogue or onto an empty state.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
@@ -62,6 +68,14 @@ class _HomeScreenState extends State<HomeScreen> {
   void _openCategory(ProductCategory category) {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => CategoryProductsScreen(category: category)),
+    );
+  }
+
+  /// The same screen a map pin opens. Navigation lives here rather than inside the carousel and the
+  /// rows, so a card stays a thing that reports a tap instead of a thing that knows about routes.
+  void _openShop(Shop shop) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ShopCardScreen(shop: shop)),
     );
   }
 
@@ -113,18 +127,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// The feed below the search bar.
   ///
-  /// **A section with nothing in it is omitted entirely, heading and all.** A "VIP Магазины"
-  /// heading over blank space is worse than no heading: it tells a customer the app is broken
-  /// rather than that nobody has bought a placement yet. The categories grid is the exception - it
-  /// always renders all twelve tiles, because the tiles are the vocabulary and a grid that changed
-  /// shape depending on what happened to be stocked would be a different screen every load.
+  /// **All three sections always draw, whatever the database holds**, and only the very first paint
+  /// (before the fetch lands) is different.
   ///
-  /// None of the three headings carries a "see all" action. Each already shows everything it has:
-  /// the VIP carousel loops endlessly in both directions, the categories grid pages through all
-  /// twelve, and Лучшие предложения is a top-N with no longer tail to open.
+  /// VIP Магазины is five slots whether or not any are sold; Лучшие предложения is fifteen places
+  /// per category, and with no category ranked it draws fifteen open ones with no tab strip;
+  /// Популярные категории is always all twelve tiles. **A section that vanished when it was empty
+  /// read as a screen missing a chunk of itself**, and the empty places are the honest version: this
+  /// is the shape the feed has, and it fills itself in as shops finish pricing.
+  ///
+  /// None of the headings carries a "see all" action. Each already shows everything it has: the VIP
+  /// carousel loops endlessly in both directions, the categories grid pages through all twelve, and
+  /// Лучшие предложения is a top-N with no longer tail to open.
   List<Widget> _sections(HomeController home, AppLocalizations strings) {
     // the very first paint, before the fetch has come back. a spinner rather than empty sections,
-    // which would flash "nothing here" for a moment and then fill in.
+    // which would flash "nothing here" for a moment and then fill in - and, now that the empty slots
+    // are real content, would flash a full screen of them.
     if (!home.hasLoaded) {
       return const [
         SizedBox(height: 64),
@@ -132,19 +150,21 @@ class _HomeScreenState extends State<HomeScreen> {
       ];
     }
 
+    final vipSlots = vipSlotRing(home.vipShops, slotCount: VipShopsCarousel.slotCount);
+
     return [
-      if (home.vipShops.isNotEmpty) ...[
-        const SizedBox(height: 26),
-        Padding(padding: _gutter, child: SectionHeader(title: strings.vipShops)),
-        const SizedBox(height: 12),
-        // keyed on the shop count: the carousel opens on a page that is an exact multiple of that
-        // count, and a PageController's initialPage cannot change after it is built. a new key
-        // makes flutter build a fresh State with a fresh controller when the list arrives.
-        VipShopsCarousel(
-          key: ValueKey(home.vipShops.length),
-          shops: home.vipShops,
-        ),
-      ],
+      const SizedBox(height: 26),
+      Padding(padding: _gutter, child: SectionHeader(title: strings.vipShops)),
+      const SizedBox(height: 12),
+      // keyed on the number of slots, which is a constant - so in practice this State is built once
+      // and never replaced. it stays because the ring grows if the backend ever sends more
+      // placements than this build expects, and a PageController's initialPage (which is derived
+      // from the ring's size) cannot be changed after it is built.
+      VipShopsCarousel(
+        key: ValueKey(vipSlots.length),
+        slots: vipSlots,
+        onShopTap: _openShop,
+      ),
 
       // no panel behind this section any more: the white surface moved onto the individual tiles
       // (see PopularCategoriesGrid), so the feed is container-free again and this heading sits on
@@ -157,27 +177,47 @@ class _HomeScreenState extends State<HomeScreen> {
         child: PopularCategoriesGrid(onCategoryTap: _openCategory),
       ),
 
-      if (home.bestOffers.isNotEmpty) ...[
-        const SizedBox(height: 26),
-        Padding(padding: _gutter, child: SectionHeader(title: strings.bestOffersTitle)),
-        const SizedBox(height: 12),
-        Padding(padding: _gutter, child: BestOffersList(groups: home.bestOffers)),
-      ],
+      const SizedBox(height: 26),
+      Padding(padding: _gutter, child: SectionHeader(title: strings.bestOffersTitle)),
+      const SizedBox(height: 12),
+      Padding(
+        padding: _gutter,
+        child: BestOffersList(groups: home.bestOffers, onShopTap: _openShop),
+      ),
 
-      // both shop sections empty and the load is done: there genuinely are no shops yet. this is
-      // unreachable while kShowcaseFallbackEnabled is true, and is what the screen becomes the day
-      // the showcase rows are deleted.
-      if (home.vipShops.isEmpty && home.bestOffers.isEmpty) ...[
+      // the load failed. drawn *below* the sections rather than instead of them, because the five
+      // VIP slots and the twelve tiles are still true - they are the shape of the screen, not data
+      // that came back wrong - and replacing the whole feed with an error would hide a working app
+      // behind one failed request.
+      //
+      // danger-coloured with a retry, the same treatment ProductResultsView and my-shops use: a
+      // failure must not look like a friendly "nothing here yet", because the two want opposite
+      // things from the reader.
+      if (home.loadError case final error?) ...[
         const SizedBox(height: 40),
         Padding(
           padding: _gutter,
           child: EmptyStateView(
-            icon: CupertinoIcons.bag,
-            title: strings.noShopsYet,
-            subtitle: home.loadError ?? strings.noShopsYetHint,
+            icon: CupertinoIcons.wifi_exclamationmark,
+            iconColor: AppColors.danger,
+            iconBackground: AppColors.dangerSoft,
+            title: strings.homeLoadError,
+            subtitle: error,
+            action: PrimaryActionButton(
+              label: strings.retryButtonShort,
+              onTap: () => home.loadHome(force: true),
+            ),
           ),
         ),
       ],
+
+      // **there is deliberately no "пока нет магазинов" block under this any more.** It sat here
+      // while an empty feed meant empty *sections*, and it stopped earning its place the moment both
+      // sections started drawing their open places: a screenful of designed-empty cards followed by a
+      // notice apologising for being empty says the same thing twice, and the second time it reads as
+      // something being wrong. The open places are the answer to "why is this screen bare" - they
+      // fill themselves in as shops finish pricing. A *failure* still gets the block above, because
+      // that one is not a state the feed can explain by itself.
     ];
   }
 }

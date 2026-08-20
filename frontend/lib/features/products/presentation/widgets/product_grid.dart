@@ -11,17 +11,11 @@ class ProductGrid extends StatelessWidget {
   const ProductGrid({
     super.key,
     required this.tiles,
-    this.shrinkWrap = false,
     this.padding = EdgeInsets.zero,
     this.keyboardDismissBehavior = ScrollViewKeyboardDismissBehavior.manual,
   });
 
   final List<Widget> tiles;
-
-  /// true when the grid is nested inside another scroll view (the shop details sheet). it then
-  /// measures all its children up front and scrolls with the parent instead of on its own - two
-  /// scrollables sharing one gesture is how a list ends up refusing to move.
-  final bool shrinkWrap;
 
   final EdgeInsets padding;
 
@@ -44,8 +38,7 @@ class ProductGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return GridView.builder(
       padding: padding,
-      shrinkWrap: shrinkWrap,
-      physics: shrinkWrap ? const NeverScrollableScrollPhysics() : const BouncingScrollPhysics(),
+      physics: const BouncingScrollPhysics(),
       keyboardDismissBehavior: keyboardDismissBehavior,
       itemCount: tiles.length,
       gridDelegate: gridDelegate,
@@ -66,8 +59,12 @@ class ProductGrid extends StatelessWidget {
 /// its own once the images finish, which is exactly the shape of bug nobody believes is real.
 ///
 /// A sliver in a [CustomScrollView] builds only what is on screen, so a catalogue of any size costs
-/// one screenful of requests. Reach for this whenever the grid is not the only thing on the page;
-/// `shrinkWrap` stays for the shop sheet, which cannot become a CustomScrollView as cheaply.
+/// one screenful of requests. **Reach for this whenever the grid is not the only thing on the page.**
+///
+/// [ProductGrid] above no longer takes a `shrinkWrap` flag at all. It had one for the map's shop
+/// sheet, the second copy of this bug, kept because that sheet could not become a `CustomScrollView`
+/// cheaply - and then the sheet became `ShopCardScreen`, which is one. Removing the parameter is what
+/// stops the next nested grid from reaching for it.
 class ProductSliverGrid extends StatelessWidget {
   const ProductSliverGrid({super.key, required this.tiles});
 

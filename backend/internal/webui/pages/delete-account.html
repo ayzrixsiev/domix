@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Удаление аккаунта — Domix</title>
+<meta name="description" content="Удаление аккаунта Domix: подтверждение номера в Telegram.">
+<meta name="robots" content="noindex">
+<style>
+  /* the app's own tokens, copied rather than shared: this page is one self-contained file on
+     purpose, so it keeps working while everything else is being rebuilt. see app_colors.dart */
+  :root{
+    --orange:#FF6F00; --orange-soft:#FFF3E9;
+    --page:#EFF1F5; --white:#fff; --hairline:#E4E7EC;
+    --ink:#1A1D1E; --grey:#8C929D; --faint:#A9AEB8;
+    --danger:#B42318; --success:#0E9F6E;
+    --r:14px;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  /* the `hidden` attribute is styled by the *browser's* stylesheet, which every author rule
+     outranks - so `.btn{display:flex}` below silently un-hides any button carrying it. this is
+     what makes hidden mean hidden, and the steps below are switched with nothing else. */
+  [hidden]{display:none !important}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; min-height:100vh; background:var(--page); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    font-size:16px; line-height:1.55; -webkit-font-smoothing:antialiased;
+    display:flex; flex-direction:column; align-items:center; padding:32px 20px 48px;
+  }
+  .wrap{width:100%; max-width:420px}
+
+  .bar{display:flex; align-items:center; justify-content:space-between; margin-bottom:26px}
+  .brand{display:flex; align-items:center; gap:9px; font-weight:700; font-size:16px; letter-spacing:-.01em}
+  .brand .pin{width:26px;height:26px;border-radius:8px;background:var(--orange);display:grid;place-items:center;flex:none}
+  .brand .pin svg{width:15px;height:15px;display:block}
+
+  /* the same recessed-track / sliding-pill idea as the app's segmented control */
+  .langs{display:flex; gap:2px; background:var(--hairline); padding:3px; border-radius:10px}
+  .langs button{
+    font:inherit; font-size:12.5px; font-weight:600; color:var(--grey);
+    border:0; background:transparent; padding:5px 11px; border-radius:7px; cursor:pointer;
+    transition:background .18s cubic-bezier(.22,1,.36,1), color .18s
+  }
+  .langs button[aria-pressed="true"]{background:var(--white); color:var(--ink)}
+
+  .card{background:var(--white); border-radius:20px; padding:28px 24px}
+  h1{font-size:23px; line-height:1.25; letter-spacing:-.02em; margin:0 0 8px; font-weight:700}
+  .lede{color:var(--grey); font-size:15px; margin:0 0 22px}
+
+  .lbl{display:block; font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--faint); margin-bottom:8px}
+  .field{
+    display:flex; align-items:center; gap:10px; background:var(--white);
+    border:1px solid var(--hairline); border-radius:var(--r); padding:0 14px; height:52px;
+    transition:border-color .15s
+  }
+  .field:focus-within{border-color:var(--orange)}
+  .field .cc{color:var(--grey); font-size:16px; font-variant-numeric:tabular-nums}
+  .field input{
+    flex:1; min-width:0; border:0; outline:0; background:transparent; padding:0;
+    font:inherit; font-size:17px; letter-spacing:.02em; color:var(--ink); font-variant-numeric:tabular-nums
+  }
+  .field input::placeholder{color:var(--faint); letter-spacing:normal}
+
+  .btn{
+    display:flex; align-items:center; justify-content:center; gap:9px; width:100%; margin-top:14px;
+    height:52px; border:0; border-radius:var(--r); cursor:pointer;
+    font:inherit; font-size:16px; font-weight:650; color:#fff; background:var(--orange);
+    text-decoration:none; transition:opacity .15s, transform .12s cubic-bezier(.22,1,.36,1)
+  }
+  .btn:active{transform:scale(.985)}
+  .btn:disabled{opacity:.4; cursor:default; transform:none}
+  .btn svg{width:18px;height:18px;flex:none}
+  .btn.ghost{background:transparent; color:var(--grey); font-weight:600; font-size:14.5px; height:40px; margin-top:6px}
+
+  .status{display:flex; gap:11px; align-items:flex-start; font-size:15px; color:var(--grey); margin:0 0 18px}
+  .status .dot{width:9px;height:9px;border-radius:50%;background:var(--orange);flex:none;margin-top:6px;animation:pulse 1.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+
+  .result{text-align:center; padding:4px 0 2px}
+  .result .mark{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;margin:0 auto 14px;background:var(--orange-soft);color:var(--orange)}
+  .result .mark svg{width:22px;height:22px}
+  .result.ok .mark{background:#E7F6EF;color:var(--success)}
+  .result.bad .mark{background:#FEF0EE;color:var(--danger)}
+  .result h2{font-size:18px; font-weight:650; margin:0 0 6px; letter-spacing:-.01em}
+  .result p{margin:0; color:var(--grey); font-size:15px}
+
+  .facts{margin-top:22px; padding-top:20px; border-top:1px solid var(--hairline)}
+  .facts h2{font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); margin:0 0 12px}
+  .facts ul{margin:0; padding:0; list-style:none; font-size:14.5px}
+  .facts li{position:relative; padding-left:18px; margin-bottom:7px; color:var(--ink)}
+  .facts li::before{content:""; position:absolute; left:5px; top:10px; width:4px; height:4px; border-radius:50%; background:var(--danger)}
+  .facts p{margin:13px 0 0; font-size:13.5px; color:var(--grey)}
+
+  footer{margin-top:18px; text-align:center; color:var(--faint); font-size:13px}
+  footer a{color:var(--grey)}
+
+  [data-lang]{display:none}
+  html[lang="ru"] [data-lang="ru"], html[lang="uz"] [data-lang="uz"]{display:revert}
+
+  @media (max-width:480px){
+    body{padding:22px 16px 40px}
+    .card{padding:24px 20px; border-radius:18px}
+    h1{font-size:21px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="bar">
+    <div class="brand">
+      <span class="pin" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
+        </svg>
+      </span>
+      Domix
+    </div>
+    <div class="langs" role="group" aria-label="Язык / Til">
+      <button type="button" data-set="ru" aria-pressed="true">Рус</button>
+      <button type="button" data-set="uz" aria-pressed="false">O‘zb</button>
+    </div>
+  </div>
+
+  <main class="card">
+    <h1>
+      <span data-lang="ru">Удаление аккаунта</span>
+      <span data-lang="uz">Hisobni o‘chirish</span>
+    </h1>
+    <p class="lede" id="lede">
+      <span data-lang="ru">Введите номер телефона и подтвердите его в Telegram. Аккаунт будет удалён сразу.</span>
+      <span data-lang="uz">Telefon raqamingizni kiriting va uni Telegramda tasdiqlang. Hisob darhol o‘chiriladi.</span>
+    </p>
+
+    <!-- step 1: the number -->
+    <form id="step-form" novalidate>
+      <span class="lbl">
+        <span data-lang="ru">Номер телефона</span>
+        <span data-lang="uz">Telefon raqami</span>
+      </span>
+      <label class="field">
+        <span class="cc">+998</span>
+        <input id="phone" type="tel" inputmode="numeric" autocomplete="tel-national"
+               placeholder="90 123 45 67" maxlength="12" aria-label="Telefon">
+      </label>
+      <button class="btn" id="submit" type="submit" disabled>
+        <span data-lang="ru">Продолжить в Telegram</span>
+        <span data-lang="uz">Telegramda davom etish</span>
+      </button>
+    </form>
+
+    <!-- step 2: away in telegram -->
+    <div id="step-wait" hidden>
+      <p class="status">
+        <span class="dot" aria-hidden="true"></span>
+        <span>
+          <span data-lang="ru">Откройте Telegram и нажмите кнопку подтверждения. Эта страница обновится сама.</span>
+          <span data-lang="uz">Telegramni oching va tasdiqlash tugmasini bosing. Bu sahifa o‘zi yangilanadi.</span>
+        </span>
+      </p>
+      <a class="btn" id="tg" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21.9 4.3 18.7 19.4c-.2 1-.9 1.3-1.7.8l-4.7-3.5-2.3 2.2c-.3.3-.5.5-1 .5l.3-4.9L18.2 6c.4-.3-.1-.5-.6-.2L6.6 12.7l-4.7-1.5c-1-.3-1-1 .2-1.5l18.4-7.1c.9-.3 1.6.2 1.4 1.7Z"/></svg>
+        <span data-lang="ru">Открыть Telegram</span>
+        <span data-lang="uz">Telegramni ochish</span>
+      </a>
+      <button class="btn ghost" type="button" data-restart>
+        <span data-lang="ru">Ввести другой номер</span>
+        <span data-lang="uz">Boshqa raqam kiritish</span>
+      </button>
+    </div>
+
+    <!-- step 3: the answer -->
+    <div id="step-done" hidden>
+      <div class="result" id="result">
+        <div class="mark" aria-hidden="true"><svg id="mark-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></svg></div>
+        <h2 id="result-title"></h2>
+        <p id="result-body"></p>
+      </div>
+      <button class="btn ghost" type="button" id="done-restart" data-restart>
+        <span data-lang="ru">Начать заново</span>
+        <span data-lang="uz">Qaytadan boshlash</span>
+      </button>
+    </div>
+
+    <section class="facts">
+      <h2>
+        <span data-lang="ru">Что будет удалено</span>
+        <span data-lang="uz">Nima o‘chiriladi</span>
+      </h2>
+      <ul>
+        <li>
+          <span data-lang="ru">Имя и номер телефона</span>
+          <span data-lang="uz">Ism va telefon raqami</span>
+        </li>
+        <li>
+          <span data-lang="ru">Все ваши магазины: адрес, контакты и точка на карте</span>
+          <span data-lang="uz">Barcha do‘konlaringiz: manzil, aloqa ma’lumotlari va xaritadagi nuqta</span>
+        </li>
+        <li>
+          <span data-lang="ru">Все товары этих магазинов вместе с ценами</span>
+          <span data-lang="uz">Bu do‘konlardagi barcha mahsulotlar va ularning narxlari</span>
+        </li>
+      </ul>
+      <p>
+        <span data-lang="ru">Удаление необратимо, резервных копий не остаётся. В журналах сервера сохраняется только числовой идентификатор аккаунта — без имени, номера телефона и других персональных данных.</span>
+        <span data-lang="uz">O‘chirishni qaytarib bo‘lmaydi, zaxira nusxa saqlanmaydi. Server jurnallarida faqat hisobning raqamli identifikatori qoladi — ismsiz, telefon raqamisiz va boshqa shaxsiy ma’lumotlarsiz.</span>
+      </p>
+      <noscript>
+        <p>
+          <span data-lang="ru">Для подтверждения нужен JavaScript. Включите его или напишите на {{SUPPORT_EMAIL}}.</span>
+          <span data-lang="uz">Tasdiqlash uchun JavaScript kerak. Uni yoqing yoki {{SUPPORT_EMAIL}} manziliga yozing.</span>
+        </p>
+      </noscript>
+    </section>
+  </main>
+
+  <footer>
+    <a href="mailto:{{SUPPORT_EMAIL}}">{{SUPPORT_EMAIL}}</a>
+  </footer>
+</div>
+
+<script>
+(function () {
+  // ── language ────────────────────────────────────────────────────────────────
+  // both languages ship in the markup and css picks one off <html lang>, so the page still reads
+  // correctly with javascript disabled - which matters here, because a play reviewer following this
+  // url is the whole audience and a blank page is a rejection.
+  var langButtons = document.querySelectorAll('.langs button');
+  var titles = { ru: 'Удаление аккаунта — Domix', uz: 'Domix hisobini o‘chirish' };
+
+  // `remember` is what separates a choice from a guess, and only a choice is stored. writing the
+  // guess back would freeze it: a browser reporting uz on the first visit would keep getting uzbek
+  // forever, because the next visit reads its own guess back as though someone had picked it.
+  function applyLang(lang, remember) {
+    document.documentElement.lang = lang;
+    document.title = titles[lang] || titles.ru;
+    langButtons.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.set === lang)); });
+    if (remember) { try { localStorage.setItem('domix.lang', lang); } catch (e) {} }
+  }
+  langButtons.forEach(function (b) {
+    b.addEventListener('click', function () { applyLang(b.dataset.set, true); });
+  });
+  var saved = null;
+  try { saved = localStorage.getItem('domix.lang'); } catch (e) {}
+  var guess = saved || (navigator.language || '').slice(0, 2).toLowerCase();
+  applyLang(titles[guess] ? guess : 'ru', false);
+
+  // ── the phone field ─────────────────────────────────────────────────────────
+  var form = document.getElementById('step-form');
+  var input = document.getElementById('phone');
+  var submit = document.getElementById('submit');
+
+  // nine digits, formatted as 90 123 45 67. a pasted number that still carries its country code
+  // loses it here rather than pushing the last three digits off the end - which would otherwise
+  // build a wrong number out of a correct paste, silently.
+  function localDigits(raw) {
+    var d = String(raw).replace(/\D/g, '');
+    if (d.length > 9 && d.slice(0, 3) === '998') { d = d.slice(3); }
+    return d.slice(0, 9);
+  }
+  function pretty(d) {
+    var out = d.slice(0, 2);
+    if (d.length > 2) out += ' ' + d.slice(2, 5);
+    if (d.length > 5) out += ' ' + d.slice(5, 7);
+    if (d.length > 7) out += ' ' + d.slice(7, 9);
+    return out;
+  }
+  input.addEventListener('input', function () {
+    var d = localDigits(input.value);
+    input.value = pretty(d);
+    submit.disabled = d.length !== 9;
+  });
+
+  // ── steps ───────────────────────────────────────────────────────────────────
+  var steps = {
+    form: document.getElementById('step-form'),
+    wait: document.getElementById('step-wait'),
+    done: document.getElementById('step-done')
+  };
+  var lede = document.getElementById('lede');
+  function show(name) {
+    Object.keys(steps).forEach(function (k) { steps[k].hidden = k !== name; });
+    // the lede tells the reader to type a number and confirm it. once they have, it is an
+    // instruction for something already done, sitting directly above the answer to it.
+    lede.hidden = name !== 'form';
+  }
+
+  // ── the outcome, one entry per status the server can report ─────────────────
+  // both languages are written into the dom for the same reason the static copy is: switching
+  // language after an answer has landed must not blank it out.
+  var icons = {
+    ok:   'M20 6 9 17l-5-5',
+    bad:  'M18 6 6 18M6 6l12 12',
+    warn: 'M12 8v5M12 16h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z'
+  };
+  var outcomes = {
+    success: { tone: 'ok', icon: 'ok',
+      ru: ['Аккаунт удалён', 'Данные аккаунта, магазины и товары удалены безвозвратно.'],
+      uz: ['Hisob o‘chirildi', 'Hisob ma’lumotlari, do‘konlar va mahsulotlar butunlay o‘chirildi.'] },
+    no_account: { tone: '', icon: 'warn',
+      ru: ['Аккаунт не найден', 'На этот номер аккаунт Domix не зарегистрирован — удалять нечего.'],
+      uz: ['Hisob topilmadi', 'Bu raqamga Domix hisobi ro‘yxatdan o‘tkazilmagan — o‘chiradigan narsa yo‘q.'] },
+    mismatch: { tone: 'bad', icon: 'bad',
+      ru: ['Номера не совпадают', 'В Telegram подтверждён другой номер. Аккаунт не удалён.'],
+      uz: ['Raqamlar mos kelmadi', 'Telegramda boshqa raqam tasdiqlandi. Hisob o‘chirilmadi.'] },
+    error: { tone: 'bad', icon: 'bad',
+      ru: ['Не получилось', 'Аккаунт не удалён. Попробуйте позже.'],
+      uz: ['Bajarilmadi', 'Hisob o‘chirilmadi. Keyinroq urinib ko‘ring.'] },
+    not_found: { tone: '', icon: 'warn',
+      ru: ['Время вышло', 'Подтверждение не пришло. Начните заново.'],
+      uz: ['Vaqt tugadi', 'Tasdiqlash kelmadi. Qaytadan boshlang.'] }
+  };
+
+  var result = document.getElementById('result');
+  var markIcon = document.getElementById('mark-icon');
+  var resultTitle = document.getElementById('result-title');
+  var resultBody = document.getElementById('result-body');
+
+  // textContent rather than innerHTML for every string that reaches the page. none of these are
+  // user-supplied today, and building nodes is the version of that rule the next person to add a
+  // line cannot get wrong.
+  function bilingual(target, ru, uz) {
+    target.textContent = '';
+    [['ru', ru], ['uz', uz]].forEach(function (pair) {
+      var span = document.createElement('span');
+      span.setAttribute('data-lang', pair[0]);
+      span.textContent = pair[1];
+      target.appendChild(span);
+    });
+  }
+  function finish(status) {
+    stopPolling();
+    var out = outcomes[status] || outcomes.error;
+    result.className = 'result ' + out.tone;
+    markIcon.innerHTML = '';
+    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', icons[out.icon]);
+    markIcon.appendChild(path);
+    bilingual(resultTitle, out.ru[0], out.uz[0]);
+    bilingual(resultBody, out.ru[1], out.uz[1]);
+    // every outcome except one leaves something to retry. after a successful deletion there is no
+    // account left to start again with, and offering it invites a second pointless round trip.
+    document.getElementById('done-restart').hidden = status === 'success';
+    show('done');
+  }
+
+  // ── the handshake ───────────────────────────────────────────────────────────
+  var sessionID = null;
+  var timer = null;
+  var polls = 0;
+  var maxPolls = 150; // 2s apart, so five minutes - half the session's own ten-minute life
+
+  function stopPolling() {
+    if (timer) { clearInterval(timer); timer = null; }
+  }
+
+  function poll() {
+    if (!sessionID) return;
+    if (++polls > maxPolls) { finish('not_found'); return; }
+
+    fetch('/api/account-deletion/status?session_id=' + encodeURIComponent(sessionID))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data && data.status && data.status !== 'pending') { finish(data.status); }
+      })
+      // a poll that failed to reach the server is not an answer about the account - the next tick
+      // asks again. only the server ends this flow.
+      .catch(function () {});
+  }
+
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    var digits = localDigits(input.value);
+    if (digits.length !== 9) return;
+
+    submit.disabled = true;
+    fetch('/api/account-deletion/init', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: '998' + digits })
+    })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function (data) {
+        sessionID = data.session_id;
+        document.getElementById('tg').href = data.telegram_url;
+        polls = 0;
+        show('wait');
+        stopPolling();
+        timer = setInterval(poll, 2000);
+      })
+      .catch(function () {
+        submit.disabled = false;
+        finish('error');
+      });
+  });
+
+  // coming back from telegram is the moment the answer is most likely to be waiting, and a tab that
+  // was in the background may have had its timers throttled to a crawl.
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && timer) { poll(); }
+  });
+
+  document.querySelectorAll('[data-restart]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      stopPolling();
+      sessionID = null;
+      input.value = '';
+      submit.disabled = true;
+      show('form');
+      input.focus();
+    });
+  });
+})();
+</script>
+</body>
+</html>

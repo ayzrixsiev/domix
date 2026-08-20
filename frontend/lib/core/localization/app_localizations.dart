@@ -170,6 +170,33 @@ class AppLocalizations {
   String get basketPrice => isRu ? 'Цена корзины' : 'Savat narxi';
   String get basketPriceShort => isRu ? 'Корзина' : 'Savat';
 
+  // ── the labels on an empty slot ──
+  //
+  // The VIP carousel is five places whether or not they are sold, and each tab of Лучшие предложения
+  // is fifteen. An unsold place draws the real card with **field names where its values would be**,
+  // so a shop owner scrolling their own app sees exactly what the space would give them.
+  //
+  // These are therefore the names of *fields*, not sentences and not marketing: «Адрес», not «Здесь
+  // будет адрес магазина». The card already reads as empty from its recessed surface, and a slot
+  // that explained itself in prose would be the loudest thing on the home screen.
+  //
+  // **Nothing here may become a plausible value.** No name, no street, no amount, no percentage - the
+  // one section of this app that is sold is the last place a convincing fake belongs. (The rating an
+  // empty slot shows is a fixed "5", written where it is drawn rather than here: it is a numeral in
+  // both languages.)
+  String get slotShopNameLabel => isRu ? 'Название магазина' : "Do'kon nomi";
+  String get slotAddressLabel => isRu ? 'Адрес' : 'Manzil';
+
+  /// Deliberately not [basketPriceShort] («Корзина»), which is a caption over a number the reader can
+  /// already see. With no number under it the caption has to name the thing on its own, and "средний
+  /// чек" is what a shop owner calls it.
+  String get slotBasketLabel => isRu ? 'Средний чек' : "O'rtacha chek";
+
+  /// The badge's slot, described rather than shown. It names the comparison the section exists to
+  /// make - see [priceTierCheaper], which is what fills this line on a real card.
+  String get slotComparisonLabel =>
+      isRu ? 'Насколько дешевле рынка' : 'Bozordan qancha arzon';
+
   /// Shown to a *customer* on the shop's card in place of the price, for a shop that has not priced
   /// its whole catalogue and is therefore out of the comparison entirely (migration 000013).
   ///
@@ -206,11 +233,17 @@ class AppLocalizations {
   String get categoryTools => isRu ? 'Инструменты' : 'Asboblar';
   // the category drill-down, opened by tapping a "Популярные категории" tile. it lists products
   // from every shop, so the copy talks about товары rather than магазины.
-  /// The home screen when the database genuinely has no ranked shops - reachable only once the
-  /// showcase rows are deleted.
-  String get noShopsYetHint => isRu
-      ? 'Магазины появятся здесь, как только они укажут цены.'
-      : "Do'konlar narxlarni ko'rsatishi bilan shu yerda paydo bo'ladi.";
+  // `noShopsYetHint` lived here and is deleted. It was the second line of the home screen's "пока
+  // нет магазинов" block, and that block went when both feed sections started drawing their open
+  // places - a screen of designed-empty cards followed by a notice explaining that it is empty says
+  // the same thing twice. `noShopsYet` itself stays: the map still uses it, where an empty result
+  // really does need a sentence, because a map with no pins looks like a map that failed.
+
+  /// `GET /api/home` failed. Its own sentence rather than [noShopsYet], because "nobody has priced
+  /// anything yet" and "we could not ask" are opposite claims and only one of them is about Domix.
+  String get homeLoadError => isRu
+      ? 'Не удалось загрузить главную'
+      : "Bosh sahifani yuklab bo'lmadi";
 
   String get categoryProductsSubtitle =>
       isRu ? 'Товары со всех магазинов' : "Barcha do'konlardagi mahsulotlar";
@@ -253,7 +286,7 @@ class AppLocalizations {
   String get currencySom => isRu ? 'сум' : "so'm";
 
   // "1250000" -> "1 250 000 сум" (or "so'm"). lives here rather than in one screen because the map
-  // pin label, the shop card and the details sheet all show the same amount and must agree - a
+  // pin label, the shop card and the home feed all show the same amount and must agree - a
   // plain no-dependency loop, since intl isn't a direct dependency of this project.
   String somAmount(int amount) {
     final digits = amount.abs().toString();
@@ -283,13 +316,75 @@ class AppLocalizations {
       ? 'Здесь появятся новые заказы, ответы магазинов и новости Domix.'
       : "Bu yerda yangi buyurtmalar, do'konlar javoblari va Domix yangiliklari paydo bo'ladi.";
 
+  // the support chat behind the Сообщения tab. it is a conversation with one other party, so the
+  // copy says «мы» and not «поддержка Domix ответит» - the second reads like a ticket system, which
+  // is exactly the distance this screen exists to remove.
+  String get supportChatTitle => isRu ? 'Поддержка' : "Qo'llab-quvvatlash";
+  String get supportChatSubtitle =>
+      isRu ? 'Отвечаем в рабочее время' : 'Ish vaqtida javob beramiz';
+
+  /// The label under a message we sent. Named, because a bubble with no author reads as a system
+  /// notice; «Поддержка Domix» is a person on the other end.
+  String get supportSenderLabel => isRu ? 'Поддержка Domix' : "Domix qo'llab-quvvatlash";
+
+  String get supportEmptyTitle => isRu ? 'Напишите нам' : 'Bizga yozing';
+  String get supportEmptyBody => isRu
+      ? 'Вопрос о магазине, ценах или приложении — задайте его здесь, ответим в этой переписке.'
+      : "Do'kon, narxlar yoki ilova haqida savolingizni shu yerda yozing — shu yozishmada javob beramiz.";
+
+  String get supportComposerHint => isRu ? 'Сообщение…' : 'Xabar…';
+  String get supportSendLabel => isRu ? 'Отправить' : 'Yuborish';
+
+  // a guest cannot write in, and the reason is worth stating rather than hiding behind a disabled
+  // field: the answer has to arrive somewhere, and without an account there is nowhere to put it.
+  String get supportGuestTitle =>
+      isRu ? 'Войдите, чтобы написать' : 'Yozish uchun hisobga kiring';
+  String get supportGuestBody => isRu
+      ? 'Ответ придёт в эту переписку, поэтому нужен аккаунт — вход занимает полминуты через Telegram.'
+      : "Javob shu yozishmaga keladi, shuning uchun hisob kerak — Telegram orqali kirish yarim daqiqa oladi.";
+  String get supportGuestAction => isRu ? 'Войти' : 'Kirish';
+
+  String get supportLoadError =>
+      isRu ? 'Не удалось загрузить переписку' : "Yozishmani yuklab bo'lmadi";
+  String get supportLoadErrorHint => isRu
+      ? 'Проверьте подключение и попробуйте снова.'
+      : "Ulanishni tekshirib, qayta urinib ko'ring.";
+
+  /// Localizes a failed send off the backend's stable `code` (see SupportException).
+  String supportSendErrorMessage(String code) {
+    switch (code) {
+      case 'empty_message':
+        return isRu ? 'Сообщение пустое.' : "Xabar bo'sh.";
+      case 'message_too_long':
+        return isRu
+            ? 'Сообщение слишком длинное — сократите его.'
+            : "Xabar juda uzun — qisqartiring.";
+      // the flood guard. it is a wait and not a refusal, and the words have to say so or it reads
+      // as "you have been blocked".
+      case 'too_many_messages':
+        return isRu
+            ? 'Слишком много сообщений подряд. Подождите минуту.'
+            : "Ketma-ket juda ko'p xabar. Bir daqiqa kuting.";
+      case 'timeout':
+        return isRu
+            ? 'Сервер не ответил. Нажмите «Отправить» ещё раз.'
+            : "Server javob bermadi. «Yuborish»ni yana bosing.";
+      case 'unauthorized':
+        return isRu ? 'Войдите, чтобы отправить сообщение.' : 'Xabar yuborish uchun hisobga kiring.';
+      default:
+        return isRu
+            ? 'Не удалось отправить. Проверьте подключение.'
+            : "Yuborib bo'lmadi. Ulanishni tekshiring.";
+    }
+  }
+
+  // day separators in the chat. anything older than yesterday gets its date, which is the point at
+  // which "вчера" stops being information.
+  String get todayLabel => isRu ? 'Сегодня' : 'Bugun';
+  String get yesterdayLabel => isRu ? 'Вчера' : 'Kecha';
+
   // placeholder screens. these read as a title plus a line of "what will appear here", the shape
-  // EmptyStateView wants - the messages tab used to be one grey sentence floating on the page,
-  // which is why it looked unfinished next to Заявки.
-  String get messagesComingSoonTitle => isRu ? 'Сообщения' : 'Xabarlar';
-  String get messagesComingSoonBody => isRu
-      ? 'Здесь появится переписка с магазинами и мастерами — можно будет уточнить цену и наличие, не выходя из приложения.'
-      : "Bu yerda do'konlar va ustalar bilan yozishmalar paydo bo'ladi — narx va mavjudlikni ilovadan chiqmasdan aniqlaysiz.";
+  // EmptyStateView wants.
   String get ticketsComingSoonTitle =>
       isRu ? 'Заявки мастерам' : 'Ustalarga buyurtmalar';
   String get ticketsComingSoonBody => isRu
@@ -319,8 +414,9 @@ class AppLocalizations {
   String get searchNoResults => isRu ? 'Ничего не найдено' : 'Hech narsa topilmadi';
   String get searchClear => isRu ? 'Очистить' : 'Tozalash';
 
-  // shop details sheet. the phone number is shown as a labelled detail row now, so the call button
-  // can carry a short verb instead of the raw number - a cta reads better as an action than as data.
+  // the shop card's contacts block. the phone number is shown as a labelled detail row, so the call
+  // button carries a short verb instead of the raw number - a cta reads better as an action than as
+  // data.
   String get addressLabel => isRu ? 'Адрес' : 'Manzil';
   String get phoneLabel => isRu ? 'Телефон' : 'Telefon';
   String get callButton => isRu ? 'Позвонить' : "Qo'ng'iroq qilish";
@@ -634,7 +730,7 @@ class AppLocalizations {
   String productErrorMessage(String code, {int? limit}) {
     switch (code) {
       case 'product_limit_reached':
-        final max = limit ?? 20;
+        final max = limit ?? 30;
         return isRu
             ? 'Можно добавить не больше $max собственных товаров.'
             : "$max tadan ko'p o'z mahsulotingizni qo'sha olmaysiz.";
@@ -689,6 +785,126 @@ class AppLocalizations {
         return isRu
             ? 'Не удалось сохранить. Проверьте подключение и попробуйте снова.'
             : "Saqlab bo'lmadi. Ulanishni tekshirib, qayta urinib ko'ring.";
+    }
+  }
+
+  // ── the shop card ────────────────────────────────────────────────────────────────────────────
+  //
+  // One screen, reached from the map's pins, the VIP carousel and Лучшие предложения - see
+  // ShopCardScreen. These are the labels that exist only there; the address, phone, basket and
+  // product strings above are shared with the rest of the app.
+
+  String get shopContactsTitle => isRu ? 'Контакты' : 'Kontaktlar';
+
+  /// Opens the phone's own maps app with a route to the shop. Named for the result rather than for
+  /// the mechanism ("открыть в Яндекс.Картах"), because which app answers depends on the phone.
+  String get routeButton => isRu ? 'Маршрут' : "Yo'nalish";
+
+  /// The paid placement, as a badge on the card. Not translated - it is the same three letters in
+  /// both languages and in the section heading above.
+  String get vipBadge => 'VIP';
+
+  /// url_launcher came back false: nothing on the phone would take the tel: or the maps link. The
+  /// number is on screen either way, which is what makes this a message rather than a failure.
+  String get couldNotOpenExternalApp => isRu
+      ? 'Не удалось открыть приложение на телефоне'
+      : "Telefondagi ilovani ochib bo'lmadi";
+
+  // ── the product photo an owner uploads ───────────────────────────────────────────────────────
+  //
+  // Every product in the owner's own shop can carry one, template rows included: what makes two
+  // shops comparable is the row's key, name and unit, none of which a photo touches. See
+  // backend/internal/endpoints/product_image.go.
+
+  String get productPhotoLabel => isRu ? 'Фото товара' : 'Mahsulot rasmi';
+
+  /// Says what the photo is *for*, which is the only thing that makes an optional field worth
+  /// filling in. Deliberately one sentence, and true of every product: a template row whose photo
+  /// is the catalogue's, an обои slot that has none, and the owner's own.
+  String get productPhotoHint => isRu
+      ? 'Покупатели видят это фото в каталоге магазина.'
+      : "Xaridorlar bu rasmni do'kon katalogida ko'radi.";
+
+  String get addPhotoAction => isRu ? 'Добавить фото' : "Rasm qo'shish";
+  String get changePhotoAction => isRu ? 'Заменить' : "Almashtirish";
+  String get removePhotoAction => isRu ? 'Удалить фото' : "Rasmni o'chirish";
+
+  String get photoSourceTitle => isRu ? 'Откуда взять фото' : 'Rasmni qayerdan olamiz';
+  String get photoFromCamera => isRu ? 'Сделать снимок' : 'Suratga olish';
+  String get photoFromGallery => isRu ? 'Выбрать из галереи' : 'Galereyadan tanlash';
+
+  String get photoUploadingLabel => isRu ? 'Загружаем фото…' : 'Rasm yuklanmoqda…';
+  String get photoSavedMessage => isRu ? 'Фото сохранено' : 'Rasm saqlandi';
+  String get photoRemovedMessage => isRu ? 'Фото удалено' : "Rasm o'chirildi";
+
+  /// On a product being created there is no id to attach a photo to yet, so the picked file waits
+  /// on the phone until the product exists. Saying so is what stops the delay reading as a failure.
+  String get photoPendingSaveLabel => isRu
+      ? 'Загрузится после сохранения товара'
+      : 'Mahsulot saqlangach yuklanadi';
+
+  /// The honest report of a half-success: the product was created and the photo was not. Two
+  /// requests, so it is a state that genuinely exists - and the product is already saved, which is
+  /// why this is a message rather than an error the owner is asked to fix on the spot.
+  String get productSavedWithoutPhoto => isRu
+      ? 'Товар сохранён, но фото не загрузилось. Откройте товар и добавьте фото ещё раз.'
+      : "Mahsulot saqlandi, lekin rasm yuklanmadi. Mahsulotni ochib, rasmni qayta qo'shing.";
+
+  /// Photo failures, keyed off the backend's machine-readable `code` - the same contract as
+  /// [productErrorMessage]. Separate from it because every message here is about a *file* and the
+  /// advice that goes with each one is different: a photo that is not a photo is not fixed by
+  /// pressing save again.
+  String photoErrorMessage(String code) {
+    switch (code) {
+      case 'invalid_image':
+        return isRu
+            ? 'Это не похоже на фото. Подойдут JPG и PNG.'
+            : "Bu rasmga o'xshamaydi. JPG va PNG mos keladi.";
+      case 'image_too_large':
+        return isRu
+            ? 'Фото слишком большое. Выберите файл поменьше.'
+            : 'Rasm juda katta. Kichikroq faylni tanlang.';
+      case 'image_too_small':
+        return isRu
+            ? 'Фото слишком маленькое — оно будет размытым в каталоге.'
+            : "Rasm juda kichik — katalogda xira ko'rinadi.";
+      case 'too_many_uploads':
+        return isRu
+            ? 'Слишком много фото подряд. Подождите немного.'
+            : "Ketma-ket juda ko'p rasm. Biroz kuting.";
+      // the picker itself refused - no camera on the device, or the owner declined access. it never
+      // reaches the network, so it has no server code and gets one of its own.
+      case 'picker_failed':
+        return isRu
+            ? 'Не удалось открыть камеру или галерею.'
+            : "Kamera yoki galereyani ochib bo'lmadi.";
+      case 'not_owner':
+      case 'forbidden_role':
+        return isRu
+            ? 'У вас нет прав на изменение товаров этого магазина.'
+            : "Bu do'kon mahsulotlarini o'zgartirish huquqingiz yo'q.";
+      case 'product_not_found':
+        return isRu
+            ? 'Товар не найден — возможно, он уже удалён.'
+            : "Mahsulot topilmadi — ehtimol u allaqachon o'chirilgan.";
+      case 'unauthorized':
+        return isRu
+            ? 'Сессия истекла. Войдите в аккаунт заново.'
+            : 'Seans tugadi. Hisobingizga qayta kiring.';
+      // an upload is the one request in the app big enough to time out on a working connection, so
+      // "try again" is genuinely the right advice here rather than a shrug
+      case 'timeout':
+        return isRu
+            ? 'Фото не успело загрузиться. Попробуйте ещё раз.'
+            : "Rasm yuklanib ulgurmadi. Qayta urinib ko'ring.";
+      case 'server_error':
+        return isRu
+            ? 'Ошибка на сервере. Попробуйте позже.'
+            : "Serverda xatolik. Keyinroq urinib ko'ring.";
+      default:
+        return isRu
+            ? 'Не удалось загрузить фото. Проверьте подключение.'
+            : "Rasmni yuklab bo'lmadi. Ulanishni tekshiring.";
     }
   }
 

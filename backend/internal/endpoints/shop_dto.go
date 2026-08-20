@@ -148,10 +148,34 @@ func shopFromOwned(r db.ListShopsByOwnerRow) ShopResponse {
 	return out
 }
 
-// ListVipShopsRow and ListBestOffersRow are field-for-field identical - same names, same types, same
-// order - because the two queries differ only in their WHERE and ORDER BY. go lets one be converted
-// to the other outright when the underlying types match like that, so the two sections share a
-// mapper instead of keeping two copies that could drift apart.
+// the VIP carousel's mapper.
+//
+// **this used to be a conversion into shopFromRanked below and cannot be one any more**, which is
+// the compiler recording a real change of meaning rather than an inconvenience. the two rows were
+// field-for-field identical while both queries inner-joined the basket index; ListVipShops now left-
+// joins it (see db/queries/shops.sql), so its two price columns are pgtype.Int8 where the ranked
+// row's are plain int64. a paid placement is shown whether or not its owner has finished pricing,
+// and setPricing leaves all three price fields nil in that case - which is exactly the state
+// ShopResponse already models for the map.
+func shopFromVip(r db.ListVipShopsRow) ShopResponse {
+	out := ShopResponse{
+		ID:           r.ID,
+		Name:         r.Name,
+		ContactPhone: r.ContactPhone,
+		ImageURL:     r.ImageUrl.String,
+		Address:      r.Address,
+		Category:     r.Category,
+		Rating:       ratingOf(r.Rating),
+		IsVIP:        r.IsVip,
+		Latitude:     r.Latitude,
+		Longitude:    r.Longitude,
+	}
+	out.setPricing(r.PriceIndex, r.BasketPrice)
+	return out
+}
+
+// the best-offers mapper. this one keeps the plain int64s, because that query still inner-joins the
+// index - a price ranking with an unpriced shop in it is not a ranking (see the note on the query).
 func shopFromRanked(r db.ListBestOffersInCategoryRow) ShopResponse {
 	out := ShopResponse{
 		ID:           r.ID,

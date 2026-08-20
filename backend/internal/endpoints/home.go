@@ -23,15 +23,24 @@ type Home struct {
 }
 
 const (
-	// how many shops each home section shows. these are the server's numbers, not the app's: the
-	// app renders whatever arrives, so growing a section is a backend change and old app builds pick
-	// it up without an update.
-	vipShopsLimit = 10
+	// **five, because five is the entire inventory.** VIP placement is a product with a fixed number
+	// of units, and the app draws all five whether or not they are sold - an empty slot is what tells
+	// a shop owner scrolling past that a place is still available. so this is not a display cap that
+	// can be raised without thinking: it is how many of a thing exist, and the app's own
+	// VipShopsCarousel.slotCount is the other half of that number.
+	//
+	// the app never *drops* a shop it was sent, so a server that grew this to six would grow the
+	// carousel rather than hide a placement somebody paid for - but the two are meant to agree.
+	vipShopsLimit = 5
 
-	// per *shop category*, not overall - "Лучшие предложения" is a tab strip now, and each tab is
-	// its own ranking. so the worst case is four categories x ten shops in one response, which is
-	// bounded forever by the LIMIT rather than growing with the market.
-	bestOffersLimit = 10
+	// per *shop category*, not overall - "Лучшие предложения" is a tab strip, and each tab is its own
+	// ranking. so the worst case is four categories x fifteen shops in one response, which is bounded
+	// forever by the LIMIT rather than growing with the market.
+	//
+	// fifteen and not ten because the app pads each tab out to a fixed number of slots: the empty
+	// rows say how many places in this category's ranking are still open, which is the one message
+	// that reaches an owner who has not finished pricing. BestOffersList.slotCount mirrors it.
+	bestOffersLimit = 15
 
 	// the category drill-down. longer than the home sections because it is a full screen someone
 	// scrolls, not a strip they glance at - but still capped, since "every плитка on the market" is
@@ -153,9 +162,10 @@ func (h *Home) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, shop := range vip {
-		// ListVipShopsRow and ListBestOffersInCategoryRow are structurally identical, so one
-		// converts to the other and both sections share a mapper - see shopFromRanked in shop_dto.go
-		response.VipShops = append(response.VipShops, shopFromRanked(db.ListBestOffersInCategoryRow(shop)))
+		// its own mapper, not the ranked one: ListVipShops left-joins the basket index, so a
+		// placement that has been paid for appears the moment it is granted and simply carries no
+		// price yet. see shopFromVip in shop_dto.go.
+		response.VipShops = append(response.VipShops, shopFromVip(shop))
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -256,6 +266,7 @@ func (h *Home) SearchProducts(w http.ResponseWriter, r *http.Request) {
 // shops. it exists so a change to what a product looks like on the wire happens once.
 func categoryProductFromRow(row db.ListProductsByCategoryRow) CategoryProductResponse {
 	isTemplate, nameEditable := templateFlags(row.TemplateKey)
+	imageURL, ownImage := productImage(row.ImagePath)
 	return CategoryProductResponse{
 		ProductResponse: ProductResponse{
 			ID:           row.ID,
@@ -267,7 +278,8 @@ func categoryProductFromRow(row db.ListProductsByCategoryRow) CategoryProductRes
 			Availability: row.Availability,
 			IsTemplate:   isTemplate,
 			NameEditable: nameEditable,
-			ImageURL:     productImageURL(row.ImagePath),
+			ImageURL:     imageURL,
+			OwnImage:     ownImage,
 		},
 		ShopName: row.ShopName,
 	}

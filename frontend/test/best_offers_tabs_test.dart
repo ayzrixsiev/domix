@@ -1,35 +1,48 @@
-// The category filter in "Лучшие предложения", and the badge on its rows.
+// The category filter in "Лучшие предложения", its fixed slots, and the badge on its rows.
 //
-// Three rules here are easy to break by accident and silent when broken: the filter must not appear
+// Four rules here are easy to break by accident and silent when broken: the filter must not appear
 // for a single category (the state the app launches in), every segment must be the same width
-// whatever its label, and the raw Basket Price Index must never reach a screen. All three are
-// pinned by rendering rather than by reading the widget, because all three are about what a person
-// sees.
+// whatever its label, the tab must hold a fixed number of places whether or not shops have earned
+// them, and the raw Basket Price Index must never reach a screen. All four are pinned by rendering
+// rather than by reading the widget, because all four are about what a person sees.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/home/data/home_content.dart';
 import 'package:frontend/features/home/presentation/widgets/best_offers.dart';
+import 'package:frontend/features/home/presentation/widgets/home_shop_row.dart';
 import 'package:frontend/features/stores/data/price_tier.dart';
 import 'package:frontend/features/stores/data/shop_category.dart';
+import 'package:frontend/features/stores/data/shop_model.dart';
 
+final _strings = AppLocalizations(AppLanguage.ru);
+
+// built through the real projection rather than a bare constructor: every preview in the app comes
+// from a backend row now (the invented-shop file is gone), and a fixture that could not have arrived
+// that way would be testing a shape the app cannot produce.
 HomeShopPreview _shop(
   String name, {
   PriceTier? tier,
   int? percent,
   int? basket = 5000000,
 }) {
-  return HomeShopPreview(
+  return HomeShopPreview.fromShop(Shop(
+    id: name.hashCode,
     name: name,
+    contactPhone: '+998901112233',
     address: 'Ташкент',
+    category: ShopCategory.universal,
+    latitude: 41.3,
+    longitude: 69.2,
     rating: 4.5,
     priceTier: tier,
     priceDifferencePercent: percent,
     basketPrice: basket,
-  );
+  ));
 }
 
 Future<void> _pump(WidgetTester tester, List<CategoryOffers> groups) async {
@@ -47,6 +60,21 @@ Future<void> _pump(WidgetTester tester, List<CategoryOffers> groups) async {
 }
 
 void main() {
+  // **the state the app launches in**, and it used to render nothing at all - the section vanished,
+  // which read as a screen missing a chunk of itself rather than as a ranking with room in it.
+  testWidgets('no ranked category still draws its places, with no tab strip', (tester) async {
+    await _pump(tester, const []);
+
+    expect(find.byType(EmptyShopRow), findsNWidgets(BestOffersList.slotCount));
+    expect(find.byType(HomeShopRow), findsNothing);
+
+    // no strip, because the tabs come from the data and there is none. a tab set to no category
+    // would be a filter that filters to nothing.
+    for (final label in ['Универсальный', 'Сантехника', 'Обои']) {
+      expect(find.text(label), findsNothing);
+    }
+  });
+
   testWidgets('a single category draws no tab strip', (tester) async {
     // the state the app launches in. one permanently-selected pill reads as a control that is
     // broken, so the strip is not drawn at all rather than drawn with nothing to switch to.
@@ -162,6 +190,86 @@ void main() {
     ]);
 
     expect(find.text('2 500 000 сум'), findsOneWidget);
-    expect(find.textContaining('рынка'), findsNothing);
+    // no *badge* on the one real row. the open places below it carry the badge's label, which is a
+    // field name and not a comparison - hence the exact three sentences rather than "рынка".
+    for (final badge in ['на 0% дешевле рынка', 'Средняя цена по рынку', 'на 0% дороже рынка']) {
+      expect(find.text(badge), findsNothing);
+    }
+  });
+
+  // ─────────────────────────── the slots ───────────────────────────
+
+  // **the tab is a fixed number of places, not a list that shrinks to its contents.** what an owner
+  // reads off two shops and thirteen open rows is "this category is not full and finishing my prices
+  // puts me in it", which is the one message that reaches somebody stuck halfway through pricing -
+  // in the place they are most likely to be looking.
+  testWidgets('a tab always holds its full number of places', (tester) async {
+    await _pump(tester, [
+      CategoryOffers(
+        category: ShopCategory.universal,
+        shops: [_shop('Первый', basket: 4000000), _shop('Второй', basket: 4500000)],
+      ),
+    ]);
+
+    expect(find.byType(HomeShopRow), findsNWidgets(2));
+    expect(find.byType(EmptyShopRow), findsNWidgets(BestOffersList.slotCount - 2));
+  });
+
+  // the ranking is the section's whole meaning, so the real shops occupy the top of the list in the
+  // order the server sent them - the open places are the tail, never interleaved
+  testWidgets('the real shops come first, in the order they arrived', (tester) async {
+    await _pump(tester, [
+      CategoryOffers(
+        category: ShopCategory.universal,
+        shops: [_shop('Дешёвый', basket: 4000000), _shop('Дорогой', basket: 6000000)],
+      ),
+    ]);
+
+    final rows = tester.widgetList<HomeShopRow>(find.byType(HomeShopRow)).toList();
+    expect(rows.map((r) => r.shop.name).toList(), ['Дешёвый', 'Дорогой']);
+
+    // and every open place sits below the last real one
+    final lastReal = tester.getTopLeft(find.byType(HomeShopRow).last).dy;
+    final firstEmpty = tester.getTopLeft(find.byType(EmptyShopRow).first).dy;
+    expect(firstEmpty, greaterThan(lastReal));
+  });
+
+  // **no invented shop anywhere in an open place.** this is the section a customer decides where to
+  // drive from, so a plausible-looking name or price in it would be the worst kind of wrong.
+  testWidgets('an open place shows field names and no data', (tester) async {
+    await _pump(tester, [
+      CategoryOffers(category: ShopCategory.universal, shops: [_shop('Настоящий')]),
+    ]);
+
+    final empties = BestOffersList.slotCount - 1;
+    expect(find.text(_strings.slotShopNameLabel), findsNWidgets(empties));
+    expect(find.text(_strings.slotAddressLabel), findsNWidgets(empties));
+    expect(find.text(_strings.slotBasketLabel), findsNWidgets(empties));
+    expect(find.text(_strings.slotComparisonLabel), findsNWidgets(empties));
+    // the one value an open place does show, and it is a description of the field rather than a
+    // score anybody earned
+    expect(find.text('5'), findsNWidgets(empties));
+
+    // and nothing inside an open place that could be read as a real amount. scoped to the empty
+    // rows on purpose - the real shop above them prints its basket, which is the whole point of it.
+    expect(
+      find.descendant(of: find.byType(EmptyShopRow), matching: find.textContaining('сум')),
+      findsNothing,
+    );
+  });
+
+  // never truncates. the count is a design constant and the server's LIMIT is what it mirrors, so
+  // the two disagreeing must cost an extra row rather than hide a shop that earned its place.
+  testWidgets('more shops than places grows the list instead of dropping any', (tester) async {
+    final many = [
+      for (var i = 0; i < BestOffersList.slotCount + 3; i++)
+        _shop('Магазин $i', basket: 4000000 + i),
+    ];
+    await _pump(tester, [
+      CategoryOffers(category: ShopCategory.universal, shops: many),
+    ]);
+
+    expect(find.byType(HomeShopRow), findsNWidgets(many.length));
+    expect(find.byType(EmptyShopRow), findsNothing);
   });
 }

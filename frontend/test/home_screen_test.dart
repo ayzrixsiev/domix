@@ -1,24 +1,32 @@
-// The substitution rule, tested where it actually matters: on screen.
+// The home feed, tested where it matters: on screen.
 //
-// The showcase rows are temporary, but the *rule* about them is not obvious and is easy to break by
-// accident - real data must win, invented data must never be mixed into a real list, and neither
-// widget nor screen may contain any of that logic. These pin all three.
+// **The rule these exist for is that nothing here is invented.** There used to be a file of
+// plausible shops the controller substituted whenever the backend came back empty or unreachable,
+// and these tests pinned that substitution. It is deleted, and what replaced it is the harder thing
+// to keep right: five VIP places and fifteen per category are drawn whether or not anybody has
+// earned them, so the screen is now full of card-shaped things that must never acquire a name, an
+// address or a price.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/home/data/home_content.dart';
 import 'package:frontend/features/home/data/home_repository.dart';
-import 'package:frontend/features/home/data/home_showcase_content.dart';
 import 'package:frontend/features/home/presentation/controllers/home_controller.dart';
 import 'package:frontend/features/home/data/category_product.dart';
 import 'package:frontend/features/home/presentation/screens/category_products_screen.dart';
 import 'package:frontend/features/home/presentation/screens/product_search_screen.dart';
 import 'package:frontend/features/home/presentation/widgets/search_and_like_bar.dart';
 import 'package:frontend/features/products/data/product_model.dart';
+import 'package:frontend/features/products/presentation/widgets/product_tile.dart';
 import 'package:frontend/features/home/presentation/screens/home_screen.dart';
+import 'package:frontend/features/home/presentation/widgets/best_offers.dart';
+import 'package:frontend/features/home/presentation/widgets/home_shop_row.dart';
+import 'package:frontend/features/home/presentation/widgets/vip_shops_carousel.dart';
+import 'package:frontend/core/widgets/pressable_scale.dart';
 import 'package:frontend/features/location/presentation/controllers/city_controller.dart';
 import 'package:frontend/features/products/data/product_category.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
@@ -122,28 +130,94 @@ Future<HomeController> _pumpHome(WidgetTester tester, _FakeHomeRepository repo) 
 }
 
 void main() {
-  testWidgets('an empty backend falls back to the showcase rows', (tester) async {
+  // **the state a fresh install is in, and the one that used to be covered up.** an empty database
+  // draws all three sections at full size - five VIP places, twelve tiles, fifteen ranked places -
+  // and not one shop name anywhere.
+  testWidgets('an empty backend draws every section, never invented shops', (tester) async {
+    final strings = AppLocalizations(AppLanguage.ru);
     final controller = await _pumpHome(tester, _FakeHomeRepository(content: _content()));
 
-    expect(controller.isShowingShowcase, isTrue);
-    expect(controller.vipShops, kShowcaseVipShops);
-    // the carousel renders the first showcase shop
-    expect(find.text(kShowcaseVipShops.first.name), findsWidgets);
+    expect(controller.vipShops, isEmpty);
+    expect(controller.bestOffers, isEmpty);
+
+    // **both shop sections draw, heading and all.** a section that vanished when it was empty read
+    // as a screen missing a chunk of itself; the open places are the shape the feed has, and they
+    // fill themselves in as shops finish pricing.
+    expect(find.text(strings.vipShops), findsOneWidget);
+    expect(find.text(strings.bestOffersTitle), findsOneWidget);
+    expect(find.text(strings.slotShopNameLabel), findsWidgets);
+    expect(find.text(strings.slotBasketLabel), findsWidgets);
+    expect(find.byType(EmptyShopRow), findsNWidgets(BestOffersList.slotCount));
+
+    // and no notice apologising for it. a screenful of designed-empty cards followed by "пока нет
+    // магазинов" says the same thing twice, and the second time it reads as something being wrong.
+    expect(find.text(strings.noShopsYet), findsNothing);
   });
 
-  testWidgets('an unreachable backend falls back too, and keeps the error', (tester) async {
+  // ─────────────────────────── the carousel's geometry ───────────────────────────
+  //
+  // **`viewportFraction` and `_offCentreScaleDrop` are one dial pulled in opposite directions**, and
+  // the thing they trade against each other is whether a reader can see there are more cards. The
+  // card was widened once already; the next person to widen it will not have the arithmetic in front
+  // of them, so it is pinned here at a real phone's width rather than at the test default of 800.
+  testWidgets('the neighbouring cards stay visible at phone width', (tester) async {
+    tester.view.physicalSize = const Size(360 * 3, 800 * 3);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+
+    await _pumpHome(
+      tester,
+      _FakeHomeRepository(
+        content: _content(vip: [_shop(id: 1, name: 'Настоящий VIP', isVip: true)]),
+      ),
+    );
+
+    // one PressableScale per built page; the transform that shrinks an off-centre card sits above
+    // it, so a global rect already has the recede applied
+    final cards = find.descendant(
+      of: find.byType(VipShopsCarousel),
+      matching: find.byType(PressableScale),
+    );
+    final rects = tester.widgetList(cards).indexed
+        .map((e) => tester.getRect(cards.at(e.$1)))
+        .toList()
+      ..sort((a, b) => a.left.compareTo(b.left));
+
+    expect(rects.length, greaterThan(1), reason: 'only one card was built - there is no peek at all');
+
+    // the card to the right of the one in the middle: it has to start before the screen ends, or
+    // the strip reads as a single card alone on the page rather than as a row of them
+    final neighbour = rects.firstWhere((r) => r.left > 180);
+    final visible = 360 - neighbour.left;
+    expect(
+      visible,
+      greaterThan(8),
+      reason: 'only ${visible.toStringAsFixed(1)}dp of the next card is on screen - widening the '
+          'card or deepening the recede has closed the peek',
+    );
+  });
+
+  testWidgets('an unreachable backend says so and offers a retry', (tester) async {
+    final strings = AppLocalizations(AppLanguage.ru);
     final controller = await _pumpHome(
       tester,
       _FakeHomeRepository(error: Exception('connection refused')),
     );
 
-    expect(controller.isShowingShowcase, isTrue);
     expect(controller.loadError, 'connection refused');
-    // a demo on bad wifi shows shops, not three error states - but the cause is still recorded
-    expect(controller.bestOffers, isNotEmpty);
+    // no plausible shops standing in for the ones we could not fetch - the failure is what is shown
+    expect(controller.vipShops, isEmpty);
+    expect(controller.bestOffers, isEmpty);
+
+    // a *failure* still gets a block of its own, because that is the one thing the open places
+    // cannot explain by themselves - and it is danger-coloured with a retry, not a friendly
+    // "nothing here yet"
+    expect(find.text(strings.homeLoadError), findsOneWidget);
+    expect(find.text('connection refused'), findsOneWidget);
+    expect(find.text(strings.retryButtonShort), findsOneWidget);
   });
 
-  testWidgets('real shops replace the showcase entirely - never a mix', (tester) async {
+  testWidgets('real shops fill the slots from the front, and nothing is invented', (tester) async {
     final controller = await _pumpHome(
       tester,
       _FakeHomeRepository(
@@ -173,17 +247,16 @@ void main() {
       ),
     );
 
-    expect(controller.isShowingShowcase, isFalse);
     expect(controller.bestOffers, hasLength(1));
     expect(controller.bestOffers.single.shops, hasLength(1));
+
+    // the one sold placement is the card the carousel opens on rather than something two swipes
+    // away behind empty ones - which is the difference between the section being worth money and not
+    expect(find.text('Настоящий VIP'), findsOneWidget);
+
     expect(find.text('Настоящий Дешёвый'), findsOneWidget);
     // the badge, never the raw index
     expect(find.text('на 12% дешевле рынка'), findsWidgets);
-
-    // the one real offer is not padded out to ten with invented ones
-    for (final showcase in kShowcaseBestOffers.expand((g) => g.shops)) {
-      expect(find.text(showcase.name), findsNothing);
-    }
   });
 
   testWidgets('a category tile opens onto that category\'s products', (tester) async {
@@ -344,10 +417,17 @@ void main() {
     }
   });
 
-  testWidgets('an empty VIP list omits the whole section, heading included', (tester) async {
-    // reachable only with the showcase off, which is what production looks like
-    final controller = HomeController(
-      repository: _FakeHomeRepository(
+  // **the VIP heading now stays even with nothing sold, and Лучшие предложения still does not.**
+  // The two look inconsistent and are not: five placements exist as a product whether or not anybody
+  // has bought one, so their empty slots say "available". Лучшие предложения builds its tabs from
+  // the data, so with nothing ranked there is no tab - and fifteen open places under a heading with
+  // no filter above them would be a section about nothing.
+  testWidgets('the VIP section is drawn with nothing sold', (tester) async {
+    final strings = AppLocalizations(AppLanguage.ru);
+
+    final controller = await _pumpHome(
+      tester,
+      _FakeHomeRepository(
         content: _content(offers: {
           ShopCategory.universal: [
             _shop(id: 2, name: 'Единственный', basketPrice: 5000000),
@@ -356,21 +436,29 @@ void main() {
       ),
     );
 
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider(create: (_) => LanguageProvider()),
-          ChangeNotifierProvider(create: (_) => CityController()),
-          ChangeNotifierProvider<HomeController>.value(value: controller),
-        ],
-        child: const MaterialApp(home: HomeScreen()),
-      ),
-    );
+    expect(controller.vipShops, isEmpty);
+    // the heading stays: five places exist as a product whether or not one has been bought, and the
+    // empty card is what says so
+    expect(find.text(strings.vipShops), findsOneWidget);
+    expect(find.text(strings.slotShopNameLabel), findsWidgets);
+    // the ranked category still has its own section
+    expect(find.text(strings.bestOffersTitle), findsOneWidget);
+    expect(find.text('Единственный'), findsOneWidget);
+  });
+
+  // the drill-down behind a category tile reads the database or shows an empty state. it used to
+  // answer from the invented catalogue whenever the home screen was showing invented shops, so a
+  // tapped tile opened onto plausible products at plausible prices from businesses that do not exist.
+  testWidgets('a category with no products opens onto an empty state, not a story', (tester) async {
+    final strings = AppLocalizations(AppLanguage.ru);
+    final repo = _FakeHomeRepository(content: _content(), categoryProducts: const []);
+    await _pumpHome(tester, repo);
+
+    await tester.tap(find.byIcon(ProductCategory.mixes.icon));
     await tester.pumpAndSettle();
 
-    expect(controller.vipShops, isEmpty);
-    // a heading over blank space reads as broken, so it is not rendered at all
-    expect(find.text('VIP Магазины'), findsNothing);
-    expect(find.text('Лучшие предложения'), findsOneWidget);
+    expect(repo.requestedCategory, ProductCategory.mixes);
+    expect(find.text(strings.noProductsInCategory), findsOneWidget);
+    expect(find.byType(ProductTile), findsNothing);
   });
 }

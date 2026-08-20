@@ -25,7 +25,7 @@ import '../controllers/stores_controller.dart';
 // there was a third row here, "Загрузка из Excel", which bulk-loaded a catalogue from a spreadsheet.
 // it is gone along with the endpoint behind it: it existed so an owner wouldn't have to type fifty
 // products in one at a time, and picking a category at creation already leaves the catalogue
-// stocked. it also wrote rows the 20-own-products cap counted, which is how a shop ended up showing
+// stocked. it also wrote rows the own-products cap counted, which is how a shop ended up showing
 // "30 из 20" on its add-product tile.
 class ShopSettingsScreen extends StatelessWidget {
   const ShopSettingsScreen({super.key, required this.shop});

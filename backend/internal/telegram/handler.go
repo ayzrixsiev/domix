@@ -82,6 +82,15 @@ func (h *Handler) send(msg tgbotapi.Chattable) {
 	}
 }
 
+// sendFinal answers and takes the contact keyboard away with the message. every branch that ends a
+// flow needs both, and a reply left with the keyboard still up invites the user to press it again
+// against a session that no longer exists.
+func (h *Handler) sendFinal(chatID int64, text string) {
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(true)
+	h.send(msg)
+}
+
 func (h *Handler) handleStart(chatID int64, text string) {
 	parts := strings.Fields(text)
 
@@ -103,14 +112,26 @@ func (h *Handler) handleStart(chatID int64, text string) {
 	}
 
 	if !linkSuccess {
-		errorMsg := "❌ Ошибка: сессия истекла или не найдена. Пожалуйста, запустите вход через приложение Domix.\n\n❌ Xatolik: seans muddati tugagan yoki topilmadi. Iltimos, kirishni Domix ilovasi orqali boshlang."
-		h.send(tgbotapi.NewMessage(chatID, errorMsg))
+		// deliberately says neither "the app" nor "the website": both flows land here, and by the
+		// time a session is gone there is nothing left to say which one it was.
+		errorMsg := "❌ Сессия истекла или не найдена. Пожалуйста, начните заново.\n\n❌ Seans muddati tugagan yoki topilmadi. Iltimos, qaytadan boshlang."
+		h.sendFinal(chatID, errorMsg)
 		return
 	}
 
+	// the same button collects the same contact either way, but one of these two flows deletes an
+	// account - and asking for a number "for registration" one tap before destroying everything the
+	// user owns would be a lie at the worst possible moment.
 	promptText := "Пожалуйста, поделитесь своим номером телефона для регистрации.\nRo'yxatdan o'tish uchun telefon raqamingizni ulashing."
+	buttonText := "📱 Поделиться номером / Raqamni ulashish"
+
+	if _, session, ok := h.SessionMgr.PendingSession(chatID); ok && session.Purpose == auth.PurposeDeletion {
+		promptText = "⚠️ Удаление аккаунта Domix.\nПодтвердите номер телефона кнопкой ниже. Аккаунт, магазины и товары будут удалены безвозвратно.\n\n⚠️ Domix hisobini o'chirish.\nQuyidagi tugma bilan telefon raqamingizni tasdiqlang. Hisob, do'konlar va mahsulotlar butunlay o'chiriladi."
+		buttonText = "🗑 Подтвердить удаление / O'chirishni tasdiqlash"
+	}
+
 	reply := tgbotapi.NewMessage(chatID, promptText)
-	contactButton := tgbotapi.NewKeyboardButtonContact("📱 Поделиться номером / Raqamni ulashish")
+	contactButton := tgbotapi.NewKeyboardButtonContact(buttonText)
 	keyboard := tgbotapi.NewReplyKeyboard(tgbotapi.NewKeyboardButtonRow(contactButton))
 	keyboard.ResizeKeyboard = true
 	keyboard.OneTimeKeyboard = true
@@ -144,15 +165,25 @@ func (h *Handler) handleContact(update tgbotapi.Update) {
 
 	log.Printf("chat %d: contact received (%s)", chatID, maskPhone(phone))
 
-	// pull the name and role the user typed into flutter
-	_, name, requestedRole, exists := h.SessionMgr.GetPendingSession(chatID)
+	// pull whatever this chat is in the middle of - the name and role typed into flutter, or the
+	// number typed on the deletion page
+	_, session, exists := h.SessionMgr.PendingSession(chatID)
 	if !exists {
 		// if user sends contact after the session id already expired, tell them to redo it through the domix app
 		log.Printf("Warning: Got contact for Chat %d, but no active RAM session was waiting! Rejecting to prevent orphaned DB entry.", chatID)
-		errorMsg := "❌ Время сессии истекло. Пожалуйста, вернитесь в приложение Domix и нажмите кнопку входа снова.\n\n❌ Seans vaqti tugadi. Iltimos, Domix ilovasiga qaytib, kirish tugmasini qayta bosing."
-		h.send(tgbotapi.NewMessage(chatID, errorMsg))
+		errorMsg := "❌ Время сессии истекло. Пожалуйста, начните заново.\n\n❌ Seans vaqti tugadi. Iltimos, qaytadan boshlang."
+		h.sendFinal(chatID, errorMsg)
 		return
 	}
+
+	// one handshake, two endings. the proof above is the same for both - this contact belongs to
+	// whoever sent it - and from here they part company completely.
+	if session.Purpose == auth.PurposeDeletion {
+		h.handleDeletion(chatID, phone, session)
+		return
+	}
+
+	name, requestedRole := session.Name, session.Role
 
 	// default context with our modification applied to it for db queries (we added 5 seconds timer)
 	// so that non of the connections gets stuck forever
@@ -180,11 +211,7 @@ func (h *Handler) handleContact(update tgbotapi.Update) {
 					Valid:  name != "",
 				},
 				Phone: phone,
-				TelegramChatID: pgtype.Int8{
-					Int64: chatID,
-					Valid: true,
-				},
-				Role: requestedRole,
+				Role:  requestedRole,
 			})
 			if createErr != nil {
 				log.Printf("CRITICAL: Failed to register user: %v", createErr)
@@ -226,10 +253,6 @@ func (h *Handler) handleContact(update tgbotapi.Update) {
 					String: newName,
 					Valid:  newName != "",
 				},
-				TelegramChatID: pgtype.Int8{
-					Int64: chatID,
-					Valid: true,
-				},
 				Role: newRole,
 			})
 			if updateErr == nil {
@@ -247,6 +270,68 @@ func (h *Handler) handleContact(update tgbotapi.Update) {
 	reply.ReplyMarkup = tgbotapi.NewRemoveKeyboard(true)
 
 	h.send(reply)
+}
+
+// handleDeletion is the last step of deleting an account from the /delete-account web page: the
+// number was typed in a browser, this is where it is proven and acted on.
+//
+// **two different questions have to be answered yes before a row goes.** the caller has already
+// asked the first - is this contact the sender's own - which is what makes any of this a proof
+// rather than a claim. the second is asked here: is it the *same* number that was typed on the
+// page. without it the field on that page would be decorative, and someone typing a stranger's
+// number would watch their own account disappear while believing they had deleted somebody else's.
+//
+// there is no confirmation step beyond the button itself. the page said what would be deleted, the
+// bot said it again above the button, and a third "are you sure" inside a flow whose only purpose is
+// deletion is a step people learn to tap through.
+func (h *Handler) handleDeletion(chatID int64, phone string, session auth.SessionData) {
+	if auth.NormalizePhone(phone) != session.Phone {
+		// not logged with either number in it: this is the branch a mistyped digit reaches, and both
+		// numbers here are somebody's personal data.
+		log.Printf("chat %d: deletion refused, the shared contact is not the number typed on the page", chatID)
+		h.SessionMgr.FinishDeletion(chatID, auth.DeletionMismatch)
+		h.sendFinal(chatID, "❌ Этот номер не совпадает с номером, который вы ввели на сайте. Аккаунт не удалён — начните заново.\n\n❌ Bu raqam saytda kiritgan raqamingizga mos kelmadi. Hisob o'chirilmadi — qaytadan boshlang.")
+		return
+	}
+
+	ctx, cancel := dbctx.WithTimeout(context.Background())
+	defer cancel()
+
+	// looked up by the raw number telegram sent, not by the normalized one, because that is exactly
+	// how the row was written at registration (see handleContact above). normalizing here would be a
+	// second, different idea of what this account's phone number is.
+	user, err := h.Queries.GetUserByPhone(ctx, phone)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// safe to say out loud *here* and nowhere else: the person reading it has just proved
+			// they own the number, so this tells them nothing they could not already find out.
+			log.Printf("chat %d: nothing to delete, no account for this number", chatID)
+			h.SessionMgr.FinishDeletion(chatID, auth.DeletionNoAccount)
+			h.sendFinal(chatID, "На этот номер аккаунт Domix не зарегистрирован — удалять нечего.\n\nBu raqamga Domix hisobi ro'yxatdan o'tkazilmagan — o'chiradigan narsa yo'q.")
+			return
+		}
+		log.Printf("CRITICAL: deletion lookup failed for chat %d: %v", chatID, err)
+		h.SessionMgr.FinishDeletion(chatID, auth.DeletionFailed)
+		h.sendFinal(chatID, "Не удалось выполнить запрос. Попробуйте позже.\n\nSo'rovni bajarib bo'lmadi. Keyinroq urinib ko'ring.")
+		return
+	}
+
+	// one statement takes the account, its shops and their products - the schema cascades, and this
+	// is the same query DELETE /api/me runs. see db/queries/users.sql.
+	if err := h.Queries.DeleteUser(ctx, user.ID); err != nil {
+		log.Printf("CRITICAL: failed to delete user %d: %v", user.ID, err)
+		h.SessionMgr.FinishDeletion(chatID, auth.DeletionFailed)
+		h.sendFinal(chatID, "Не удалось удалить аккаунт. Попробуйте позже.\n\nHisobni o'chirib bo'lmadi. Keyinroq urinib ko'ring.")
+		return
+	}
+
+	// the id and nothing else, exactly as endpoints.DeleteMe logs it. every other field on that row
+	// was the personal data the user just asked us to forget, and a log file is the one place nobody
+	// goes back to clean.
+	log.Printf("User %d deleted their account from the deletion page", user.ID)
+
+	h.SessionMgr.FinishDeletion(chatID, auth.DeletionDone)
+	h.sendFinal(chatID, "✅ Аккаунт Domix удалён вместе с магазинами и товарами. Восстановить его нельзя.\n\n✅ Domix hisobi do'konlar va mahsulotlar bilan birga o'chirildi. Uni tiklab bo'lmaydi.")
 }
 
 // maskPhone turns "+998901234567" into "+998*****4567" for the log.

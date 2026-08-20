@@ -1,0 +1,2898 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Domix · Админ-панель</title>
+<style>
+  /* ─────────────────────────────────────────────────────────────────────────────
+     A warm, flat palette. The phone app's tokens are cool grey on white with soft
+     shadows (core/constants/app_colors.dart); this is the same brand orange on a
+     warm neutral ramp with no shadows on content at all - separation comes from
+     fill, not from lift. Deliberately a different surface, not a different brand:
+     `--o` is the app's #FF6F00 unchanged.
+     ───────────────────────────────────────────────────────────────────────────── */
+  :root{
+    --beige:#E9DFD2; --shell:#FFFFFF; --surface:#FCFBFA;
+    --card:#F7F7F5; --card-hi:#FDEEDF; --line:#EFEEEB; --line-2:#E6E4E0;
+    --ink:#1A1A1A; --ink-2:#5F5F5A; --muted:#9A9A93; --faint:#B9B8B1;
+
+    --o:#FF6F00; --o-600:#F97316; --o-500:#FB8C3C; --o-400:#FDA968;
+    --o-300:#FDC48F; --o-200:#FEDCB6; --o-100:#FFEDD5; --o-50:#FFF7ED;
+
+    --green:#15803D; --green-bg:#DCFCE7; --red:#B91C1C; --red-bg:#FEE2E2;
+    --amber:#A16207; --amber-bg:#FEF3C7; --blue:#1D4ED8; --blue-bg:#DBEAFE;
+
+    --r-1:10px; --r-2:14px; --r-3:18px; --r-4:24px; --r-5:30px;
+    --ease:cubic-bezier(.22,1,.36,1);
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--beige);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    font-size:14.5px;line-height:1.5;-webkit-font-smoothing:antialiased;
+    letter-spacing:-.005em;
+  }
+  button,input,select,textarea{font:inherit;color:inherit}
+  [hidden]{display:none !important}
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+  ::selection{background:var(--o-200)}
+
+  /* ── login ── */
+  .login{min-height:100vh;display:grid;place-items:center;padding:24px}
+  .login-card{width:100%;max-width:420px;background:var(--shell);border-radius:var(--r-5);padding:40px 34px;text-align:center}
+  .brand{display:inline-flex;align-items:center;gap:11px;font-weight:750;font-size:20px;letter-spacing:-.03em;margin-bottom:26px}
+  .brand .mark{width:34px;height:34px;border-radius:11px;background:var(--o);display:grid;place-items:center;flex:none}
+  .brand .mark svg{width:19px;height:19px}
+  .login-card h1{font-size:23px;letter-spacing:-.03em;margin:0 0 8px;font-weight:750}
+  .login-card p{color:var(--ink-2);margin:0 0 26px;font-size:14.5px}
+  .hint{color:var(--faint);font-size:12.5px;margin-top:20px;line-height:1.6}
+
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:9px;border:0;
+    border-radius:var(--r-2);padding:13px 22px;font-weight:650;font-size:14.5px;cursor:pointer;
+    text-decoration:none;transition:background .16s var(--ease),transform .12s var(--ease),opacity .16s
+  }
+  .btn svg{width:17px;height:17px}
+  .btn-p{background:var(--o);color:#fff}
+  .btn-p:hover{background:#EA6600;transform:translateY(-1px)}
+  .btn-g{background:var(--card);color:var(--ink);border:1px solid var(--line-2)}
+  .btn-g:hover{background:var(--line)}
+  .btn-d{background:var(--red);color:#fff}
+  .btn-d:hover{background:#9c1717}
+  .btn:disabled{opacity:.5;cursor:default;transform:none}
+  .btn-w{width:100%}
+  .btn-s{padding:9px 15px;font-size:13.5px;border-radius:var(--r-1)}
+
+  .copy-row{display:flex;gap:8px;align-items:center;margin-top:13px;background:var(--card);border-radius:var(--r-2);padding:8px 8px 8px 14px}
+  .copy-row code{flex:1;min-width:0;font-size:12.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Menlo,monospace;text-align:left}
+  .copy-row button{flex:none;border:1px solid var(--line-2);background:var(--shell);border-radius:9px;padding:6px 12px;font-size:12.5px;font-weight:650;cursor:pointer}
+  .waiting{display:flex;align-items:center;justify-content:center;gap:10px;color:var(--ink-2);font-size:13.5px;margin-top:22px}
+  .spin{width:15px;height:15px;border:2px solid var(--o-200);border-top-color:var(--o);border-radius:50%;animation:sp .7s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .alert{display:flex;gap:10px;text-align:left;align-items:flex-start;background:var(--red-bg);color:var(--red);border-radius:var(--r-2);padding:12px 14px;font-size:13.5px;margin-top:18px}
+  .alert svg{width:17px;height:17px;flex:none;margin-top:2px}
+
+  /* ── shell ── */
+  .app{display:flex;min-height:calc(100vh - 28px);margin:14px;background:var(--shell);border-radius:var(--r-5);overflow:hidden}
+  aside{width:246px;flex:none;padding:26px 18px;display:flex;flex-direction:column;border-right:1px solid var(--line)}
+  aside .brand{margin:0 0 30px;padding-left:6px}
+  nav{display:flex;flex-direction:column;gap:4px}
+  nav button{
+    display:flex;align-items:center;gap:13px;width:100%;text-align:left;background:transparent;border:0;
+    color:var(--ink-2);padding:12px 15px;border-radius:var(--r-2);cursor:pointer;font-size:14.5px;font-weight:600;
+    transition:background .16s var(--ease),color .16s
+  }
+  nav button svg{width:19px;height:19px;flex:none;color:var(--muted);transition:color .16s}
+  nav button:hover{background:var(--card)}
+  nav button[aria-current]{background:var(--o);color:#fff}
+  nav button[aria-current] svg{color:#fff}
+  nav button[aria-current] .pip{background:rgba(255,255,255,.28);color:#fff}
+  nav .pip{margin-left:auto;font-size:11.5px;font-weight:700;background:var(--card);color:var(--muted);padding:2px 8px;border-radius:999px;min-width:24px;text-align:center}
+  /* the one pip that is a count of people waiting rather than a count of rows, so it is the one
+     allowed to be loud. the [aria-current] rule above is more specific and still wins, which is
+     what keeps the pip white while its own section is open. */
+  nav .pip.hot{background:var(--o);color:#fff}
+  .sep{height:1px;background:var(--line);margin:22px 6px}
+
+  main{flex:1;min-width:0;background:var(--surface);padding:26px 30px 44px}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:22px;margin-bottom:26px}
+  .top h1{font-size:29px;letter-spacing:-.035em;margin:0;font-weight:750}
+  .top .sub{color:var(--muted);font-size:13.5px;margin-top:1px}
+  .top-r{display:flex;align-items:center;gap:11px}
+  .field{position:relative;width:260px}
+  .field svg{position:absolute;right:14px;top:50%;transform:translateY(-50%);width:17px;height:17px;color:var(--faint);pointer-events:none}
+  .field input{width:100%;border:1px solid var(--line-2);background:var(--shell);border-radius:999px;padding:11px 42px 11px 17px;font-size:13.5px;outline:none;transition:border-color .16s,box-shadow .16s}
+  .field input:focus{border-color:var(--o-300);box-shadow:0 0 0 3px var(--o-50)}
+  .field input::placeholder{color:var(--faint)}
+  .ib{width:40px;height:40px;border-radius:50%;border:1px solid var(--line-2);background:var(--shell);display:grid;place-items:center;cursor:pointer;position:relative;
+      transition:background .16s var(--ease),border-color .16s,transform .11s var(--ease)}
+  .ib:hover{background:var(--card)}
+  /* the press has to move the control. a background swap alone is invisible on a 40px circle under
+     a fingertip, which is why the refresh button read as dead even while it was working. */
+  .ib:active{transform:scale(.88)}
+  .ib svg{width:18px;height:18px;color:var(--ink-2);transition:color .16s}
+  .ib:disabled{cursor:default}
+  .ib:disabled:not(.busy){opacity:.45}
+  .ib.busy{background:var(--o-50);border-color:var(--o-200);transform:none}
+  .ib.busy svg{color:var(--o);animation:sp .8s linear infinite}
+  .ib.dg:hover{background:var(--red-bg);border-color:#F1BDBD}
+  .ib.dg:hover svg{color:var(--red)}
+
+  /* ── cards ── */
+  .card{background:var(--card);border-radius:var(--r-4);padding:20px 22px}
+  .card.plain{background:var(--shell);border:1px solid var(--line)}
+  .card > header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:18px}
+  .card h2{font-size:16.5px;font-weight:750;letter-spacing:-.02em;margin:0}
+  .card .cap{font-size:12.5px;color:var(--muted);margin-top:3px}
+  .pill{
+    display:inline-flex;align-items:center;gap:7px;background:var(--o-100);color:#9A4A02;border:0;
+    padding:8px 14px;border-radius:var(--r-1);font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap
+  }
+  .pill.solid{background:var(--o);color:#fff}
+  .pill svg{width:14px;height:14px}
+  .legend{display:flex;gap:14px;font-size:12px;color:var(--ink-2);font-weight:600;flex-wrap:wrap}
+  .legend span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+  .legend i{width:9px;height:9px;border-radius:3px;display:block;flex:none}
+  .legend i.dash{width:14px;height:0;border-top:2px dashed var(--o-300);border-radius:0}
+
+  /* ── dashboard grid ── */
+  .dash{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
+  .kpi{grid-column:span 3}
+  .b4{grid-column:span 4}
+  .b8{grid-column:span 8}
+  .b12{grid-column:span 12}
+
+  .kpi{background:var(--card);border-radius:var(--r-4);padding:19px 20px}
+  .kpi.hi{background:var(--card-hi)}
+  .kpi .k-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:22px}
+  .kpi .k-lab{font-size:13.5px;font-weight:600;color:var(--ink-2)}
+  .kpi.hi .k-lab{color:#8A4302}
+  .kpi .k-ico{width:36px;height:36px;border-radius:12px;background:var(--shell);display:grid;place-items:center;flex:none}
+  .kpi.hi .k-ico{background:var(--o);}
+  .kpi .k-ico svg{width:17px;height:17px;color:var(--ink-2)}
+  .kpi.hi .k-ico svg{color:#fff}
+  .kpi .k-bot{display:flex;align-items:flex-end;justify-content:space-between;gap:10px}
+  .kpi .k-val{font-size:29px;font-weight:750;letter-spacing:-.04em;line-height:1}
+  .kpi .k-side{text-align:right}
+  .kpi .k-d{font-size:12.5px;font-weight:750}
+  .kpi .k-d.up{color:var(--green)}
+  .kpi .k-d.dn{color:var(--red)}
+  .kpi .k-d.fl{color:var(--muted)}
+  .kpi .k-note{font-size:11px;color:var(--muted);margin-top:1px}
+
+  .card .foot{margin-top:16px;padding-top:14px;border-top:1px solid var(--line-2);font-size:12.5px;color:var(--ink-2);font-weight:600}
+
+  /* the markets card: ring on the left, numbers on the right, one subject */
+  .split{display:flex;gap:24px;align-items:flex-start}
+  .split .ring{flex:none}
+  .split .tbl{flex:1;min-width:0}
+  .swatch{width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:9px;vertical-align:middle}
+
+  .chart{position:relative;width:100%}
+  .chart svg{display:block;width:100%}
+  .tip{
+    position:absolute;pointer-events:none;opacity:0;transform:translate(-50%,-116%);
+    background:var(--shell);border:1px solid var(--line-2);border-radius:var(--r-1);padding:8px 12px;
+    font-size:12.5px;white-space:nowrap;box-shadow:0 8px 22px rgba(60,50,40,.13);transition:opacity .12s;z-index:5;line-height:1.5
+  }
+  .tip .t-d{color:var(--muted);font-size:11px;font-weight:650;display:block;margin-bottom:3px}
+  .tip .t-r{display:flex;align-items:center;gap:7px;font-weight:650}
+  .tip .t-r i{width:8px;height:8px;border-radius:2px;flex:none}
+
+  /* donut */
+  .donut{position:relative;margin:0 auto;width:196px;height:196px}
+  .donut .d-mid{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
+  .donut .d-mid span{font-size:11.5px;color:var(--muted);font-weight:600;display:block}
+  .donut .d-mid b{font-size:23px;font-weight:750;letter-spacing:-.03em;display:block;margin-top:2px}
+
+  /* progress rows */
+  .prows{display:flex;flex-direction:column;gap:15px}
+  .prow .pl{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:7px}
+  .prow .pn{font-size:13.5px;font-weight:600}
+  .prow .pv{font-size:13px;font-weight:750}
+  .prow .pt{height:8px;border-radius:99px;background:var(--o-100);overflow:hidden}
+  .prow .pt i{display:block;height:100%;border-radius:99px;background:var(--o);transition:width .55s var(--ease)}
+
+  .flist{display:flex;flex-direction:column;gap:13px}
+  .flist .fr{display:flex;align-items:center;gap:10px;font-size:13.5px}
+  .flist .fr i{width:10px;height:10px;border-radius:3px;flex:none}
+  .flist .fr .fk{color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .flist .fr .fv{margin-left:auto;font-weight:750;padding-left:12px}
+
+  /* ── tables ── */
+  .bar{display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+  .search{position:relative;flex:1;min-width:230px;max-width:400px}
+  .search svg{position:absolute;left:15px;top:50%;transform:translateY(-50%);width:17px;height:17px;color:var(--faint)}
+  .search input{width:100%;border:1px solid var(--line-2);background:var(--shell);border-radius:var(--r-2);padding:12px 15px 12px 42px;font-size:14px;outline:none;transition:border-color .16s,box-shadow .16s}
+  .search input:focus{border-color:var(--o-300);box-shadow:0 0 0 3px var(--o-50)}
+  .search input::placeholder{color:var(--faint)}
+  .count{font-size:13px;color:var(--muted);font-weight:600;margin-left:auto}
+
+  .tbl{background:var(--shell);border:1px solid var(--line);border-radius:var(--r-4);overflow:hidden}
+  .scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  thead th{
+    text-align:left;font-size:11px;font-weight:750;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
+    padding:13px 16px;background:var(--card);border-bottom:1px solid var(--line);white-space:nowrap;user-select:none
+  }
+  thead th.s{cursor:pointer}
+  thead th.s:hover{color:var(--ink-2)}
+  thead th .ar{opacity:0;margin-left:4px;font-size:9px}
+  thead th[data-dir] .ar{opacity:1;color:var(--o)}
+  tbody td{padding:13px 16px;border-bottom:1px solid var(--line);vertical-align:middle}
+  tbody tr:last-child td{border-bottom:0}
+  tbody tr:hover{background:var(--o-50)}
+  th.r{text-align:right}
+  td.r{text-align:right;white-space:nowrap}
+  .b{font-weight:650}
+  /* name and its "новых" tag on one line, so the tag reads as part of the name rather than as a
+     second row of its own */
+  .b-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+  /* an unread conversation, marked on the row itself. an inset shadow rather than a border-left,
+     because a border changes the cell's width and would shift the whole column by 3px the moment a
+     message arrived - visible as the table twitching under a poll. */
+  tbody tr.nw td:first-child{box-shadow:inset 3px 0 0 var(--o)}
+  tbody tr.nw .b{font-weight:750}
+
+  .d{color:var(--muted)}
+  .mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,Menlo,monospace;font-size:12.5px}
+  .idc{color:var(--faint);font-size:12px;font-variant-numeric:tabular-nums}
+
+  .tag{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:4px 9px;border-radius:999px;white-space:nowrap}
+  .tag.g{background:var(--card);color:var(--muted);border:1px solid var(--line-2)}
+  .tag.o{background:var(--o-100);color:#9A4A02}
+  .tag.bl{background:var(--blue-bg);color:var(--blue)}
+  .tag.gr{background:var(--green-bg);color:var(--green)}
+  .tag.rd{background:var(--red-bg);color:var(--red)}
+  .tag.am{background:var(--amber-bg);color:var(--amber)}
+  .tag.vip{background:var(--o);color:#fff}
+
+  .prog{display:flex;align-items:center;gap:9px;min-width:118px}
+  .prog .t{flex:1;height:6px;background:var(--o-100);border-radius:99px;overflow:hidden}
+  .prog .t i{display:block;height:100%;border-radius:99px;background:var(--o)}
+  .prog .p{font-size:11.5px;font-weight:750;color:var(--ink-2);min-width:32px;text-align:right;font-variant-numeric:tabular-nums}
+
+  .acts{display:inline-flex;gap:6px}
+  .ia{width:31px;height:31px;border:1px solid var(--line-2);background:var(--shell);border-radius:9px;display:grid;place-items:center;cursor:pointer;color:var(--muted);transition:all .14s}
+  .ia:hover{color:var(--o);border-color:var(--o-300);background:var(--o-50)}
+  .ia.dg:hover{color:var(--red);border-color:#F1BDBD;background:var(--red-bg)}
+  .ia svg{width:15px;height:15px}
+  .ia:disabled{opacity:.35;cursor:not-allowed}
+  .ia:disabled:hover{color:var(--muted);border-color:var(--line-2);background:var(--shell)}
+
+  .empty{padding:54px 24px;text-align:center;color:var(--muted)}
+  .empty .bx{width:54px;height:54px;border-radius:17px;background:var(--card);display:grid;place-items:center;margin:0 auto 14px}
+  .empty .bx svg{width:23px;height:23px;color:var(--faint)}
+  .empty b{display:block;color:var(--ink);font-size:15.5px;font-weight:700;margin-bottom:5px}
+  .empty p{margin:0;font-size:13.5px}
+  .skel{padding:44px;text-align:center;color:var(--faint);font-size:13.5px}
+
+  /* ── modal / drawer ── */
+  .scrim{position:fixed;inset:0;background:rgba(45,38,30,.4);backdrop-filter:blur(2px);display:grid;place-items:center;padding:24px;z-index:50;opacity:0;animation:fd .18s var(--ease) forwards}
+  @keyframes fd{to{opacity:1}}
+  .modal{width:100%;max-width:456px;background:var(--shell);border-radius:var(--r-5);padding:26px;transform:scale(.97);animation:pp .22s var(--ease) forwards;max-height:88vh;overflow-y:auto}
+  .modal.lg{max-width:900px}
+  .modal.md{max-width:560px}
+  @keyframes pp{to{transform:scale(1)}}
+  .modal .m-ico{width:46px;height:46px;border-radius:15px;display:grid;place-items:center;margin-bottom:16px}
+  .modal .m-ico svg{width:22px;height:22px}
+  .modal .m-ico.dg{background:var(--red-bg);color:var(--red)}
+  .modal .m-ico.o{background:var(--o-100);color:var(--o-600)}
+  .modal h3{margin:0 0 7px;font-size:19px;font-weight:750;letter-spacing:-.025em}
+  .modal .m-sub{margin:0;color:var(--ink-2);font-size:14px}
+  .modal ul.names{margin:14px 0 0;padding:14px 16px;background:var(--card);border-radius:var(--r-2);list-style:none;font-size:13.5px}
+  .modal ul.names li{position:relative;padding-left:17px;margin-bottom:6px}
+  .modal ul.names li:last-child{margin-bottom:0}
+  .modal ul.names li::before{content:"";position:absolute;left:4px;top:8px;width:5px;height:5px;border-radius:50%;background:var(--o)}
+  .modal .m-acts{display:flex;gap:10px;position:sticky;bottom:0;z-index:2;
+                 margin:22px -26px -26px;padding:16px 26px 26px;background:var(--shell)}
+  .modal .m-acts .btn{flex:1}
+  .warn{display:flex;gap:10px;align-items:flex-start;background:var(--amber-bg);color:var(--amber);border-radius:var(--r-2);padding:12px 14px;font-size:13px;margin-top:14px}
+  .warn svg{width:16px;height:16px;flex:none;margin-top:2px}
+
+  .form{display:flex;flex-direction:column;gap:14px;margin-top:20px}
+  .form label{display:block}
+  .form .lb{font-size:12px;font-weight:700;color:var(--ink-2);margin-bottom:6px;display:block}
+  .form input,.form select{width:100%;border:1px solid var(--line-2);background:var(--shell);border-radius:var(--r-1);padding:11px 13px;font-size:14px;outline:none;transition:border-color .16s,box-shadow .16s}
+  .form input:focus,.form select:focus{border-color:var(--o-300);box-shadow:0 0 0 3px var(--o-50)}
+  .form input:disabled{background:var(--card);color:var(--muted);cursor:not-allowed}
+  .form .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .form .locked{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted);margin-top:5px}
+  .form .locked svg{width:13px;height:13px}
+
+  /* ── support thread ──
+     the conversation is drawn as chat bubbles rather than as another table, and that is not
+     decoration: the founder is answering a person, and a table of rows invites the same clipped
+     tone a spreadsheet does. it also has to look like what the user is looking at on their phone,
+     since both halves of a misunderstanding start here.
+
+     **it is a chat window, not a form dialog, and the layout is what makes that true.** the modal
+     is a flex column that does NOT scroll - the conversation scrolls inside it - so the header and
+     the composer are always on screen at their full height. built the other way (the shared modal
+     body scrolling, with the sticky `.m-acts` row at the bottom) that row's opaque background
+     painted over the textarea's bottom border, which read as a field with a missing edge.
+     it also has no «Закрыть» button: the × in the header closes it, and the row it used to occupy
+     is now the composer's. */
+  .modal.chatm{max-width:640px;min-height:min(560px,88vh);max-height:min(88vh,780px);
+               padding:0;overflow:hidden;display:flex;flex-direction:column}
+
+  .chat-head{flex:none;display:flex;align-items:center;gap:13px;padding:17px 22px;
+             border-bottom:1px solid var(--line)}
+  /* initials rather than the message glyph the rest of the panel uses for this section: inside the
+     thread the question is *who*, and the icon already said "support" on the way in */
+  .chat-head .av{flex:none;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;
+                 background:var(--o-100);color:var(--o-600);font-size:15px;font-weight:750}
+  .chat-head .who{flex:1;min-width:0}
+  .chat-head .who b{display:block;font-size:16.5px;font-weight:750;letter-spacing:-.02em;
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chat-head .who span{display:block;margin-top:2px;font-size:12.5px;color:var(--muted)}
+  .chat-head .x{flex:none;width:36px;height:36px;border:0;background:transparent;border-radius:50%;
+                display:grid;place-items:center;cursor:pointer;color:var(--muted);
+                transition:background .16s,color .16s,transform .12s}
+  .chat-head .x:hover{background:var(--card);color:var(--ink)}
+  .chat-head .x:active{transform:scale(.9)}
+  .chat-head .x svg{width:18px;height:18px}
+
+  /* the one recessed surface on the page, and it earns it here: the conversation has to read as a
+     different kind of thing from the chrome above and below it, and a min-height keeps a two-message
+     thread from collapsing into a strip */
+  /* `min-height:0` and not a pixel floor: a flex item refuses to shrink past its content without
+     it, so on a short window the conversation would have pushed the composer out of the bottom of
+     an `overflow:hidden` modal. the floor lives on .chatm above, where shrinking is safe. */
+  .chat{flex:1 1 auto;min-height:0;overflow-y:auto;padding:18px 22px;background:var(--card);
+        display:flex;flex-direction:column;gap:9px}
+  .chat .skel{margin:auto;padding:0}
+  /* a support thread is answered over days, so without this two messages a week apart sit against
+     each other as though they were one exchange */
+  .chat-day{align-self:center;margin:5px 0 3px;padding:3px 11px;border-radius:999px;
+            background:var(--line);color:var(--ink-2);font-size:11px;font-weight:700}
+
+  /* pre-wrap keeps the user's own line breaks - people write support messages as lists - and
+     overflow-wrap is what stops a pasted url from widening the modal past the screen */
+  .msg{max-width:72%;padding:9px 13px 7px;border-radius:var(--r-2);font-size:14px;line-height:1.45;
+       white-space:pre-wrap;overflow-wrap:anywhere}
+  .msg.them{align-self:flex-start;background:var(--shell);border:1px solid var(--line-2);border-bottom-left-radius:6px}
+  .msg.us{align-self:flex-end;background:var(--o);color:#fff;border-bottom-right-radius:6px}
+  /* a run of messages from one side is one turn, so they close up. the gap between turns stays */
+  .msg.seq{margin-top:-5px}
+  /* the day chip carries the date, so a bubble only needs the clock - and right-aligned it reads as
+     the end of the message rather than as a second line of it */
+  .msg .t{display:block;margin-top:3px;text-align:right;font-size:10.5px;font-weight:600;opacity:.55}
+
+  .chat-foot{flex:none;padding:14px 22px 18px;border-top:1px solid var(--line);background:var(--shell)}
+  .reply{display:flex;gap:10px;align-items:flex-end}
+  /* no placeholder on the field itself - the hint below says what Ctrl+Enter does without sitting
+     inside the box the answer is typed into. 92px is four lines: these replies are paragraphs. */
+  .reply textarea{flex:1;resize:none;min-height:92px;max-height:210px;border:1px solid var(--line-2);
+                  background:var(--shell);border-radius:var(--r-2);padding:13px 15px;font-size:14px;
+                  line-height:1.5;outline:none;transition:border-color .16s,box-shadow .16s}
+  .reply textarea:focus{border-color:var(--o-300);box-shadow:0 0 0 3px var(--o-50)}
+  .reply .btn{flex:0 0 auto;height:46px}
+  .reply-hint{margin-top:9px;text-align:right;font-size:11.5px;color:var(--faint)}
+
+  /* ── map picker ─────────────────────────────────────────────────────────────
+     hand-rolled rather than Leaflet-from-a-CDN, for the same reason every string
+     on this page goes through textContent: the admin's JWT is in localStorage,
+     and a third-party <script> tag would hand whoever controls that CDN the
+     ability to read it. tiles are <img>s - an image cannot reach localStorage -
+     so the pictures come from OpenStreetMap and the code does not.
+     ─────────────────────────────────────────────────────────────────────────── */
+  .mapx-find{display:flex;gap:8px;margin-bottom:8px}
+  .mapx-find input{flex:1;min-width:0}
+  .mapx-find button{flex:none;padding:0 15px;border:1px solid var(--line-2);background:var(--card);border-radius:var(--r-1);font-size:13px;font-weight:650;cursor:pointer;white-space:nowrap}
+  .mapx-find button:hover{background:var(--line)}
+  .mapx-find button:disabled{opacity:.5;cursor:default}
+  .mapx-frame{position:relative;height:240px;border-radius:var(--r-2);overflow:hidden;border:1px solid var(--line-2);
+              background:#E8E4DC;cursor:grab;touch-action:none;user-select:none}
+  .mapx-frame.drag{cursor:grabbing}
+  .mapx-layer{position:absolute;inset:0}
+  .mapx-tile{position:absolute;top:0;left:0;width:256px;height:256px;pointer-events:none;opacity:0;transition:opacity .2s}
+  .mapx-tile.on{opacity:1}
+  /* a 0-radius corner rotated -45° puts the teardrop's point at the anchor, so the pin marks the
+     coordinate rather than hovering near it */
+  .mapx-pin{position:absolute;width:0;height:0;pointer-events:none;z-index:3}
+  .mapx-pin i{position:absolute;left:-13px;top:-31px;width:26px;height:26px;background:var(--o);
+              border:2.5px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+              box-shadow:0 3px 9px rgba(60,40,20,.42)}
+  .mapx-zoom{position:absolute;right:10px;bottom:10px;z-index:4;display:flex;flex-direction:column;gap:1px;
+             border-radius:9px;overflow:hidden;box-shadow:0 2px 8px rgba(60,40,20,.28)}
+  .mapx-zoom button{width:30px;height:30px;border:0;background:#fff;color:var(--ink);font-size:17px;font-weight:700;
+                    line-height:1;cursor:pointer;display:grid;place-items:center}
+  .mapx-zoom button:hover{background:var(--card)}
+  .mapx-zoom button:disabled{color:var(--faint);cursor:default;background:#fff}
+  .mapx-attr{position:absolute;left:0;bottom:0;z-index:4;background:rgba(255,255,255,.84);font-size:10px;
+             padding:2px 7px;border-top-right-radius:7px;color:var(--ink-2)}
+  .mapx-attr a{color:inherit}
+  .mapx-tip{font-size:11.5px;color:var(--muted);margin-top:7px;line-height:1.5}
+
+  .toasts{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:60;display:flex;flex-direction:column;gap:8px;align-items:center}
+  .toast{display:flex;align-items:center;gap:10px;background:var(--ink);color:#fff;padding:12px 18px;border-radius:var(--r-2);font-size:13.5px;font-weight:600;animation:rs .24s var(--ease)}
+  @keyframes rs{from{opacity:0;transform:translateY(9px)}}
+  .toast.bad{background:var(--red)}
+  .toast svg{width:17px;height:17px;flex:none}
+
+  @media (max-width:1240px){
+    .kpi{grid-column:span 6}
+    .b4,.b8{grid-column:span 12}
+  }
+  @media (max-width:900px){
+    .app{flex-direction:column;margin:8px}
+    aside{width:100%;border-right:0;border-bottom:1px solid var(--line);padding:14px;flex-direction:row;align-items:center;gap:12px;overflow-x:auto}
+    aside .brand{margin:0}
+    nav{flex-direction:row;gap:4px}
+    nav button{padding:10px 12px;white-space:nowrap}
+    nav button .lb2{display:none}
+    nav .pip{display:none}
+    .sep{display:none}
+    main{padding:18px 16px 36px}
+    .kpi,.b4,.b8{grid-column:span 12}
+    .split{flex-direction:column}
+    .split .ring{align-self:center}
+    .top{flex-wrap:wrap}
+    .field{width:100%;order:3}
+  }
+</style>
+</head>
+<body>
+
+<!-- ═════════════ login ═════════════ -->
+<div class="login" id="login">
+  <div class="login-card">
+    <div class="brand">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></span>
+      Domix
+    </div>
+    <h1>Админ-панель</h1>
+    <p>Вход через Telegram — тот же способ, что и в приложении.</p>
+
+    <div id="l-start">
+      <button class="btn btn-p btn-w" id="l-go">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+        Войти через Telegram
+      </button>
+    </div>
+
+    <div id="l-wait" hidden>
+      <a class="btn btn-p btn-w" id="l-link" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+        Открыть Telegram
+      </a>
+      <div class="copy-row"><code id="l-url"></code><button type="button" id="l-copy">Копировать</button></div>
+      <div class="waiting"><span class="spin"></span><span>Ожидание подтверждения…</span></div>
+      <p class="hint">В Telegram нажмите <b>START</b>, затем «Поделиться номером». Ссылка действует 10 минут.</p>
+    </div>
+
+    <div id="l-err" hidden></div>
+  </div>
+</div>
+
+<!-- ═════════════ panel ═════════════ -->
+<div class="app" id="app" hidden>
+  <aside>
+    <div class="brand">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></span>
+      Domix
+    </div>
+    <nav id="nav"></nav>
+
+  </aside>
+
+  <main>
+    <div class="top">
+      <div>
+        <h1 id="pg-title">Обзор</h1>
+        <div class="sub" id="pg-sub">—</div>
+      </div>
+      <div class="top-r">
+        <div class="field">
+          <input type="search" id="q-global" placeholder="Магазин, товар, пользователь…" autocomplete="off">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        </div>
+        <button class="ib" id="refresh" title="Обновить">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+        </button>
+        <button class="ib dg" id="l-out" title="Выйти">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <section id="v-dash"><div class="dash" id="dash"></div></section>
+
+    <section id="v-anomalies" hidden>
+      <div class="bar">
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="search" id="q-anom" placeholder="Товар или магазин" autocomplete="off">
+        </div>
+        <button class="pill" id="an-th" type="button"></button>
+        <div class="count" id="c-anom"></div>
+      </div>
+      <div class="tbl"><div class="scroll"><table id="t-anom">
+        <thead><tr>
+          <th class="s" data-key="deviation_percent">Отклонение<span class="ar">▼</span></th>
+          <th class="s" data-key="name">Товар<span class="ar">▼</span></th>
+          <th class="s" data-key="shop_name">Магазин<span class="ar">▼</span></th>
+          <th class="s" data-key="price">Цена<span class="ar">▼</span></th>
+          <th class="s" data-key="median_price">Медиана рынка<span class="ar">▼</span></th>
+          <th>Магазинов</th><th></th>
+        </tr></thead><tbody></tbody></table></div><div id="s-anom"></div></div>
+    </section>
+
+    <section id="v-support" hidden>
+      <div class="bar">
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="search" id="q-support" placeholder="Имя, телефон или текст сообщения" autocomplete="off">
+        </div>
+        <div class="count" id="c-support"></div>
+      </div>
+      <div class="tbl"><div class="scroll"><table id="t-support">
+        <thead><tr>
+          <th class="s" data-key="name">Пользователь<span class="ar">▼</span></th>
+          <th>Последнее сообщение</th>
+          <th class="s" data-key="last_at">Когда<span class="ar">▼</span></th>
+          <th class="s" data-key="unanswered">Ждёт ответа<span class="ar">▼</span></th>
+          <th></th>
+        </tr></thead><tbody></tbody></table></div><div id="s-support"></div></div>
+    </section>
+
+    <section id="v-users" hidden>
+      <div class="bar">
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="search" id="q-users" placeholder="Имя, телефон или ID" autocomplete="off">
+        </div>
+        <div class="count" id="c-users"></div>
+      </div>
+      <div class="tbl"><div class="scroll"><table id="t-users">
+        <thead><tr>
+          <th class="s" data-key="id">ID<span class="ar">▼</span></th>
+          <th class="s" data-key="name">Пользователь<span class="ar">▼</span></th>
+          <th class="s" data-key="role">Роль<span class="ar">▼</span></th>
+          <th class="s" data-key="shop_count">Магазины<span class="ar">▼</span></th>
+          <th class="s" data-key="created_at">Регистрация<span class="ar">▼</span></th>
+          <th></th>
+        </tr></thead><tbody></tbody></table></div><div id="s-users"></div></div>
+    </section>
+
+    <section id="v-shops" hidden>
+      <div class="bar">
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="search" id="q-shops" placeholder="Название, адрес, владелец или ID" autocomplete="off">
+        </div>
+        <div class="count" id="c-shops"></div>
+      </div>
+      <div class="tbl"><div class="scroll"><table id="t-shops">
+        <thead><tr>
+          <th class="s" data-key="id">ID<span class="ar">▼</span></th>
+          <th class="s" data-key="name">Магазин<span class="ar">▼</span></th>
+          <th class="s" data-key="category">Категория<span class="ar">▼</span></th>
+          <th class="s" data-key="owner_name">Владелец<span class="ar">▼</span></th>
+          <th class="s" data-key="progress">Каталог<span class="ar">▼</span></th>
+          <th class="s" data-key="price_index">Индекс<span class="ar">▼</span></th>
+          <th class="s" data-key="vip">VIP<span class="ar">▼</span></th>
+          <th></th>
+        </tr></thead><tbody></tbody></table></div><div id="s-shops"></div></div>
+    </section>
+
+    <section id="v-templates" hidden><div id="tpl-list"></div></section>
+  </main>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+"use strict";
+(function () {
+
+var TOKEN_KEY = "domix.admin.token";
+
+// the graduated orange ramp the charts read from, darkest first. a donut of twelve identical
+// oranges is unreadable and a donut of twelve *hues* stops looking like one brand, so segments are
+// ordered by size and shaded along one ramp - position in the ramp carries the ranking.
+var RAMP = ["#FF6F00","#FB8C3C","#FDA968","#FDC48F","#FEDCB6","#FFEDD5"];
+var C = { o:"#FF6F00", o3:"#FDC48F", o1:"#FFEDD5", line:"#EFEEEB", muted:"#9A9A93", faint:"#B9B8B1",
+          green:"#15803D", red:"#B91C1C", ink:"#1A1A1A" };
+
+function shade(i, n) {
+  if (n <= 1) return RAMP[0];
+  var t = (i / (n - 1)) * (RAMP.length - 1);
+  var lo = Math.floor(t), hi = Math.min(lo + 1, RAMP.length - 1), f = t - lo;
+  function ch(a, b) { return Math.round(parseInt(a, 16) + (parseInt(b, 16) - parseInt(a, 16)) * f); }
+  var A = RAMP[lo].slice(1), B = RAMP[hi].slice(1);
+  return "rgb(" + ch(A.slice(0,2),B.slice(0,2)) + "," + ch(A.slice(2,4),B.slice(2,4)) + "," + ch(A.slice(4,6),B.slice(4,6)) + ")";
+}
+
+var SHOP_CATS = { universal:"Универсальный", plumbing:"Сантехника", wood:"Древесные материалы", wallpaper:"Обои" };
+var PRODUCT_CATS = { mixes:"Смеси", blocks:"Блоки", lumber:"Пиломатериалы", metal:"Металл", fasteners:"Крепёж",
+  roofing:"Кровля", insulation:"Изоляция", electrical:"Электрика", plumbing:"Сантехника",
+  paints:"Краски", finishing:"Отделка", tools:"Инструменты" };
+var ROLES = { customer:"Покупатель", shop_owner:"Владелец магазина", admin:"Администратор" };
+var AVAIL = { in_stock:"В наличии", on_order:"Под заказ", unavailable:"Нет в наличии" };
+
+var state = {
+  token:null, me:null, stats:null, users:null, shops:null, anomalies:null, templates:null, support:null,
+  view:"dash", threshold:0.5,
+  q:{ users:"", shops:"", anom:"", support:"" },
+  sort:{ users:{key:"created_at",dir:-1}, shops:{key:"created_at",dir:-1}, anom:{key:"deviation_percent",dir:-1},
+         support:{key:"last_at",dir:-1} },
+  poll:null
+};
+
+// ── dom helpers. every user-supplied string goes through textContent, never innerHTML: the admin's
+// token lives in localStorage, so a shop named `<img onerror=…>` rendered as html would hand it away.
+function $(s){ return document.querySelector(s); }
+function $$(s){ return Array.prototype.slice.call(document.querySelectorAll(s)); }
+function el(t, c, x){ var n=document.createElement(t); if(c)n.className=c; if(x!==undefined&&x!==null)n.textContent=String(x); return n; }
+function sv(t, a){ var n=document.createElementNS("http://www.w3.org/2000/svg",t); for(var k in a) if(a[k]!==undefined&&a[k]!==null) n.setAttribute(k,a[k]); return n; }
+function ico(paths, size){ var s=sv("svg",{viewBox:"0 0 24 24",fill:"none",stroke:"currentColor","stroke-width":"2","stroke-linecap":"round","stroke-linejoin":"round",width:size||18,height:size||18}); paths.forEach(function(d){ s.appendChild(sv("path",{d:d})); }); return s; }
+function clear(n){ while(n.firstChild) n.removeChild(n.firstChild); }
+
+function nf(n){ return Number(n||0).toLocaleString("ru-RU"); }
+function money(n){ return nf(n)+" сум"; }
+function pct(a,b){ return b>0 ? Math.round(a/b*100) : 0; }
+function sdate(iso){ if(!iso) return "—"; var d=new Date(iso); if(isNaN(d)) return "—";
+  return String(d.getDate()).padStart(2,"0")+"."+String(d.getMonth()+1).padStart(2,"0")+"."+d.getFullYear(); }
+function dlab(y){ var p=String(y).split("-"); return p.length===3 ? p[2]+"."+p[1] : y; }
+// a support message needs the clock as well as the day - "сегодня в 14:20" is what tells the
+// founder whether somebody is still sitting there waiting
+function clock(iso){ var d=new Date(iso); if(isNaN(d)) return "";
+  return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
+function stamp(iso){ if(!iso) return "—"; if(isNaN(new Date(iso))) return "—"; return sdate(iso)+" "+clock(iso); }
+// which calendar day a message belongs to, and what to call it. anything older than yesterday gets
+// its date, which is the point at which "вчера" stops being information.
+function dayKey(iso){ var d=new Date(iso); return isNaN(d) ? "" : d.toDateString(); }
+function dayLabel(iso){
+  var d=new Date(iso); if(isNaN(d)) return "";
+  var then=new Date(d.getFullYear(),d.getMonth(),d.getDate()), n=new Date();
+  var diff=Math.round((new Date(n.getFullYear(),n.getMonth(),n.getDate())-then)/86400000);
+  return diff===0 ? "Сегодня" : diff===1 ? "Вчера" : sdate(iso);
+}
+// "Азиз рихсиев" -> "АР". one word gives its first two letters; nothing gives a dash rather than an
+// empty circle, since a blank avatar reads as a failed image.
+function initials(name){
+  var parts = String(name||"").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "—";
+  if (parts.length === 1) return parts[0].slice(0,2).toUpperCase();
+  return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
+}
+function catName(c){ return SHOP_CATS[c]||c; }
+function pcatName(c){ return PRODUCT_CATS[c]||c; }
+function roleName(c){ return ROLES[c]||c; }
+
+var ICONS = {
+  dash:["M4 4h6v8H4z","M14 4h6v5h-6z","M14 13h6v7h-6z","M4 16h6v4H4z"],
+  anom:["M12 9v4","M12 17h.01","M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"],
+  users:["M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2","M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z","M22 21v-2a4 4 0 0 0-3-3.87"],
+  shops:["M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z","M15 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"],
+  tpl:["M4 4h16v5H4z","M4 13h7v7H4z","M15 13h5v7h-5z"],
+  box:["M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z","m3.3 7 8.7 5 8.7-5","M12 22V12"],
+  scale:["M3 3v16a2 2 0 0 0 2 2h16","m19 9-5 5-4-4-3 3"],
+  edit:["M12 20h9","M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"],
+  trash:["M3 6h18","M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6","M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2","M10 11v6","M14 11v6"],
+  crown:["m5 16-3-9 5.5 4L12 4l4.5 7L22 7l-3 9Z","M5 20h14"],
+  grid:["M3 3h7v7H3z","M14 3h7v7h-7z","M14 14h7v7h-7z","M3 14h7v7H3z"],
+  sync:["M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8","M21 3v5h-5","M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16","M8 16H3v5"],
+  ok:["M20 6 9 17l-5-5"],
+  lock:["M5 11h14v10H5z","M8 11V7a4 4 0 0 1 8 0v4"],
+  search:["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z","m21 21-4.3-4.3"],
+  chat:["M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"],
+  x:["M18 6 6 18","m6 6 12 12"],
+  send:["m22 2-7 20-4-9-9-4Z","M22 2 11 13"]
+};
+
+// ── api ──
+function api(path, opts) {
+  opts = opts || {};
+  var h = opts.headers || {};
+  if (state.token) h["Authorization"] = "Bearer " + state.token;
+  if (opts.body) h["Content-Type"] = "application/json";
+  return fetch(path, { method: opts.method || "GET", headers: h, body: opts.body })
+    .then(function (res) {
+      return res.json().catch(function(){ return {}; }).then(function (b) {
+        if (res.ok) return b;
+        var e = new Error(b.error || res.statusText || "request failed");
+        e.status = res.status; e.code = b.code; throw e;
+      });
+    });
+}
+
+function toast(msg, bad) {
+  var t = el("div", "toast" + (bad ? " bad" : ""));
+  t.appendChild(ico(bad ? ICONS.anom : ICONS.ok, 17));
+  t.appendChild(el("span", null, msg));
+  $("#toasts").appendChild(t);
+  setTimeout(function(){ t.style.transition="opacity .25s"; t.style.opacity="0"; setTimeout(function(){ t.remove(); },260); }, 3200);
+}
+
+// ── login ──
+function loginError(title, detail) {
+  var box = $("#l-err"); clear(box); box.hidden = false;
+  var a = el("div","alert"); a.appendChild(ico(ICONS.anom,17));
+  var t = el("div"); t.appendChild(el("b",null,title));
+  if (detail) { t.appendChild(document.createElement("br")); t.appendChild(el("span",null,detail)); }
+  a.appendChild(t); box.appendChild(a);
+}
+
+function startLogin() {
+  var b = $("#l-go"); b.disabled = true; $("#l-err").hidden = true;
+  // role "customer" deliberately: /api/auth/init maps anything that is not shop_owner to customer,
+  // so nothing sent from here can grant anything. the role check happens against /api/me below.
+  api("/api/auth/init", { method:"POST", body: JSON.stringify({ name:"Domix Admin", role:"customer" }) })
+    .then(function (d) {
+      $("#l-start").hidden = true; $("#l-wait").hidden = false;
+      $("#l-link").href = d.telegram_url; $("#l-url").textContent = d.telegram_url;
+      window.open(d.telegram_url, "_blank", "noopener");
+      poll(d.session_id, 0);
+    })
+    .catch(function (e) {
+      b.disabled = false;
+      loginError("Не удалось начать вход", e.status === 429 ? "Слишком много попыток. Подождите минуту." : (e.message||""));
+    });
+}
+
+function poll(sid, n) {
+  if (n > 150) { resetLogin(); loginError("Время ожидания вышло","Ссылка больше не действует — начните заново."); return; }
+  api("/api/auth/status?session_id=" + encodeURIComponent(sid)).then(function (d) {
+    if (d.status === "success" && d.token) return adopt(d.token);
+    if (d.status === "not_found") { resetLogin(); loginError("Сессия истекла","Начните вход заново."); return; }
+    state.poll = setTimeout(function(){ poll(sid, n+1); }, 2000);
+  }).catch(function(){ state.poll = setTimeout(function(){ poll(sid, n+1); }, 2500); });
+}
+
+function resetLogin(){ $("#l-wait").hidden = true; $("#l-start").hidden = false; $("#l-go").disabled = false; }
+
+function adopt(token) {
+  state.token = token;
+  return api("/api/me").then(function (me) {
+    if (me.role !== "admin") {
+      state.token = null; try{ localStorage.removeItem(TOKEN_KEY); }catch(e){}
+      resetLogin();
+      loginError("Вы не администратор — доступ запрещён");
+      return;
+    }
+    try{ localStorage.setItem(TOKEN_KEY, token); }catch(e){}
+    state.me = me; enter();
+  }).catch(function (e) {
+    state.token = null; try{ localStorage.removeItem(TOKEN_KEY); }catch(err){}
+    resetLogin(); loginError("Не удалось проверить аккаунт", e.message||"");
+  });
+}
+
+function signOut(reason) {
+  if (state.poll) clearTimeout(state.poll);
+  // the loop reads state.token and stops on its own, but a timer left running past a sign-out is
+  // one nobody restarts correctly on the next login
+  if (live.timer) { clearInterval(live.timer); live.timer = null; }
+  live.thread = null;
+  state.token=null; state.me=null; state.stats=null; state.users=null; state.shops=null;
+  // the inbox goes with the rest: it holds phone numbers and what people wrote about their problems
+  state.anomalies=null; state.templates=null; state.support=null;
+  try{ localStorage.removeItem(TOKEN_KEY); }catch(e){}
+  $("#app").hidden = true; $("#login").hidden = false; resetLogin(); $("#l-err").hidden = true;
+  if (reason==="expired") loginError("Сессия закончилась","Войдите снова.");
+  if (reason==="forbidden") loginError("Вы не администратор — доступ запрещён");
+}
+
+// one place decides that a failed call means the session is over, so a dead token returns the whole
+// page to the login screen once instead of leaving several broken panels on screen.
+function guard(e){ if(e.status===401){signOut("expired");return true;} if(e.status===403 && e.code!=="cannot_delete_admin" && e.code!=="cannot_edit_admin"){signOut("forbidden");return true;} return false; }
+
+var NAV = [
+  { v:"dash",      label:"Обзор",         icon:ICONS.dash,  title:"Обзор",         sub:"Всё, что происходит в Domix" },
+  // second, above everything else: a person is waiting on the other end of these and nothing
+  // else on this panel has somebody's attention held while it goes unread.
+  { v:"support",   label:"Поддержка",     icon:ICONS.chat,  title:"Поддержка",     sub:"Сообщения от пользователей" },
+  { v:"anomalies", label:"Аномалии",      icon:ICONS.anom,  title:"Аномалии цен",  sub:"Цены, которые расходятся с рынком" },
+  { v:"users",     label:"Пользователи",  icon:ICONS.users, title:"Пользователи",  sub:"Аккаунты и их магазины" },
+  { v:"shops",     label:"Магазины",      icon:ICONS.shops, title:"Магазины",      sub:"Каталоги, индексы и размещения" },
+  { v:"templates", label:"Шаблоны",       icon:ICONS.tpl,   title:"Шаблоны",       sub:"Списки, которыми заполняется новый магазин" }
+];
+
+function buildNav() {
+  var nav = $("#nav"); clear(nav);
+  NAV.forEach(function (item) {
+    var b = el("button"); b.dataset.view = item.v;
+    b.appendChild(ico(item.icon, 19));
+    b.appendChild(el("span","lb2",item.label));
+    if (item.v==="users"||item.v==="shops"||item.v==="anomalies"||item.v==="support") { var p=el("span","pip","—"); p.id="pip-"+item.v; b.appendChild(p); }
+    b.addEventListener("click", function(){ setView(item.v); });
+    nav.appendChild(b);
+  });
+}
+
+function enter() {
+  $("#login").hidden = true; $("#app").hidden = false;
+  buildNav(); setView("dash"); refresh({ silent:true });
+  // one interval for the whole page, started once a session exists and cleared on sign-out
+  if (!live.timer) live.timer = setInterval(liveTick, LIVE.tick);
+}
+
+function setView(v) {
+  state.view = v;
+  $$("#nav button").forEach(function(b){ if(b.dataset.view===v) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current"); });
+  NAV.forEach(function(i){ $("#v-"+i.v).hidden = i.v!==v; });
+  var meta = NAV.filter(function(i){ return i.v===v; })[0];
+  $("#pg-title").textContent = meta.title; $("#pg-sub").textContent = meta.sub;
+
+  // the header field is a shortcut into the list on screen, so it only exists where there is one.
+  // on Обзор and Шаблоны it was a search box that searched nothing until it silently navigated
+  // somewhere else.
+  var searchable = v === "users" || v === "shops";
+  $("#q-global").parentNode.hidden = !searchable;
+  if (searchable) $("#q-global").value = v === "users" ? state.q.users : state.q.shops;
+
+  if (v==="users" && !state.users) loadUsers();
+  if (v==="shops" && !state.shops) loadShops();
+  if (v==="anomalies" && !state.anomalies) loadAnomalies();
+  if (v==="support" && !state.support) loadSupport();
+  if (v==="templates" && !state.templates) loadTemplates();
+  if (v==="dash" && state.stats) drawDash();
+
+  // opening the inbox must show what is there now, not a list cached before the founder walked away
+  if (v === "support" && state.support) liveNow();
+}
+
+// ═══════════════════════ live refresh ═══════════════════════
+//
+// **why the panel polls itself instead of being pushed to.**
+//
+// The founder reads the support inbox with this page open, so a message arriving while they are
+// looking at it has to appear on its own - «Обновить» is a button nobody presses at the moment it
+// would matter. Three ways to do that were on the table:
+//
+//   * SSE (`EventSource` over text/event-stream) is the shape that fits "push one small event to an
+//     open page", and it is the one this panel cannot use: **EventSource sends no headers**, and
+//     every request here authenticates with `Authorization: Bearer` from localStorage. Making it
+//     work means putting an admin token in a query string - into server logs, into browser history,
+//     into whatever sits in front of the api - or minting a short-lived ticket first, which is more
+//     machinery than the problem is worth.
+//   * A websocket takes headers no more happily and adds a connection type to keep alive through
+//     ngrok, for one page read by one person.
+//   * Polling costs one request per interval from exactly one browser. At the numbers this panel
+//     runs at - one admin, one machine - that is free, and it reuses endpoints that already exist.
+//
+// Two things keep it honest rather than a busy loop: **nothing runs while the tab is in the
+// background** (`document.hidden`), and only what is on screen is asked for - the inbox refreshes
+// while its section is open, the open conversation while it is open, and the dashboard numbers
+// behind the sidebar badge slowly, everywhere.
+var LIVE = {
+  // how often the loop wakes up. everything below is a multiple of it in practice, so this is the
+  // resolution rather than a rate.
+  tick: 5000,
+  // the sidebar badge. slow on purpose: it is a number that only matters when it changes from zero,
+  // and it rides on the whole dashboard payload.
+  stats: 45000,
+  // the inbox list, while it is the section on screen. this is the one that has to feel live.
+  inbox: 12000,
+  // an open conversation. faster than the list, because somebody is reading it right now.
+  thread: 8000
+};
+
+var live = { timer:null, statsAt:0, inboxAt:0, threadAt:0, busy:false, thread:null };
+
+function liveTick() {
+  // signed out, or the tab is in the background - a poll nobody can see is a request nobody asked
+  // for. coming back to the tab fires one immediately, see the listener at the bottom of the file.
+  if (!state.token || document.hidden) return;
+  // a round is still in flight. skipping rather than queueing is what stops a slow database from
+  // turning a 5-second timer into a growing pile of identical requests.
+  if (live.busy) return;
+
+  var now = Date.now(), jobs = [];
+
+  if (now - live.statsAt > LIVE.stats) { live.statsAt = now; jobs.push(loadStats()); }
+  if (state.view === "support" && now - live.inboxAt > LIVE.inbox) {
+    live.inboxAt = now; jobs.push(loadSupport());
+  }
+  if (live.thread && now - live.threadAt > LIVE.thread) {
+    live.threadAt = now; jobs.push(live.thread());
+  }
+
+  if (!jobs.length) return;
+  live.busy = true;
+  Promise.all(jobs).catch(function(){}).then(function(){ live.busy = false; });
+}
+
+// forces the next tick to do the work now - used when a section is opened, so arriving somewhere
+// shows current data rather than whatever was cached up to twelve seconds ago.
+function liveNow() {
+  live.statsAt = 0; live.inboxAt = 0; live.threadAt = 0;
+  liveTick();
+}
+
+function refresh(o) {
+  var silent = !!(o && o.silent);
+  var b = $("#refresh"); b.classList.add("busy"); b.disabled = true;
+
+  // the manual button and the loop must not both be in flight against the same endpoints, and a
+  // press is also a statement that everything on screen is now current
+  live.statsAt = Date.now(); live.inboxAt = Date.now();
+
+  var jobs = [loadStats()];
+  if (state.users) jobs.push(loadUsers());
+  if (state.shops) jobs.push(loadShops());
+  if (state.anomalies) jobs.push(loadAnomalies());
+  if (state.support) jobs.push(loadSupport());
+  if (state.templates) jobs.push(loadTemplates());
+
+  // a floor on how briefly the spinner can exist. against a local database every one of these
+  // finishes inside a single frame, so the button flickered and the numbers - which on a market
+  // this small are usually the same numbers - did not visibly move. the request really did happen;
+  // there was simply nothing on screen saying so. the toast is the other half of that: an answer
+  // that is identical to the last one still has to look like an answer.
+  var floor = new Promise(function (done) { setTimeout(done, 420); });
+
+  Promise.all([floor].concat(jobs)).catch(function(){}).then(function () {
+    b.classList.remove("busy"); b.disabled = false;
+    if (!silent) toast("Данные обновлены");
+  });
+}
+
+// ═══════════════════════ dashboard ═══════════════════════
+
+function loadStats() {
+  return api("/api/admin/stats").then(function (d) {
+    state.stats = d;
+    if ($("#pip-users")) $("#pip-users").textContent = nf(d.users.total);
+    if ($("#pip-shops")) $("#pip-shops").textContent = nf(d.shops.total);
+    // ── the support badge answers two questions with one number, and which one it is showing is
+    // the difference between the hot state and the calm one.
+    //
+    // `unread` is conversations holding something nobody here has opened yet. that is the alarm, and
+    // it is what **reading** clears - which is the whole point of migration 000002: a thread the
+    // founder has already read should stop shouting.
+    //
+    // `awaiting` is conversations still owed an answer. reading does not touch it, so when the
+    // unread count falls to zero the badge does not go blank - it drops to this, quietly. that
+    // matters: a badge that emptied on read would let five people who had been read and not answered
+    // disappear from the sidebar entirely, which is exactly the failure a mark-as-read usually
+    // introduces.
+    if ($("#pip-support") && d.support) {
+      var pip = $("#pip-support"), unread = d.support.unread || 0, waiting = d.support.awaiting || 0;
+
+      // **the badge counts what has not been read, and it goes away entirely at zero.**
+      //
+      // It briefly fell back to `awaiting` when nothing was unread - the idea being that a founder
+      // who read five questions and answered none should still see five. In practice that is a badge
+      // that only clears when a reply is *sent*, which is the thing it was supposed to stop doing:
+      // plenty of messages are read and need no answer, and one that sits there until you type
+      // something is one you stop believing. Reading is the action; the badge follows the action.
+      //
+      // The queue is not lost, it just is not in the sidebar: the inbox's «Ждёт ответа» column still
+      // carries `unanswered` per thread, derived in SQL and unmoved by reading, and the number is on
+      // this button's tooltip below.
+      pip.hidden = unread === 0;
+      pip.textContent = nf(unread);
+      pip.classList.toggle("hot", unread > 0);
+      pip.parentNode.title = unread > 0
+        ? nf(unread) + " новых · " + nf(waiting) + " ждут ответа"
+        : waiting > 0 ? nf(waiting) + " ждут ответа (все прочитаны)" : "Все ответы отправлены";
+    }
+    if (state.view === "dash") drawDash();
+  }).catch(function(e){ if(!guard(e)) toast("Не удалось загрузить статистику", true); });
+}
+
+function card(cls, title, cap, right) {
+  var c = el("div", "card " + (cls||""));
+  var h = el("header");
+  var l = el("div");
+  l.appendChild(el("h2", null, title));
+  if (cap) l.appendChild(el("div","cap",cap));
+  h.appendChild(l);
+  if (right) h.appendChild(right);
+  c.appendChild(h);
+  return c;
+}
+
+function legend(items) {
+  var l = el("div","legend");
+  items.forEach(function (it) {
+    var s = el("span");
+    var i = el("i", it.dash ? "dash" : null);
+    if (it.dash) i.style.borderTopColor = it.color; else i.style.background = it.color;
+    s.appendChild(i); s.appendChild(document.createTextNode(it.label));
+    l.appendChild(s);
+  });
+  return l;
+}
+
+function kpi(o) {
+  var c = el("div", "kpi" + (o.hi ? " hi" : ""));
+  var top = el("div","k-top");
+  top.appendChild(el("div","k-lab",o.label));
+  var ic = el("div","k-ico"); ic.appendChild(ico(o.icon,17)); top.appendChild(ic);
+  c.appendChild(top);
+
+  var bot = el("div","k-bot");
+  bot.appendChild(el("div","k-val num",o.value));
+  var side = el("div","k-side");
+  if (o.delta !== undefined && o.delta !== null) {
+    side.appendChild(el("div","k-d "+(o.delta>0?"up":"fl"), (o.delta>0?"+":"")+nf(o.delta)));
+    side.appendChild(el("div","k-note",o.note||"за 7 дней"));
+  } else if (o.note) {
+    side.appendChild(el("div","k-note",o.note));
+  }
+  bot.appendChild(side);
+  c.appendChild(bot);
+  return c;
+}
+
+// every panel below answers a question no other panel on the screen answers. that is the whole
+// editing rule for this function, and it is what the previous version broke: `ranked / total` was
+// drawn as a KPI, again as a gauge arc, again as the two boxes under that arc - one of which also
+// restated the Магазины KPI verbatim - and again as the funnel's last bar. four renderings of one
+// ratio read as four findings. the gauge is gone; the KPI states the number and the funnel explains
+// how it got there, which is a different question rather than a second picture of the same one.
+function drawDash() {
+  var s = state.stats; if (!s) return;
+  var g = $("#dash"); clear(g);
+
+  // ── row 1: four counts, four different things being counted ──
+  g.appendChild(kpi({ label:"Магазины", value:nf(s.shops.total), delta:s.shops.new_7d,
+    icon:ICONS.shops, hi:true }));
+  g.appendChild(kpi({ label:"Пользователи", value:nf(s.users.total), delta:s.users.new_7d,
+    icon:ICONS.users }));
+  g.appendChild(kpi({ label:"В сравнении цен", value:nf(s.shops.ranked),
+    note:"из "+nf(s.shops.total)+" магазинов", icon:ICONS.scale }));
+  g.appendChild(kpi({ label:"VIP-размещений", value:nf(s.shops.vip),
+    note: s.vip.length ? "ближайшее до "+sdate(s.vip[0].until) : "нет активных", icon:ICONS.crown }));
+
+  // ── row 2: how the market grew, and where its catalogues are stuck ──
+  var sc = card("b8 plain","Регистрации за 30 дней","Новые пользователи и новые магазины по дням",
+    legend([{color:C.o,label:"Пользователи"},{color:C.o3,label:"Магазины",dash:true}]));
+  var holder = el("div","chart"); holder.id = "ch-signups";
+  var tip = el("div","tip"); tip.id = "tip-signups"; holder.appendChild(tip);
+  sc.appendChild(holder); g.appendChild(sc);
+
+  g.appendChild(buildFunnel(s.funnel, s.activity));
+
+  // ── row 3: the same fact as an afternoon of phone calls ──
+  g.appendChild(buildAttention(s.attention));
+
+  // ── row 4: the four markets, one card ──
+  g.appendChild(buildMarkets(s));
+
+  drawSignups(s.signups);
+}
+
+// ── the catalogue funnel ──
+//
+// **the one panel that says where the product is losing people rather than how much of it exists.**
+// It matters more here than in most marketplaces because of the all-or-nothing rule: a shop at 99%
+// publishes exactly as much as a shop at 0% — nothing. So «почти готово» is not a progress bar, it
+// is a list of people who did nearly all the work and are getting none of the benefit.
+// the pricing-activity number rides in this card's caption rather than in a fifth KPI tile. it is
+// the rate of change of exactly what the bars below measure, so it belongs to them - and a KPI tile
+// for it was competing with the four counts for the same row.
+function buildFunnel(f, activity) {
+  var c = card("b4 plain","Заполнение каталогов","Магазин попадает в сравнение только когда заполнен целиком");
+
+  var stages = [
+    { key:"Ничего не указано", value:f.empty,    color:"#E4E7EC", ink:"var(--muted)" },
+    { key:"Начали",            value:f.started,  color:RAMP[4] },
+    { key:"Больше половины",   value:f.halfway,  color:RAMP[2] },
+    { key:"Почти готово",      value:f.nearly,   color:RAMP[0], hot:true },
+    { key:"Заполнен целиком",  value:f.complete, color:"#15803D" }
+  ];
+
+  var rowsBox = el("div","prows");
+  stages.forEach(function (st) {
+    var item = el("div","prow");
+    var line = el("div","pl");
+    var name = el("span","pn", st.key);
+    if (st.hot && st.value > 0) {
+      name.appendChild(document.createTextNode(" "));
+      name.appendChild(el("span","tag o","звонить"));
+    }
+    line.appendChild(name);
+    line.appendChild(el("span","pv num", nf(st.value)));
+    item.appendChild(line);
+
+    var t = el("div","pt"); var fill = el("i");
+    fill.style.width = pct(st.value, f.shops) + "%";
+    fill.style.background = st.color;
+    t.appendChild(fill); item.appendChild(t);
+    rowsBox.appendChild(item);
+  });
+  c.appendChild(rowsBox);
+
+  // the rate of change of the bars above, and the reason there is no fifth KPI tile for it: it is
+  // the same subject as this card, and a tile would have been a fifth thing competing for row one.
+  var moved = el("div","foot");
+  moved.textContent = activity && activity.priced_7d > 0
+    ? "За неделю указано " + nf(activity.priced_7d) + " цен · " + nf(activity.shops_active_7d) + " магазинов работали"
+    : "За неделю никто не указал ни одной цены";
+  c.appendChild(moved);
+
+  if (f.stalled > 0) {
+    var w = el("div","warn"); w.style.marginTop = "12px";
+    w.appendChild(ico(ICONS.anom,16));
+    w.appendChild(el("span",null, nf(f.stalled) + " магазинов создано больше двух недель назад и не заполнено ни на одну строку — эти уже не вернутся сами."));
+    c.appendChild(w);
+  }
+  return c;
+}
+
+// ── who to phone ──
+//
+// a dashboard that reports "the market is 44% complete" and stops leaves you there. this is the same
+// fact turned into an afternoon of phone calls: the owner nearest the line, their number, and how
+// many rows are left.
+function buildAttention(list) {
+  var c = card("b12 plain","Кому позвонить","Ближе всех к тому, чтобы попасть в сравнение цен");
+
+  if (!list || !list.length) {
+    var ok = el("div","flist");
+    var r = el("div","fr"); var i = el("i"); i.style.background = C.green;
+    r.appendChild(i);
+    r.appendChild(el("span","fk", "Все каталоги заполнены целиком"));
+    ok.appendChild(r); c.appendChild(ok);
+    return c;
+  }
+
+  var tbl = el("div","tbl");
+  var sc = el("div","scroll");
+  var t = el("table");
+  var th = el("thead"); var hr = el("tr");
+  ["Магазин","Владелец","Осталось","Готово",""].forEach(function(h){ hr.appendChild(el("th",null,h)); });
+  th.appendChild(hr); t.appendChild(th);
+
+  var body = el("tbody");
+  list.forEach(function (a) {
+    var tr = el("tr");
+
+    var nm = el("td");
+    nm.appendChild(el("div","b", a.name));
+    nm.appendChild(el("div","d", catName(a.category)));
+    tr.appendChild(nm);
+
+    var ow = el("td");
+    ow.appendChild(el("div",null, a.owner_name || "Без имени"));
+    ow.appendChild(el("div","d mono", a.owner_phone));
+    tr.appendChild(ow);
+
+    tr.appendChild(el("td","b num", nf(a.remaining)));
+
+    var pg = el("td"); var w = el("div","prog");
+    var track = el("div","t"); var fill = el("i");
+    var done = pct(a.priced_rows, a.template_rows);
+    fill.style.width = done + "%";
+    track.appendChild(fill); w.appendChild(track);
+    w.appendChild(el("span","p", done + "%"));
+    pg.appendChild(w); tr.appendChild(pg);
+
+    var act = el("td","r");
+    act.appendChild(iconBtn(ICONS.box, "Открыть каталог", null, function () {
+      openShopById(a.id);
+    }));
+    tr.appendChild(act);
+
+    body.appendChild(tr);
+  });
+  t.appendChild(body); sc.appendChild(t); tbl.appendChild(sc); c.appendChild(tbl);
+  return c;
+}
+
+// ── the four markets, one card ──
+//
+// this replaces two panels that were each half of the same subject: a donut whose key rows printed
+// «в сравнении / всего» per category, and a separate «Корзина по рынкам» that printed the shop count
+// per category again beside the basket price. one card now, and each half does the job it is good
+// at — the ring shows the split at a glance, the table carries the numbers, and neither repeats the
+// other.
+//
+// it iterates the *categories* rather than the baskets, because a market with shops and nothing in
+// the comparison is the row most worth seeing and the basket query cannot return it: that query
+// reads the index view, which by design has no row for a shop whose catalogue is incomplete.
+function buildMarkets(s) {
+  var c = card("b12 plain","Рынки","Магазины, охват сравнения и стоимость общей корзины по категориям");
+
+  var byCat = {};
+  (s.baskets || []).forEach(function (b) { byCat[b.category] = b; });
+
+  var cats = (s.shop_categories || []).slice().sort(function (a, b) { return b.shops - a.shops; });
+  if (!cats.length) {
+    c.appendChild(el("div","skel","Магазинов пока нет — сравнивать нечего."));
+    return c;
+  }
+
+  var split = el("div","split");
+
+  var ring = el("div","ring");
+  ring.appendChild(buildDonut(cats.map(function (r) { return r.shops; }), s.shops.total, "магазинов"));
+  split.appendChild(ring);
+
+  var tbl = el("div","tbl"); var sc = el("div","scroll"); var t = el("table");
+  var th = el("thead"); var hr = el("tr");
+  ["Категория","Магазинов","В сравнении","Корзина","Разброс"].forEach(function (h, i) {
+    hr.appendChild(el("th", i ? "r" : null, h));
+  });
+  th.appendChild(hr); t.appendChild(th);
+
+  var body = el("tbody");
+  cats.forEach(function (r, i) {
+    var b = byCat[r.category];
+    var tr = el("tr");
+
+    var nm = el("td");
+    var dot = el("i","swatch"); dot.style.background = shade(i, cats.length);
+    nm.appendChild(dot);
+    nm.appendChild(el("span","b", catName(r.category)));
+    tr.appendChild(nm);
+
+    tr.appendChild(el("td","r num", nf(r.shops)));
+
+    var cov = el("td","r");
+    if (r.ranked > 0) {
+      cov.appendChild(el("span","b num", nf(r.ranked)));
+      cov.appendChild(el("span","d num", " · " + pct(r.ranked, r.shops) + "%"));
+    } else cov.appendChild(el("span","d","никого"));
+    tr.appendChild(cov);
+
+    tr.appendChild(el("td","r num b", b ? money(b.median_basket) : "—"));
+
+    // the spread is what says whether the badge means anything in this market: a category where
+    // every basket lands within 2% of every other is one where «на 4% дешевле» cannot happen.
+    var sp = el("td","r");
+    if (b && b.shops > 1) {
+      var spread = Math.round((b.max_basket - b.min_basket) / Math.max(b.median_basket, 1) * 100);
+      sp.appendChild(el("span","num", spread + "%"));
+      sp.appendChild(el("div","d num", nf(b.min_basket) + " – " + nf(b.max_basket)));
+    } else sp.appendChild(el("span","d", b ? "один магазин" : "—"));
+    tr.appendChild(sp);
+
+    body.appendChild(tr);
+  });
+  t.appendChild(body); sc.appendChild(t); tbl.appendChild(sc);
+  split.appendChild(tbl);
+
+  c.appendChild(split);
+  return c;
+}
+
+// opens a shop's catalogue from anywhere, loading the shop list first if this tab has not been
+// visited yet - the dashboard can link to a shop the shops tab has never fetched.
+function openShopById(id) {
+  var shop = (state.shops||[]).filter(function(s){ return s.id===id; })[0];
+  if (shop) { openProducts(shop); return; }
+  loadShops().then(function () {
+    var found = (state.shops||[]).filter(function(s){ return s.id===id; })[0];
+    if (found) openProducts(found); else toast("Магазин не найден", true);
+  });
+}
+
+
+// ── donut ──
+// no key list of its own: the ring always sits beside the markets table, whose first column carries
+// the same category name against a swatch painted from the same `shade(i, n)`. a legend here would
+// be a second copy of that column standing two centimetres away from it.
+function buildDonut(values, total, unit) {
+  var size = 196, stroke = 26, r = (size-stroke)/2, cx = size/2, circ = 2*Math.PI*r;
+
+  var d = el("div","donut");
+  var svg = sv("svg",{width:size,height:size,viewBox:"0 0 "+size+" "+size});
+  svg.appendChild(sv("circle",{cx:cx,cy:cx,r:r,fill:"none",stroke:C.o1,"stroke-width":stroke}));
+
+  var sum = values.reduce(function(a,v){ return a+v; },0);
+  var off = 0;
+  values.forEach(function (value, i) {
+    if (!value || !sum) return;
+    var len = value/sum*circ;
+    // a small gap between arcs so neighbours stay distinguishable without a white ring between them
+    svg.appendChild(sv("circle",{ cx:cx, cy:cx, r:r, fill:"none", stroke:shade(i, values.length),
+      "stroke-width":stroke, "stroke-dasharray": Math.max(len-4,1)+" "+circ,
+      "stroke-dashoffset": -off, "stroke-linecap":"round",
+      transform:"rotate(-90 "+cx+" "+cx+")" }));
+    off += len;
+  });
+  d.appendChild(svg);
+
+  var mid = el("div","d-mid"); var inner = el("div");
+  inner.appendChild(el("span",null,"Всего"));
+  inner.appendChild(el("b","num",nf(total)));
+  inner.appendChild(el("span",null,unit));
+  mid.appendChild(inner); d.appendChild(mid);
+  return d;
+}
+
+
+// ── smooth line ──
+//
+// catmull-rom control points converted to cubic beziers. a polyline through 30 daily counts reads as
+// jagged noise; the curve is the same data with the eye's work done for it. tension stays low so the
+// curve never overshoots below zero on a spike, which would draw a negative day.
+function smooth(pts, tension) {
+  if (!pts.length) return "";
+  if (pts.length < 3) return "M" + pts.map(function(p){ return p.x+" "+p.y; }).join("L");
+  var t = tension === undefined ? 0.18 : tension;
+  var d = "M" + pts[0].x + " " + pts[0].y;
+  for (var i = 0; i < pts.length - 1; i++) {
+    var p0 = pts[i-1] || pts[i], p1 = pts[i], p2 = pts[i+1], p3 = pts[i+2] || p2;
+    d += "C" + (p1.x + (p2.x-p0.x)*t) + " " + (p1.y + (p2.y-p0.y)*t)
+       + "," + (p2.x - (p3.x-p1.x)*t) + " " + (p2.y - (p3.y-p1.y)*t)
+       + "," + p2.x + " " + p2.y;
+  }
+  return d;
+}
+
+// measured in real pixels rather than drawn in a scaled viewBox: a viewBox that scales also scales
+// the labels, so the same chart gets 9px text on a laptop and 14px on a monitor.
+function drawSignups(days) {
+  var host = $("#ch-signups"); if (!host || !days || !days.length) return;
+  var tip = $("#tip-signups");
+  $$("#ch-signups svg").forEach(function(n){ n.remove(); });
+
+  // taller than it needs to be for 30 points, because the card next to it is the funnel and grid
+  // rows stretch to the tallest cell - at 264 the chart sat in the top two thirds of a white box.
+  var W = Math.max(host.clientWidth, 320), H = 330;
+  var padL = 38, padR = 12, padT = 12, padB = 30;
+  var pw = W-padL-padR, ph = H-padT-padB;
+
+  var max = 1;
+  days.forEach(function(d){ max = Math.max(max, d.users, d.shops); });
+  var step = max <= 4 ? 1 : Math.pow(10, Math.floor(Math.log10(max)))/2;
+  var top = Math.ceil(max/step)*step;
+
+  var X = function(i){ return padL + (days.length===1 ? pw/2 : i/(days.length-1)*pw); };
+  var Y = function(v){ return padT + ph - (v/top)*ph; };
+
+  var svg = sv("svg",{width:W,height:H,viewBox:"0 0 "+W+" "+H});
+  var defs = sv("defs");
+  var grad = sv("linearGradient",{id:"gU",x1:"0",y1:"0",x2:"0",y2:"1"});
+  grad.appendChild(sv("stop",{offset:"0%","stop-color":C.o,"stop-opacity":".20"}));
+  grad.appendChild(sv("stop",{offset:"100%","stop-color":C.o,"stop-opacity":"0"}));
+  defs.appendChild(grad); svg.appendChild(defs);
+
+  for (var k = 0; k <= 4; k++) {
+    var v = top/4*k, y = Y(v);
+    svg.appendChild(sv("line",{x1:padL,y1:y,x2:W-padR,y2:y,stroke:C.line,"stroke-width":1,"stroke-dasharray":"1 5","stroke-linecap":"round"}));
+    var lab = sv("text",{x:padL-9,y:y+4,"text-anchor":"end","font-size":11,fill:C.faint,"font-family":"inherit","font-weight":"600"});
+    lab.textContent = Math.round(v); svg.appendChild(lab);
+  }
+  days.forEach(function (d,i) {
+    if (i%5!==0 && i!==days.length-1) return;
+    var lab = sv("text",{x:X(i),y:H-8,"text-anchor":"middle","font-size":11,fill:C.faint,"font-family":"inherit","font-weight":"600"});
+    lab.textContent = dlab(d.day); svg.appendChild(lab);
+  });
+
+  var band = sv("rect",{y:padT,height:ph,fill:C.o,opacity:0,rx:6}); svg.appendChild(band);
+
+  var uPts = days.map(function(d,i){ return {x:X(i),y:Y(d.users)}; });
+  var sPts = days.map(function(d,i){ return {x:X(i),y:Y(d.shops)}; });
+
+  svg.appendChild(sv("path",{d: smooth(uPts) + "L"+X(days.length-1)+" "+Y(0)+"L"+X(0)+" "+Y(0)+"Z", fill:"url(#gU)"}));
+  svg.appendChild(sv("path",{d:smooth(sPts),fill:"none",stroke:C.o3,"stroke-width":2.2,"stroke-dasharray":"6 5","stroke-linecap":"round"}));
+  svg.appendChild(sv("path",{d:smooth(uPts),fill:"none",stroke:C.o,"stroke-width":2.8,"stroke-linecap":"round"}));
+
+  var dot = sv("circle",{r:5,fill:"#fff",stroke:C.o,"stroke-width":3,opacity:0}); svg.appendChild(dot);
+
+  var cw = pw/Math.max(days.length-1,1);
+  days.forEach(function (d,i) {
+    var hit = sv("rect",{x:X(i)-cw/2,y:padT,width:cw,height:ph,fill:"transparent"});
+    hit.addEventListener("mouseenter", function () {
+      band.setAttribute("x", X(i)-cw/2); band.setAttribute("width", cw); band.setAttribute("opacity", .07);
+      dot.setAttribute("cx", X(i)); dot.setAttribute("cy", Y(d.users)); dot.setAttribute("opacity", 1);
+      clear(tip);
+      tip.appendChild(el("span","t-d",dlab(d.day)));
+      [[C.o,"Пользователи",d.users],[C.o3,"Магазины",d.shops]].forEach(function (r) {
+        var row = el("div","t-r"); var i2 = el("i"); i2.style.background = r[0];
+        row.appendChild(i2); row.appendChild(el("span",null,r[1]+": "+nf(r[2]))); tip.appendChild(row);
+      });
+      tip.style.left = X(i)+"px";
+      tip.style.top = Math.min(Y(Math.max(d.users,d.shops)), padT+ph-10)+"px";
+      tip.style.opacity = 1;
+    });
+    svg.appendChild(hit);
+  });
+  svg.addEventListener("mouseleave", function(){ tip.style.opacity=0; band.setAttribute("opacity",0); dot.setAttribute("opacity",0); });
+
+  host.appendChild(svg);
+}
+
+// ═══════════════════════ shared table plumbing ═══════════════════════
+
+function sortRows(rows, sort, derive) {
+  return rows.slice().sort(function (a, b) {
+    var x = derive ? derive(a, sort.key) : a[sort.key];
+    var y = derive ? derive(b, sort.key) : b[sort.key];
+    if (x === null || x === undefined) x = -Infinity;
+    if (y === null || y === undefined) y = -Infinity;
+    if (typeof x === "string" || typeof y === "string") return String(x).localeCompare(String(y),"ru")*sort.dir;
+    return (x<y ? -1 : x>y ? 1 : 0)*sort.dir;
+  });
+}
+
+function markSort(table, sort) {
+  $$(table+" thead th").forEach(function (th) {
+    if (th.dataset.key === sort.key) { th.dataset.dir = sort.dir>0?"asc":"desc"; th.querySelector(".ar").textContent = sort.dir>0?"▲":"▼"; }
+    else delete th.dataset.dir;
+  });
+}
+
+function wireSort(table, sortState, rerender) {
+  $$(table+" thead th.s").forEach(function (th) {
+    th.addEventListener("click", function () {
+      var k = th.dataset.key;
+      if (sortState.key === k) sortState.dir *= -1;
+      else { sortState.key = k; sortState.dir = (k==="created_at"||k==="id"||k==="deviation_percent") ? -1 : 1; }
+      rerender();
+    });
+  });
+}
+
+function emptyBox(title, text) {
+  var b = el("div","empty");
+  var g = el("div","bx"); g.appendChild(ico(ICONS.search,23)); b.appendChild(g);
+  b.appendChild(el("b",null,title)); b.appendChild(el("p",null,text));
+  return b;
+}
+
+function countLabel(q, shown, loaded) {
+  if (q) return "Найдено: " + nf(shown) + " из " + nf(loaded);
+  return "Всего: " + nf(shown) + (loaded === 500 ? " (первые 500)" : "");
+}
+
+function iconBtn(icon, title, cls, onClick) {
+  var b = el("button","ia"+(cls?" "+cls:"")); b.title = title;
+  b.appendChild(ico(icon,15));
+  if (onClick) b.addEventListener("click", onClick);
+  return b;
+}
+
+// ═══════════════════════ support ═══════════════════════
+//
+// one thread per user, and the api addresses a thread by *user* id because that is all a thread is -
+// there is no row of its own.
+//
+// **two counts per row, and they are not the same question.** `unanswered` is derived in SQL exactly
+// as it always was - messages the user sent after the last thing support said - and it is the queue:
+// opening a conversation does not settle it, only replying does. `unread` is messages newer than the
+// last time this admin opened the thread, and that is the one reading clears. Keeping them apart is
+// what lets the badge go quiet on a conversation the founder has read without that conversation
+// quietly leaving the list of work.
+
+function loadSupport() {
+  if (!state.support) { $("#s-support").className="skel"; $("#s-support").textContent="Загрузка…"; }
+  return api("/api/admin/support/threads?limit=500").then(function (d) {
+    state.support = d.threads || []; renderSupport();
+  }).catch(function(e){ if(!guard(e)){ $("#s-support").className="skel"; $("#s-support").textContent="Не удалось загрузить сообщения"; } });
+}
+
+function renderSupport() {
+  var body = $("#t-support tbody"), box = $("#s-support");
+
+  // the list re-renders itself every twelve seconds now, and a table that jumped back to the top
+  // each time would be unreadable while it was being read. the scroller is the `.scroll` div the
+  // table sits in.
+  var scroller = body.closest(".scroll"), keepAt = scroller ? scroller.scrollTop : 0;
+
+  clear(body); clear(box); box.className = "";
+
+  var q = state.q.support.trim().toLowerCase();
+  var rows = (state.support||[]).filter(function (t) {
+    if (!q) return true;
+    return String(t.user_id)===q || (t.name||"").toLowerCase().indexOf(q)>=0
+        || (t.phone||"").toLowerCase().indexOf(q)>=0 || (t.last_body||"").toLowerCase().indexOf(q)>=0;
+  });
+  rows = sortRows(rows, state.sort.support);
+  $("#c-support").textContent = countLabel(q, rows.length, (state.support||[]).length);
+  markSort("#t-support", state.sort.support);
+
+  if (!rows.length) { box.appendChild(emptyBox(q?"Ничего не найдено":"Сообщений пока нет",
+    q?"Попробуйте другой запрос.":"Здесь появится всё, что пользователи напишут в поддержку из приложения.")); return; }
+
+  rows.forEach(function (t) {
+    var tr = el("tr");
+    // an unread conversation is marked on the row itself rather than in a sixth column: the founder
+    // scans this list down the left edge, and "is there anything new" is a glance, not a number to
+    // read.
+    if (t.unread > 0) tr.className = "nw";
+
+    var who = el("td");
+    var nameRow = el("div","b-row");
+    nameRow.appendChild(el("span","b", t.name || "Без имени"));
+    if (t.unread > 0) nameRow.appendChild(el("span","tag o", "новых " + nf(t.unread)));
+    who.appendChild(nameRow);
+    who.appendChild(el("div","d mono", t.phone + " · #" + t.user_id));
+    tr.appendChild(who);
+
+    // "Вы:" rather than the user's name, because the row is read from the founder's side and the
+    // question it answers is "did I already say something". truncated here and not on the server:
+    // the panel is what knows how much fits.
+    var prev = el("td","d");
+    var text = String(t.last_body || "").replace(/\s+/g, " ");
+    prev.textContent = (t.last_from_support ? "Вы: " : "") + (text.length > 90 ? text.slice(0,90)+"…" : text);
+    tr.appendChild(prev);
+
+    tr.appendChild(el("td","d num", stamp(t.last_at)));
+
+    var wait = el("td");
+    if (t.unanswered > 0) wait.appendChild(el("span","tag o", nf(t.unanswered)));
+    else wait.appendChild(el("span","tag gr","отвечено"));
+    tr.appendChild(wait);
+
+    var act = el("td","r"); var wrap = el("div","acts");
+    wrap.appendChild(iconBtn(ICONS.chat, "Открыть переписку", null, function(){ openThread(t); }));
+    act.appendChild(wrap); tr.appendChild(act);
+
+    // the whole row opens the thread, not only the button. this is a list of conversations to read,
+    // and a 4px target on the far right is the wrong way to enter one.
+    tr.style.cursor = "pointer";
+    tr.addEventListener("click", function (e) { if (e.target.closest("button")) return; openThread(t); });
+
+    body.appendChild(tr);
+  });
+
+  if (scroller) scroller.scrollTop = keepAt;
+}
+
+function openThread(thread) {
+  var s = shell({ bare:true, cls:"chatm", onClose: function(){ live.thread = null; } });
+
+  // the whole conversation is held here rather than only appended to the dom, so a reply can be
+  // re-rendered through the same path the first load takes - which is what keeps the day chips
+  // right when an answer is typed after midnight.
+  var messages = [];
+
+  // ── header ──
+  var head = el("div","chat-head");
+  head.appendChild(el("div","av", initials(thread.name)));
+  var who = el("div","who");
+  who.appendChild(el("b", null, thread.name || "Без имени"));
+  who.appendChild(el("span", null, thread.phone + " · " + roleName(thread.role) + " · #" + thread.user_id));
+  head.appendChild(who);
+  var x = el("button","x"); x.type = "button"; x.title = "Закрыть (Esc)";
+  x.appendChild(ico(ICONS.x, 18));
+  x.addEventListener("click", s.close);
+  head.appendChild(x);
+  s.modal.appendChild(head);
+
+  // ── conversation ──
+  var box = el("div","chat");
+  box.appendChild(el("div","skel","Загрузка переписки…"));
+  s.modal.appendChild(box);
+
+  // ── composer ──
+  var foot = el("div","chat-foot");
+  var row = el("div","reply");
+  var input = el("textarea");
+  // the same 2000 the server enforces. the attribute stops the message being typed rather than
+  // refused after it was written - the one case where duplicating a server rule earns its keep,
+  // since the server still checks and the two cannot disagree in the direction that matters.
+  input.maxLength = 2000;
+  var send = el("button","btn btn-p"); send.type = "button";
+  send.appendChild(ico(ICONS.send, 16));
+  var sendLabel = el("span", null, "Отправить");
+  send.appendChild(sendLabel);
+  row.appendChild(input); row.appendChild(send);
+  foot.appendChild(row);
+  foot.appendChild(el("div","reply-hint","Ctrl + Enter — отправить"));
+  s.modal.appendChild(foot);
+
+  // grows with the answer up to the css cap and then scrolls. `height:auto` first, or scrollHeight
+  // reports the box it is already stretched to and the field can only ever get taller.
+  function grow() {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 210) + "px";
+  }
+  input.addEventListener("input", grow);
+
+  function draw() {
+    // where the reader is, decided *before* the box is emptied. a conversation that redraws every
+    // eight seconds must not drag somebody back to the newest message while they are scrolled up
+    // reading what was said last week - but it does have to follow the bottom when they are already
+    // there, which is where the reader is 99% of the time.
+    var wasAtBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+    var wasAt = box.scrollTop;
+
+    clear(box);
+    if (!messages.length) {
+      box.appendChild(el("div","skel","Пока ни одного сообщения."));
+      return;
+    }
+    var lastDay = null, lastSide = null;
+    messages.forEach(function (m) {
+      var key = dayKey(m.created_at);
+      if (key !== lastDay) {
+        box.appendChild(el("div","chat-day", dayLabel(m.created_at)));
+        lastDay = key;
+        lastSide = null;   // a new day starts a new turn even from the same side
+      }
+      var side = m.from_support ? "us" : "them";
+      box.appendChild(bubble(m, side === lastSide));
+      lastSide = side;
+    });
+    box.scrollTop = wasAtBottom ? box.scrollHeight : wasAt;
+  }
+
+  // one fetch, shared by the first load and by the poll below.
+  //
+  // it replaces the whole list rather than asking for "everything after id N": a support thread is a
+  // person's conversation with the founder, a few dozen messages at most, so the payload is smaller
+  // than the endpoint it would take to avoid it. **this request is also what marks the thread read**
+  // (see Admin.SupportThread), which is why a message arriving while the modal is open stops being
+  // unread on its own rather than waiting for a reply.
+  // whether the box has been painted at all yet. **not the same question as "is the list empty"** -
+  // without it, a conversation with no messages in it matches `next.length === messages.length` on
+  // the very first pull and returns early, leaving "Загрузка переписки…" on screen for ever.
+  var drawn = false;
+
+  function pull() {
+    var wasFirst = !drawn;
+    return api("/api/admin/support/threads/" + thread.user_id).then(function (d) {
+      var next = d.messages || [];
+
+      // **this request is also what marks the thread read** (see Admin.SupportThread), so the sidebar
+      // badge and the row behind the modal are both stale the instant it succeeds - and the *first*
+      // one is the important case: opening a conversation is exactly when the founder expects the
+      // badge to clear, and leaving it to the next 45-second stats poll is the difference between a
+      // badge that responds and one that seems stuck.
+      //
+      // Fetched outright rather than by resetting the loop's clocks, because a five-second wait for
+      // something the reader just did still reads as broken.
+      if (wasFirst || next.length > messages.length) {
+        live.inboxAt = Date.now(); live.statsAt = Date.now();
+        loadSupport(); loadStats();
+      }
+
+      // redrawing only when something actually changed keeps a poll from stealing a text selection
+      // or resetting the day chips every eight seconds for no reason. `drawn` and not "is the list
+      // empty": without it a conversation with no messages matches on the very first pull and never
+      // leaves «Загрузка переписки…».
+      if (drawn && next.length === messages.length) return;
+      messages = next;
+      drawn = true;
+      draw();
+    });
+  }
+
+  pull().then(function () {
+    input.focus();
+  }).catch(function (e) {
+    clear(box);
+    if (guard(e)) { s.close(); return; }
+    box.appendChild(el("div","skel","Не удалось загрузить переписку"));
+  });
+
+  // hand the conversation to the live loop for as long as it is on screen; shell's onClose above
+  // takes it back. errors are swallowed rather than passed to `guard`: a poll that fails because the
+  // network blinked would otherwise close the modal from under a half-typed reply.
+  live.thread = function () { return pull().catch(function(){}); };
+  live.threadAt = Date.now();
+
+  function submit() {
+    var text = input.value.trim();
+    if (!text) return;
+
+    send.disabled = true; sendLabel.textContent = "…";
+    api("/api/admin/support/threads/" + thread.user_id, { method:"POST", body: JSON.stringify({ body:text }) })
+      .then(function (m) {
+        input.value = ""; grow(); input.focus();
+        // appended rather than re-fetched: the server just handed back the one thing that changed
+        messages.push(m);
+        draw();
+        toast("Ответ отправлен");
+        // the list behind the modal still counts this conversation as waiting, and so does the
+        // badge - and replying also settles the read marker (see Admin.SupportReply), so both
+        // numbers move. done now rather than left to the loop, because an action the founder just
+        // took should be reflected before they look up.
+        live.inboxAt = Date.now(); live.statsAt = Date.now();
+        loadSupport(); loadStats();
+      })
+      .catch(function (e) {
+        if (guard(e)) { s.close(); return; }
+        toast(e.code === "message_too_long" ? "Сообщение слишком длинное"
+            : e.code === "user_not_found" ? "Пользователь удалил аккаунт" : "Не удалось отправить", true);
+      })
+      .then(function () { send.disabled = false; sendLabel.textContent = "Отправить"; });
+  }
+
+  send.addEventListener("click", submit);
+  // Ctrl/⌘+Enter and not plain Enter: these answers run to several lines, and a newline key that
+  // sends half of one is how a support reply goes out unfinished.
+  input.addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); submit(); }
+  });
+}
+
+function bubble(m, sameSideAsPrevious) {
+  // textContent, like every other user-supplied string on this page: a message body is the one field
+  // in this whole database that a stranger writes and an admin reads with a token in localStorage,
+  // so it is the last place innerHTML could ever be used.
+  var b = el("div", "msg " + (m.from_support ? "us" : "them") + (sameSideAsPrevious ? " seq" : ""), m.body);
+  b.appendChild(el("span","t", clock(m.created_at)));
+  return b;
+}
+
+// ═══════════════════════ users ═══════════════════════
+
+function loadUsers() {
+  if (!state.users) { $("#s-users").className="skel"; $("#s-users").textContent="Загрузка…"; }
+  return api("/api/admin/users?limit=500").then(function (d) {
+    state.users = d.users || []; renderUsers();
+  }).catch(function(e){ if(!guard(e)){ $("#s-users").className="skel"; $("#s-users").textContent="Не удалось загрузить пользователей"; } });
+}
+
+function renderUsers() {
+  var body = $("#t-users tbody"), box = $("#s-users");
+  clear(body); clear(box); box.className = "";
+
+  var q = state.q.users.trim().toLowerCase();
+  var rows = (state.users||[]).filter(function (u) {
+    if (!q) return true;
+    return String(u.id)===q || (u.name||"").toLowerCase().indexOf(q)>=0 || (u.phone||"").toLowerCase().indexOf(q)>=0;
+  });
+  rows = sortRows(rows, state.sort.users);
+  $("#c-users").textContent = countLabel(q, rows.length, (state.users||[]).length);
+  markSort("#t-users", state.sort.users);
+
+  if (!rows.length) { box.appendChild(emptyBox(q?"Ничего не найдено":"Пользователей пока нет",
+    q?"Попробуйте другой запрос.":"Здесь появятся все, кто вошёл в приложение.")); return; }
+
+  rows.forEach(function (u) {
+    var tr = el("tr");
+    tr.appendChild(el("td","idc","#"+u.id));
+
+    var who = el("td");
+    who.appendChild(el("div","b", u.name || "Без имени"));
+    who.appendChild(el("div","d mono", u.phone));
+    tr.appendChild(who);
+
+    var rt = el("td");
+    rt.appendChild(el("span", u.role==="admin"?"tag gr":u.role==="shop_owner"?"tag bl":"tag g", roleName(u.role)));
+    tr.appendChild(rt);
+
+    tr.appendChild(el("td","num", u.shop_count ? nf(u.shop_count) : "—"));
+    tr.appendChild(el("td","d num", sdate(u.created_at)));
+
+    var act = el("td","r"); var wrap = el("div","acts");
+    var isAdmin = u.role === "admin";
+    var edit = iconBtn(ICONS.edit, isAdmin ? "Администратора нельзя редактировать через панель" : "Редактировать", null,
+      isAdmin ? null : function(){ editUser(u); });
+    edit.disabled = isAdmin;
+    var del = iconBtn(ICONS.trash, isAdmin ? "Администратора нельзя удалить через панель" : "Удалить", "dg",
+      isAdmin ? null : function(){ confirmDeleteUser(u); });
+    del.disabled = isAdmin;
+    wrap.appendChild(edit); wrap.appendChild(del); act.appendChild(wrap); tr.appendChild(act);
+
+    body.appendChild(tr);
+  });
+}
+
+function editUser(u) {
+  modal({
+    title:"Редактировать пользователя",
+    sub:u.phone + " · #" + u.id,
+    iconClass:"o", icon:ICONS.edit,
+    fields:[
+      { name:"name", label:"Имя", value:u.name || "" },
+      { name:"role", label:"Роль", type:"select", value:u.role,
+        options:[["customer",ROLES.customer],["shop_owner",ROLES.shop_owner]] },
+      { name:"phone", label:"Телефон", value:u.phone, disabled:true,
+        note:"Телефон — это идентификатор аккаунта в Telegram-входе, поэтому он не редактируется." }
+    ],
+    confirmLabel:"Сохранить",
+    onConfirm:function (v) {
+      return api("/api/admin/users/"+u.id, { method:"PUT", body: JSON.stringify({ name:v.name, role:v.role }) })
+        .then(function (updated) {
+          u.name = updated.name; u.role = updated.role;
+          renderUsers(); loadStats(); toast("Пользователь сохранён");
+        }).catch(function (e) {
+          if (guard(e)) return;
+          toast(e.code==="name_required" ? "Укажите имя" : e.code==="cannot_edit_admin"
+            ? "Администратора нельзя редактировать через панель" : "Не удалось сохранить", true);
+          throw e;
+        });
+    }
+  });
+}
+
+function confirmDeleteUser(u) {
+  var names = ["Имя и номер телефона"];
+  if (u.shop_count > 0) {
+    names.push("Магазинов: " + nf(u.shop_count) + " — вместе со всеми товарами и ценами");
+    names.push("Точки этих магазинов исчезнут с карты");
+  }
+  confirmDialog({
+    title:"Удалить пользователя?",
+    body:(u.name||"Без имени") + " · " + u.phone + ". Действие необратимо.",
+    names:names,
+    onConfirm:function () {
+      return api("/api/admin/users/"+u.id, { method:"DELETE" }).then(function () {
+        state.users = state.users.filter(function(x){ return x.id!==u.id; });
+        // the schema cascades, so their shops are gone too - dropping them here keeps the two tabs
+        // agreeing without a second request
+        if (state.shops) state.shops = state.shops.filter(function(s){ return s.owner_id!==u.id; });
+        renderUsers(); if (state.shops) renderShops(); loadStats();
+        toast("Пользователь удалён");
+      }).catch(function (e) {
+        if (guard(e)) return;
+        toast(e.code==="cannot_delete_admin" ? "Администратора нельзя удалить через панель"
+          : e.code==="user_not_found" ? "Этот пользователь уже удалён" : "Не удалось удалить", true);
+        throw e;
+      });
+    }
+  });
+}
+
+// ═══════════════════════ shops ═══════════════════════
+
+function loadShops() {
+  if (!state.shops) { $("#s-shops").className="skel"; $("#s-shops").textContent="Загрузка…"; }
+  return api("/api/admin/shops?limit=500").then(function (d) {
+    state.shops = d.shops || []; renderShops();
+  }).catch(function(e){ if(!guard(e)){ $("#s-shops").className="skel"; $("#s-shops").textContent="Не удалось загрузить магазины"; } });
+}
+
+function shopSortValue(s, key) {
+  if (key==="progress") return s.template_total>0 ? s.template_priced/s.template_total : -1;
+  if (key==="price_index") return (s.price_index===null||s.price_index===undefined) ? null : s.price_index;
+  if (key==="vip") return s.is_vip ? 1 : 0;
+  if (key==="owner_name") return s.owner_name || "";
+  return s[key];
+}
+
+function renderShops() {
+  var body = $("#t-shops tbody"), box = $("#s-shops");
+  clear(body); clear(box); box.className = "";
+
+  var q = state.q.shops.trim().toLowerCase();
+  var rows = (state.shops||[]).filter(function (s) {
+    if (!q) return true;
+    return String(s.id)===q || (s.name||"").toLowerCase().indexOf(q)>=0 || (s.address||"").toLowerCase().indexOf(q)>=0
+      || (s.owner_name||"").toLowerCase().indexOf(q)>=0 || (s.owner_phone||"").toLowerCase().indexOf(q)>=0;
+  });
+  rows = sortRows(rows, state.sort.shops, shopSortValue);
+  $("#c-shops").textContent = countLabel(q, rows.length, (state.shops||[]).length);
+  markSort("#t-shops", state.sort.shops);
+
+  if (!rows.length) { box.appendChild(emptyBox(q?"Ничего не найдено":"Магазинов пока нет",
+    q?"Попробуйте другой запрос.":"Магазины появятся здесь, как только их создадут в приложении.")); return; }
+
+  rows.forEach(function (s) {
+    var tr = el("tr");
+    tr.appendChild(el("td","idc","#"+s.id));
+
+    var nm = el("td");
+    nm.appendChild(el("div","b", s.name));
+    nm.appendChild(el("div","d", s.address));
+    tr.appendChild(nm);
+
+    var ct = el("td"); ct.appendChild(el("span","tag g", catName(s.category))); tr.appendChild(ct);
+
+    var ow = el("td");
+    ow.appendChild(el("div",null, s.owner_name || "Без имени"));
+    ow.appendChild(el("div","d mono", s.owner_phone));
+    tr.appendChild(ow);
+
+    // template rows only - the same count ShopProductsScreen shows the owner, so the panel and the
+    // owner's own screen never disagree about how far along they are
+    var pg = el("td"); var w = el("div","prog");
+    var t = el("div","t"); var f = el("i");
+    var done = pct(s.template_priced, s.template_total);
+    f.style.width = done+"%"; if (done===100) f.style.background = C.green;
+    t.appendChild(f); w.appendChild(t);
+    w.appendChild(el("span","p", s.template_total ? done+"%" : "—"));
+    pg.appendChild(w);
+    pg.appendChild(el("div","d num", nf(s.template_priced)+" / "+nf(s.template_total)));
+    tr.appendChild(pg);
+
+    // the raw index, shown here and nowhere else in the product. 100 is the market price.
+    var ix = el("td");
+    if (s.price_index===null || s.price_index===undefined) ix.appendChild(el("span","tag g","нет"));
+    else {
+      ix.appendChild(el("span", s.price_index<98?"tag gr":s.price_index>102?"tag rd":"tag am", String(s.price_index)));
+      if (s.basket_price) ix.appendChild(el("div","d num", money(s.basket_price)));
+    }
+    tr.appendChild(ix);
+
+    var vp = el("td");
+    if (s.is_vip) { vp.appendChild(el("span","tag vip","VIP")); if (s.vip_until) vp.appendChild(el("div","d num","до "+sdate(s.vip_until))); }
+    else vp.appendChild(el("span","d","—"));
+    tr.appendChild(vp);
+
+    var act = el("td","r"); var wrap = el("div","acts");
+    wrap.appendChild(iconBtn(ICONS.crown, s.is_vip?"Изменить размещение":"Сделать VIP", null, function(){ editVIP(s); }));
+    wrap.appendChild(iconBtn(ICONS.box, "Товары", null, function(){ openProducts(s); }));
+    wrap.appendChild(iconBtn(ICONS.edit, "Редактировать", null, function(){ editShop(s); }));
+    wrap.appendChild(iconBtn(ICONS.trash, "Удалить", "dg", function(){ confirmDeleteShop(s); }));
+    act.appendChild(wrap); tr.appendChild(act);
+
+    body.appendChild(tr);
+  });
+}
+
+function editShop(s) {
+  modal({
+    title:"Редактировать магазин",
+    sub:"#" + s.id + " · " + catName(s.category),
+    iconClass:"o", icon:ICONS.edit, size:"md",
+    fields:[
+      { name:"name", label:"Название", value:s.name },
+      { name:"address", label:"Адрес", value:s.address },
+      { name:"contact_phone", label:"Контактный телефон", value:s.contact_phone },
+      // the map and the two numbers are one control in two forms - the picker writes the fields and
+      // the fields move the pin. the numbers stay visible because they are what the api stores and
+      // what it validates; a point typed wrong has to be fixable without hunting for it on a map.
+      { type:"map", label:"Точка на карте", lat:s.latitude, lng:s.longitude,
+        latField:"latitude", lngField:"longitude" },
+      { name:"latitude", label:"Широта", value:s.latitude, half:true },
+      { name:"longitude", label:"Долгота", value:s.longitude, half:true },
+      { name:"category", label:"Категория", value:catName(s.category), disabled:true,
+        note:"Категория выбрала шаблон, которым заполнен каталог, поэтому её нельзя сменить — магазин остался бы с чужим списком товаров." }
+    ],
+    confirmLabel:"Сохранить",
+    onConfirm:function (v) {
+      var lat = parseFloat(v.latitude), lng = parseFloat(v.longitude);
+      if (isNaN(lat) || isNaN(lng)) { toast("Координаты должны быть числами", true); return Promise.reject(new Error("bad coords")); }
+      return api("/api/admin/shops/"+s.id, { method:"PUT", body: JSON.stringify({
+        name:v.name, address:v.address, contact_phone:v.contact_phone, latitude:lat, longitude:lng
+      })}).then(function () {
+        s.name=v.name; s.address=v.address; s.contact_phone=v.contact_phone; s.latitude=lat; s.longitude=lng;
+        renderShops(); toast("Магазин сохранён");
+      }).catch(function (e) {
+        if (guard(e)) return;
+        toast(e.code==="invalid_location" ? "Точка на карте указана неверно"
+          : e.code==="missing_fields" ? "Заполните все поля" : "Не удалось сохранить", true);
+        throw e;
+      });
+    }
+  });
+}
+
+// **the paid placement.** a date on the server, a number of days here: the realistic input is "sold
+// them a month", and an absolute date would make "extend by 30 days" ambiguous about from when.
+function editVIP(s) {
+  var choices = [[30,"30 дней"],[90,"90 дней"],[180,"180 дней"],[365,"год"]];
+  modal({
+    title: s.is_vip ? "Изменить VIP-размещение" : "Сделать магазин VIP",
+    sub: s.name + (s.is_vip && s.vip_until ? " · сейчас до " + sdate(s.vip_until) : ""),
+    iconClass:"o", icon:ICONS.crown,
+    fields:[
+      { name:"days", label:"Срок размещения", type:"select", value:"30",
+        options: choices.map(function(c){ return [String(c[0]), c[1]]; }).concat([["0","Снять размещение"]]) }
+    ],
+    note:"Размещение отсчитывается от сегодняшнего дня. VIP-магазины попадают в карусель на главном экране; на индекс цен это не влияет.",
+    confirmLabel:"Применить",
+    onConfirm:function (v) {
+      var days = parseInt(v.days, 10) || 0;
+      return api("/api/admin/shops/"+s.id+"/vip", { method:"PUT", body: JSON.stringify({ days: days }) })
+        .then(function (r) {
+          s.is_vip = r.is_vip; s.vip_until = r.vip_until;
+          renderShops(); loadStats();
+          toast(days > 0 ? "Размещение выдано на " + days + " дн." : "Размещение снято");
+        }).catch(function (e) { if (guard(e)) return; toast("Не удалось изменить размещение", true); throw e; });
+    }
+  });
+}
+
+function confirmDeleteShop(s) {
+  var names = ["Название, адрес, телефон и точку на карте"];
+  if (s.products_total > 0) names.push("Товаров: " + nf(s.products_total) + " — вместе с ценами");
+  if (s.price_index !== null && s.price_index !== undefined) names.push("Магазин исчезнет из сравнения цен и «Лучших предложений»");
+  confirmDialog({
+    title:"Удалить магазин?",
+    body:s.name + " · " + s.address + ". Владелец (" + (s.owner_name||s.owner_phone) + ") останется — удалится только магазин.",
+    names:names,
+    onConfirm:function () {
+      return api("/api/admin/shops/"+s.id, { method:"DELETE" }).then(function () {
+        state.shops = state.shops.filter(function(x){ return x.id!==s.id; });
+        if (state.users) {
+          state.users.forEach(function(u){ if(u.id===s.owner_id && u.shop_count>0) u.shop_count -= 1; });
+          renderUsers();
+        }
+        renderShops(); loadStats(); toast("Магазин удалён");
+      }).catch(function (e) {
+        if (guard(e)) return;
+        toast(e.code==="shop_not_found" ? "Этот магазин уже удалён" : "Не удалось удалить", true);
+        throw e;
+      });
+    }
+  });
+}
+
+// ═══════════════════════ a shop's products ═══════════════════════
+//
+// prices are edited inline rather than through a form per product: the reason to open this screen is
+// almost always a price the anomaly report flagged, and a modal per row would make fixing five of
+// them fifteen clicks. the save button on a row only lights up once something changed.
+
+function openProducts(shop) {
+  var scrim = el("div","scrim");
+  var m = el("div","modal lg");
+
+  var head = el("div");
+  head.appendChild(el("h3", null, shop.name));
+  head.appendChild(el("p","m-sub", catName(shop.category) + " · " + shop.address));
+  m.appendChild(head);
+
+  var body = el("div"); body.style.marginTop = "18px";
+  body.appendChild(el("div","skel","Загрузка каталога…"));
+  m.appendChild(body);
+
+  var acts = el("div","m-acts");
+  var close = el("button","btn btn-g","Закрыть");
+  acts.appendChild(close); m.appendChild(acts);
+
+  scrim.appendChild(m); document.body.appendChild(scrim);
+  function shut(){ document.removeEventListener("keydown", onKey); scrim.remove(); }
+  function onKey(e){ if(e.key==="Escape") shut(); }
+  document.addEventListener("keydown", onKey);
+  scrim.addEventListener("click", function(e){ if(e.target===scrim) shut(); });
+  close.addEventListener("click", shut);
+
+  api("/api/admin/shops/"+shop.id+"/products").then(function (d) {
+    clear(body);
+    var products = d.products || [];
+    if (!products.length) { body.appendChild(emptyBox("Каталог пуст","В этом магазине нет товаров.")); return; }
+
+    var tbl = el("div","tbl");
+    var sc = el("div","scroll"); sc.style.maxHeight = "58vh";
+    var t = el("table");
+    var thead = el("thead"); var hr = el("tr");
+    ["Товар","Категория","Цена, сум","Наличие",""].forEach(function (h) { hr.appendChild(el("th",null,h)); });
+    thead.appendChild(hr); t.appendChild(thead);
+
+    var tb = el("tbody");
+    products.forEach(function (p) { tb.appendChild(productRow(p, shop)); });
+    t.appendChild(tb); sc.appendChild(t); tbl.appendChild(sc); body.appendChild(tbl);
+  }).catch(function (e) {
+    clear(body);
+    if (guard(e)) { shut(); return; }
+    body.appendChild(el("div","skel","Не удалось загрузить каталог"));
+  });
+}
+
+function productRow(p, shop) {
+  var tr = el("tr");
+
+  var nameCell = el("td");
+  var nameLine = el("div","b"); nameLine.textContent = p.name;
+  nameCell.appendChild(nameLine);
+  var meta = el("div","d");
+  meta.textContent = p.unit + (p.is_template ? (p.name_editable ? " · место шаблона" : " · шаблон") : " · свой товар");
+  nameCell.appendChild(meta);
+  tr.appendChild(nameCell);
+
+  tr.appendChild(el("td","d", pcatName(p.category)));
+
+  var priceCell = el("td");
+  var price = el("input");
+  price.type = "number"; price.min = "0"; price.step = "1000";
+  price.value = p.price === null || p.price === undefined ? "" : String(p.price);
+  price.placeholder = "не указана";
+  price.style.width = "130px"; price.style.padding = "8px 11px";
+  price.style.border = "1px solid var(--line-2)"; price.style.borderRadius = "9px";
+  price.style.outline = "none"; price.style.fontVariantNumeric = "tabular-nums";
+  priceCell.appendChild(price);
+  tr.appendChild(priceCell);
+
+  var availCell = el("td");
+  var avail = el("select");
+  avail.style.padding = "8px 11px"; avail.style.border = "1px solid var(--line-2)";
+  avail.style.borderRadius = "9px"; avail.style.outline = "none";
+  Object.keys(AVAIL).forEach(function (k) {
+    var o = el("option", null, AVAIL[k]); o.value = k;
+    if (k === p.availability) o.selected = true;
+    avail.appendChild(o);
+  });
+  availCell.appendChild(avail);
+  tr.appendChild(availCell);
+
+  var actCell = el("td","r");
+  var save = el("button","btn btn-p btn-s","Сохранить");
+  save.disabled = true;
+  actCell.appendChild(save);
+  tr.appendChild(actCell);
+
+  function dirty() {
+    var typed = price.value.trim() === "" ? null : Number(price.value);
+    var was = p.price === undefined ? null : p.price;
+    return typed !== was || avail.value !== p.availability;
+  }
+  function sync(){ save.disabled = !dirty(); }
+  price.addEventListener("input", sync);
+  avail.addEventListener("change", sync);
+
+  save.addEventListener("click", function () {
+    var typed = price.value.trim() === "" ? null : Number(price.value);
+    if (typed !== null && (isNaN(typed) || typed < 0)) { toast("Цена должна быть неотрицательным числом", true); return; }
+    save.disabled = true; save.textContent = "…";
+
+    // the api takes the whole product and decides by template_key which fields it is allowed to
+    // apply - an admin goes through exactly the statements an owner does, so a template row's name
+    // and unit cannot be changed from here either. sending them back unchanged is what the app does.
+    api("/api/admin/products/"+p.id, { method:"PUT", body: JSON.stringify({
+      name:p.name, category:p.category, unit:p.unit, price:typed, availability:avail.value
+    })}).then(function (updated) {
+      p.price = updated.price; p.availability = updated.availability;
+      save.textContent = "Сохранено";
+      setTimeout(function(){ save.textContent = "Сохранить"; sync(); }, 1200);
+      // the shop's progress bar and the whole index may have moved
+      loadShops(); loadStats(); if (state.anomalies) loadAnomalies();
+    }).catch(function (e) {
+      save.disabled = false; save.textContent = "Сохранить";
+      if (guard(e)) return;
+      toast(e.code==="invalid_price" ? "Недопустимая цена" : "Не удалось сохранить", true);
+    });
+  });
+
+  return tr;
+}
+
+// ═══════════════════════ anomalies ═══════════════════════
+
+function loadAnomalies() {
+  if (!state.anomalies) { $("#s-anom").className="skel"; $("#s-anom").textContent="Загрузка…"; }
+  return api("/api/admin/anomalies?threshold="+state.threshold).then(function (d) {
+    state.anomalies = d.anomalies || [];
+    if ($("#pip-anomalies")) $("#pip-anomalies").textContent = nf(state.anomalies.length);
+    renderAnomalies();
+    if (state.view === "dash" && state.stats) drawDash();
+  }).catch(function(e){ if(!guard(e)){ $("#s-anom").className="skel"; $("#s-anom").textContent="Не удалось загрузить отчёт"; } });
+}
+
+var THRESHOLDS = [[0.3,"от 30%"],[0.5,"от 50%"],[1,"в 2 раза"],[2,"в 3 раза"]];
+
+function renderAnomalies() {
+  var body = $("#t-anom tbody"), box = $("#s-anom");
+  clear(body); clear(box); box.className = "";
+
+  var label = THRESHOLDS.filter(function(t){ return t[0]===state.threshold; })[0];
+  var btn = $("#an-th"); clear(btn);
+  btn.appendChild(ico(ICONS.scale,14));
+  btn.appendChild(document.createTextNode("Отклонение " + (label ? label[1] : state.threshold*100+"%")));
+
+  var q = state.q.anom.trim().toLowerCase();
+  var rows = (state.anomalies||[]).filter(function (a) {
+    if (!q) return true;
+    return (a.name||"").toLowerCase().indexOf(q)>=0 || (a.shop_name||"").toLowerCase().indexOf(q)>=0;
+  });
+  rows = sortRows(rows, state.sort.anom, function (a, k) {
+    return k === "deviation_percent" ? Math.abs(a.deviation_percent) : a[k];
+  });
+  $("#c-anom").textContent = countLabel(q, rows.length, (state.anomalies||[]).length);
+  markSort("#t-anom", state.sort.anom);
+
+  if (!rows.length) {
+    box.appendChild(emptyBox(
+      q ? "Ничего не найдено" : "Подозрительных цен нет",
+      q ? "Попробуйте другой запрос."
+        : "Сравнение идёт по медиане цены на тот же товар внутри той же категории магазинов. Нужно минимум 3 магазина с ценой на строку, иначе «рынок» — это один продавец."));
+    return;
+  }
+
+  rows.forEach(function (a) {
+    var tr = el("tr");
+
+    var dv = el("td");
+    var high = a.deviation_percent > 0;
+    dv.appendChild(el("span", high ? "tag rd" : "tag gr", (high?"+":"") + a.deviation_percent + "%"));
+    dv.appendChild(el("div","d", high ? "дороже рынка" : "дешевле рынка"));
+    tr.appendChild(dv);
+
+    tr.appendChild(el("td","b", a.name));
+
+    var sh = el("td");
+    sh.appendChild(el("div", null, a.shop_name));
+    sh.appendChild(el("div","d", catName(a.shop_category)));
+    tr.appendChild(sh);
+
+    tr.appendChild(el("td","num b", money(a.price)));
+    tr.appendChild(el("td","num d", money(a.median_price)));
+    tr.appendChild(el("td","num d", nf(a.market_shops)));
+
+    var act = el("td","r");
+    var open = iconBtn(ICONS.box, "Открыть каталог магазина", null, function () {
+      var shop = (state.shops||[]).filter(function(s){ return s.id===a.shop_id; })[0];
+      if (shop) { openProducts(shop); return; }
+      // the shops tab has not been opened yet, so there is nothing in memory to hand the modal
+      loadShops().then(function () {
+        var found = (state.shops||[]).filter(function(s){ return s.id===a.shop_id; })[0];
+        if (found) openProducts(found); else toast("Магазин не найден", true);
+      });
+    });
+    act.appendChild(open); tr.appendChild(act);
+
+    body.appendChild(tr);
+  });
+}
+
+// ═══════════════════════ templates ═══════════════════════
+
+function loadTemplates() {
+  var host = $("#tpl-list");
+  if (!state.templates) { clear(host); host.appendChild(el("div","skel","Загрузка шаблонов…")); }
+  return api("/api/admin/templates").then(function (d) {
+    state.templates = d.templates || []; renderTemplates();
+  }).catch(function (e) {
+    if (guard(e)) return;
+    clear(host); host.appendChild(el("div","skel","Не удалось загрузить шаблоны"));
+  });
+}
+
+function renderTemplates() {
+  var host = $("#tpl-list"); clear(host);
+
+  var intro = el("div","card plain"); intro.style.marginBottom = "16px";
+  intro.appendChild(el("h2",null,"Как это работает"));
+  [
+    "Шаблон — это список товаров, которым заполняется каталог нового магазина. Здесь его можно менять: добавлять товары, править названия и единицы, удалять лишнее.",
+    "Изменения действуют на магазины, которые будут созданы дальше. Магазины, которые уже существуют, остаются со своим списком — их догоняет кнопка «Применить ко всем»: она добавит новые строки, поправит названия и уберёт удалённые. Цены при этом не трогаются.",
+    "Ключ товара нельзя изменить после создания: именно по нему товар сравнивается между магазинами. Смена ключа не переименовала бы товар, а оторвала бы его от всех магазинов, где он уже стоит."
+  ].forEach(function (text, i) {
+    var p = el("p","cap", text);
+    p.style.marginTop = i === 0 ? "8px" : "10px";
+    p.style.fontSize = "13.5px"; p.style.lineHeight = "1.6";
+    intro.appendChild(p);
+  });
+  host.appendChild(intro);
+
+  state.templates.forEach(function (t) {
+    var drift = t.missing_rows > 0 || t.stale_rows > 0;
+
+    var actions = el("div");
+    actions.style.display = "flex"; actions.style.gap = "8px"; actions.style.flexWrap = "wrap";
+
+    var add = el("button","pill");
+    add.appendChild(ico(["M12 5v14","M5 12h14"],14));
+    add.appendChild(document.createTextNode("Добавить товар"));
+    add.addEventListener("click", function(){ addTemplateItem(t); });
+    actions.appendChild(add);
+
+    var sync = el("button", "pill" + (drift ? " solid" : ""));
+    sync.appendChild(ico(ICONS.sync,14));
+    sync.appendChild(document.createTextNode("Применить ко всем"));
+    sync.addEventListener("click", function(){ confirmSync(t); });
+    actions.appendChild(sync);
+
+    var c = card("plain", catName(t.category),
+      t.size + " позиций · " + nf(t.shops) + " магазинов" + (t.owner_named ? " · названия пишет владелец" : ""),
+      actions);
+    c.style.marginBottom = "16px";
+
+    var status = el("div");
+    status.style.display="flex"; status.style.gap="10px"; status.style.flexWrap="wrap"; status.style.marginBottom="16px";
+    if (drift) {
+      if (t.missing_rows > 0) status.appendChild(el("span","tag am","не хватает строк в магазинах: " + nf(t.missing_rows)));
+      if (t.stale_rows > 0) status.appendChild(el("span","tag rd","лишних строк в магазинах: " + nf(t.stale_rows)));
+    } else {
+      status.appendChild(el("span","tag gr","все магазины совпадают с шаблоном"));
+    }
+    c.appendChild(status);
+
+    var tbl = el("div","tbl");
+    var sc = el("div","scroll"); sc.style.maxHeight = "380px";
+    var tb = el("table");
+    var th = el("thead"); var hr = el("tr");
+    ["Ключ","Товар","Категория","Ед.","Фото",""].forEach(function(h){ hr.appendChild(el("th",null,h)); });
+    th.appendChild(hr); tb.appendChild(th);
+
+    var body = el("tbody");
+    if (!t.items.length) {
+      var tr = el("tr"); var td = el("td"); td.colSpan = 6;
+      td.appendChild(emptyBox("Шаблон пуст","Магазины этой категории будут создаваться без товаров."));
+      tr.appendChild(td); body.appendChild(tr);
+    }
+    t.items.forEach(function (it) {
+      var tr = el("tr");
+      tr.appendChild(el("td","mono d", it.key));
+      tr.appendChild(el("td","b", it.name));
+      tr.appendChild(el("td","d", pcatName(it.category)));
+      tr.appendChild(el("td","d", it.unit));
+      tr.appendChild(el("td","d mono", it.image_path || "—"));
+
+      var act = el("td","r"); var wrap = el("div","acts");
+      wrap.appendChild(iconBtn(ICONS.edit,"Редактировать",null,function(){ editTemplateItem(t, it); }));
+      wrap.appendChild(iconBtn(ICONS.trash,"Удалить из шаблона","dg",function(){ deleteTemplateItem(t, it); }));
+      act.appendChild(wrap); tr.appendChild(act);
+
+      body.appendChild(tr);
+    });
+    tb.appendChild(body); sc.appendChild(tb); tbl.appendChild(sc); c.appendChild(tbl);
+    host.appendChild(c);
+  });
+}
+
+// the twelve product categories, as options for the pickers below
+function productCategoryOptions() {
+  return Object.keys(PRODUCT_CATS).map(function(k){ return [k, PRODUCT_CATS[k]]; });
+}
+
+// a key the founder does not have to invent: the category prefix plus a transliterated slug of the
+// name. it is only a suggestion - the field stays editable, because the key is permanent and the
+// person adding the row is the one who knows whether it should match an existing naming pattern.
+var TRANSLIT = { а:"a",б:"b",в:"v",г:"g",д:"d",е:"e",ё:"e",ж:"zh",з:"z",и:"i",й:"y",к:"k",л:"l",м:"m",
+  н:"n",о:"o",п:"p",р:"r",с:"s",т:"t",у:"u",ф:"f",х:"h",ц:"c",ч:"ch",ш:"sh",щ:"sch",ъ:"",ы:"y",ь:"",
+  э:"e",ю:"yu",я:"ya" };
+
+function suggestKey(category, name) {
+  var slug = String(name).toLowerCase().split("").map(function (ch) {
+    if (TRANSLIT[ch] !== undefined) return TRANSLIT[ch];
+    if (/[a-z0-9]/.test(ch)) return ch;
+    return "_";
+  }).join("").replace(/_+/g,"_").replace(/^_|_$/g,"").slice(0,40);
+  return slug ? category + "." + slug : "";
+}
+
+function addTemplateItem(t) {
+  modal({
+    title:"Новый товар в шаблоне",
+    sub:catName(t.category) + " · добавится в конец списка",
+    iconClass:"o", icon:ICONS.tpl,
+    fields:[
+      { name:"name", label:"Название" },
+      { name:"template_key", label:"Ключ (навсегда)",
+        note:"Ключ нельзя будет изменить: по нему товар сравнивается между магазинами. Латиница, цифры, точка и подчёркивание." },
+      { name:"category", label:"Категория товара", type:"select", value:"tools", options:productCategoryOptions() },
+      { name:"unit", label:"Единица измерения", value:"шт", half:true },
+      { name:"image_path", label:"Фото (путь)", value:"", half:true }
+    ],
+    note:"Новый товар появится у магазинов, созданных после этого. Чтобы он появился и у существующих, нажмите «Применить ко всем» — они выпадут из сравнения цен, пока владельцы не укажут цену.",
+    autoKey:true, keyPrefix:t.category,
+    confirmLabel:"Добавить",
+    onConfirm:function (v) {
+      if (!v.template_key) { toast("Укажите ключ", true); return Promise.reject(new Error("no key")); }
+      return api("/api/admin/templates/"+t.category+"/items", { method:"POST", body: JSON.stringify({
+        template_key:v.template_key, name:v.name, category:v.category, unit:v.unit, image_path:v.image_path
+      })}).then(function () {
+        loadTemplates(); toast("Товар добавлен в шаблон");
+      }).catch(function (e) {
+        if (guard(e)) return;
+        toast(e.code==="key_taken" ? "Такой ключ уже используется"
+          : e.code==="invalid_key" ? "Ключ: только латиница, цифры, точка и подчёркивание"
+          : e.code==="missing_fields" ? "Заполните название и единицу"
+          : e.code==="invalid_category" ? "Неизвестная категория товара"
+          : "Не удалось добавить", true);
+        throw e;
+      });
+    }
+  });
+}
+
+function editTemplateItem(t, it) {
+  modal({
+    title:"Редактировать товар шаблона",
+    sub:catName(t.category),
+    iconClass:"o", icon:ICONS.edit,
+    fields:[
+      { name:"name", label:"Название", value:it.name },
+      { name:"category", label:"Категория товара", type:"select", value:it.category, options:productCategoryOptions() },
+      { name:"unit", label:"Единица измерения", value:it.unit, half:true },
+      { name:"image_path", label:"Фото (путь)", value:it.image_path || "", half:true },
+      { name:"template_key", label:"Ключ", value:it.key, disabled:true,
+        note:"Ключ изменить нельзя. Он не переименовал бы товар, а оторвал бы его от всех магазинов, где товар уже стоит — при следующей синхронизации их строки удалились бы вместе с ценами." }
+    ],
+    note:"Изменения дойдут до существующих магазинов только после «Применить ко всем». Цены при этом не трогаются.",
+    confirmLabel:"Сохранить",
+    onConfirm:function (v) {
+      return api("/api/admin/template-items/"+it.id, { method:"PUT", body: JSON.stringify({
+        name:v.name, category:v.category, unit:v.unit, image_path:v.image_path
+      })}).then(function () {
+        loadTemplates(); toast("Сохранено");
+      }).catch(function (e) {
+        if (guard(e)) return;
+        toast(e.code==="missing_fields" ? "Заполните название и единицу" : "Не удалось сохранить", true);
+        throw e;
+      });
+    }
+  });
+}
+
+function deleteTemplateItem(t, it) {
+  confirmDialog({
+    title:"Убрать товар из шаблона?",
+    body:it.name + " · " + catName(t.category),
+    names:[
+      "Новые магазины будут создаваться без этого товара",
+      "У существующих " + nf(t.shops) + " магазинов он останется, пока не нажать «Применить ко всем»",
+      "При синхронизации строка удалится вместе с ценой, которую владелец успел указать"
+    ],
+    onConfirm:function () {
+      return api("/api/admin/template-items/"+it.id, { method:"DELETE" }).then(function () {
+        loadTemplates(); toast("Товар убран из шаблона");
+      }).catch(function (e) {
+        if (guard(e)) return;
+        toast("Не удалось удалить", true); throw e;
+      });
+    }
+  });
+}
+
+
+function confirmSync(t) {
+  var names = [];
+  if (t.missing_rows > 0) names.push("Добавится строк: " + nf(t.missing_rows) + " — без цены");
+  if (t.stale_rows > 0) names.push("Удалится строк: " + nf(t.stale_rows) + " — вместе с ценами, которые владельцы уже ввели");
+  names.push(t.owner_named
+    ? "Названия НЕ трогаются: в этой категории их пишет владелец"
+    : "Названия, единицы и фото приводятся к шаблону");
+  names.push("Цены и наличие не меняются");
+
+  confirmDialog({
+    title:"Применить шаблон ко всем магазинам?",
+    body:catName(t.category) + " · " + nf(t.shops) + " магазинов. Действие нельзя отменить.",
+    names:names,
+    warn: t.missing_rows > 0
+      ? "Новые строки добавятся без цены, а магазин попадает в сравнение цен только с полностью заполненным каталогом. Все магазины этой категории временно выпадут из сравнения, пока владельцы не проставят цены."
+      : null,
+    confirmLabel:"Применить",
+    danger:t.stale_rows > 0,
+    onConfirm:function () {
+      return api("/api/admin/templates/"+t.category+"/sync", { method:"POST" }).then(function (r) {
+        toast("Готово: +" + nf(r.inserted) + " · изменено " + nf(r.updated) + " · удалено " + nf(r.deleted));
+        loadTemplates(); loadStats();
+        if (state.shops) loadShops();
+        if (state.anomalies) loadAnomalies();
+      }).catch(function (e) {
+        if (guard(e)) return;
+        toast("Не удалось применить шаблон", true); throw e;
+      });
+    }
+  });
+}
+
+// ═══════════════════════ dialogs ═══════════════════════
+//
+// the same shape as DestructiveConfirmDialog in the phone app: the body names what disappears rather
+// than asking "are you sure", cancel sits first, and the confirming button is on the right. two
+// surfaces disagreeing about which side is safe is how somebody's shop gets deleted by muscle memory.
+
+function shell(opts) {
+  var scrim = el("div","scrim");
+  var m = el("div","modal" + (opts.size ? " " + opts.size : "") + (opts.cls ? " " + opts.cls : ""));
+  // `bare` skips the icon/title/sub block for a modal that is not a form with a heading - the chat
+  // window builds its own header. everything below it (scrim, escape, click-outside) is the reason
+  // to come through here rather than hand-rolling the shell a second time.
+  if (!opts.bare) {
+    var g = el("div","m-ico " + (opts.iconClass||"dg"));
+    g.appendChild(ico(opts.icon||ICONS.anom,22)); m.appendChild(g);
+    m.appendChild(el("h3",null,opts.title));
+    if (opts.sub) m.appendChild(el("p","m-sub",opts.sub));
+  }
+  scrim.appendChild(m); document.body.appendChild(scrim);
+
+  // `onClose` runs once, however the modal was dismissed - the × button, Escape, or a click on the
+  // scrim. All three already route through `shut`, so this is the one place that can see all of
+  // them; a caller wiring three listeners of its own would eventually wire two.
+  //
+  // It exists for the chat window, which hands its open conversation to the live-refresh loop and
+  // has to take it back again. A modal that kept polling after it was closed would be an invisible
+  // request every eight seconds for the rest of the session.
+  var closed = false;
+  function shut(){
+    if (closed) return;
+    closed = true;
+    document.removeEventListener("keydown",onKey);
+    scrim.remove();
+    if (opts.onClose) opts.onClose();
+  }
+  function onKey(e){ if(e.key==="Escape") shut(); }
+  document.addEventListener("keydown", onKey);
+  scrim.addEventListener("click", function(e){ if(e.target===scrim) shut(); });
+  return { scrim:scrim, modal:m, close:shut };
+}
+
+// ═══════════════════════ map picker ═══════════════════════
+//
+// **a slippy map in about 120 lines, with no library.** The alternative was Leaflet off a CDN, and
+// it was rejected for the reason the rest of this file is written the way it is: the admin's JWT
+// lives in localStorage, so every user-supplied string here reaches the page through textContent
+// rather than innerHTML. A <script src="//cdn…"> would undo all of that in one tag - whoever
+// controls that host gets to run code next to the token. Raster tiles are <img> elements and an
+// image cannot read localStorage, so the pictures can come from someone else while the code does
+// not. It also means the panel keeps working the way it does today: one binary, nothing to fetch
+// at boot, nothing to pin a version of.
+//
+// **Coordinates stay the authoritative input and the map is a second way to type them.** Both
+// directions are wired: clicking the map writes the numbers, editing a number moves the pin. That
+// is deliberate rather than lazy - the API validates lat/lng, `ST_MakePoint` stores exactly those
+// two numbers, and a picker that hid them would make a wrong point unfixable by hand.
+
+var TILE_URL = "https://tile.openstreetmap.org/";
+// Tashkent. only used when a shop somehow has no coordinates at all; every shop made through the
+// app has them, because the add-store form will not submit without a point.
+var HOME = { lat: 41.311081, lng: 69.240562 };
+var Z_MIN = 3, Z_MAX = 19;
+
+// web mercator, in world pixels: 256 px per tile, 2^z tiles per side.
+function lngToX(lng, z) { return (lng + 180) / 360 * 256 * Math.pow(2, z); }
+function latToY(lat, z) {
+  var s = Math.sin(Math.max(Math.min(lat, 85.05112878), -85.05112878) * Math.PI / 180);
+  return (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * 256 * Math.pow(2, z);
+}
+function xToLng(x, z) { return x / (256 * Math.pow(2, z)) * 360 - 180; }
+function yToLat(y, z) {
+  var n = Math.PI - 2 * Math.PI * y / (256 * Math.pow(2, z));
+  return 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+}
+function round6(v) { return Math.round(v * 1e6) / 1e6; }
+
+// builds the whole block - search row, map, hint - and keeps it in step with the two coordinate
+// inputs it is handed. returns the element; the caller decides where it goes in the form.
+function mapPicker(startLat, startLng, latInput, lngInput) {
+  var lat = isFinite(startLat) && startLat !== 0 ? Number(startLat) : HOME.lat;
+  var lng = isFinite(startLng) && startLng !== 0 ? Number(startLng) : HOME.lng;
+  var zoom = 16;
+  var ox = 0, oy = 0;                 // world pixel of the frame's top-left corner
+  var tiles = {};                     // "z/x/y@col" -> img, so panning reuses what is already loaded
+
+  var box = el("div");
+
+  // ── find a place by name ──
+  var find = el("div","mapx-find");
+  var fq = el("input"); fq.type = "text"; fq.placeholder = "Найти по названию или адресу";
+  var fb = el("button","", "Найти"); fb.type = "button";
+  find.appendChild(fq); find.appendChild(fb);
+  box.appendChild(find);
+
+  // ── the map ──
+  var frame = el("div","mapx-frame");
+  var layer = el("div","mapx-layer");
+  var pin = el("div","mapx-pin"); pin.appendChild(el("i"));
+  frame.appendChild(layer); frame.appendChild(pin);
+
+  var zc = el("div","mapx-zoom");
+  var zin = el("button","","+"); zin.type = "button"; zin.title = "Приблизить";
+  var zout = el("button","","−"); zout.type = "button"; zout.title = "Отдалить";
+  zc.appendChild(zin); zc.appendChild(zout); frame.appendChild(zc);
+
+  var attr = el("div","mapx-attr");
+  var a = el("a", null, "© OpenStreetMap");
+  a.href = "https://www.openstreetmap.org/copyright"; a.target = "_blank"; a.rel = "noopener";
+  attr.appendChild(a); frame.appendChild(attr);
+
+  box.appendChild(frame);
+  box.appendChild(el("div","mapx-tip","Нажмите на карту, чтобы поставить точку. Перетаскивайте, чтобы сдвинуть; колесо или ± — масштаб."));
+
+  function centre() {
+    var W = frame.clientWidth, H = frame.clientHeight;
+    ox = lngToX(lng, zoom) - W / 2;
+    oy = latToY(lat, zoom) - H / 2;
+  }
+
+  var laid = false, waits = 0;
+  function draw() {
+    var W = frame.clientWidth, H = frame.clientHeight;
+    // the picker is built before its form is attached, so the frame has no size on the first pass.
+    // the counter is the bail-out: a modal closed before it ever laid out would otherwise leave this
+    // rescheduling itself for the life of the page.
+    if (!W || !H) { if (waits++ < 120) requestAnimationFrame(draw); return; }
+    if (!laid) { laid = true; centre(); }
+
+    var n = Math.pow(2, zoom);
+    var x0 = Math.floor(ox / 256), x1 = Math.floor((ox + W) / 256);
+    var y0 = Math.floor(oy / 256), y1 = Math.floor((oy + H) / 256);
+    var want = {};
+
+    for (var ty = y0; ty <= y1; ty++) {
+      if (ty < 0 || ty >= n) continue;                       // no tiles above the pole or below it
+      for (var tx = x0; tx <= x1; tx++) {
+        var wx = ((tx % n) + n) % n;                         // wrap across the antimeridian
+        var key = zoom + "/" + wx + "/" + ty + "@" + tx;     // tx in the key: a repeated column is its own img
+        want[key] = 1;
+        var img = tiles[key];
+        if (!img) {
+          img = new Image();
+          img.className = "mapx-tile"; img.alt = ""; img.decoding = "async";
+          img.addEventListener("load", function () { this.classList.add("on"); });
+          img.src = TILE_URL + zoom + "/" + wx + "/" + ty + ".png";
+          tiles[key] = img; layer.appendChild(img);
+        }
+        img.style.transform = "translate3d(" + (tx * 256 - ox) + "px," + (ty * 256 - oy) + "px,0)";
+      }
+    }
+    Object.keys(tiles).forEach(function (k) {
+      if (!want[k]) { tiles[k].remove(); delete tiles[k]; }
+    });
+
+    pin.style.transform = "translate3d(" + (lngToX(lng, zoom) - ox) + "px," + (latToY(lat, zoom) - oy) + "px,0)";
+    zin.disabled = zoom >= Z_MAX; zout.disabled = zoom <= Z_MIN;
+  }
+
+  // the numbers are the record; the map writes them the same way a keyboard would.
+  function publish() {
+    latInput.value = String(round6(lat));
+    lngInput.value = String(round6(lng));
+  }
+
+  function setPoint(nlat, nlng, recentre) {
+    lat = nlat; lng = nlng;
+    if (recentre) centre();
+    publish(); draw();
+  }
+
+  // zoom about a fixed screen point, so the thing under the cursor stays under the cursor
+  function zoomTo(z, px, py) {
+    z = Math.max(Z_MIN, Math.min(Z_MAX, z));
+    if (z === zoom) return;
+    var k = Math.pow(2, z - zoom);
+    ox = (ox + px) * k - px;
+    oy = (oy + py) * k - py;
+    zoom = z; draw();
+  }
+
+  // ── drag to pan, click to place. one gesture decides which it was: a pointer that moved more
+  // than a few pixels was a pan, and dropping a pin under it would be a misfire on every drag. ──
+  var down = null;
+  frame.addEventListener("pointerdown", function (e) {
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    down = { x:e.clientX, y:e.clientY, ox:ox, oy:oy, moved:false };
+    // capture keeps a drag alive when the pointer leaves the frame. it throws if the id is not an
+    // active pointer, which a synthetic event is - the drag still works without it, so it is not
+    // worth failing the gesture over.
+    try { frame.setPointerCapture(e.pointerId); } catch (err) {}
+    frame.classList.add("drag");
+  });
+  frame.addEventListener("pointermove", function (e) {
+    if (!down) return;
+    var dx = e.clientX - down.x, dy = e.clientY - down.y;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) down.moved = true;
+    ox = down.ox - dx; oy = down.oy - dy; draw();
+  });
+  frame.addEventListener("pointerup", function (e) {
+    if (!down) return;
+    var wasDrag = down.moved; down = null;
+    frame.classList.remove("drag");
+    if (wasDrag) return;
+    var r = frame.getBoundingClientRect();
+    setPoint(yToLat(oy + (e.clientY - r.top), zoom), xToLng(ox + (e.clientX - r.left), zoom), false);
+  });
+  frame.addEventListener("pointercancel", function () { down = null; frame.classList.remove("drag"); });
+
+  // preventDefault, or the wheel scrolls the modal behind the map instead of zooming it
+  frame.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    var r = frame.getBoundingClientRect();
+    zoomTo(zoom + (e.deltaY < 0 ? 1 : -1), e.clientX - r.left, e.clientY - r.top);
+  }, { passive:false });
+
+  zin.addEventListener("click", function () { zoomTo(zoom + 1, frame.clientWidth / 2, frame.clientHeight / 2); });
+  zout.addEventListener("click", function () { zoomTo(zoom - 1, frame.clientWidth / 2, frame.clientHeight / 2); });
+
+  // typing a coordinate moves the pin, which is what makes the pair of fields still usable: paste a
+  // point from somewhere else and the map follows instead of contradicting it.
+  function fromFields() {
+    var a2 = parseFloat(latInput.value), b2 = parseFloat(lngInput.value);
+    if (!isFinite(a2) || !isFinite(b2)) return;
+    if (a2 === lat && b2 === lng) return;
+    lat = a2; lng = b2; centre(); draw();
+  }
+  latInput.addEventListener("change", fromFields);
+  lngInput.addEventListener("change", fromFields);
+
+  // ── geocoding, on submit only ──
+  //
+  // Nominatim is free and keyless, and its usage policy is the reason this fires on a button press
+  // rather than as-you-type: it asks for at most one request a second and no bulk use. Biased to
+  // Uzbekistan because that is the whole market - unbiased, "Чиланзар" lands wherever the planet
+  // happens to have the better-known match.
+  function search() {
+    var q = fq.value.trim();
+    if (q.length < 3) { toast("Введите хотя бы три символа", true); return; }
+    fb.disabled = true; var was = fb.textContent; fb.textContent = "…";
+    fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=uz&accept-language=ru&q="
+          + encodeURIComponent(q))
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error(String(r.status))); })
+      .then(function (hits) {
+        if (!hits || !hits.length) { toast("Ничего не найдено", true); return; }
+        zoom = 16;
+        setPoint(parseFloat(hits[0].lat), parseFloat(hits[0].lon), true);
+      })
+      .catch(function () { toast("Поиск недоступен — поставьте точку вручную", true); })
+      .then(function () { fb.disabled = false; fb.textContent = was; });
+  }
+  fb.addEventListener("click", search);
+  // the picker lives inside a form-shaped modal whose primary button is «Сохранить»; without this,
+  // Enter in the search box would save the shop rather than search for the place.
+  fq.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); search(); } });
+
+  publish(); draw();
+  return box;
+}
+
+function confirmDialog(o) {
+  var s = shell({ title:o.title, sub:o.body, icon:ICONS.anom, iconClass:"dg" });
+
+  if (o.names && o.names.length) {
+    var ul = el("ul","names");
+    o.names.forEach(function(t){ ul.appendChild(el("li",null,t)); });
+    s.modal.appendChild(ul);
+  }
+  if (o.warn) {
+    var w = el("div","warn"); w.appendChild(ico(ICONS.anom,16)); w.appendChild(el("span",null,o.warn));
+    s.modal.appendChild(w);
+  }
+
+  var acts = el("div","m-acts");
+  var cancel = el("button","btn btn-g","Отмена");
+  var ok = el("button", o.danger === false ? "btn btn-p" : "btn btn-d", o.confirmLabel || "Удалить");
+  acts.appendChild(cancel); acts.appendChild(ok); s.modal.appendChild(acts);
+  cancel.addEventListener("click", s.close); cancel.focus();
+
+  ok.addEventListener("click", function () {
+    ok.disabled = true; cancel.disabled = true;
+    var was = ok.textContent; ok.textContent = "…";
+    o.onConfirm().then(s.close).catch(function () {
+      ok.disabled = false; cancel.disabled = false; ok.textContent = was;
+    });
+  });
+}
+
+function modal(o) {
+  var s = shell({ title:o.title, sub:o.sub, icon:o.icon, iconClass:o.iconClass||"o", size:o.size });
+
+  var form = el("div","form");
+  var inputs = {};
+  var pair = null;
+  // a map field is built in a second pass: it wires itself to the two coordinate inputs by name, and
+  // those may be declared after it in the field list.
+  var maps = [];
+
+  o.fields.forEach(function (f) {
+    if (f.type === "map") {
+      var slot = el("div");
+      slot.appendChild(el("span","lb",f.label));
+      pair = null; form.appendChild(slot);
+      maps.push({ f:f, slot:slot });
+      return;
+    }
+    var label = el("label");
+    label.appendChild(el("span","lb",f.label));
+
+    var input;
+    if (f.type === "select") {
+      input = el("select");
+      f.options.forEach(function (opt) {
+        var op = el("option",null,opt[1]); op.value = opt[0];
+        if (String(opt[0]) === String(f.value)) op.selected = true;
+        input.appendChild(op);
+      });
+    } else {
+      input = el("input");
+      input.type = "text";
+      input.value = f.value === null || f.value === undefined ? "" : String(f.value);
+      if (f.disabled) input.disabled = true;
+    }
+    inputs[f.name] = input;
+    label.appendChild(input);
+
+    if (f.note) {
+      var n = el("div","locked");
+      n.appendChild(ico(ICONS.lock,13));
+      n.appendChild(el("span",null,f.note));
+      label.appendChild(n);
+    }
+
+    // two half-width fields share a row (latitude / longitude)
+    if (f.half) {
+      if (!pair) { pair = el("div","two"); form.appendChild(pair); }
+      pair.appendChild(label);
+      if (pair.children.length === 2) pair = null;
+    } else {
+      pair = null;
+      form.appendChild(label);
+    }
+  });
+  maps.forEach(function (m) {
+    m.slot.appendChild(mapPicker(m.f.lat, m.f.lng, inputs[m.f.latField], inputs[m.f.lngField]));
+  });
+  s.modal.appendChild(form);
+
+  if (o.note) {
+    var nb = el("div","warn"); nb.style.background = "var(--o-50)"; nb.style.color = "#8A4302";
+    nb.appendChild(ico(ICONS.crown,16)); nb.appendChild(el("span",null,o.note));
+    s.modal.appendChild(nb);
+  }
+
+  var acts = el("div","m-acts");
+  var cancel = el("button","btn btn-g","Отмена");
+  var ok = el("button","btn btn-p", o.confirmLabel || "Сохранить");
+  acts.appendChild(cancel); acts.appendChild(ok); s.modal.appendChild(acts);
+  cancel.addEventListener("click", s.close);
+
+  // typing a name fills the key in for you, until you touch the key yourself. the key is permanent,
+  // so it must stay editable - but nobody should have to transliterate «Пена монтажная» by hand to
+  // add a product.
+  if (o.autoKey && inputs.name && inputs.template_key) {
+    var keyTouched = false;
+    inputs.template_key.addEventListener("input", function () { keyTouched = true; });
+    inputs.name.addEventListener("input", function () {
+      if (!keyTouched) inputs.template_key.value = suggestKey(o.keyPrefix || state.templateCategory || "", inputs.name.value);
+    });
+  }
+
+  var first = o.fields.filter(function(f){ return !f.disabled && f.type !== "map"; })[0];
+  if (first && inputs[first.name]) inputs[first.name].focus();
+
+  ok.addEventListener("click", function () {
+    var values = {};
+    Object.keys(inputs).forEach(function(k){ values[k] = inputs[k].value.trim ? inputs[k].value.trim() : inputs[k].value; });
+    ok.disabled = true; cancel.disabled = true;
+    var was = ok.textContent; ok.textContent = "…";
+    o.onConfirm(values).then(s.close).catch(function () {
+      ok.disabled = false; cancel.disabled = false; ok.textContent = was;
+    });
+  });
+}
+
+// ═══════════════════════ wiring ═══════════════════════
+
+$("#l-go").addEventListener("click", startLogin);
+$("#l-out").addEventListener("click", function(){ signOut(); });
+$("#refresh").addEventListener("click", function(){ refresh(); });
+$("#l-copy").addEventListener("click", function () {
+  var url = $("#l-url").textContent;
+  var done = function(){ $("#l-copy").textContent="Скопировано"; setTimeout(function(){ $("#l-copy").textContent="Копировать"; },1600); };
+  if (navigator.clipboard) navigator.clipboard.writeText(url).then(done, function(){}); else done();
+});
+
+$("#q-users").addEventListener("input", function(e){ state.q.users = e.target.value; renderUsers(); });
+$("#q-shops").addEventListener("input", function(e){ state.q.shops = e.target.value; renderShops(); });
+$("#q-anom").addEventListener("input", function(e){ state.q.anom = e.target.value; renderAnomalies(); });
+$("#q-support").addEventListener("input", function(e){ state.q.support = e.target.value; renderSupport(); });
+
+// the header field is a shortcut into whichever list is open rather than a fifth search: three
+// boxes on screen searching different things is how a user ends up typing into the wrong one.
+$("#q-global").addEventListener("input", function (e) {
+  var v = e.target.value;
+  if (state.view === "users") { state.q.users = v; $("#q-users").value = v; renderUsers(); }
+  else if (state.view === "shops") { state.q.shops = v; $("#q-shops").value = v; renderShops(); }
+});
+
+$("#an-th").addEventListener("click", function () {
+  var i = THRESHOLDS.map(function(t){ return t[0]; }).indexOf(state.threshold);
+  state.threshold = THRESHOLDS[(i+1) % THRESHOLDS.length][0];
+  state.anomalies = null;
+  loadAnomalies();
+});
+
+wireSort("#t-users", state.sort.users, renderUsers);
+wireSort("#t-shops", state.sort.shops, renderShops);
+wireSort("#t-anom", state.sort.anom, renderAnomalies);
+wireSort("#t-support", state.sort.support, renderSupport);
+
+// coming back to the tab catches up immediately rather than waiting out whichever interval was
+// running when it was hidden. this is the other half of `document.hidden` in liveTick: together they
+// mean a panel left open on a second monitor costs nothing and a panel being looked at is current.
+document.addEventListener("visibilitychange", function () {
+  if (!document.hidden) liveNow();
+});
+
+// the charts are measured in pixels, so they have to be redrawn when the window changes size.
+// debounced, or a drag across a monitor redraws on every frame.
+var rt = null;
+window.addEventListener("resize", function () {
+  clearTimeout(rt);
+  rt = setTimeout(function () {
+    if (state.view === "dash" && state.stats) drawSignups(state.stats.signups);
+  }, 180);
+});
+
+// ── boot ──
+// a stored token is a claim to check, not proof. /api/me decides, and it is also what catches an
+// account whose admin role was removed while the tab was closed.
+(function boot() {
+  var stored = null;
+  try { stored = localStorage.getItem(TOKEN_KEY); } catch (e) {}
+  if (!stored) return;
+  state.token = stored;
+  api("/api/me").then(function (me) {
+    if (me.role !== "admin") { signOut("forbidden"); return; }
+    state.me = me; enter();
+  }).catch(function () {
+    state.token = null; try { localStorage.removeItem(TOKEN_KEY); } catch (e) {}
+  });
+})();
+
+})();
+</script>
+</body>
+</html>

@@ -326,8 +326,8 @@ func TestWallpaperShopIsSeededWithTenSlots(t *testing.T) {
 	shop := makeSeededShop(t, ctx, tx, q, "Oboi4", catalog.CategoryWallpaper, false)
 
 	listed := listProducts(t, ctx, products, shop)
-	if len(listed) != catalog.WallpaperSize {
-		t.Fatalf("want %d slots, got %d", catalog.WallpaperSize, len(listed))
+	if len(listed) != len(catalog.Template(string(catalog.CategoryWallpaper))) {
+		t.Fatalf("want %d slots, got %d", len(catalog.Template(string(catalog.CategoryWallpaper))), len(listed))
 	}
 
 	for i, product := range listed {

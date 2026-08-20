@@ -45,12 +45,11 @@ app.*.map.json
 /android/app/release
 
 # Build-time config consumed by --dart-define-from-file. env.json is per-developer (it points at
-# whichever ngrok tunnel or local port that machine is running), so it is not shared - copy
-# env.example.json to env.json after cloning. Values here end up compiled into the binary and are
-# readable by anyone who unpacks the app, so nothing secret may live in these files.
+# whichever ngrok tunnel or local port that machine is running), so it is not shared - `make setup`
+# writes a starter one. Values here end up compiled into the binary and are readable by anyone who
+# unpacks the app, so nothing secret may live in these files.
 env.json
 env.*.json
-!env.example.json
 # env.prod.json is the exception and is committed on purpose: it holds the production API address
 # and a Mapbox public token, neither of which is secret (both are readable out of any shipped APK -
 # see the file's own note). Keeping it in git is what makes a release reproducible by anyone.

@@ -17,6 +17,7 @@ class Product {
     required this.isTemplate,
     required this.nameEditable,
     this.imageUrl,
+    this.ownImage = false,
   });
 
   final int id;
@@ -54,6 +55,16 @@ class Product {
   /// [ApiConfig.serverRoot] on the way in, so nothing downstream has to know that.
   final String? imageUrl;
 
+  /// Whether [imageUrl] is this shop's own upload rather than the shared catalogue photo the row was
+  /// seeded with.
+  ///
+  /// **It is what decides whether the edit screen offers "Удалить фото".** Removing means two
+  /// different things: on the owner's own upload the photo goes, and on a seeded row the catalogue's
+  /// shot comes back. On a row that is *still showing* the catalogue's shot it would do nothing at
+  /// all - so without this flag the button would be dead on most of a fresh shop's catalogue, which
+  /// is the kind of control people press twice and then report as broken.
+  final bool ownImage;
+
   bool get hasPrice => price != null;
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -71,6 +82,9 @@ class Product {
       // from before slots existed behaves exactly as it did then: `!is_template`
       nameEditable: json['name_editable'] as bool? ?? !(json['is_template'] as bool? ?? false),
       imageUrl: _absoluteImageUrl(json['image_url'] as String?),
+      // false on a backend from before uploads existed, which is exactly right there: every photo it
+      // could send is a catalogue one
+      ownImage: json['own_image'] as bool? ?? false,
     );
   }
 
@@ -112,6 +126,7 @@ class Product {
       isTemplate: isTemplate,
       nameEditable: nameEditable,
       imageUrl: imageUrl,
+      ownImage: ownImage,
     );
   }
 }

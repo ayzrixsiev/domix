@@ -249,12 +249,11 @@ func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// a plain loop of single-row inserts rather than one bulk COPY: it is at most 99 statements (the
+	// a plain loop of single-row inserts rather than one bulk COPY: it is at most 100 statements (the
 	// универсальный template), runs once in a shop's lifetime, and reuses the query sqlc already
 	// generated. worth revisiting only if templates ever grow into the thousands.
 	template := catalog.Template(category)
 	for _, item := range template {
-		imagePath := item.ImagePath(catalog.Category(category))
 		if err := qtx.SeedTemplateProduct(ctx, db.SeedTemplateProductParams{
 			ShopID: shop.ID,
 			Name:   item.Name,
@@ -266,7 +265,7 @@ func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 			TemplateKey: pgtype.Text{String: item.Key, Valid: true},
 			// null rather than "" for a template with no photo set, so the column means the same
 			// thing as products.price does: absent, not empty
-			ImagePath: pgtype.Text{String: imagePath, Valid: imagePath != ""},
+			ImagePath: pgtype.Text{String: item.ImagePath, Valid: item.ImagePath != ""},
 		}); err != nil {
 			log.Printf("CRITICAL: failed to seed template product %q into shop %d: %v", item.Key, shop.ID, err)
 			writeShopError(w, http.StatusInternalServerError, "server_error", "failed to create shop")

@@ -16,6 +16,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -54,6 +55,7 @@ func homeUnderTest(t *testing.T) (*Home, context.Context, pgx.Tx, *db.Queries) {
 	t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
 
 	q := db.New(tx)
+	loadTemplates(t, ctx, q)
 	return &Home{Queries: q}, ctx, tx, q
 }
 
@@ -211,11 +213,67 @@ func TestHomeRanksAndCountsRealData(t *testing.T) {
 	if offers[2].PriceTier == nil || *offers[2].PriceTier != "dearer" {
 		t.Fatalf("an index of 120 should read as dearer, got %v", offers[2].PriceTier)
 	}
-	wantBasket := int64(catalog.UniversalSize) * 80_000
+	wantBasket := int64(len(catalog.Template(string(catalog.CategoryUniversal)))) * 80_000
 	if offers[0].BasketPrice == nil || *offers[0].BasketPrice != wantBasket {
 		t.Fatalf("want a basket of %d alongside the badge, got %v", wantBasket, offers[0].BasketPrice)
 	}
 
+}
+
+// the wire half of the LEFT JOIN: a shop that has been granted a placement is in the carousel from
+// the moment it is granted, carrying explicit nulls rather than being missing.
+//
+// this is the same shape TestHomeSerializesAbsentIndexAsNull checks for the map, and it is here as
+// well because the two lists used to disagree - the map showed an unfinished shop and the carousel,
+// which is the one somebody paid for, silently did not.
+func TestAPaidPlacementIsInTheCarouselWithOrWithoutAPrice(t *testing.T) {
+	home, ctx, tx, q := homeUnderTest(t)
+
+	if _, err := tx.Exec(ctx, "DELETE FROM shops"); err != nil {
+		t.Fatalf("clearing shops: %v", err)
+	}
+
+	unfinished := makeSeededShop(t, ctx, tx, q, "Unfinished", catalog.CategoryUniversal, true)
+
+	var raw struct {
+		VipShops []map[string]json.RawMessage `json:"vip_shops"`
+	}
+	if rec := getJSON(t, ctx, home.Get, "/api/home", &raw); rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	if len(raw.VipShops) != 1 {
+		t.Fatalf("a granted placement must appear whatever its catalogue looks like, got %d cards",
+			len(raw.VipShops))
+	}
+	if got := string(raw.VipShops[0]["id"]); got != strconv.FormatInt(unfinished, 10) {
+		t.Fatalf("want shop %d in the carousel, got id %s", unfinished, got)
+	}
+	if got := string(raw.VipShops[0]["is_vip"]); got != "true" {
+		t.Fatalf("a card in the carousel must report is_vip true, got %s", got)
+	}
+	// nulls, not zeroes: the app draws no price and no badge, which is the truth about a shop that
+	// has not finished. a 0 would render as a free basket and "100% дешевле рынка".
+	for _, key := range []string{"basket_price", "price_tier", "price_difference_percent"} {
+		if got := string(raw.VipShops[0][key]); got != "null" {
+			t.Fatalf("an unpriced VIP shop must serialize %s as null, got %s", key, got)
+		}
+	}
+	// and the raw index stays server-side here too (§5)
+	if _, present := raw.VipShops[0]["price_index"]; present {
+		t.Fatal("price_index must not be serialized - the app renders a tier, never the number")
+	}
+
+	// it is *not* in Лучшие предложения, which is a price ranking and has nothing to rank it on
+	var payload HomeResponse
+	getJSON(t, ctx, home.Get, "/api/home", &payload)
+	for _, group := range payload.BestOffers {
+		for _, shop := range group.Shops {
+			if shop.ID == unfinished {
+				t.Fatal("a shop with no basket was ranked in Лучшие предложения")
+			}
+		}
+	}
 }
 
 // four tabs, in the canonical order, and only for categories that have shops.
@@ -384,7 +442,7 @@ func makeSeededShop(t *testing.T, ctx context.Context, tx pgx.Tx, q *db.Queries,
 			Category:    string(item.Category),
 			Unit:        item.Unit,
 			TemplateKey: pgtype.Text{String: item.Key, Valid: true},
-			ImagePath:   pgtype.Text{String: item.ImagePath(category), Valid: item.Image != ""},
+			ImagePath:   pgtype.Text{String: item.ImagePath, Valid: item.ImagePath != ""},
 		}); err != nil {
 			t.Fatalf("seed %q: %v", item.Key, err)
 		}
@@ -408,4 +466,30 @@ func priceAll(t *testing.T, ctx context.Context, tx pgx.Tx, shopID int64, price 
 		"UPDATE products SET price = $2 WHERE shop_id = $1 AND template_key IS NOT NULL", shopID, price); err != nil {
 		t.Fatalf("price products: %v", err)
 	}
+}
+
+// the templates live in `product_templates` since migration 000014 and are held in memory by
+// internal/catalog, loaded once at startup by main.go. tests do not run main.go, so every harness
+// that seeds a shop has to load them first - without it catalog.Template returns nothing and every
+// shop is created with an empty catalogue, which fails as a wrong *count* three assertions later
+// rather than as a missing setup step.
+func loadTemplates(t *testing.T, ctx context.Context, q *db.Queries) {
+	t.Helper()
+
+	rows, err := q.ListProductTemplates(ctx)
+	if err != nil {
+		t.Fatalf("read product_templates: %v", err)
+	}
+	if len(rows) == 0 {
+		t.Fatal("product_templates is empty - run `migrate -database \"$DB_URL\" -path db/migrations up`")
+	}
+
+	loaded := make([]catalog.Row, 0, len(rows))
+	for _, row := range rows {
+		loaded = append(loaded, catalog.Row{
+			ShopCategory: row.ShopCategory, Key: row.TemplateKey, Name: row.Name,
+			Category: row.Category, Unit: row.Unit, ImagePath: row.ImagePath.String,
+		})
+	}
+	catalog.Load(loaded)
 }

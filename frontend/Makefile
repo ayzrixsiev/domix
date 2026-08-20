@@ -1,20 +1,9 @@
 # Build commands for the Domix app.
-#
-# This exists so nobody has to remember `--dart-define-from-file=env.json`. That flag is not
-# strange - it is Flutter's official way to supply build-time config, and there is no alternative
-# that ships values into a compiled binary. What was wrong was typing it by hand every time and
-# having exactly one env file for two different environments.
-#
-#   env.json       your machine. gitignored, per-developer, points at your ngrok tunnel.
-#   env.prod.json  production. committed, because nothing in it is secret (see the file).
-#
-# `make dev` uses the first, `make release` the second, and neither can be run with the wrong one by
-# accident.
 
 .PHONY: help setup dev dev-skia desktop emulator gradle-stop guard-jdk analyze test check guard-prod apk-test apk release clean
 
 help:
-	@echo "make setup     - first time: copy env.example.json to env.json and fetch packages"
+	@echo "make setup     - first time: write a starter env.json and fetch packages"
 	@echo "make emulator  - boot the domix Android emulator (leave it running)"
 	@echo "make dev       - run on an Android device/emulator against your local backend"
 	@echo "make dev-skia  - same, but on the old renderer. try this if the emulator stutters."
@@ -25,10 +14,17 @@ help:
 	@echo "make apk       - production APK. needs a real domain in env.prod.json first."
 	@echo "make release   - production app bundle (.aab), the file Google Play wants"
 
+# Writes the starter env.json inline rather than copying a committed template. There is no
+# env.example.json: a two-key file is not worth a fourth copy of the same two keys, and a template
+# nobody edits drifts out of date silently. env.prod.json is the committed reference for the shape.
 setup:
-	@test -f env.json || cp env.example.json env.json
+	@test -f env.json || printf '%s\n' \
+		'{' \
+		'  "API_BASE_URL": "https://jeep-prepay-penholder.ngrok-free.dev/api/auth",' \
+		'  "MAPKIT_API_KEY": ""' \
+		'}' > env.json
 	flutter pub get
-	@echo "env.json ready - point API_BASE_URL at your backend."
+	@echo "env.json ready - check API_BASE_URL and fill in MAPKIT_API_KEY."
 
 emulator:
 	flutter emulators --launch domix

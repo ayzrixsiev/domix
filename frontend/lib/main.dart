@@ -16,6 +16,7 @@ import 'features/location/presentation/controllers/city_controller.dart';
 import 'features/profile/presentation/controllers/auth_controller.dart';
 import 'features/stores/presentation/controllers/stores_controller.dart';
 import 'features/products/presentation/controllers/products_controller.dart';
+import 'features/messages/presentation/controllers/support_controller.dart';
 
 void main() async {
   // wake up flutter engine drivers to read hardware encrypted storage before drawing ui
@@ -51,15 +52,22 @@ void main() async {
   unawaited(authController.verifySession());
   final storesController = StoresController();
   final productsController = ProductsController();
+  final supportController = SupportController();
 
-  // the one wire between the login state machine and the map's shop list.
+  // what the end of a session has to reach. a callback rather than an import in either direction:
+  // AuthController knows nothing about shops or messages and neither of them knows about sessions,
+  // and main() is the one place allowed to know about all three.
   //
-  // deleting an account destroys that owner's shops server-side (the schema cascades), so the pins
-  // the map is holding become wrong at that exact moment - and nothing would ever tell it, because
-  // the shop list is fetched once and kept. this is what tells it. a callback rather than an import
-  // in either direction: AuthController knows nothing about shops and StoresController knows nothing
-  // about sessions, and main() is the one place that is allowed to know about both.
-  authController.onSessionEnded = storesController.handleSessionEnded;
+  //   * the shops, because deleting an account destroys that owner's shops server-side (the schema
+  //     cascades), so the pins the map is holding become wrong at that exact moment - and nothing
+  //     would ever tell it, since the shop list is fetched once and kept.
+  //   * the support thread, and this one is privacy rather than staleness: a conversation left in
+  //     memory after a logout is somebody's phone number and their problem, shown to whoever signs
+  //     in on this phone next.
+  authController.onSessionEnded = (accountDeleted) {
+    storesController.handleSessionEnded(accountDeleted);
+    supportController.handleSessionEnded();
+  };
 
   runApp(
     DevicePreview(
@@ -79,6 +87,7 @@ void main() async {
           ChangeNotifierProvider.value(value: authController),      // make all
           ChangeNotifierProvider.value(value: storesController),    // UI components
           ChangeNotifierProvider.value(value: productsController),  // to listen to these controllers using notifyListener()
+          ChangeNotifierProvider.value(value: supportController),
         ],
         child: const DomixApp(),
       ),

@@ -63,6 +63,13 @@ type SupportMessage struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
+type SupportThreadRead struct {
+	AdminID      int64              `json:"admin_id"`
+	ThreadUserID int64              `json:"thread_user_id"`
+	LastReadID   int64              `json:"last_read_id"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
 type User struct {
 	ID        int64              `json:"id"`
 	Name      pgtype.Text        `json:"name"`

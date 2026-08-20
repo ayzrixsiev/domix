@@ -5,6 +5,7 @@ import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/home/data/home_content.dart';
+import 'package:frontend/features/stores/data/shop_model.dart';
 import 'package:frontend/features/home/presentation/widgets/home_shop_row.dart';
 
 /// "Лучшие предложения" - the cheapest shops, one tab per shop category.
@@ -25,12 +26,26 @@ import 'package:frontend/features/home/presentation/widgets/home_shop_row.dart';
 /// with no location input at all, so the rows show no distance: keeping "0.5 км" next to a list
 /// that ignores location would imply a proximity guarantee the section does not make.
 class BestOffersList extends StatefulWidget {
-  const BestOffersList({super.key, required this.groups});
+  const BestOffersList({super.key, required this.groups, this.onShopTap});
 
-  /// One entry per shop category that has ranked shops, already sorted and trimmed - by the server
-  /// for real data, by `home_showcase_content.dart` for the showcase rows. The widget does not know
-  /// which, and empty categories never reach it, so there is no such thing as a dead tab.
+  /// How many places each category's ranking holds. **Mirrors `bestOffersLimit` in the Go handler**,
+  /// which is what decides how many shops actually arrive; this is what decides how many rows are
+  /// drawn. The app never truncates what it was sent (see [rankedSlots]), so the two disagreeing
+  /// costs an extra row rather than a hidden shop.
+  static const int slotCount = 15;
+
+  /// One entry per shop category that has ranked shops, already sorted and trimmed by the server.
+  ///
+  /// **A category with no ranked shops is not sent and is therefore not a tab.** That rule survived
+  /// the move to fixed slots deliberately: fifteen open places under a tab nobody has qualified for
+  /// is not an invitation, it is a dead end - and the tab strip is a filter, so an option that
+  /// filters to nothing is a broken control. Open places mean something *inside* a category that
+  /// already exists.
   final List<CategoryOffers> groups;
+
+  /// Opens the shop card. Passed down to every row rather than handled here, so navigation stays out
+  /// of the leaf widgets - the same split [ProductTile] uses.
+  final ValueChanged<Shop>? onShopTap;
 
   @override
   State<BestOffersList> createState() => _BestOffersListState();
@@ -50,13 +65,23 @@ class _BestOffersListState extends State<BestOffersList> {
   @override
   Widget build(BuildContext context) {
     final strings = Provider.of<LanguageProvider>(context).strings;
-    if (widget.groups.isEmpty) return const SizedBox.shrink();
 
-    // clamped rather than trusted: didUpdateWidget catches the shrink between builds, but the very
+    // **no groups is a real state that still draws its places**, and it is where the app launches:
+    // nobody has priced a whole catalogue yet, so no category has a ranking. The section used to
+    // disappear entirely, which read as a screen missing a chunk of itself.
+    //
+    // What it shows instead is the shape the section will have - the open places fill themselves in
+    // as shops finish pricing, with nothing to change here. There is no tab strip, because the tabs
+    // come from the data and there is none; that is also why this is not "a tab with no category",
+    // which would be a filter set to nothing.
+    //
+    // clamped rather than trusted: didUpdateWidget catches a shrink between builds, but the very
     // first build after a hot reload can arrive with a stale index and `groups[_selected]` would
-    // throw rather than degrade
-    final index = _selected.clamp(0, widget.groups.length - 1);
-    final group = widget.groups[index];
+    // throw rather than degrade.
+    final index = widget.groups.isEmpty ? 0 : _selected.clamp(0, widget.groups.length - 1);
+    final shops = widget.groups.isEmpty
+        ? const <HomeShopPreview>[]
+        : widget.groups[index].shops;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,9 +98,22 @@ class _BestOffersListState extends State<BestOffersList> {
           ),
           const SizedBox(height: 12),
         ],
-        for (var i = 0; i < group.shops.length; i++) ...[
+        // the ranking padded out to a fixed number of places. `slots` is rebuilt per frame rather
+        // than cached: it is a list of fifteen references over a list the controller already holds,
+        // and caching it would mean deciding when it goes stale.
+        for (final (i, slot) in rankedSlots(shops, slotCount: BestOffersList.slotCount).indexed) ...[
           if (i > 0) const SizedBox(height: 10),
-          HomeShopRow(shop: group.shops[i], strings: strings),
+          if (slot == null)
+            EmptyShopRow(strings: strings)
+          else
+            HomeShopRow(
+              shop: slot,
+              strings: strings,
+              onTap: switch (widget.onShopTap) {
+                final ValueChanged<Shop> open => () => open(slot.shop),
+                _ => null,
+              },
+            ),
         ],
       ],
     );

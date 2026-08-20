@@ -16,7 +16,7 @@ import 'product_edit_screen.dart';
 /// how many products of their own an owner may add on top of the category template. mirrors
 /// maxCustomProducts in backend/internal/endpoints/product_crud.go, which is the one that actually
 /// enforces it - this copy only greys the add tile out before a doomed round trip.
-const int kMaxCustomProducts = 20;
+const int kMaxCustomProducts = 30;
 
 // the "Товары" section of ShopSettingsScreen: the shop's whole catalogue as a grid, in exactly the
 // layout a customer sees it on the shop's card. tap any tile to edit it, tap the last cell to add

@@ -544,7 +544,7 @@ class StoreInlineErrorCard extends StatelessWidget {
   }
 }
 
-// matches the call cta in the shop details sheet: fixed comfortable height, radius from the scale,
+// matches the call cta on the shop card: fixed comfortable height, radius from the scale,
 // and a soft colour-matched glow instead of material's default grey elevation.
 //
 // [color] exists so the destructive variant on the edit screen is the same button in red rather

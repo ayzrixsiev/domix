@@ -3,17 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
-import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
-import 'package:frontend/core/widgets/price_tier_badge.dart';
-import 'package:frontend/features/products/presentation/controllers/products_controller.dart';
-import 'package:frontend/features/products/presentation/widgets/product_grid.dart';
-import 'package:frontend/features/products/presentation/widgets/product_tile.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 import 'package:frontend/features/stores/presentation/controllers/stores_controller.dart';
+import 'package:frontend/features/stores/presentation/screens/shop_card_screen.dart';
 import '../widgets/domix_map.dart';
 import '../widgets/map_search_panel.dart';
 import '../widgets/shop_marker.dart';
@@ -142,18 +137,15 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _showShopDetails(BuildContext context, Shop shop) {
-    final strings = Provider.of<LanguageProvider>(context, listen: false).strings;
-
-    showModalBottomSheet(
-      context: context,
-      // the sheet paints its own rounded surface, so the framework's must not sit behind it
-      backgroundColor: Colors.transparent,
-      // lets the sheet size past the default ~50% cap. it's content-sized today, but this is what
-      // will let it keep working once products/promotions are added to it.
-      isScrollControlled: true,
-      barrierColor: Colors.black.withValues(alpha: 0.28),
-      builder: (ctx) => _ShopDetailsSheet(shop: shop, strings: strings),
+  /// Opens the shop card.
+  ///
+  /// **The same screen a VIP card and a Лучшие предложения row open**, which is the point: a shop is
+  /// one object and it should look like one wherever it is reached from. This used to be a modal
+  /// sheet built here in this file, so the map owned a screen three other surfaces needed and could
+  /// not have - see the class comment on [ShopCardScreen] for why it became a route.
+  void _openShopCard(BuildContext context, Shop shop) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ShopCardScreen(shop: shop)),
     );
   }
 
@@ -216,14 +208,14 @@ class _MapScreenState extends State<MapScreen> {
                   visualKey:
                       '${shop.category.code}|${shop.priceTier?.name ?? '-'}'
                       '|${shop.priceDifferencePercent ?? 0}',
-                  onTap: () => _showShopDetails(context, shop),
+                  onTap: () => _openShopCard(context, shop),
                   builder: () => ShopMarker(
                     // what the pin draws inside itself - универсальный, сантехника, древесные
                     // материалы or обои. always present, unlike the price label above: a shop's
                     // category is picked when it is created and never changes.
                     category: shop.category,
                     // omitted entirely for a shop that has not priced its whole catalogue,
-                    // which is most of them early on - matches the details sheet below.
+                    // which is most of them early on - matches the shop card the pin opens.
                     // `!= null` where this used to be `> 0`: the guard is the same guard, but it
                     // asks the model instead of inferring it from a sentinel value.
                     priceTier: shop.priceTier,
@@ -249,8 +241,10 @@ class _MapScreenState extends State<MapScreen> {
                     shops: controller.stores,
                     strings: strings,
                     onShopSelected: (shop) {
+                      // the camera moves first, so popping the card lands back on a map
+                      // already centred on the shop that was picked
                       _flyTo(shop.latitude, shop.longitude);
-                      _showShopDetails(context, shop);
+                      _openShopCard(context, shop);
                     },
                     onPlaceSelected: (place) => _flyTo(place.latitude, place.longitude),
                   ),
@@ -288,538 +282,6 @@ class _MapScreenState extends State<MapScreen> {
 // logo and copyright itself, as part of the map surface and as a condition of the licence - so
 // adding our own would be a second, wrong credit for data that is no longer OSM's. If a future
 // provider needs credit again, it belongs above the nav bar, at `bottomPadding + 10`.
-
-// ─────────────────────────────────────────────────────────────────────────────
-// shop details sheet
-//
-// laid out as a stack of independent sections separated by hairlines rather than as one block of
-// text, so sections planned for later (opening hours, promotions, more actions) drop in as
-// additional entries without the layout needing to be rethought. the sheet already scrolls and is
-// height-capped for the same reason - which is what let the product catalogue land at the bottom of
-// it without touching anything above.
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _ShopDetailsSheet extends StatelessWidget {
-  const _ShopDetailsSheet({required this.shop, required this.strings});
-
-  final Shop shop;
-  final AppLocalizations strings;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.85),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const _SheetGrabber(),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: ShopBanner(imageUrl: shop.imageFullUrl),
-              ),
-              const SizedBox(height: 16),
-
-              // identity: name carries all the emphasis, everything else steps down a level
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      shop.name,
-                      style: const TextStyle(
-                        fontSize: 21,
-                        height: 1.2,
-                        letterSpacing: -0.3,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textDark,
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    _ShopMetaLine(shop: shop, strings: strings),
-                    const SizedBox(height: 14),
-                    _BasketPriceBlock(shop: shop, strings: strings),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 18),
-              const _SheetDivider(),
-              _DetailRow(
-                icon: CupertinoIcons.location_solid,
-                label: strings.addressLabel,
-                value: shop.address,
-              ),
-              // indented to line up with the text column, the way grouped ios lists separate rows
-              const _SheetDivider(indent: _DetailRow.textInset),
-              _DetailRow(
-                icon: CupertinoIcons.phone_fill,
-                label: strings.phoneLabel,
-                value: shop.contactPhone,
-              ),
-              const _SheetDivider(),
-
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-                child: _CallButton(
-                  label: strings.callButton,
-                  onTap: () => launchUrl(Uri.parse('tel:${shop.contactPhone}')),
-                ),
-              ),
-
-              // the catalogue goes last, below the call button, on purpose: someone who opened a
-              // pin wants to know where the shop is and how to reach it first. browsing prices is
-              // the longer, scrollable part of the visit, so it goes where scrolling starts.
-              const _SheetDivider(),
-              _ShopProductsSection(shop: shop, strings: strings),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// the customer-facing half of the products feature: the same two-per-row grid the owner manages,
-// rendered read-only.
-//
-// stateful only to kick off the fetch - the products themselves live in ProductsController, keyed
-// by shop, so tapping the same pin twice in one session doesn't hit the network again.
-class _ShopProductsSection extends StatefulWidget {
-  const _ShopProductsSection({required this.shop, required this.strings});
-
-  final Shop shop;
-  final AppLocalizations strings;
-
-  @override
-  State<_ShopProductsSection> createState() => _ShopProductsSectionState();
-}
-
-class _ShopProductsSectionState extends State<_ShopProductsSection> {
-  @override
-  void initState() {
-    super.initState();
-    // deferred past the first frame for the same reason MapScreen defers its own load:
-    // loadProducts notifies before its first await, and notifying while the tree is still building
-    // trips flutter's "setState() called during build" guard
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      context.read<ProductsController>().loadProducts(widget.shop.id);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = widget.strings;
-    final controller = Provider.of<ProductsController>(context);
-    final shopId = widget.shop.id;
-
-    // only products the shop has actually priced. an unpriced row is a real product the owner
-    // simply hasn't got to yet - useful to *them*, which is why their own grid shows it - but to a
-    // customer it is a tile that answers no question, and fifty of them would bury the priced ones.
-    final priced = [
-      for (final product in controller.productsFor(shopId))
-        if (product.hasPrice) product,
-    ];
-
-    final Widget content;
-    if (controller.isLoadingFor(shopId) && !controller.hasLoaded(shopId)) {
-      content = const Padding(
-        padding: EdgeInsets.symmetric(vertical: 26),
-        child: Center(
-          child: SizedBox(
-            width: 22,
-            height: 22,
-            child: CircularProgressIndicator(strokeWidth: 2.2, color: AppColors.primaryOrange),
-          ),
-        ),
-      );
-    } else if (priced.isEmpty) {
-      // a shop that hasn't priced anything gets a line saying so rather than a hidden section.
-      // hiding it would make the sheet look like it simply has no products area, which is a
-      // different (and wrong) message.
-      content = Padding(
-        padding: const EdgeInsets.only(top: 4, bottom: 8),
-        child: Text(
-          controller.loadErrorFor(shopId) != null
-              ? strings.productsLoadError
-              : strings.noPricedProductsYet,
-          style: const TextStyle(
-            color: AppColors.textGrey,
-            fontSize: 13,
-            height: 1.4,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
-      );
-    } else {
-      content = ProductGrid(
-        // shrink-wrapped: it is inside the sheet's own SingleChildScrollView, and two scrollables
-        // fighting over one drag gesture is how a grid ends up refusing to move
-        shrinkWrap: true,
-        padding: const EdgeInsets.only(top: 4),
-        tiles: [
-          for (final product in priced)
-            ProductTile(product: product, strings: strings),
-        ],
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                strings.shopProductsSectionTitle,
-                style: const TextStyle(
-                  color: AppColors.textDark,
-                  fontSize: 16,
-                  letterSpacing: -0.2,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              if (priced.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                Text(
-                  '${priced.length}',
-                  style: const TextStyle(
-                    color: AppColors.textFaint,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 10),
-          content,
-        ],
-      ),
-    );
-  }
-}
-
-class _SheetGrabber extends StatelessWidget {
-  const _SheetGrabber();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        width: 38,
-        height: 4,
-        margin: const EdgeInsets.only(top: 10, bottom: 14),
-        decoration: BoxDecoration(
-          color: const Color(0xFFE1E4EA),
-          borderRadius: BorderRadius.circular(2),
-        ),
-      ),
-    );
-  }
-}
-
-class _SheetDivider extends StatelessWidget {
-  const _SheetDivider({this.indent = 20});
-
-  final double indent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(left: indent),
-      child: const SizedBox(height: 1, child: ColoredBox(color: AppColors.hairline)),
-    );
-  }
-}
-
-// rating and shop category on one line directly under the name. previously the rating floated on
-// the far right of the title row, which is why it read as detached - as secondary metadata it
-// belongs next to the other secondary metadata, not opposite the heading.
-//
-// the category is here as the legend for the map: the pin this sheet opened from draws a glyph for
-// сантехника or обои, and this is the only place that says in words what the glyph meant. it is the
-// same icon, so the two read as one fact seen twice rather than as two unrelated markings.
-//
-// the price comparison used to live on this line as well, squeezed in beside the rating. it moved
-// down into _BasketPriceBlock: the сум figure came off the map pin in the same change, and a number
-// that large next to a 13px rating had nowhere to go.
-class _ShopMetaLine extends StatelessWidget {
-  const _ShopMetaLine({required this.shop, required this.strings});
-
-  final Shop shop;
-  final AppLocalizations strings;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        // the separator dot goes with the rating, not with the category. left behind it would open
-        // the line with a bullet pointing at nothing. see Shop.hasRating.
-        if (shop.hasRating) ...[
-          const Icon(CupertinoIcons.star_fill, color: AppColors.starYellow, size: 13),
-          const SizedBox(width: 4),
-          Text(
-            shop.rating.toStringAsFixed(1),
-            style: const TextStyle(
-              fontSize: 13.5,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textDark,
-            ),
-          ),
-          const _MetaDot(),
-        ],
-        Icon(shop.category.icon, color: AppColors.textFaint, size: 13),
-        const SizedBox(width: 5),
-        Flexible(
-          child: Text(
-            shop.category.label(strings),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 13.5,
-              fontWeight: FontWeight.w500,
-              color: AppColors.textGrey,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// What the shared basket costs at this shop, and how that compares to the market.
-///
-/// **This is where the сум figure lives now.** It used to sit above the shop's pin on the map, where
-/// forty seven-digit numbers were competing for the same few hundred pixels; the pin carries the
-/// comparison alone (a coloured dot and "−4%") and the absolute price waits here, in the one place
-/// there is room to label it. A number nobody can label is a number nobody can check.
-///
-/// The two fields are drawn from one condition rather than one each. Since migration 000013 a shop
-/// is in the index only with its entire template priced, so `basketPrice` and `priceTier` are either
-/// both present or both absent - branching on them separately would be writing code for a state the
-/// database cannot produce.
-///
-/// **The empty case is a sentence, not a blank.** Most shops will sit here for a while: one unpriced
-/// product is enough to keep a shop out. A customer who tapped a pin and found nothing where a price
-/// should be reads that as the app failing, where a line saying the shop has not finished its prices
-/// reads as the shop's own state - the same reason the notifications screen exists rather than the
-/// bell doing nothing.
-class _BasketPriceBlock extends StatelessWidget {
-  const _BasketPriceBlock({required this.shop, required this.strings});
-
-  final Shop shop;
-  final AppLocalizations strings;
-
-  @override
-  Widget build(BuildContext context) {
-    final basket = shop.basketPrice;
-    final tier = shop.priceTier;
-
-    if (basket == null || tier == null) {
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 1),
-            child: Icon(CupertinoIcons.clock, color: AppColors.textFaint, size: 13),
-          ),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Text(
-              strings.basketPriceIncomplete,
-              style: const TextStyle(
-                fontSize: 12.5,
-                height: 1.4,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textFaint,
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 11, 14, 13),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: AppColors.hairline),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            strings.basketPrice,
-            style: const TextStyle(
-              fontSize: 11.5,
-              height: 1.2,
-              letterSpacing: 0.2,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textFaint,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            strings.somAmount(basket),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 20,
-              height: 1.15,
-              letterSpacing: -0.4,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textDark,
-            ),
-          ),
-          const SizedBox(height: 9),
-          // the full sentence, not the compact form: this sheet is where somebody who just tapped a
-          // pin reading "−4%" finds out what those four characters meant
-          Align(
-            alignment: Alignment.centerLeft,
-            child: PriceTierBadge(
-              tier: tier,
-              differencePercent: shop.priceDifferencePercent,
-              strings: strings,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MetaDot extends StatelessWidget {
-  const _MetaDot();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 3,
-      height: 3,
-      margin: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: const BoxDecoration(color: AppColors.textFaint, shape: BoxShape.circle),
-    );
-  }
-}
-
-// label above value, with a muted icon in the gutter. the label being small and faint is what lets
-// the value itself stay readable at a normal weight instead of needing bold to stand out.
-class _DetailRow extends StatelessWidget {
-  const _DetailRow({required this.icon, required this.label, required this.value});
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  /// left padding + icon width + gap - the x offset the text column starts at
-  static const double textInset = 20 + 16 + 12;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 16,
-            child: Icon(icon, color: AppColors.textFaint, size: 15),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    height: 1.2,
-                    letterSpacing: 0.2,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textFaint,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    height: 1.35,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textDark,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CallButton extends StatelessWidget {
-  const _CallButton({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        boxShadow: AppShadows.accent(AppColors.primaryOrange),
-      ),
-      child: Material(
-        color: AppColors.primaryOrange,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          onTap: onTap,
-          child: SizedBox(
-            height: 52,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(CupertinoIcons.phone_fill, color: Colors.white, size: 16),
-                const SizedBox(width: 9),
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15.5,
-                      letterSpacing: 0.1,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _MapMessageBanner extends StatelessWidget {
   const _MapMessageBanner({
@@ -924,70 +386,6 @@ class _MapMessageBanner extends StatelessWidget {
               ],
             ],
           ),
-      ),
-    );
-  }
-}
-
-// shown at the top of a shop's details sheet: the shop's real photo once that feature exists,
-// or - for now, since shops don't have photos yet - a neutral placeholder instead
-class ShopBanner extends StatelessWidget {
-  const ShopBanner({super.key, required this.imageUrl});
-
-  final String? imageUrl;
-
-  static const double height = 96;
-
-  @override
-  Widget build(BuildContext context) {
-    // foreground decoration paints the outline *over* the clipped child, so the same hairline
-    // frames a real photo and the placeholder alike
-    return DecoratedBox(
-      position: DecorationPosition.foreground,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.hairline),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        child: imageUrl != null
-            ? Image.network(
-                imageUrl!,
-                height: height,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => const _DefaultBanner(),
-              )
-            : const _DefaultBanner(),
-      ),
-    );
-  }
-}
-
-// was a full-bleed saturated orange gradient, which made the loudest thing in the sheet a
-// placeholder for missing content. now a near-neutral surface with the faintest warm tint, so the
-// shop's name is what the eye lands on first.
-class _DefaultBanner extends StatelessWidget {
-  const _DefaultBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: ShopBanner.height,
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.primarySoft, AppColors.surfaceMuted],
-        ),
-      ),
-      child: Center(
-        child: Icon(
-          CupertinoIcons.building_2_fill,
-          color: AppColors.primaryOrange.withValues(alpha: 0.42),
-          size: 30,
-        ),
       ),
     );
   }

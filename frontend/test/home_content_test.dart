@@ -17,10 +17,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/home/data/home_content.dart';
-import 'package:frontend/features/home/data/home_showcase_content.dart';
-import 'package:frontend/features/products/data/product_category.dart';
 import 'package:frontend/features/stores/data/price_tier.dart';
 import 'package:frontend/features/stores/data/shop_category.dart';
+import 'package:frontend/features/stores/data/shop_model.dart';
 
 void main() {
   group('HomeContent.fromJson against a real backend response', () {
@@ -91,9 +90,6 @@ void main() {
       expect(raw.containsKey('categories'), isFalse);
     });
 
-    test('hasNoShops is false when the backend returned shops', () {
-      expect(content.hasNoShops, isFalse);
-    });
   });
 
   group('HomeContent.fromJson edge cases', () {
@@ -104,7 +100,6 @@ void main() {
 
       expect(content.vipShops, isEmpty);
       expect(content.bestOffers, isEmpty);
-      expect(content.hasNoShops, isTrue);
     });
 
     test('a null list is survived rather than thrown on', () {
@@ -114,7 +109,7 @@ void main() {
       final content = HomeContent.fromJson(jsonDecode(nulls) as Map<String, dynamic>);
 
       expect(content.vipShops, isEmpty);
-      expect(content.hasNoShops, isTrue);
+      expect(content.bestOffers, isEmpty);
     });
 
     test('a shop with no published price decodes as null, never as zero', () {
@@ -149,68 +144,109 @@ void main() {
     });
   });
 
-  group('showcase content', () {
-    test('every category opens onto products, from the shops that stock it', () {
-      // the drill-down list is derived from the same map the home sections are, so a shop that is
-      // cheap on the home screen is cheap here too - the relationship the real data has
-      for (final category in ProductCategory.values) {
-        final products = showcaseProductsForCategory(category);
-        expect(products, isNotEmpty, reason: '${category.code} opens onto nothing');
-        for (final entry in products) {
-          expect(entry.product.category, category.code);
-          expect(entry.product.price, isNotNull);
-          expect(entry.shopName, isNotEmpty);
-        }
-        // cheapest first, like the SQL
-        final prices = [for (final e in products) e.product.price!];
-        expect(prices, [...prices]..sort());
+  // ─────────────────────────── slots ───────────────────────────
+  //
+  // Where a paid placement lands is a commercial rule, not a layout detail, so it is tested here
+  // rather than through a carousel: **the founder must never have to swipe past an empty card to
+  // reach a shop that is paying for the section.** With one placement sold, that shop is what a
+  // customer sees when the section comes into view, and the carousel opens on the middle position -
+  // so "fills from the centre" and "opens on a real shop" are the same statement.
+
+  group('vipSlotRing', () {
+    HomeShopPreview shop(String name) => HomeShopPreview.fromShop(Shop(
+          id: name.hashCode,
+          name: name,
+          contactPhone: '+998901112233',
+          address: 'Ташкент',
+          category: ShopCategory.universal,
+          latitude: 41.3,
+          longitude: 69.2,
+          rating: 0,
+          isVip: true,
+        ));
+
+    /// The ring as names, with `·` for an open slot - the table in the doc comment, executable.
+    List<String> ringOf(int sold) => vipSlotRing(
+          [for (var i = 0; i < sold; i++) shop(String.fromCharCode(65 + i))],
+          slotCount: 5,
+        ).map((slot) => slot?.name ?? '·').toList();
+
+    test('fills from the centre outwards, alternating right then left', () {
+      expect(ringOf(0), ['·', '·', '·', '·', '·']);
+      expect(ringOf(1), ['·', '·', 'A', '·', '·']);
+      expect(ringOf(2), ['·', '·', 'A', 'B', '·']);
+      expect(ringOf(3), ['·', 'C', 'A', 'B', '·']);
+      expect(ringOf(4), ['·', 'C', 'A', 'B', 'D']);
+      expect(ringOf(5), ['E', 'C', 'A', 'B', 'D']);
+    });
+
+    test('the first placement is always at the position the carousel opens on', () {
+      // the carousel parks on `length ~/ 2`, so this is the assertion that makes "a customer sees a
+      // real shop, not an empty card" true - the rest of the arrangement is about the neighbours
+      for (var sold = 1; sold <= 5; sold++) {
+        final ring = ringOf(sold);
+        expect(ring[ring.length ~/ 2], 'A', reason: 'with $sold sold, the centre is not the first');
       }
     });
 
-    test('best offers are grouped and ranked cheapest first, like the SQL', () {
-      expect(kShowcaseBestOffers, isNotEmpty);
-      for (final group in kShowcaseBestOffers) {
-        final baskets = [for (final shop in group.shops) shop.basketPrice!];
-        expect(baskets, [...baskets]..sort(),
-            reason: 'the ${group.category.code} tab is not cheapest-first');
+    test('the nearest cards in both directions are the other real ones', () {
+      // the second and third placements sit either side of the first, so one swipe in either
+      // direction from the opening card lands on a paying shop before it lands on an empty one
+      final ring = ringOf(3);
+      final centre = ring.length ~/ 2;
+      expect(ring[centre + 1], 'B');
+      expect(ring[centre - 1], 'C');
+    });
+
+    test('always draws its full number of places, however few are sold', () {
+      for (var sold = 0; sold <= 5; sold++) {
+        expect(ringOf(sold), hasLength(5));
       }
     });
 
-    test('the showcase tiers are computed from the baskets, not hand-written', () {
-      // the point of the showcase is to behave like the real thing. a hand-typed badge could drift
-      // away from the basket printed next to it; deriving it the way the SQL view does cannot.
-      for (final group in kShowcaseBestOffers) {
-        final average = group.shops
-                .map((s) => s.basketPrice!)
-                .reduce((total, basket) => total + basket) /
-            group.shops.length;
+    test('more placements than places grows the ring instead of dropping one', () {
+      // hiding a placement somebody paid for is the failure this whole section is built to avoid,
+      // so a backend that grew the inventory must cost an app an extra card, never a card
+      final shops = [for (var i = 0; i < 7; i++) shop('shop$i')];
+      final ring = vipSlotRing(shops, slotCount: 5);
 
-        for (final shop in group.shops) {
-          final index = (shop.basketPrice! / average * 100).round();
-          expect(shop.priceDifferencePercent, (index - 100).abs(),
-              reason: '${shop.name} advertises a gap its own basket does not support');
-        }
-      }
+      expect(ring, hasLength(7));
+      expect(ring.whereType<HomeShopPreview>(), hasLength(7));
+      // and no two placements landed on the same position, which is what the modulo has to hold
+      expect(ring.map((s) => s!.name).toSet(), hasLength(7));
+      // the first one is still what the carousel opens on
+      expect(ring[ring.length ~/ 2]!.name, 'shop0');
+    });
+  });
+
+  group('rankedSlots', () {
+    HomeShopPreview shop(String name) => HomeShopPreview.fromShop(Shop(
+          id: name.hashCode,
+          name: name,
+          contactPhone: '+998901112233',
+          address: 'Ташкент',
+          category: ShopCategory.universal,
+          latitude: 41.3,
+          longitude: 69.2,
+          rating: 0,
+        ));
+
+    test('keeps the server ordering and pads the tail', () {
+      // **in order, not centred** - the difference from the ring above. this section is a ranking:
+      // the top of the list is the cheapest shop and the reader is meant to start there.
+      final slots = rankedSlots([shop('A'), shop('B')], slotCount: 5);
+
+      expect(slots.map((s) => s?.name).toList(), ['A', 'B', null, null, null]);
     });
 
-    test('every showcase shop carries a badge', () {
-      // there is no market-size floor any more, so every ranked shop has a comparison - including
-      // the only shop in a category, which is exactly average by definition
-      for (final group in kShowcaseBestOffers) {
-        for (final shop in group.shops) {
-          expect(shop.priceTier, isNotNull, reason: '${shop.name} has no badge');
-        }
-      }
+    test('never truncates', () {
+      final shops = [for (var i = 0; i < 8; i++) shop('shop$i')];
+      expect(rankedSlots(shops, slotCount: 5), hasLength(8));
     });
 
-    test('every VIP showcase row is actually flagged VIP', () {
-      expect(kShowcaseVipShops, isNotEmpty);
-      expect(kShowcaseVipShops.every((s) => s.isVip), isTrue);
-    });
-
-    test('a VIP shop can win a best-offer slot on price', () {
-      // mirrors the real query, which does not exclude them
-      expect(kShowcaseBestOffers.expand((g) => g.shops).any((s) => s.isVip), isTrue);
+    test('nothing ranked is still a full set of places', () {
+      expect(rankedSlots(const [], slotCount: 15), hasLength(15));
+      expect(rankedSlots(const [], slotCount: 15).whereType<HomeShopPreview>(), isEmpty);
     });
   });
 }

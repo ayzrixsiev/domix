@@ -5,7 +5,7 @@ import '../../data/product_model.dart';
 import '../../data/products_repository.dart';
 
 // viewmodel behind the two screens that show a shop's catalogue: the owner's management grid
-// (ShopProductsScreen) and the customer-facing grid inside the map's shop sheet.
+// (ShopProductsScreen) and the customer-facing grid on ShopCardScreen.
 //
 // the cache is keyed by shop id rather than being a single list, because those two screens are
 // about *different* shops much of the time - a customer taps three pins in a row - and a single
@@ -26,6 +26,16 @@ class ProductsController extends ChangeNotifier {
   bool _isSaving = false;
   ProductMutationException? _saveError;
 
+  // the photo has its own pair, deliberately not [_isSaving]/[_saveError].
+  //
+  // It is a separate action on the same screen: it starts when the owner picks an image rather than
+  // when they press «Сохранить», it takes seconds rather than milliseconds, and it fails for reasons
+  // of its own ("that file is not a photo") that the form's error card would report as a failure to
+  // save a product. Sharing the flags would also grey out the save button for the length of an
+  // upload, which is the one moment the rest of the form is perfectly usable.
+  bool _isPhotoBusy = false;
+  ProductMutationException? _photoError;
+
   /// the shop's catalogue, or an empty list if it has never been loaded. `const []` and not a new
   /// list each call, so a widget rebuilding doesn't allocate and doesn't get a mutable view of
   /// nothing that it might try to add to.
@@ -37,6 +47,9 @@ class ProductsController extends ChangeNotifier {
 
   bool get isSaving => _isSaving;
   ProductMutationException? get saveError => _saveError;
+
+  bool get isPhotoBusy => _isPhotoBusy;
+  ProductMutationException? get photoError => _photoError;
 
   /// how many products in this shop the owner added themselves. the backend enforces the cap; this
   /// is only for showing "12 / 20" and greying the add tile out before a doomed round trip.
@@ -100,11 +113,25 @@ class ProductsController extends ChangeNotifier {
   Future<Product?> updateProduct(Product product) async {
     return _mutate(() async {
       final saved = await _repo.updateProduct(product);
-      _byShop[product.shopId] = [
-        for (final p in productsFor(product.shopId)) p.id == saved.id ? saved : p,
-      ];
+      _replaceInCache(saved);
       return saved;
     });
+  }
+
+  /// Attaches a photo to a product that already exists, returning the saved product or null on
+  /// failure ([photoError] then holds the reason).
+  ///
+  /// [filePath] is what `image_picker` handed back - a file in the app's own cache directory, which
+  /// the plugin has already re-encoded to jpeg at the size asked for.
+  Future<Product?> uploadProductPhoto({required Product product, required String filePath}) {
+    return _mutatePhoto(() => _repo.uploadProductImage(productId: product.id, filePath: filePath));
+  }
+
+  /// Removes it again. The product comes back carrying whatever photo it *should* have now, which
+  /// for a template row is the catalogue's own shot - so this is not always "the tile goes blank",
+  /// and the app does not have to know which case it is in.
+  Future<Product?> removeProductPhoto(Product product) {
+    return _mutatePhoto(() => _repo.removeProductImage(product.id));
   }
 
   /// returns true on success, so the edit screen knows it can pop
@@ -118,6 +145,42 @@ class ProductsController extends ChangeNotifier {
       return product;
     });
     return result != null;
+  }
+
+  /// Swap one product in the cache for the version the server just returned. The grid, the map
+  /// sheet and the edit screen all read the same list, so a product is replaced in one place.
+  void _replaceInCache(Product saved) {
+    _byShop[saved.shopId] = [
+      for (final p in productsFor(saved.shopId)) p.id == saved.id ? saved : p,
+    ];
+  }
+
+  // the same shape as _mutate below, against the photo's own flags. it is a copy of six lines
+  // rather than a parameter on _mutate because the two sets of state exist precisely so that a
+  // photo failing and a save failing are two different things on screen.
+  Future<Product?> _mutatePhoto(Future<Product> Function() action) async {
+    _isPhotoBusy = true;
+    _photoError = null;
+    notifyListeners();
+
+    Product? result;
+    try {
+      result = await action();
+      _replaceInCache(result);
+    } on ProductMutationException catch (e) {
+      _photoError = e;
+    } on TimeoutException catch (e) {
+      _photoError = ProductMutationException(code: 'timeout', message: e.toString());
+    } catch (e) {
+      // the real exception goes to the log rather than into a `message` field nothing renders -
+      // see the note in _mutate
+      debugPrint('ProductsController: unexpected error during a photo upload: $e');
+      _photoError = ProductMutationException(code: 'server_error', message: e.toString());
+    }
+
+    _isPhotoBusy = false;
+    notifyListeners();
+    return result;
   }
 
   // the three mutations differ only in the request they make and how they patch the local list;
@@ -159,6 +222,8 @@ class ProductsController extends ChangeNotifier {
   void resetSaveState() {
     _isSaving = false;
     _saveError = null;
+    _isPhotoBusy = false;
+    _photoError = null;
   }
 
   /// drop a deleted shop's catalogue. without it the cache would hold rows for a shop that no

@@ -16,6 +16,8 @@ import (
 	"domix/backend/internal/auth"
 	"domix/backend/internal/catalog"
 	"domix/backend/internal/dbctx"
+	"domix/backend/internal/imagestore"
+	"domix/backend/internal/ratelimit"
 )
 
 // the whole products api:
@@ -36,6 +38,15 @@ import (
 type Products struct {
 	Queries   *db.Queries
 	JWTSecret string
+
+	// where an owner's uploaded product photos are written. see product_image.go, and
+	// internal/imagestore for why the catalogue's own shots and these share one directory tree
+	// without being able to delete each other.
+	Images *imagestore.Store
+
+	// the per-account ceiling on uploads, which the per-IP limiter in front of every route cannot
+	// express. nil in the tests, which call the handlers directly.
+	Uploads *ratelimit.Limiter
 }
 
 // how many products an owner may add on top of the category template. the template is what makes
@@ -44,8 +55,14 @@ type Products struct {
 //
 // it counts *only* the owner's own rows (CountCustomProducts, `template_key IS NULL`). the seeded
 // rows are not part of the allowance - they are the same in every shop of the category, so charging
-// an owner for them would leave a brand-new universal shop 50 products into a 20-product budget.
-const maxCustomProducts = 20
+// an owner for them would leave a brand-new universal shop 100 products past its whole budget
+// before the owner had touched anything.
+//
+// the same number for every shop category, deliberately: the allowance is "how far off the shared
+// basket may a shop drift", which is the same question whether the template under it is 100 rows or
+// 10. it is sent to the app in the `limit` field of the product_limit_reached error, so raising it
+// is a backend deploy - the dart copy only greys a tile out early.
+const maxCustomProducts = 30
 
 // these mirror the varchar widths in db/migrations (000001 + 000004). a value wider than its column
 // makes postgres reject the statement, which would surface to the owner as an unexplained "failed
@@ -88,6 +105,16 @@ type ProductResponse struct {
 	// root-relative, e.g. "/static/products/universal/001.jpg". null for a product with no photo,
 	// which the app draws as the placeholder banner it drew for every product before this existed.
 	ImageURL *string `json:"image_url"`
+
+	// whether that photo is this shop's own upload rather than the shared catalogue shot the row was
+	// seeded with. the third derived boolean on this struct, and it is here for the same reason the
+	// other two are: it answers a question the app has to ask before drawing a control.
+	//
+	// **"удалить фото" means two different things and only this tells them apart.** On an owner's own
+	// upload it removes the photo, and on a seeded row it puts the catalogue's shot back. On a row
+	// still showing the catalogue's shot it would do nothing at all - so without this the app draws a
+	// delete button that is dead on most of a fresh shop's catalogue.
+	OwnImage bool `json:"own_image"`
 }
 
 // where the api serves product photos. the database stores only the path inside the images folder
@@ -95,12 +122,15 @@ type ProductResponse struct {
 // and a stored absolute url would be wrong in two of the three. the app prepends the host.
 const productImageURLPrefix = "/static/products/"
 
-func productImageURL(path pgtype.Text) *string {
+// the two photo fields, filled from the one column that carries the fact. together rather than one
+// each, so a response can never leave with a url and the wrong answer beside it - the same reason
+// templateFlags derives its pair in one place.
+func productImage(path pgtype.Text) (url *string, own bool) {
 	if !path.Valid || path.String == "" {
-		return nil
+		return nil, false
 	}
-	url := productImageURLPrefix + path.String
-	return &url
+	full := productImageURLPrefix + path.String
+	return &full, imagestore.IsUpload(path.String)
 }
 
 // the two flags above, derived from the one column that carries the fact. kept in a single function
@@ -172,6 +202,7 @@ func (p *Products) ListByShop(w http.ResponseWriter, r *http.Request) {
 	response := make([]ProductResponse, 0, len(products))
 	for _, product := range products {
 		isTemplate, nameEditable := templateFlags(product.TemplateKey)
+		imageURL, ownImage := productImage(product.ImagePath)
 		response = append(response, ProductResponse{
 			ID:           product.ID,
 			ShopID:       product.ShopID,
@@ -182,7 +213,8 @@ func (p *Products) ListByShop(w http.ResponseWriter, r *http.Request) {
 			Availability: product.Availability,
 			IsTemplate:   isTemplate,
 			NameEditable: nameEditable,
-			ImageURL:     productImageURL(product.ImagePath),
+			ImageURL:     imageURL,
+			OwnImage:     ownImage,
 		})
 	}
 
@@ -259,6 +291,7 @@ func (p *Products) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	isTemplate, nameEditable := templateFlags(product.TemplateKey)
+	imageURL, ownImage := productImage(product.ImagePath)
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(ProductResponse{
@@ -271,7 +304,8 @@ func (p *Products) Create(w http.ResponseWriter, r *http.Request) {
 		Availability: product.Availability,
 		IsTemplate:   isTemplate,
 		NameEditable: nameEditable,
-		ImageURL:     productImageURL(product.ImagePath),
+		ImageURL:     imageURL,
+		OwnImage:     ownImage,
 	})
 }
 
@@ -381,6 +415,8 @@ func (p *Products) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	imageURL, ownImage := productImage(product.ImagePath)
+
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(ProductResponse{
 		ID:           product.ID,
@@ -392,7 +428,8 @@ func (p *Products) Update(w http.ResponseWriter, r *http.Request) {
 		Availability: product.Availability,
 		IsTemplate:   isTemplate,
 		NameEditable: nameEditable,
-		ImageURL:     productImageURL(product.ImagePath),
+		ImageURL:     imageURL,
+		OwnImage:     ownImage,
 	})
 }
 

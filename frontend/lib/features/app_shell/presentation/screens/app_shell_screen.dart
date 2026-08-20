@@ -37,6 +37,11 @@ class _AppShellScreenState extends State<AppShellScreen> {
   /// since the two would have to be changed together and only one of them would fail loudly.
   static const _mapTabIndex = 2;
 
+  /// Same, for the two tabs that talk to each other: Сообщения needs an account, and the only place
+  /// to get one is Профиль.
+  static const _messagesTabIndex = 3;
+  static const _profileTabIndex = 4;
+
   // built per-frame (like _buildNavItems below) rather than as a static field, since ProfileScreen
   // needs a BuildContext to navigate to AddStoreScreen when its "add store" row is tapped
   List<Widget> _buildPages(BuildContext context) => [
@@ -50,7 +55,15 @@ class _AppShellScreenState extends State<AppShellScreen> {
       bottomPadding: _bottomPadding,
       isActive: _currentIndex == _mapTabIndex,
     ),
-    const MessagesScreen(showScaffold: false, bottomPadding: _bottomPadding),
+    // the support chat is live rather than a placeholder, so it needs the same visibility signal
+    // the map does: a reply arriving while the app sits open is only ever picked up when this tab
+    // is opened again, since nothing pushes to the phone.
+    MessagesScreen(
+      showScaffold: false,
+      bottomPadding: _bottomPadding,
+      isActive: _currentIndex == _messagesTabIndex,
+      onSignInTap: () => _selectTab(_profileTabIndex),
+    ),
     ProfileScreen(
       showScaffold: false,
       bottomPadding: _bottomPadding,

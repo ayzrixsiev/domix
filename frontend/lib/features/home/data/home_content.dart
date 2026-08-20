@@ -1,38 +1,33 @@
+import 'dart:math' as math;
+
 import 'package:frontend/features/stores/data/price_tier.dart';
 import 'package:frontend/features/stores/data/shop_category.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 
 /// A shop as the home screen shows it, and the one type its widgets know about.
 ///
-/// Deliberately not [Shop] itself. The home sections need four facts - a name, where it is, how
-/// good it is and what it costs - and giving the widgets the full backend model would let a card
-/// quietly start depending on an id or a pair of coordinates. It also keeps the showcase rows in
-/// `home_showcase_content.dart` from being passable to anything that expects a persisted shop,
-/// which is a property the placeholder file has had since it was written and worth keeping.
+/// Deliberately not [Shop] itself: the home sections need four facts - a name, where it is, how good
+/// it is and what it costs - and handing the widgets the full backend model would let a card quietly
+/// start depending on a coordinate pair or a product count.
 ///
-/// Real shops arrive through [HomeShopPreview.fromShop]; showcase rows are written out as consts.
-/// Once both are here, nothing downstream can tell them apart - which is exactly the point: the
-/// widgets have no fallback logic in them at all.
+/// **Every preview is a real shop, and there is no other way to make one.** There used to be a second
+/// constructor that took the four facts on their own, so that `home_showcase_content.dart` could
+/// write out invented rows as `const` and have them arrive at the widgets indistinguishable from real
+/// ones. That file is gone (the home screen shows the database or an empty slot, never a plausible
+/// story), and with it the only reason [shop] was ever nullable. So it is required now, which is what
+/// deleted the "this card is inert" branch from three widgets: a card that is drawn from a shop can
+/// always be opened.
 class HomeShopPreview {
-  const HomeShopPreview({
-    required this.name,
-    required this.address,
-    required this.rating,
-    this.priceTier,
-    this.priceDifferencePercent,
-    this.basketPrice,
-    this.isVip = false,
-  });
-
-  /// Projects a real backend shop onto what the home screen needs.
-  HomeShopPreview.fromShop(Shop shop)
-      : name = shop.name,
-        address = shop.address,
-        rating = shop.rating,
-        priceTier = shop.priceTier,
-        priceDifferencePercent = shop.priceDifferencePercent,
-        basketPrice = shop.basketPrice,
-        isVip = shop.isVip;
+  /// Projects a real backend shop onto what the home screen needs, keeping the row itself in [shop].
+  HomeShopPreview.fromShop(Shop source)
+      : shop = source,
+        name = source.name,
+        address = source.address,
+        rating = source.rating,
+        priceTier = source.priceTier,
+        priceDifferencePercent = source.priceDifferencePercent,
+        basketPrice = source.basketPrice,
+        isVip = source.isVip;
 
   final String name;
   final String address;
@@ -50,6 +45,11 @@ class HomeShopPreview {
   final int? basketPrice;
 
   final bool isVip;
+
+  /// The backend row this preview came from - what makes a card a way *into* a shop. A shop card
+  /// needs the phone, the category and the id its catalogue hangs off, all of which `GET /api/home`
+  /// already sends and this type used to throw away.
+  final Shop shop;
 
   /// Whether there is a rating worth drawing. Mirrors [Shop.hasRating] deliberately: the home feed
   /// carries its own lighter model, and a star that appears on the map but not on the home screen
@@ -82,12 +82,6 @@ class HomeContent {
   /// One entry per shop category that actually has ranked shops, in the backend's canonical order.
   /// The tab strip is built from this, so a category with nothing in it is simply not a tab.
   final List<CategoryOffers> bestOffers;
-
-  /// True when the backend answered but had nothing to show - no shop is VIP and none has priced
-  /// enough of its catalogue to be ranked. This is the state a fresh database is in, and it is what
-  /// the controller tests to decide whether to fall back to the showcase rows.
-  ///
-  bool get hasNoShops => vipShops.isEmpty && bestOffers.isEmpty;
 
   static HomeContent fromJson(Map<String, dynamic> json) {
     return HomeContent(
@@ -122,4 +116,89 @@ class HomeContent {
         HomeShopPreview.fromShop(Shop.fromJson(item as Map<String, dynamic>)),
     ];
   }
+}
+
+// ─────────────────────────────── slots ───────────────────────────────
+//
+// Both home sections are a **fixed number of positions**, drawn whether or not anything is in them.
+// The two functions below decide which position a shop lands in, and they are here rather than in the
+// widgets for one reason: where a paying shop appears is a product rule, not a layout detail, and a
+// rule wants a test that does not need a screen to run.
+//
+// A `null` entry is an empty slot. It is not a loading state and not padding - see the widgets that
+// draw it.
+
+/// The rating an empty slot shows, as a literal.
+///
+/// **The one value on an empty slot that is not a field name**, and it is here rather than in either
+/// widget because both draw it and two copies of one number can disagree - the same reason
+/// `Shop.hasRating` and `HomeShopPreview.hasRating` are documented as mirrors.
+///
+/// A literal because there is nothing to derive it from: no shop, no reviews table, nothing that
+/// could make it true or false. It describes the field - "a rating goes here, out of five" - rather
+/// than claiming anything about a business, which is why it is the single exception to the rule that
+/// an empty slot invents nothing.
+///
+/// A `String` and not a number: it is drawn, never compared, and `5` formatted through a locale would
+/// be one more thing that could turn into "5.0" on somebody's phone.
+const String kSlotRating = '5';
+
+/// The VIP carousel's ring of slots, **filled from the centre outwards**.
+///
+/// The carousel opens parked on the middle position and loops endlessly in both directions, so the
+/// order here is a ring rather than a row: index [slotCount] ~/ 2 is what the customer is looking at
+/// when the section scrolls into view, and its neighbours are one swipe away in each direction.
+///
+/// Shops go in centre-first, then alternating right and left - so with one placement sold, that shop
+/// is the card on screen rather than something two swipes away behind empty ones. With five sold the
+/// ring is full and the arrangement stops mattering.
+///
+///     sold │ 0    1    2*   3    4        (* = where the carousel opens)
+///     ─────┼─────────────────────────
+///       1  │ ·    ·    A    ·    ·
+///       2  │ ·    ·    A    B    ·
+///       3  │ ·    C    A    B    ·
+///       4  │ ·    C    A    B    D
+///       5  │ E    C    A    B    D
+///
+/// **The list is never shorter than [shops].** If the backend ever sends more placements than this
+/// build knows about, the ring grows to hold them - dropping one would be hiding something somebody
+/// paid for, which is the failure this whole section is built around avoiding.
+List<HomeShopPreview?> vipSlotRing(
+  List<HomeShopPreview> shops, {
+  required int slotCount,
+}) {
+  final size = math.max(slotCount, shops.length);
+  final centre = size ~/ 2;
+  final ring = List<HomeShopPreview?>.filled(size, null);
+
+  for (var n = 0; n < shops.length; n++) {
+    // 0, +1, −1, +2, −2, … - a run of `size` consecutive integers once n reaches the end, so no two
+    // shops can land on the same position.
+    final offset = n.isEven ? -(n ~/ 2) : (n + 1) ~/ 2;
+    // `%` is Euclidean in Dart (−1 % 5 is 4), which is what lets an offset walk off either end of an
+    // even-sized ring and come back round rather than throwing.
+    ring[(centre + offset) % size] = shops[n];
+  }
+  return ring;
+}
+
+/// The slots of one "Лучшие предложения" tab: the ranking as the server ordered it, padded with
+/// empty positions up to [slotCount].
+///
+/// **In order, not centred**, and that is the whole difference from the ring above. This section is a
+/// ranking - the top of the list is the cheapest shop and the reader is meant to start there - where
+/// the carousel is a shelf of five bought placements with a most-valuable spot in the middle. The
+/// empty rows underneath say how many places in this category's ranking are still open, which is the
+/// one message that reaches an owner who has not finished pricing.
+///
+/// Never truncates, for the same reason the ring does not: what the server sent, the app shows.
+List<HomeShopPreview?> rankedSlots(
+  List<HomeShopPreview> shops, {
+  required int slotCount,
+}) {
+  final size = math.max(slotCount, shops.length);
+  return [
+    for (var i = 0; i < size; i++) i < shops.length ? shops[i] : null,
+  ];
 }

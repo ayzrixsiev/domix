@@ -14,6 +14,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"testing"
 	"time"
 
@@ -289,6 +291,110 @@ func TestBasketIndexNeedsEveryTemplateProductPriced(t *testing.T) {
 	}
 }
 
+// ─────────────────────────── the paid placements ───────────────────────────
+
+// **the one that would cost real money if it broke.** ListVipShops used to inner-join the basket
+// index, so a placement that had been granted and paid for did not appear in the carousel until its
+// owner had priced every last template row - and nothing anywhere said so. it was a left join on the
+// map the whole time (ListShops), which is why the bug was invisible: the shop was on the map, just
+// not in the thing somebody had bought.
+func TestAPaidPlacementAppearsBeforeItsCatalogueIsPriced(t *testing.T) {
+	ctx, conn, q := beginTx(t)
+
+	full := len(catalog.Template(string(catalog.CategoryUniversal)))
+
+	// bought a placement, has priced nothing at all
+	blank := makeShopTx(t, ctx, conn, q, "blank", catalog.CategoryUniversal, true)
+	// bought a placement, one row short of a complete basket - the state most shops are in early on
+	nearly := makeShopTx(t, ctx, conn, q, "nearly", catalog.CategoryUniversal, true)
+	priceProducts(t, ctx, conn, nearly, full-1, 100_000)
+	// bought a placement and finished
+	done := makeShopTx(t, ctx, conn, q, "done", catalog.CategoryUniversal, true)
+	priceProducts(t, ctx, conn, done, full, 100_000)
+
+	shops, err := q.ListVipShops(ctx, 5)
+	if err != nil {
+		t.Fatalf("list vip shops: %v", err)
+	}
+
+	got := vipIDs(shops)
+	if len(got) != 3 {
+		t.Fatalf("three shops hold a live placement, want all three in the carousel, got %v", got)
+	}
+	for _, id := range []int64{blank, nearly, done} {
+		if !slices.Contains(got, id) {
+			t.Errorf("shop %d paid for a placement and is missing from the carousel (%v)", id, got)
+		}
+	}
+
+	// and the price columns tell the truth about each of them rather than being faked to fill a card
+	for _, shop := range shops {
+		switch shop.ID {
+		case blank, nearly:
+			if shop.BasketPrice.Valid || shop.PriceIndex.Valid {
+				t.Errorf("shop %d has an incomplete basket and must publish no price, got %d",
+					shop.ID, shop.BasketPrice.Int64)
+			}
+		case done:
+			if !shop.BasketPrice.Valid {
+				t.Errorf("shop %d priced its whole template and should carry a basket", shop.ID)
+			}
+		}
+	}
+}
+
+// the centre of the carousel is the most valuable position in the section and it is being sold, so
+// which row leads this list is a commercial decision rather than an ordering detail. the rule is
+// "the longest placement still ahead of it leads", ties broken by id so the order is total.
+func TestTheVipCarouselLeadsWithTheLongestPlacement(t *testing.T) {
+	ctx, conn, q := beginTx(t)
+
+	full := len(catalog.Template(string(catalog.CategoryUniversal)))
+
+	// created in the reverse of the order they should come back in, so a query that simply returned
+	// insertion order would fail here
+	short := makeShopTx(t, ctx, conn, q, "short", catalog.CategoryUniversal, false)
+	long := makeShopTx(t, ctx, conn, q, "long", catalog.CategoryUniversal, false)
+	lapsed := makeShopTx(t, ctx, conn, q, "lapsed", catalog.CategoryUniversal, false)
+	priceProducts(t, ctx, conn, short, full, 100_000)
+	priceProducts(t, ctx, conn, long, full, 100_000)
+	priceProducts(t, ctx, conn, lapsed, full, 100_000)
+
+	setVIP(t, ctx, q, short, time.Now().Add(7*24*time.Hour))
+	setVIP(t, ctx, q, long, time.Now().Add(90*24*time.Hour))
+	// yesterday: the placement is over, and it leaves the carousel on its own with nobody doing
+	// anything - which is the whole reason vip_until is a date and not a boolean (§6)
+	setVIP(t, ctx, q, lapsed, time.Now().Add(-24*time.Hour))
+
+	shops, err := q.ListVipShops(ctx, 5)
+	if err != nil {
+		t.Fatalf("list vip shops: %v", err)
+	}
+	if got := vipIDs(shops); len(got) != 2 || got[0] != long || got[1] != short {
+		t.Fatalf("want [long short] = %v, got %v - a lapsed placement must drop out and the longest "+
+			"one must lead", []int64{long, short}, got)
+	}
+}
+
+// the LIMIT is the inventory, not a page size: five slots exist and five is what the app draws.
+func TestTheVipCarouselNeverReturnsMoreThanItsLimit(t *testing.T) {
+	ctx, conn, q := beginTx(t)
+
+	for i := range 7 {
+		makeShopTx(t, ctx, conn, q, "vip"+strconv.Itoa(i), catalog.CategoryUniversal, true)
+	}
+
+	shops, err := q.ListVipShops(ctx, 5)
+	if err != nil {
+		t.Fatalf("list vip shops: %v", err)
+	}
+	if len(shops) != 5 {
+		t.Fatalf("seven live placements against a limit of five, want 5 rows, got %d", len(shops))
+	}
+}
+
+// ─────────────────────────── the ranking ───────────────────────────
+
 // each tab of "Лучшие предложения" is one shop category and nothing else - which is the whole
 // reason the section grew tabs. a Обои shop's basket is ten items and a Универсальный shop's is
 // fifty, so the two were never really rankable against each other even with the index normalising
@@ -353,6 +459,57 @@ func TestBestOffersExcludeShopsWithNoIndex(t *testing.T) {
 		if o.ID == empty {
 			t.Fatal("a shop with no priced products must not be ranked as a best offer")
 		}
+	}
+}
+
+// **the ordering is the entire meaning of this section**, so it gets a test of its own rather than
+// riding along inside the scoping test above.
+//
+// what is really being pinned is that ordering by `price_index` and ordering by `basket_price` are
+// the *same* ordering inside one shop category. the index is `basket ÷ that category's average
+// basket`, and every row this query returns is in the same category, so the divisor is one positive
+// constant - dividing a list by a constant cannot reorder it. the query uses the index only because
+// the view already carries it.
+//
+// worth stating as a test because the two look like independent choices, and somebody reading
+// "ORDER BY price_index" with the raw sums in front of them will eventually be tempted to "fix" it.
+func TestBestOffersRankByPriceWhicheverNumberYouUse(t *testing.T) {
+	ctx, conn, q := beginTx(t)
+
+	full := len(catalog.Template(string(catalog.CategoryUniversal)))
+
+	// deliberately not in price order, and deliberately not in id order either
+	makeAndPrice := func(name string, unit int64) int64 {
+		id := makeShopTx(t, ctx, conn, q, name, catalog.CategoryUniversal, false)
+		priceProducts(t, ctx, conn, id, full, unit)
+		return id
+	}
+	middling := makeAndPrice("middling", 100_000)
+	dear := makeAndPrice("dear", 130_000)
+	cheap := makeAndPrice("cheap", 70_000)
+
+	offers := bestOffersIn(t, ctx, q, catalog.CategoryUniversal, 15)
+	if got := offerIDs(offers); len(got) != 3 || got[0] != cheap || got[1] != middling || got[2] != dear {
+		t.Fatalf("want [cheap middling dear] = %v, got %v (indices %v)",
+			[]int64{cheap, middling, dear}, got, offerIndices(offers))
+	}
+
+	// both numbers ascend together, which is the claim above
+	for i := 1; i < len(offers); i++ {
+		if offers[i].PriceIndex < offers[i-1].PriceIndex {
+			t.Errorf("row %d has a lower index than the row above it: %v", i, offerIndices(offers))
+		}
+		if offers[i].BasketPrice < offers[i-1].BasketPrice {
+			t.Errorf("row %d is cheaper than the row above it - ordering by the index has diverged "+
+				"from ordering by the basket, which inside one category is impossible unless the "+
+				"query changed markets mid-list", i)
+		}
+	}
+
+	// and the limit is a limit, not a promise of fifteen rows
+	if trimmed := bestOffersIn(t, ctx, q, catalog.CategoryUniversal, 2); len(trimmed) != 2 ||
+		trimmed[0].ID != cheap || trimmed[1].ID != middling {
+		t.Fatalf("a limit of 2 must keep the two cheapest, got %v", offerIDs(trimmed))
 	}
 }
 
