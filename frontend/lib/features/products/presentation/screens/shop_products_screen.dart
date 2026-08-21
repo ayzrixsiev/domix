@@ -12,6 +12,7 @@ import '../controllers/products_controller.dart';
 import '../widgets/product_grid.dart';
 import '../widgets/product_tile.dart';
 import 'product_edit_screen.dart';
+import 'package:frontend/core/widgets/circle_back_button.dart';
 
 /// how many products of their own an owner may add on top of the category template. mirrors
 /// maxCustomProducts in backend/internal/endpoints/product_crud.go, which is the one that actually
@@ -85,7 +86,7 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
     final shopId = widget.shop.id;
     final products = controller.productsFor(shopId);
     final isLoading = controller.isLoadingFor(shopId);
-    final loadError = controller.loadErrorFor(shopId);
+    final loadFailed = controller.loadFailedFor(shopId);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -96,6 +97,10 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
         centerTitle: false,
         titleSpacing: 20,
         iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
+        // the disc, not a bare chevron - see CircleBackButton for why every bar in the app needs it.
+        // leadingWidth must move with it or flutter keeps its own 56 and the title sits wrong.
+        leading: const CircleBackButton(),
+        leadingWidth: CircleBackButton.leadingWidth,
         title: Text(
           strings.productsScreenTitle,
           style: const TextStyle(
@@ -112,7 +117,7 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
           // the catalogue is the one thing on this screen a second device could have changed, so
           // pull-to-refresh forces past the session cache rather than reading it back
           onRefresh: () => controller.loadProducts(shopId, force: true),
-          child: _body(context, strings, controller, products, isLoading, loadError),
+          child: _body(context, strings, controller, products, isLoading, loadFailed),
         ),
       ),
     );
@@ -124,7 +129,7 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
     ProductsController controller,
     List<Product> products,
     bool isLoading,
-    String? loadError,
+    bool loadFailed,
   ) {
     // a spinner only on the very first load. once there are tiles to show, a refresh happens
     // underneath them rather than replacing the screen with nothing.
@@ -134,7 +139,7 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
       );
     }
 
-    if (loadError != null && products.isEmpty) {
+    if (loadFailed && products.isEmpty) {
       return _FullPageState(
         child: _CenteredMessage(
           icon: CupertinoIcons.exclamationmark_circle,

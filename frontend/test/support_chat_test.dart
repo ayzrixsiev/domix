@@ -18,10 +18,12 @@ import 'package:provider/provider.dart';
 
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
+import 'package:frontend/core/widgets/circle_back_button.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/messages/data/support_message.dart';
 import 'package:frontend/features/messages/data/support_repository.dart';
 import 'package:frontend/features/messages/presentation/controllers/support_controller.dart';
+import 'package:frontend/features/messages/presentation/screens/chats_screen.dart';
 import 'package:frontend/features/messages/presentation/screens/messages_screen.dart';
 import 'package:frontend/features/messages/presentation/widgets/message_bubble.dart';
 import 'package:frontend/features/profile/presentation/controllers/auth_controller.dart';
@@ -37,6 +39,19 @@ class _FakeSupportRepository implements SupportRepository {
 
   int loads = 0;
   final List<String> sent = [];
+
+  /// The read watermark, in memory instead of the keystore - there is no secure storage in a widget
+  /// test, and what these check is what the controller *does* with the number.
+  int watermark = 0;
+
+  @override
+  Future<int> readWatermark() async => watermark;
+
+  @override
+  Future<void> writeWatermark(int messageId) async => watermark = messageId;
+
+  @override
+  Future<void> clearWatermark() async => watermark = 0;
 
   @override
   Future<List<SupportMessage>> fetchMessages() async {
@@ -67,6 +82,47 @@ SupportMessage _message({
     body: body,
     sentAt: at ?? DateTime(2026, 8, 19, 14, 20),
   );
+}
+
+/// Hydrates the real [AuthController] out of a faked secure storage, which is the only public
+/// way into a signed-in state - the profile state has no setter on purpose.
+Future<void> signIn({required bool signedIn}) async {
+  // a token whose `exp` is in the future. AuthController reads that claim itself, offline, so a
+  // hand-built one is exactly as good as a real one for this.
+  String jwt() {
+    String chunk(Map<String, dynamic> m) =>
+        base64Url.encode(utf8.encode(jsonEncode(m))).replaceAll('=', '');
+    final exp = DateTime.now().add(const Duration(days: 30)).millisecondsSinceEpoch ~/ 1000;
+    return '${chunk({'alg': 'HS256'})}.${chunk({'exp': exp})}.signature';
+  }
+
+  final store = signedIn
+      ? {
+          'domix_jwt_token': jwt(),
+          'domix_user_role': 'shop_owner',
+          'domix_user_name': 'Азиз',
+          'domix_user_phone': '+998900000000',
+        }
+      : <String, String>{};
+
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+    const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+    (call) async {
+      switch (call.method) {
+        case 'read':
+          return store[(call.arguments as Map)['key']];
+        case 'readAll':
+          return store;
+        default:
+          return null;
+      }
+    },
+  );
+
+  // AuthController is a process-wide singleton, so a signed-in state set by one test would
+  // otherwise leak into the next and make these pass or fail on declaration order
+  await AuthController().logout();
+  await AuthController().checkExistingLogin();
 }
 
 void main() {
@@ -151,9 +207,9 @@ void main() {
     // problem; left in memory after a logout it is the next person to sign in on this phone who
     // reads it.
     test('the conversation is dropped when the session ends', () async {
-      final repo = _FakeSupportRepository(thread: [
-        _message(id: 1, fromSupport: false, body: 'мой номер +998 90 123 45 67'),
-      ]);
+      final repo = _FakeSupportRepository(
+        thread: [_message(id: 1, fromSupport: false, body: 'мой номер +998 90 123 45 67')],
+      );
       final controller = SupportController(repository: repo);
       await controller.load();
       expect(controller.messages, isNotEmpty);
@@ -236,8 +292,9 @@ void main() {
       controller.setWatching(false);
     });
 
-    testWidgets('backs off while nothing is happening, and speeds up again when it does',
-        (tester) async {
+    testWidgets('backs off while nothing is happening, and speeds up again when it does', (
+      tester,
+    ) async {
       final repo = _FakeSupportRepository(thread: [_message(id: 1, fromSupport: false)]);
       final controller = SupportController(repository: repo);
       await controller.load();
@@ -287,7 +344,9 @@ void main() {
     });
 
     testWidgets('a failed poll leaves the conversation on screen alone', (tester) async {
-      final repo = _FakeSupportRepository(thread: [_message(id: 1, fromSupport: true, body: 'ответ')]);
+      final repo = _FakeSupportRepository(
+        thread: [_message(id: 1, fromSupport: true, body: 'ответ')],
+      );
       final controller = SupportController(repository: repo);
       await controller.load();
       controller.setWatching(true);
@@ -338,10 +397,7 @@ void main() {
         Alignment.centerRight,
         reason: 'the reader wrote this one, so it belongs on their side',
       );
-      expect(
-        await alignmentOf(tester, _message(id: 2, fromSupport: true)),
-        Alignment.centerLeft,
-      );
+      expect(await alignmentOf(tester, _message(id: 2, fromSupport: true)), Alignment.centerLeft);
     });
 
     testWidgets('only an incoming message is signed', (tester) async {
@@ -383,15 +439,16 @@ void main() {
         ),
       );
 
-      final decoration = tester
-          .widget<Container>(find.byType(Container).first)
-          .decoration as BoxDecoration;
+      final decoration =
+          tester.widget<Container>(find.byType(Container).first).decoration as BoxDecoration;
       expect(decoration.color, AppColors.primaryOrange);
     });
 
     testWidgets('the day separator renders its label', (tester) async {
       await tester.pumpWidget(
-        const MaterialApp(home: Scaffold(body: MessageDaySeparator(label: 'Вчера'))),
+        const MaterialApp(
+          home: Scaffold(body: MessageDaySeparator(label: 'Вчера')),
+        ),
       );
       expect(find.text('Вчера'), findsOneWidget);
     });
@@ -441,47 +498,6 @@ void main() {
   // visible on a desktop run either, because the failure is in a state the desktop happens not to be
   // in.
   group('MessagesScreen', () {
-    /// Hydrates the real [AuthController] out of a faked secure storage, which is the only public
-    /// way into a signed-in state - the profile state has no setter on purpose.
-    Future<void> signIn({required bool signedIn}) async {
-      // a token whose `exp` is in the future. AuthController reads that claim itself, offline, so a
-      // hand-built one is exactly as good as a real one for this.
-      String jwt() {
-        String chunk(Map<String, dynamic> m) =>
-            base64Url.encode(utf8.encode(jsonEncode(m))).replaceAll('=', '');
-        final exp = DateTime.now().add(const Duration(days: 30)).millisecondsSinceEpoch ~/ 1000;
-        return '${chunk({'alg': 'HS256'})}.${chunk({'exp': exp})}.signature';
-      }
-
-      final store = signedIn
-          ? {
-              'domix_jwt_token': jwt(),
-              'domix_user_role': 'shop_owner',
-              'domix_user_name': 'Азиз',
-              'domix_user_phone': '+998900000000',
-            }
-          : <String, String>{};
-
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
-        const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
-        (call) async {
-          switch (call.method) {
-            case 'read':
-              return store[(call.arguments as Map)['key']];
-            case 'readAll':
-              return store;
-            default:
-              return null;
-          }
-        },
-      );
-
-      // AuthController is a process-wide singleton, so a signed-in state set by one test would
-      // otherwise leak into the next and make these pass or fail on declaration order
-      await AuthController().logout();
-      await AuthController().checkExistingLogin();
-    }
-
     Future<void> pumpScreen(WidgetTester tester, SupportController controller) async {
       await tester.pumpWidget(
         MultiProvider(
@@ -514,10 +530,12 @@ void main() {
 
     testWidgets('a signed-in user gets the thread and a working composer', (tester) async {
       await signIn(signedIn: true);
-      final repo = _FakeSupportRepository(thread: [
-        _message(id: 1, fromSupport: false, body: 'как поднять магазин в VIP?'),
-        _message(id: 2, fromSupport: true, body: 'напишите, на какой срок'),
-      ]);
+      final repo = _FakeSupportRepository(
+        thread: [
+          _message(id: 1, fromSupport: false, body: 'как поднять магазин в VIP?'),
+          _message(id: 2, fromSupport: true, body: 'напишите, на какой срок'),
+        ],
+      );
       final controller = SupportController(repository: repo);
 
       await pumpScreen(tester, controller);
@@ -639,15 +657,15 @@ void main() {
       final controller = SupportController(repository: _FakeSupportRepository());
 
       Future<void> pumpWithActive(bool isActive) => tester.pumpWidget(
-            MultiProvider(
-              providers: [
-                ChangeNotifierProvider(create: (_) => LanguageProvider()),
-                ChangeNotifierProvider<AuthController>.value(value: AuthController()),
-                ChangeNotifierProvider<SupportController>.value(value: controller),
-              ],
-              child: MaterialApp(home: MessagesScreen(isActive: isActive)),
-            ),
-          );
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => LanguageProvider()),
+            ChangeNotifierProvider<AuthController>.value(value: AuthController()),
+            ChangeNotifierProvider<SupportController>.value(value: controller),
+          ],
+          child: MaterialApp(home: MessagesScreen(isActive: isActive)),
+        ),
+      );
 
       await pumpWithActive(true);
       await tester.pumpAndSettle();
@@ -663,7 +681,9 @@ void main() {
       expect(node.hasFocus, isFalse);
     });
 
-    testWidgets('an empty thread invites the first message instead of showing nothing', (tester) async {
+    testWidgets('an empty thread invites the first message instead of showing nothing', (
+      tester,
+    ) async {
       await signIn(signedIn: true);
       final controller = SupportController(repository: _FakeSupportRepository());
 
@@ -673,6 +693,97 @@ void main() {
       expect(find.text(strings.supportEmptyTitle), findsOneWidget);
       // the composer is still there - an empty conversation is the one most in need of it
       expect(find.byType(TextField), findsOneWidget);
+    });
+  });
+
+  // The Сообщения tab is a *list* of conversations now, and today the list has one row. What can
+  // break silently here is the row's own arithmetic - a preview that shows your own question back
+  // to you, or a badge that never clears - and the hand-off to the chat, since the list and the
+  // chat both drive the same poll and the pop is what used to leave the list frozen.
+  group('ChatsScreen', () {
+    Future<void> pumpList(WidgetTester tester, SupportController controller) async {
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => LanguageProvider()),
+            ChangeNotifierProvider<AuthController>.value(value: AuthController()),
+            ChangeNotifierProvider<SupportController>.value(value: controller),
+          ],
+          child: const MaterialApp(home: ChatsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the tab is a list, and its row opens the conversation', (tester) async {
+      await signIn(signedIn: true);
+      final controller = SupportController(
+        repository: _FakeSupportRepository(
+          thread: [_message(id: 1, fromSupport: true, body: 'Здравствуйте!')],
+        ),
+      );
+
+      await pumpList(tester, controller);
+
+      final strings = AppLocalizations(AppLanguage.ru);
+      // the list, not the chat: a row previewing the thread and no composer anywhere
+      expect(find.byType(ChatListRow), findsOneWidget);
+      expect(find.text(strings.supportSenderLabel), findsOneWidget);
+      expect(find.text('Здравствуйте!'), findsOneWidget);
+      expect(find.byType(TextField), findsNothing);
+
+      await tester.tap(find.byType(ChatListRow));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MessagesScreen), findsOneWidget);
+      expect(find.byType(TextField), findsOneWidget);
+    });
+
+    testWidgets('a reply nobody has opened is counted, and opening it clears the count',
+        (tester) async {
+      await signIn(signedIn: true);
+      final repo = _FakeSupportRepository(thread: [
+        _message(id: 7, fromSupport: false, body: 'Когда ответите?'),
+        _message(id: 8, fromSupport: true, body: 'Уже смотрим'),
+      ]);
+      final controller = SupportController(repository: repo);
+
+      await pumpList(tester, controller);
+
+      // nothing has ever been read on this install, so the watermark is 0 and the reply is new
+      expect(controller.unreadCount, 1);
+      expect(find.text('1'), findsOneWidget);
+
+      await tester.tap(find.byType(ChatListRow));
+      await tester.pumpAndSettle();
+      // and back out of the chat, which is where the second markThreadRead lands. tapping the
+      // button rather than pageBack() also pins that a pushed conversation has a visible way back
+      // at all - inside the shell it had none, and did not need one.
+      await tester.tap(find.byType(CircleBackButton));
+      await tester.pumpAndSettle();
+
+      expect(controller.unreadCount, 0);
+      // the watermark is the newest id, not a flag - a message arriving next is unread by
+      // arithmetic rather than because something remembered to set a bit
+      expect(repo.watermark, 8);
+      expect(find.text('1'), findsNothing);
+    });
+
+    testWidgets('the preview says who wrote the last line', (tester) async {
+      await signIn(signedIn: true);
+      final controller = SupportController(
+        repository: _FakeSupportRepository(
+          thread: [_message(id: 3, fromSupport: false, body: 'Мой вопрос')],
+        ),
+      );
+
+      await pumpList(tester, controller);
+
+      final strings = AppLocalizations(AppLanguage.ru);
+      // without the prefix a row shows your own question back to you as though it had been answered
+      expect(find.text('${strings.chatPreviewYou}Мой вопрос'), findsOneWidget);
+      // and the reader's own message is not news to them, so no badge
+      expect(controller.unreadCount, 0);
     });
   });
 }

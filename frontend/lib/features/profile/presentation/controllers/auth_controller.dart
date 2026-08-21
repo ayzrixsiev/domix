@@ -35,7 +35,7 @@ class AuthController extends ChangeNotifier {
   // deliberately *not* _isLoading. that flag draws the "open telegram and share your number"
   // overlay, which is the wrong thing to show somebody who just asked to be deleted.
   bool _isDeletingAccount = false;
-  String? _errorMessage;
+  String? _loginErrorDetail;
 
   // holds current ui state for the profilescreen
   ProfileViewState _profileState = const ProfileViewState.guest();
@@ -51,7 +51,17 @@ class AuthController extends ChangeNotifier {
 
   bool get isLoading => _isLoading;
   bool get isDeletingAccount => _isDeletingAccount;
-  String? get errorMessage => _errorMessage;
+  /// The raw reason a login attempt failed - **for the log and for nothing else.**
+  ///
+  /// It is deliberately not called `errorMessage`: it is an English exception string
+  /// (`Failed to initialize login session: 502`, `Could not open Telegram`), assembled for whoever
+  /// debugs it. `ProfileScreen` printed it verbatim in the waiting overlay for a while, which is the
+  /// same class of bug as `_showErrorDialog` rendering the login copy for a failed deletion
+  /// (CLAUDE.md §8): **a field whose name promises a sentence the user can read, holding one they
+  /// cannot.** The screen shows written copy and passes this to `debugPrint`.
+  ///
+  /// Non-null is still the *signal* that the attempt failed, which is what the overlay reads it for.
+  String? get loginErrorDetail => _loginErrorDetail;
   String? get deleteAccountErrorCode => _deleteAccountErrorCode;
   ProfileViewState get profileState => _profileState;
 
@@ -154,7 +164,7 @@ class AuthController extends ChangeNotifier {
   }) async {
     try {
       _isLoading = true;
-      _errorMessage = null;
+      _loginErrorDetail = null;
       notifyListeners();
 
       // step 1: hit go backend /init
@@ -183,7 +193,7 @@ class AuthController extends ChangeNotifier {
 
     } catch (e) {
       _isLoading = false;
-      _errorMessage = e.toString().replaceAll("Exception: ", "");
+      _loginErrorDetail = e.toString().replaceAll("Exception: ", "");
       notifyListeners();
     }
   }
@@ -266,7 +276,7 @@ class AuthController extends ChangeNotifier {
 
   // dismiss the current error once the user has read it and pressed ok, so it doesn't linger forever
   void clearError() {
-    _errorMessage = null;
+    _loginErrorDetail = null;
     notifyListeners();
   }
 
@@ -285,7 +295,7 @@ class AuthController extends ChangeNotifier {
   Future<void> logout({bool accountDeleted = false}) async {
     _cancelPolling();
     _isLoading = false;
-    _errorMessage = null;
+    _loginErrorDetail = null;
     await _authService.logout();
     _profileState = const ProfileViewState.guest();
     // fired before notifyListeners, so whatever rebuilds on the line below already sees the cleared
@@ -304,7 +314,7 @@ class AuthController extends ChangeNotifier {
   /// confirmed, and a failure leaves the app exactly as it was.
   ///
   /// Returns true when the account is gone. The caller shows the error itself rather than reading
-  /// [errorMessage], because this is a modal flow with its own dialog - routing it through the
+  /// [loginErrorDetail], because this is a modal flow with its own dialog - routing it through the
   /// shared error field would paint it over the profile screen after the sheet has closed.
   Future<bool> deleteAccount() async {
     if (_isDeletingAccount) return false;

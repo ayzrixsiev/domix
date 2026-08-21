@@ -22,7 +22,7 @@ class HomeController extends ChangeNotifier {
   List<CategoryOffers> _bestOffers = const [];
 
   bool _isLoading = false;
-  String? _loadError;
+  bool _loadFailed = false;
   bool _hasLoaded = false;
 
   /// The shops holding a live paid placement, in the backend's order - longest placement first. The
@@ -34,7 +34,10 @@ class HomeController extends ChangeNotifier {
   List<CategoryOffers> get bestOffers => _bestOffers;
 
   bool get isLoading => _isLoading;
-  String? get loadError => _loadError;
+
+  /// Whether the last load failed. **A bool, not a message** - the screen owns the sentence the
+  /// reader gets, and the exception behind it is a `debugPrint` in [loadHome] and nothing else.
+  bool get loadFailed => _loadFailed;
 
   /// True once a load has finished, successfully or not. The screen uses it to tell "still starting
   /// up" from "genuinely has nothing", which are different things to draw.
@@ -43,7 +46,7 @@ class HomeController extends ChangeNotifier {
   /// [force] re-fetches even when content is already held, which is what a pull-to-refresh wants.
   Future<void> loadHome({bool force = false}) async {
     if (_isLoading) return; // a second call while one is in flight is a no-op
-    if (!force && _hasLoaded && _loadError == null) return;
+    if (!force && _hasLoaded && !_loadFailed) return;
 
     _isLoading = true;
     notifyListeners();
@@ -52,14 +55,18 @@ class HomeController extends ChangeNotifier {
       final content = await _repo.fetchHomeContent();
       _vipShops = content.vipShops;
       _bestOffers = content.bestOffers;
-      _loadError = null;
+      _loadFailed = false;
     } catch (e) {
       // the sections are emptied as well as the error being recorded. leaving the last successful
       // load on screen under a failure banner would be showing prices from an unknown time ago as
       // though they were current - and this list is what a customer decides where to drive from.
       _vipShops = const [];
       _bestOffers = const [];
-      _loadError = e.toString().replaceAll('Exception: ', '');
+      // **the flag is the state; the exception is a log line.** it used to be stored as text and
+      // rendered as the error card's subtitle, which put `ClientException: Connection closed before
+      // full header was received, uri=…` in front of a customer looking for cement.
+      debugPrint('HomeController: could not load home content: $e');
+      _loadFailed = true;
     }
 
     _isLoading = false;

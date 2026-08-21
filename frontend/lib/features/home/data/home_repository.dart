@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
 import 'package:frontend/core/constants/api_config.dart';
+import 'package:frontend/core/network/api_get.dart';
 import 'package:frontend/features/home/data/category_product.dart';
 import 'package:frontend/features/home/data/home_content.dart';
 import 'package:frontend/features/products/data/product_category.dart';
@@ -21,7 +21,7 @@ class HomeRepository {
   /// always renders all three sections together, so three requests would buy nothing but three
   /// chances for one of them to fail on its own and leave the page half-populated.
   Future<HomeContent> fetchHomeContent() async {
-    final response = await http.get(_homeUri).timeout(const Duration(seconds: 10));
+    final response = await apiGet(_homeUri);
 
     if (response.statusCode != 200) {
       throw Exception('Failed to load home content (${response.statusCode})');
@@ -61,7 +61,7 @@ class HomeRepository {
   /// `as List<dynamic>` is the line that makes the backend's `make([]T, 0, n)` load-bearing - a
   /// `null` body would throw here rather than decode to an empty list.
   Future<List<CategoryProduct>> _fetchProducts(Uri uri) async {
-    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+    final response = await apiGet(uri);
 
     if (response.statusCode != 200) {
       throw Exception('Failed to load products (${response.statusCode})');

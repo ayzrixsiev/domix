@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:frontend/core/constants/api_config.dart';
+import 'package:frontend/core/network/api_get.dart';
 import 'package:frontend/features/profile/data/auth_service.dart';
 import 'shop_category.dart';
 import 'shop_model.dart';
@@ -17,7 +18,7 @@ class StoresRepository {
 
   // fetch every shop - public data, no login required, used to plot pins on the map
   Future<List<Shop>> fetchStores() async {
-    final response = await http.get(_shopsUri).timeout(const Duration(seconds: 10));
+    final response = await apiGet(_shopsUri);
 
     if (response.statusCode != 200) {
       throw Exception('Failed to load shops (${response.statusCode})');
@@ -29,6 +30,23 @@ class StoresRepository {
         .toList();
   }
 
+  /// One shop, by id - what a product tile has to work with when it is tapped from search or a
+  /// category browse.
+  ///
+  /// **Returns null for a 404 rather than throwing**, because "this shop was deleted while you were
+  /// reading about its cement" is not a failure the reader can retry out of, and the screen says a
+  /// different sentence for it. Everything else throws, and that one *is* worth a Повторить button.
+  Future<Shop?> fetchShop(int shopId) async {
+    final response = await apiGet(_shopUri(shopId));
+
+    if (response.statusCode == 404) return null;
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load shop (${response.statusCode})');
+    }
+
+    return Shop.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
   // fetch only the shops the current logged-in owner themselves own - backs the "my shops" list
   // that opens from Profile > Управление магазинами > Настройка магазинов
   Future<List<Shop>> fetchMyShops() async {
@@ -37,9 +55,7 @@ class StoresRepository {
       throw Exception('You must be logged in to view your shops');
     }
 
-    final response = await http
-        .get(_myShopsUri, headers: {'Authorization': 'Bearer $token'})
-        .timeout(const Duration(seconds: 10));
+    final response = await apiGet(_myShopsUri, headers: {'Authorization': 'Bearer $token'});
 
     if (response.statusCode != 200) {
       AuthService.handleUnauthorized(response);

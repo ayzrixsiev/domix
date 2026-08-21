@@ -16,6 +16,7 @@ import '../../data/product_model.dart';
 import '../controllers/products_controller.dart';
 import '../widgets/product_category_field.dart';
 import '../widgets/product_photo_field.dart';
+import 'package:frontend/core/widgets/circle_back_button.dart';
 
 // add or edit one product. one screen for both, because the fields are the same either way - the
 // differences are the title, which endpoint is called, and whether there is anything to delete.
@@ -389,6 +390,10 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
         centerTitle: false,
         titleSpacing: 20,
         iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
+        // the disc, not a bare chevron - see CircleBackButton for why every bar in the app needs it.
+        // leadingWidth must move with it or flutter keeps its own 56 and the title sits wrong.
+        leading: const CircleBackButton(),
+        leadingWidth: CircleBackButton.leadingWidth,
         title: Text(
           widget.isNew ? strings.addProductTitle : strings.editProductTitle,
           style: const TextStyle(

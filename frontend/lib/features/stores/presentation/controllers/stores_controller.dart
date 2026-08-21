@@ -15,7 +15,7 @@ class StoresController extends ChangeNotifier {
   // the public list every shop, for the map
   List<Shop> _stores = [];
   bool _isLoading = false;
-  String? _loadError;
+  bool _loadFailed = false;
 
   /// When [_stores] was last successfully fetched, or null if it never has been.
   ///
@@ -27,11 +27,11 @@ class StoresController extends ChangeNotifier {
   // only the current owner's own shops, for the management list
   List<Shop> _myShops = [];
   bool _isLoadingMyShops = false;
-  String? _myShopsError;
+  bool _myShopsFailed = false;
 
   // the add-shop form
   bool _isSaving = false;
-  String? _saveError;
+  bool _saveFailed = false;
 
   // the edit-shop form and the delete action, both on EditStoreScreen. they share one busy flag on
   // purpose - the screen disables both buttons while either is in flight, since deleting a shop
@@ -43,7 +43,13 @@ class StoresController extends ChangeNotifier {
 
   List<Shop> get stores => _stores;
   bool get isLoading => _isLoading;
-  String? get loadError => _loadError;
+
+  /// **Booleans, not messages.** Every screen below reads these as "did it fail", and the sentence
+  /// it draws is written in [AppLocalizations]; the exception behind the failure is `debugPrint`ed
+  /// where it is caught. They held `e.toString()` for a while, which is one careless
+  /// `subtitle: controller.loadError` away from showing a customer
+  /// `ClientException: Connection closed before full header was received, uri=…`.
+  bool get loadFailed => _loadFailed;
 
   /// How long a fetched shop list is trusted before the map re-fetches it on the next visit.
   ///
@@ -61,7 +67,7 @@ class StoresController extends ChangeNotifier {
   /// because [MapScreen.initState] runs once per app session and the IndexedStack keeps the State
   /// alive across every tab switch.
   bool get isStoresStale {
-    if (_loadError != null) return true;
+    if (_loadFailed) return true;
     final fetchedAt = _storesFetchedAt;
     if (fetchedAt == null) return true;
     return DateTime.now().difference(fetchedAt) > storesFreshFor;
@@ -69,10 +75,10 @@ class StoresController extends ChangeNotifier {
 
   List<Shop> get myShops => _myShops;
   bool get isLoadingMyShops => _isLoadingMyShops;
-  String? get myShopsError => _myShopsError;
+  bool get myShopsFailed => _myShopsFailed;
 
   bool get isSaving => _isSaving;
-  String? get saveError => _saveError;
+  bool get saveFailed => _saveFailed;
 
   bool get isMutatingShop => _isMutatingShop;
   ShopMutationException? get shopMutationError => _shopMutationError;
@@ -89,13 +95,13 @@ class StoresController extends ChangeNotifier {
 
     try {
       _stores = await _repo.fetchStores();
-      _loadError = null;
+      _loadFailed = false;
       _storesFetchedAt = DateTime.now();
     } catch (e) {
-      _loadError = e.toString().replaceAll('Exception: ', '');
-      // printed as well as stored. the banner shows a fixed russian sentence, so without this the
-      // difference between "the tunnel moved" and "the server returned 500" is invisible from the
-      // console - and those need completely different fixes.
+      _loadFailed = true;
+      // the console is where the real reason goes. the banner shows a fixed russian sentence, so
+      // without this the difference between "the tunnel moved" and "the server returned 500" is
+      // invisible from the console - and those need completely different fixes.
       debugPrint('loadStores failed: $e');
     }
 
@@ -139,7 +145,7 @@ class StoresController extends ChangeNotifier {
     }
 
     _myShops = [];
-    _myShopsError = null;
+    _myShopsFailed = false;
     _isLoadingMyShops = false;
     _storesFetchedAt = null;
 
@@ -152,9 +158,10 @@ class StoresController extends ChangeNotifier {
 
     try {
       _myShops = await _repo.fetchMyShops();
-      _myShopsError = null;
+      _myShopsFailed = false;
     } catch (e) {
-      _myShopsError = e.toString().replaceAll('Exception: ', '');
+      _myShopsFailed = true;
+      debugPrint('loadMyShops failed: $e');
     }
 
     _isLoadingMyShops = false;
@@ -171,7 +178,7 @@ class StoresController extends ChangeNotifier {
     required double longitude,
   }) async {
     _isSaving = true;
-    _saveError = null;
+    _saveFailed = false;
     notifyListeners();
 
     try {
@@ -192,7 +199,8 @@ class StoresController extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      _saveError = e.toString().replaceAll('Exception: ', '');
+      _saveFailed = true;
+      debugPrint('createShop failed: $e');
       _isSaving = false;
       notifyListeners();
       return false;
@@ -203,7 +211,7 @@ class StoresController extends ChangeNotifier {
   // yet at that point, and notifying mid-build would trip flutter's "called during build" guard.
   void resetSaveState() {
     _isSaving = false;
-    _saveError = null;
+    _saveFailed = false;
   }
 
   // returns the saved shop on success, null on failure (shopMutationError then holds the reason).

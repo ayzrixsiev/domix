@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
+import 'package:frontend/core/widgets/circle_back_button.dart';
 
 // The destination behind the home header's bell.
 //
@@ -27,6 +28,10 @@ class NotificationsScreen extends StatelessWidget {
         centerTitle: false,
         titleSpacing: 20,
         iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
+        // the disc, not a bare chevron - see CircleBackButton for why every bar in the app needs it.
+        // leadingWidth must move with it or flutter keeps its own 56 and the title sits wrong.
+        leading: const CircleBackButton(),
+        leadingWidth: CircleBackButton.leadingWidth,
         title: Text(
           strings.notificationsTitle,
           style: const TextStyle(

@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,6 +5,7 @@ import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/home/data/category_product.dart';
 import 'package:frontend/features/home/presentation/widgets/product_results_view.dart';
+import 'package:frontend/core/widgets/circle_back_button.dart';
 
 /// A titled page of products drawn from across every shop, cheapest first: what a category tile
 /// opens.
@@ -65,10 +65,8 @@ class _ProductResultsScreenState extends State<ProductResultsScreen> {
         backgroundColor: AppColors.background,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(CupertinoIcons.back, color: AppColors.textDark),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+        leading: const CircleBackButton(),
+        leadingWidth: CircleBackButton.leadingWidth,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,

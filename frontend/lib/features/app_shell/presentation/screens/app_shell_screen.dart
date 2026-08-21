@@ -7,7 +7,7 @@ import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/app_shell/presentation/widgets/floating_bottom_nav_bar.dart';
 import 'package:frontend/features/home/presentation/screens/home_screen.dart';
 import 'package:frontend/features/map/presentation/screens/map_screen.dart';
-import 'package:frontend/features/messages/presentation/screens/messages_screen.dart';
+import 'package:frontend/features/messages/presentation/screens/chats_screen.dart';
 import 'package:frontend/features/profile/presentation/screens/profile_screen.dart';
 import 'package:frontend/features/tickets/presentation/screens/tickets_screen.dart';
 import 'package:frontend/features/stores/presentation/screens/add_store_screen.dart';
@@ -55,10 +55,11 @@ class _AppShellScreenState extends State<AppShellScreen> {
       bottomPadding: _bottomPadding,
       isActive: _currentIndex == _mapTabIndex,
     ),
-    // the support chat is live rather than a placeholder, so it needs the same visibility signal
-    // the map does: a reply arriving while the app sits open is only ever picked up when this tab
-    // is opened again, since nothing pushes to the phone.
-    MessagesScreen(
+    // the list of conversations, not a conversation: today it holds one row (Domix support) and the
+    // chat itself is a pushed route. it needs the same visibility signal the map does, since a
+    // reply arriving while the app sits open is only picked up when something asks - nothing
+    // pushes to the phone.
+    ChatsScreen(
       showScaffold: false,
       bottomPadding: _bottomPadding,
       isActive: _currentIndex == _messagesTabIndex,

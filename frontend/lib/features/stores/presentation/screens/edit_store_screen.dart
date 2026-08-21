@@ -11,6 +11,7 @@ import 'package:frontend/features/products/presentation/controllers/products_con
 import 'package:frontend/features/stores/data/shop_model.dart';
 import 'package:frontend/features/stores/presentation/widgets/store_form_fields.dart';
 import '../controllers/stores_controller.dart';
+import 'package:frontend/core/widgets/circle_back_button.dart';
 
 // the "Данные магазина" section of ShopSettingsScreen: edit name / contact phone / location, and -
 // kept in its own block at the very bottom, below a full-width rule - delete the shop.
@@ -175,6 +176,10 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
         centerTitle: false,
         titleSpacing: 20,
         iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
+        // the disc, not a bare chevron - see CircleBackButton for why every bar in the app needs it.
+        // leadingWidth must move with it or flutter keeps its own 56 and the title sits wrong.
+        leading: const CircleBackButton(),
+        leadingWidth: CircleBackButton.leadingWidth,
         title: Text(
           strings.editStoreScreenTitle,
           style: const TextStyle(

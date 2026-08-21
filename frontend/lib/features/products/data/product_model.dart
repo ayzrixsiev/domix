@@ -18,6 +18,7 @@ class Product {
     required this.nameEditable,
     this.photoEditable = true,
     this.imageUrl,
+    this.thumbUrl,
     this.ownImage = false,
   });
 
@@ -67,12 +68,31 @@ class Product {
   /// photo on any row in the owner's shop.
   final bool photoEditable;
 
-  /// The product's photo, ready to hand to `Image.network`, or null when it has no photo.
+  /// The product's photo at full size (1000px), ready to hand to `Image.network`, or null when it
+  /// has no photo. **This is the one an edit screen loads, not the one a grid loads** - see
+  /// [thumbUrl].
   ///
-  /// The backend sends a root-relative path ("/static/products/universal/001.jpg") because the host
-  /// changes between the ngrok tunnel, staging and production; [Product.fromJson] prepends
-  /// [ApiConfig.serverRoot] on the way in, so nothing downstream has to know that.
+  /// The backend sends a root-relative path ("/static/products/universal/001.jpg") while photos are
+  /// served by the API itself, and an absolute one ("https://img.domix-api.uz/universal/001.jpg")
+  /// once they move to their own host; [Product.fromJson] prepends [ApiConfig.serverRoot] to the
+  /// first shape and leaves the second alone, so nothing downstream has to know which it got.
   final String? imageUrl;
+
+  /// The 400px copy of the same photo, which is what every catalogue grid loads. Null exactly when
+  /// [imageUrl] is.
+  ///
+  /// **A hundred tiles at 1000px is roughly 15 MB; at 400px it is roughly 2.5 MB**, and a shop card
+  /// is a hundred tiles on a phone tethered to mobile data. That is what this field is for.
+  ///
+  /// **The address is sent by the server, never built here.** The backend derives it from the
+  /// master's path by a naming rule, and the rule is deliberately not in this file: an apk that
+  /// appended "_thumb" itself would carry that convention until its owner updated, so changing the
+  /// convention would mean a release in Play rather than a deploy - and the builds that guessed
+  /// wrong could not be fixed at all.
+  ///
+  /// Falls back to [imageUrl] when the field is absent, which is what a backend from before
+  /// thumbnails existed sends. That fallback is the reason no existing photo can disappear.
+  final String? thumbUrl;
 
   /// Whether [imageUrl] is this shop's own upload rather than the shared catalogue photo the row was
   /// seeded with.
@@ -103,14 +123,22 @@ class Product {
       // true on a backend from before the rule existed, which is what that backend did
       photoEditable: json['photo_editable'] as bool? ?? true,
       imageUrl: _absoluteImageUrl(json['image_url'] as String?),
+      // an older backend sends no image_thumb_url at all; falling back to the full-size photo is
+      // exactly what this app did before thumbnails existed
+      thumbUrl: _absoluteImageUrl(
+            json['image_thumb_url'] as String?,
+          ) ??
+          _absoluteImageUrl(json['image_url'] as String?),
       // false on a backend from before uploads existed, which is exactly right there: every photo it
       // could send is a catalogue one
       ownImage: json['own_image'] as bool? ?? false,
     );
   }
 
-  /// The server sends "/static/products/universal/001.jpg"; the widget needs a full url. Guarded
-  /// against an already-absolute value so this stays correct if photos ever move to a CDN.
+  /// The server sends "/static/products/universal/001.jpg" while the API serves photos itself; the
+  /// widget needs a full url. The absolute branch is not hypothetical any more - it is what arrives
+  /// once IMAGE_BASE_URL points at img.domix-api.uz, and it is why the app needed no change when it
+  /// did.
   static String? _absoluteImageUrl(String? path) {
     if (path == null || path.isEmpty) return null;
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
@@ -148,6 +176,7 @@ class Product {
       nameEditable: nameEditable,
       photoEditable: photoEditable,
       imageUrl: imageUrl,
+      thumbUrl: thumbUrl,
       ownImage: ownImage,
     );
   }

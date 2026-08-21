@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:frontend/core/constants/api_config.dart';
+import 'package:frontend/core/network/api_get.dart';
 import 'package:frontend/features/profile/data/auth_service.dart';
 import 'product_model.dart';
 
@@ -41,9 +42,7 @@ class ProductsRepository {
   /// every product in one shop. public - this is what fills the grid on a shop's card, which any
   /// customer can open without logging in.
   Future<List<Product>> fetchShopProducts(int shopId) async {
-    final response = await http
-        .get(_shopProductsUri(shopId))
-        .timeout(const Duration(seconds: 10));
+    final response = await apiGet(_shopProductsUri(shopId));
 
     if (response.statusCode != 200) {
       throw _exceptionFrom(response);

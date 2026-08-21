@@ -19,7 +19,11 @@ class ProductsController extends ChangeNotifier {
 
   final Map<int, List<Product>> _byShop = {};
   final Set<int> _loadingShopIds = {};
-  final Map<int, String> _loadErrors = {};
+  /// The shops whose last catalogue load failed. **A set of ids, not a map of messages** - the
+  /// screens read it as "did this shop's catalogue fail", draw a written sentence of their own, and
+  /// the exception goes to `debugPrint` in [loadProducts]. It held `e.toString()` per shop, which is
+  /// one `subtitle: controller.loadErrorFor(id)` away from a customer reading a stack of Dart.
+  final Set<int> _failedLoads = {};
 
   // the add/edit/delete form on ShopProductsScreen. one busy flag rather than one per product: only
   // one edit sheet is ever open at a time, and the screen disables its save/delete buttons together.
@@ -42,7 +46,7 @@ class ProductsController extends ChangeNotifier {
   List<Product> productsFor(int shopId) => _byShop[shopId] ?? const [];
 
   bool isLoadingFor(int shopId) => _loadingShopIds.contains(shopId);
-  String? loadErrorFor(int shopId) => _loadErrors[shopId];
+  bool loadFailedFor(int shopId) => _failedLoads.contains(shopId);
   bool hasLoaded(int shopId) => _byShop.containsKey(shopId);
 
   bool get isSaving => _isSaving;
@@ -83,13 +87,14 @@ class ProductsController extends ChangeNotifier {
     if (!force && _byShop.containsKey(shopId)) return;
 
     _loadingShopIds.add(shopId);
-    _loadErrors.remove(shopId);
+    _failedLoads.remove(shopId);
     notifyListeners();
 
     try {
       _byShop[shopId] = await _repo.fetchShopProducts(shopId);
     } catch (e) {
-      _loadErrors[shopId] = e.toString();
+      _failedLoads.add(shopId);
+      debugPrint('loadProducts failed for shop $shopId: $e');
     }
 
     _loadingShopIds.remove(shopId);
@@ -230,6 +235,6 @@ class ProductsController extends ChangeNotifier {
   /// longer exists, and an id reused by postgres later would serve them to the wrong shop.
   void forgetShop(int shopId) {
     _byShop.remove(shopId);
-    _loadErrors.remove(shopId);
+    _failedLoads.remove(shopId);
   }
 }

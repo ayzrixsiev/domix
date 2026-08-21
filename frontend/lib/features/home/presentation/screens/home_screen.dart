@@ -206,7 +206,7 @@ class _HomeScreenState extends State<HomeScreen> {
       // danger-coloured with a retry, the same treatment ProductResultsView and my-shops use: a
       // failure must not look like a friendly "nothing here yet", because the two want opposite
       // things from the reader.
-      if (home.loadError case final error?) ...[
+      if (home.loadFailed) ...[
         const SizedBox(height: 40),
         Padding(
           padding: _gutter,
@@ -215,7 +215,8 @@ class _HomeScreenState extends State<HomeScreen> {
             iconColor: AppColors.danger,
             iconBackground: AppColors.dangerSoft,
             title: strings.homeLoadError,
-            subtitle: error,
+            // a written sentence, never the exception - see AppLocalizations.loadErrorHint
+            subtitle: strings.loadErrorHint,
             action: PrimaryActionButton(
               label: strings.retryButtonShort,
               onTap: () => home.loadHome(force: true),

@@ -12,6 +12,7 @@ import 'package:frontend/features/stores/data/shop_model.dart';
 import 'add_store_screen.dart';
 import 'shop_settings_screen.dart';
 import '../controllers/stores_controller.dart';
+import 'package:frontend/core/widgets/circle_back_button.dart';
 
 // lists the shops the current owner themselves own - opened from Profile > Управление
 // магазинами > Настройка магазинов. tapping a shop opens ShopSettingsScreen for it.
@@ -69,6 +70,10 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
         centerTitle: false,
         titleSpacing: 20,
         iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
+        // the disc, not a bare chevron - see CircleBackButton for why every bar in the app needs it.
+        // leadingWidth must move with it or flutter keeps its own 56 and the title sits wrong.
+        leading: const CircleBackButton(),
+        leadingWidth: CircleBackButton.leadingWidth,
         title: Text(
           strings.myShopsScreenTitle,
           style: const TextStyle(
@@ -101,7 +106,7 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
       return const Center(child: CircularProgressIndicator(color: AppColors.primaryOrange));
     }
 
-    if (controller.myShopsError != null && controller.myShops.isEmpty) {
+    if (controller.myShopsFailed && controller.myShops.isEmpty) {
       return EmptyStateView(
         icon: CupertinoIcons.wifi_exclamationmark,
         // the only place this state is coloured differently: the layout is the same designed empty

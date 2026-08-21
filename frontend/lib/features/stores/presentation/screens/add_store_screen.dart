@@ -9,6 +9,7 @@ import 'package:frontend/features/map/presentation/screens/location_picker_scree
 import 'package:frontend/features/stores/data/shop_category.dart';
 import 'package:frontend/features/stores/presentation/widgets/store_form_fields.dart';
 import '../controllers/stores_controller.dart';
+import 'package:frontend/core/widgets/circle_back_button.dart';
 
 // the "add store" page: shop name, contact number, and a location picked on the map.
 // no photo yet - shops get a default banner (see ShopBanner in map_screen.dart) until photo
@@ -123,7 +124,7 @@ class _AddStoreScreenState extends State<AddStoreScreen> {
         ),
       );
     }
-    // on failure controller.saveError is now set, and build() below shows the inline error card
+    // on failure controller.saveFailed is now true, and build() below shows the inline error card
   }
 
   @override
@@ -139,6 +140,10 @@ class _AddStoreScreenState extends State<AddStoreScreen> {
         centerTitle: false,
         titleSpacing: 20,
         iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
+        // the disc, not a bare chevron - see CircleBackButton for why every bar in the app needs it.
+        // leadingWidth must move with it or flutter keeps its own 56 and the title sits wrong.
+        leading: const CircleBackButton(),
+        leadingWidth: CircleBackButton.leadingWidth,
         title: Text(
           _strings.addStoreScreenTitle,
           style: const TextStyle(
@@ -195,7 +200,7 @@ class _AddStoreScreenState extends State<AddStoreScreen> {
               strings: _strings,
               onTap: _pickLocation,
             ),
-            if (controller.saveError != null) ...[
+            if (controller.saveFailed) ...[
               const SizedBox(height: 18),
               StoreInlineErrorCard(message: _strings.storeCreationFailed),
             ],

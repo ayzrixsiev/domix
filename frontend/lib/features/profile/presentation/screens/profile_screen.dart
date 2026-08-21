@@ -383,7 +383,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final currentProfile = authController.profileState;
 
     // show a centered, dismissible dialog once per new error instead of a raw banner that never goes away
-    final currentError = authController.errorMessage;
+    final currentError = authController.loginErrorDetail;
     if (currentError != null && currentError != _lastHandledError) {
       _lastHandledError = currentError;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -922,7 +922,8 @@ class _TelegramAuthOverlayState extends State<_TelegramAuthOverlay> {
 
   @override
   Widget build(BuildContext context) {
-    final hasTimedOut = _secondsRemaining == 0 || widget.authController.errorMessage != null;
+    final hasFailed = widget.authController.loginErrorDetail != null;
+    final hasTimedOut = _secondsRemaining == 0 || hasFailed;
 
     return Container(
       width: MediaQuery.of(context).size.width * 0.85,
@@ -1009,7 +1010,11 @@ class _TelegramAuthOverlayState extends State<_TelegramAuthOverlay> {
             ),
             const SizedBox(height: 16),
             Text(
-              widget.authController.errorMessage ?? widget.strings.timeoutError,
+              // **written copy, never the exception.** this printed `loginErrorDetail` verbatim, so
+              // a failed /init showed the reader `Failed to initialize login session: 502`. the two
+              // states say different things because they *are* different: the countdown running out
+              // means nobody shared a number, while a failure means the attempt never got that far.
+              hasFailed ? widget.strings.errorDialogInstructions : widget.strings.timeoutError,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: _kTextPrimary,

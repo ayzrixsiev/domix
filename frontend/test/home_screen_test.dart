@@ -204,7 +204,9 @@ void main() {
       _FakeHomeRepository(error: Exception('connection refused')),
     );
 
-    expect(controller.loadError, 'connection refused');
+    // a flag, not the exception's text: what the reader gets is written copy, and
+    // `connection refused` goes to the log. see AppLocalizations.loadErrorHint.
+    expect(controller.loadFailed, isTrue);
     // no plausible shops standing in for the ones we could not fetch - the failure is what is shown
     expect(controller.vipShops, isEmpty);
     expect(controller.bestOffers, isEmpty);
@@ -213,8 +215,14 @@ void main() {
     // cannot explain by themselves - and it is danger-coloured with a retry, not a friendly
     // "nothing here yet"
     expect(find.text(strings.homeLoadError), findsOneWidget);
-    expect(find.text('connection refused'), findsOneWidget);
+    expect(find.text(strings.loadErrorHint), findsOneWidget);
     expect(find.text(strings.retryButtonShort), findsOneWidget);
+
+    // **and the exception itself is nowhere on screen.** this line is the point of the test now: the
+    // card used to render `e.toString()` as its subtitle, so a customer looking for cement was shown
+    // `ClientException: Connection closed before full header was received, uri=https://…/api/home`.
+    expect(find.text('connection refused'), findsNothing);
+    expect(find.textContaining('Exception'), findsNothing);
   });
 
   testWidgets('real shops fill the slots from the front, and nothing is invented', (tester) async {

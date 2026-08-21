@@ -10,6 +10,7 @@ import 'package:frontend/features/stores/data/shop_model.dart';
 import 'package:frontend/features/stores/presentation/widgets/store_form_fields.dart';
 import 'edit_store_screen.dart';
 import '../controllers/stores_controller.dart';
+import 'package:frontend/core/widgets/circle_back_button.dart';
 
 // the per-shop hub, opened by tapping a shop in MyShopsScreen. it owns no shop functionality itself
 // - it is a menu of sections, each of which opens its own screen:
@@ -55,6 +56,10 @@ class ShopSettingsScreen extends StatelessWidget {
         centerTitle: false,
         titleSpacing: 20,
         iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
+        // the disc, not a bare chevron - see CircleBackButton for why every bar in the app needs it.
+        // leadingWidth must move with it or flutter keeps its own 56 and the title sits wrong.
+        leading: const CircleBackButton(),
+        leadingWidth: CircleBackButton.leadingWidth,
         title: Text(
           strings.shopSettingsScreenTitle,
           style: const TextStyle(

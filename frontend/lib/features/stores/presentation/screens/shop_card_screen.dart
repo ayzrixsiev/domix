@@ -7,14 +7,18 @@ import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
+import 'package:frontend/core/widgets/empty_state_view.dart';
 import 'package:frontend/core/widgets/price_tier_badge.dart';
+import 'package:frontend/core/widgets/primary_action_button.dart';
 import 'package:frontend/features/products/data/product_model.dart';
 import 'package:frontend/features/products/presentation/controllers/products_controller.dart';
 import 'package:frontend/features/products/presentation/widgets/product_grid.dart';
 import 'package:frontend/features/products/presentation/widgets/product_tile.dart';
 import 'package:frontend/features/stores/data/price_tier.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
+import 'package:frontend/features/stores/data/stores_repository.dart';
 import 'package:frontend/features/stores/presentation/widgets/shop_category_banner.dart';
+import 'package:frontend/core/widgets/circle_back_button.dart';
 
 /// One shop, in full: whose card this is, what their basket costs, how to reach them, and what they
 /// sell.
@@ -89,6 +93,133 @@ class ShopCardScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The same card, opened by something that holds only a shop's id: a product tile in search
+/// results or a category browse.
+///
+/// **Every other entry point already has the whole shop and passes it** - the map holds the list it
+/// drew its pins from, and `GET /api/home` sends full shop rows - so [ShopCardScreen] paints on its
+/// first frame and this is the one route that has to fetch. A product row carries nothing but
+/// `shop_id`, and putting a shop's fields on all hundred rows of a category response would repeat
+/// one address a hundred times to save a round trip nobody makes until they tap.
+///
+/// Three states, and the third is the reason this is not one generic error: a **404 is not a
+/// failure**. The shop was deleted while its cement was on somebody's screen, there is nothing to
+/// retry, and a Повторить button that fails identically every time is worse than a sentence saying
+/// what happened.
+class ShopByIdScreen extends StatefulWidget {
+  const ShopByIdScreen({super.key, required this.shopId, this.repository});
+
+  final int shopId;
+
+  /// Injectable for tests; nothing in the app passes it.
+  final StoresRepository? repository;
+
+  @override
+  State<ShopByIdScreen> createState() => _ShopByIdScreenState();
+}
+
+class _ShopByIdScreenState extends State<ShopByIdScreen> {
+  late final StoresRepository _repo = widget.repository ?? StoresRepository();
+
+  Shop? _shop;
+  bool _isLoading = true;
+
+  /// The one outcome worth a *different* sentence: the shop was deleted while its cement was on
+  /// screen, so there is nothing to retry. Everything else that goes wrong is the retryable branch
+  /// below, and it says so **without carrying the exception onto the screen**.
+  ///
+  /// There used to be a `String? _error` here holding `e.toString()`, rendered as the subtitle, so a
+  /// reader who tapped a product on a phone that had been idle was shown
+  /// `ClientException: Connection closed before full header was received, uri=https://…/api/shops/12`.
+  /// None of that is for them, the Повторить button beside it already said the only thing they could
+  /// do, and the exception is worth more in the log than on the screen - see [apiGet], which now
+  /// makes that particular failure fix itself.
+  bool _gone = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _gone = false;
+    });
+
+    try {
+      final shop = await _repo.fetchShop(widget.shopId);
+      // the request outlives the screen if the reader backs out mid-flight, and setState on a
+      // disposed State throws - `mounted` has to be checked after every await, not once at the top
+      if (!mounted) return;
+      setState(() {
+        _shop = shop;
+        _gone = shop == null;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      // the log is the only place the real exception goes
+      debugPrint('ShopByIdScreen: could not load shop ${widget.shopId}: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = Provider.of<LanguageProvider>(context).strings;
+    final shop = _shop;
+
+    // loaded: hand off to the same widget every other entry point renders, chrome and all
+    if (shop != null) return ShopCardScreen(shop: shop);
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        leading: const CircleBackButton(),
+        leadingWidth: CircleBackButton.leadingWidth,
+      ),
+      body: Center(
+        child: _isLoading
+            ? const CircularProgressIndicator(color: AppColors.primaryOrange)
+            : Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: _gone
+                    ? EmptyStateView(
+                        icon: CupertinoIcons.building_2_fill,
+                        title: strings.shopGoneTitle,
+                        subtitle: strings.shopGoneBody,
+                      )
+                    : EmptyStateView(
+                        icon: CupertinoIcons.wifi_exclamationmark,
+                        iconColor: AppColors.danger,
+                        iconBackground: AppColors.dangerSoft,
+                        title: strings.shopLoadError,
+                        action: PrimaryActionButton(
+                          label: strings.retryButtonShort,
+                          onTap: _load,
+                        ),
+                      ),
+              ),
+      ),
+    );
+  }
+}
+
+/// Pushes [ShopByIdScreen]. The one call a product tile makes, so no caller has to know that
+/// opening a shop from an id costs a fetch.
+Future<void> openShopById(BuildContext context, int shopId) {
+  return Navigator.of(context).push<void>(
+    MaterialPageRoute(builder: (_) => ShopByIdScreen(shopId: shopId)),
+  );
 }
 
 /// Opens the shop card as the map's draggable sheet.
@@ -361,7 +492,7 @@ class _ShopCardViewState extends State<ShopCardView> {
             isFirstLoad: isFirstLoad,
             // three different empty states, and telling them apart is the point: the request failed,
             // the shop has priced nothing, or this particular search matched nothing.
-            hasFailed: controller.loadErrorFor(shop.id) != null,
+            hasFailed: controller.loadFailedFor(shop.id),
             isFiltered: _query.trim().isNotEmpty,
           ),
         ),
@@ -401,8 +532,11 @@ class _ShopCardViewState extends State<ShopCardView> {
             // clear of the status bar the cover now runs under
             Positioned(
               top: MediaQuery.paddingOf(context).top + 8,
-              left: 14,
-              child: const _BackButton(),
+              // 0, because CircleBackButton carries the gutter inset itself - it is the same widget
+              // every app bar uses, so the disc lands on the same 16px line here as it does there
+              left: 0,
+              // floating: it hovers over the cover picture rather than sitting in a bar
+              child: const CircleBackButton(floating: true),
             ),
           ],
         ),
@@ -476,41 +610,6 @@ class _SheetGrabber extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0x33101828),
         borderRadius: BorderRadius.circular(2),
-      ),
-    );
-  }
-}
-
-/// The pushed route's way back, floating over the cover rather than sitting in an app bar.
-///
-/// A white circle with a shadow **and a hairline ring**. The ring is new and it is not trim: the
-/// cover is white-and-orange now, and its top-left corner - which is exactly where this sits - is
-/// the whitest part of it, so a white disc with only a soft shadow under it had nothing to make it a
-/// shape. The ring also has to survive the reader scrolling the cover away, which puts the same
-/// button over the grey page.
-class _BackButton extends StatelessWidget {
-  const _BackButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surfaceWhite,
-      shape: const CircleBorder(),
-      elevation: 0,
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: () => Navigator.of(context).maybePop(),
-        child: Ink(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            color: AppColors.surfaceWhite,
-            shape: BoxShape.circle,
-            border: Border.all(color: AppColors.trackGrey),
-            boxShadow: AppShadows.floating,
-          ),
-          child: const Icon(CupertinoIcons.back, color: AppColors.textDark, size: 20),
-        ),
       ),
     );
   }

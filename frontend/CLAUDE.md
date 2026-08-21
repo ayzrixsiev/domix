@@ -311,8 +311,9 @@ exhaustive `switch`es — so a thirteenth category is a compile error rather tha
 
 **Tapping a tile opens `CategoryProductsScreen`** — every priced product in that category across every
 shop, cheapest first, through the same `ProductGrid`/`ProductTile` the owner's catalogue and the map's
-shop card use. Each tile carries its shop's name as a subtitle, because a price with no seller
-attached is not actionable.
+shop card use. Each tile carries its shop's name as a subtitle, because a price with no seller attached
+is not actionable — **and tapping it opens that shop's card** (§7), because a name with no way to reach
+it is the same dead end one step later. Search results share the widget and so share both.
 
 ### There is no fallback content, and there must not be one again
 
@@ -497,12 +498,21 @@ carousel, a row in Лучшие предложения. Before it existed only t
 sheet built inside `map_screen.dart`, so a paid VIP placement was a card that did nothing when it was
 tapped: a failure with no error anywhere, on the one card somebody had paid for.
 
-**It takes a whole `Shop`, never an id to look up.** Every entry point already holds one: the map has
-the list it drew its pins from, and `GET /api/home` sends full shop rows that `HomeShopPreview` merely
-projects down for the feed. So the card paints complete on its first frame — no spinner, no second
-round trip for facts the app already had. That is why `HomeShopPreview` carries the row it came from.
-`test/shop_card_test.dart` pins the three routes in, including the one that must *not* open a card:
+**It takes a whole `Shop` wherever the caller has one**, which is every entry point but one: the map
+has the list it drew its pins from, and `GET /api/home` sends full shop rows that `HomeShopPreview`
+merely projects down for the feed. So the card paints complete on its first frame — no spinner, no
+second round trip for facts the app already had. That is why `HomeShopPreview` carries the row it came
+from. `test/shop_card_test.dart` pins those routes in, including the one that must *not* open a card:
 an unsold VIP slot.
+
+**The exception is a product tile**, which carries only `shop_id` — search results and the category
+browse. `openShopById(context, id)` pushes `ShopByIdScreen`, which fetches `GET /api/shops/{id}` and
+then hands off to the identical `ShopCardScreen`; it is in the same file, so "how a shop card opens"
+stays one place to read. Three states, and the third is why it is not one generic error: **a 404 is
+not a failure** — the shop was deleted while its cement was on somebody's screen, there is nothing to
+retry, and `fetchShop` returns null for it rather than throwing. Putting the shop's fields on all
+hundred rows of a category response would have avoided the fetch by repeating one address a hundred
+times, for a round trip nobody makes until they tap.
 
 #### One content, two chromes
 
@@ -612,8 +622,11 @@ has corners of its own, so a rounded cover inside them was two radii a few pixel
   what keeps it free: a drag landing on the handle falls through to the scroll view, which is what the
   sheet listens to. It is translucent black rather than `trackGrey`, which is invisible on a near-
   white cover.
-- **The route's back button gained a `trackGrey` ring.** Its corner of the cover is the whitest part
-  of the picture, so a white disc with only a shadow under it had nothing making it a shape.
+- **The route's back button is the shared `CircleBackButton` at `floating: true`**, and the ring on it
+  is why: its corner of the cover is the whitest part of the picture, so a white disc with only a
+  shadow under it had nothing making it a shape. It was a private `_BackButton` in this file until
+  every other screen needed the same disc (root §9); the `Positioned` passes `left: 0` because the
+  widget carries the gutter inset itself.
 - **The route has no top `SafeArea` any more** — that is what lets the picture run under the status
   bar, and it is why the cover is near-white up there and why `SystemUiOverlayStyle.dark` (dark
   glyphs) is asked for explicitly. The route's cover is `defaultHeight + MediaQuery.paddingOf().top`
@@ -715,6 +728,15 @@ Two rules the tile encodes: an unpriced product shows "Цена не указа�
 place orange is used for something other than a button, because on a fresh shop it is on all 100 tiles
 and it *is* the owner's to-do list; and an availability chip appears only for `on_order`/`unavailable`,
 since in-stock is normal and a badge on every tile says nothing.
+
+**The grid loads `product.thumbUrl`, not `product.imageUrl`** — a 400px copy against a 1000px one, and
+a shop card is up to a hundred tiles, so it is ~2.5 MB against ~15 MB down a mobile connection. Both
+addresses come from the server (root §7); the app never builds one. `thumbUrl` already falls back to the
+full-size url when the backend sent no `image_thumb_url`, and `_BannerPhoto` takes a `fallbackUrl` that
+retries the master once if the thumbnail itself 404s — the catalogue's thumbnails are generated by a
+`magick` command somebody runs by hand, so that is the step most likely to be skipped, and skipping it
+must not blank the market. `cacheWidth: 540` stays as a ceiling for the case where neither applies.
+`test/product_photo_test.dart` pins the preference, the fallback and the tile.
 
 **`_BannerPlaceholder` is plain `surfaceWhite`, and that is a decision about the photos rather than
 about the empty state.** It is painted *under* the photo, never instead of it, and the photo is
@@ -825,19 +847,38 @@ it showed `CupertinoIcons.money_dollar`, which names the wrong currency for ever
 
 ## 9. Сообщения (`features/messages/`)
 
-**The tab is the support conversation itself, not a list containing one.** Exactly one thread exists
-per account, so a list of a single row would be a screen whose only job is to be tapped through. When
-chats with shops and masters arrive this becomes that list and the chat moves to a pushed route —
-`SupportController` needs no change for it. The wire format and the rules live in root §7.
+**The tab is `ChatsScreen`, a list of conversations, and the chat is a pushed route.** Today the list
+holds one row — Domix support — which is exactly the shape that was argued against while the second
+kind of conversation (shop ↔ customer, worker ↔ client) was an idea rather than a plan: a tab is a
+destination people learn, and moving the chat out from under them is a change to a habit. Made early,
+it cost nothing — `SupportController` needed no change, as predicted. The wire format and the rules
+live in root §7.
 
+- **Nothing fetches a list.** The row is drawn from the thread the controller already holds: its last
+  message, that message's time, and `unreadCount`. **There is no `GET /api/chats` and there must not be
+  one yet** — it would be a round trip to learn what the app knows. A shop writing to a customer is
+  what makes it necessary, and that is when it earns its place.
+- **`ChatListRow` knows nothing about support.** It takes a glyph, a name, a preview, a time and a
+  count, because callers two and three are a shop and a worker and the only thing that must not differ
+  between the rows is the layout.
+- **Unread is a watermark, held on the phone** (root §7). The preview goes `textDark`/`w600` when there
+  is anything unread, so the count is not the only channel; the badge disappears entirely at zero.
+- **The list re-arms its own poll after the chat is popped.** `MessagesScreen.dispose` stops it — right,
+  since it was a route — but the list underneath is still on screen and still wants a live preview, and
+  popping does not rebuild the route below. `_chatIsOpen` keeps the two from fighting over the flag
+  while both are mounted.
 - **A guest sees why they cannot write rather than a disabled field** — the answer has to arrive
   somewhere, and without an account there is nowhere to put it. `onSignInTap` switches the shell to the
   Profile tab; a standalone route passes null, which hides the button rather than offering one that
   goes nowhere.
-- **`isActive` is required, same as the map's.** `IndexedStack` builds every tab and paints one, so
-  without that false→true edge a reply sent while the app was open would never appear — the thread was
-  fetched at launch and nothing would ask again. `refreshIfStale()` (45s) decides whether the edge
-  costs a request, and a *failed* load counts as stale so returning to the tab retries by itself.
+- **`isActive` is required on both screens, same as the map's.** `IndexedStack` builds every tab and
+  paints one, so without that false→true edge a reply sent while the app was open would never appear —
+  the thread was fetched at launch and nothing would ask again. `refreshIfStale()` (45s) decides
+  whether the edge costs a request, and a *failed* load counts as stale so returning retries by itself.
+- **A pushed conversation draws a `CircleBackButton`; the same screen inside a shell does not.**
+  `showScaffold` is what distinguishes them, and a back arrow with nothing to pop is worse than none.
+  It was a bare `LucideIcons.chevron_left` in an `IconButton`; the disc is shared with every app bar in
+  the app (root §9), and `_ChatHeader` drops its left padding to 0 because the widget owns that inset.
 - **A live poll keeps the thread current while somebody is actually reading it.** The visibility edge
   alone meant a reply never arrived while the user was *sitting on* the conversation. Root §7 has the
   design and the rejected alternatives; the screen's job is the three inputs — `isActive`,

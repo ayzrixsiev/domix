@@ -252,6 +252,16 @@ class AppLocalizations {
   String get categoryProductsLoadError =>
       isRu ? 'Не удалось загрузить товары' : "Mahsulotlarni yuklab bo'lmadi";
 
+  // opening a shop card from a product tile, where the app holds an id and has to fetch. two
+  // outcomes worth telling apart: the request failed (retry), or the shop is gone (nothing to
+  // retry - somebody deleted it while its cement was on screen).
+  String get shopLoadError =>
+      isRu ? 'Не удалось открыть магазин' : "Do'konni ochib bo'lmadi";
+  String get shopGoneTitle => isRu ? 'Магазин недоступен' : "Do'kon mavjud emas";
+  String get shopGoneBody => isRu
+      ? 'Похоже, магазин был удалён. Попробуйте найти другой товар.'
+      : "Do'kon o'chirilganga o'xshaydi. Boshqa mahsulotni qidiring.";
+
   // product search, opened from the home screen's field. it lands on the same screen the category
   // tiles open, so it borrows that screen's error and count strings and only needs its own heading
   // and empty state.
@@ -316,6 +326,16 @@ class AppLocalizations {
   // the support chat behind the Сообщения tab. it is a conversation with one other party, so the
   // copy says «мы» and not «поддержка Domix ответит» - the second reads like a ticket system, which
   // is exactly the distance this screen exists to remove.
+  // the Сообщения tab is a list of conversations now, and today it holds one row. the strings the
+  // *list* needs are separate from the chat's own: a row previews, a screen converses.
+  String get chatsScreenTitle => isRu ? 'Сообщения' : 'Xabarlar';
+  String get chatsScreenSubtitle =>
+      isRu ? 'Ваши переписки' : 'Sizning yozishmalaringiz';
+  /// Prefixes the preview when the last word in a thread was the reader's own, the way every chat
+  /// app does it - without it a row shows your own question as though somebody had answered.
+  String get chatPreviewYou => isRu ? 'Вы: ' : 'Siz: ';
+  String get chatNoMessagesYet => isRu ? 'Нет сообщений' : "Xabarlar yo'q";
+
   String get supportChatTitle => isRu ? 'Поддержка' : "Qo'llab-quvvatlash";
   String get supportChatSubtitle =>
       isRu ? 'Отвечаем в рабочее время' : 'Ish vaqtida javob beramiz';
@@ -343,7 +363,16 @@ class AppLocalizations {
 
   String get supportLoadError =>
       isRu ? 'Не удалось загрузить переписку' : "Yozishmani yuklab bo'lmadi";
-  String get supportLoadErrorHint => isRu
+  /// The sentence under **every** failed read in the app - the support thread, the home feed, a
+  /// category browse.
+  ///
+  /// It lives here rather than beside one screen because it is the answer to the same question
+  /// everywhere, and because it is the *replacement* for something worse: three of those screens
+  /// used to print `e.toString()` as their subtitle, so a dropped connection reached the reader as
+  /// `ClientException: Connection closed before full header was received, uri=…`. **An exception is
+  /// written for whoever fixes it, never for whoever hit it** - the raw string goes to `debugPrint`
+  /// and this goes on the screen.
+  String get loadErrorHint => isRu
       ? 'Проверьте подключение и попробуйте снова.'
       : "Ulanishni tekshirib, qayta urinib ko'ring.";
 

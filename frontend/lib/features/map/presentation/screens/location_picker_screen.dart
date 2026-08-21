@@ -7,6 +7,7 @@ import 'package:frontend/core/localization/language_provider.dart';
 import '../../data/geocoding_service.dart';
 import '../widgets/domix_map.dart';
 import '../widgets/shop_marker.dart';
+import 'package:frontend/core/widgets/circle_back_button.dart';
 
 // what the caller gets back once the user confirms a location
 class LocationPickResult {
@@ -164,16 +165,16 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
           // back button + search bar
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              // 2 on the left, not 16: CircleBackButton carries the rest of the gutter itself
+              padding: const EdgeInsets.fromLTRB(2, 12, 16, 0),
               child: Column(
                 children: [
                   Row(
                     children: [
-                      _RoundIconButton(
-                        icon: CupertinoIcons.back,
-                        onTap: () => Navigator.of(context).pop(),
-                      ),
-                      const SizedBox(width: 10),
+                      // floating: this one sits on the map itself, which is the busiest ground in
+                      // the app - it needs the heavier lift to stay a shape over a satellite tile
+                      const CircleBackButton(floating: true),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: _SearchField(
                           controller: _searchController,
@@ -236,30 +237,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({required this.icon, required this.onTap});
-
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      shape: const CircleBorder(),
-      elevation: 3,
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Icon(icon, color: AppColors.textDark, size: 20),
-        ),
       ),
     );
   }

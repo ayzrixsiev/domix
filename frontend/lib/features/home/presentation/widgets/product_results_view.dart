@@ -8,6 +8,7 @@ import 'package:frontend/core/widgets/primary_action_button.dart';
 import 'package:frontend/features/home/data/category_product.dart';
 import 'package:frontend/features/products/presentation/widgets/product_grid.dart';
 import 'package:frontend/features/products/presentation/widgets/product_tile.dart';
+import 'package:frontend/features/stores/presentation/screens/shop_card_screen.dart';
 
 /// One fetch of cross-shop products and the four states it can be in: loading, failed, empty, and a
 /// grid. Everything below a screen's app bar, and nothing above it.
@@ -58,7 +59,10 @@ class ProductResultsView extends StatefulWidget {
 class _ProductResultsViewState extends State<ProductResultsView> {
   List<CategoryProduct>? _products;
   bool _isLoading = true;
-  String? _error;
+
+  /// **A flag, not the exception's text.** The failure gets one written sentence and a retry; the
+  /// exception goes to the log. See the same note on `ShopByIdScreen._gone`.
+  bool _failed = false;
 
   @override
   void initState() {
@@ -69,7 +73,7 @@ class _ProductResultsViewState extends State<ProductResultsView> {
   Future<void> _load() async {
     setState(() {
       _isLoading = true;
-      _error = null;
+      _failed = false;
     });
 
     try {
@@ -85,8 +89,9 @@ class _ProductResultsViewState extends State<ProductResultsView> {
       widget.onCountChanged?.call(products.length);
     } catch (e) {
       if (!mounted) return;
+      debugPrint('ProductResultsView: could not load results: $e');
       setState(() {
-        _error = e.toString().replaceAll('Exception: ', '');
+        _failed = true;
         _isLoading = false;
       });
       widget.onCountChanged?.call(null);
@@ -112,7 +117,7 @@ class _ProductResultsViewState extends State<ProductResultsView> {
   Widget _content() {
     final strings = widget.strings;
 
-    if (_error != null) {
+    if (_failed) {
       return _FullPage(
         child: EmptyStateView(
           icon: CupertinoIcons.wifi_exclamationmark,
@@ -121,7 +126,7 @@ class _ProductResultsViewState extends State<ProductResultsView> {
           iconColor: AppColors.danger,
           iconBackground: AppColors.dangerSoft,
           title: strings.categoryProductsLoadError,
-          subtitle: _error,
+          subtitle: strings.loadErrorHint,
           action: PrimaryActionButton(label: strings.retryButtonShort, onTap: _load),
         ),
       );
@@ -152,6 +157,10 @@ class _ProductResultsViewState extends State<ProductResultsView> {
             // the shop is the whole reason this list is browsable: a price with no seller attached
             // answers a question nobody asked
             subtitle: entry.shopName,
+            // and the name has to be reachable, or the list ends in a dead end. the tile carries
+            // only shop_id, so this is the one route into a shop card that fetches - see
+            // ShopByIdScreen.
+            onTap: () => openShopById(context, entry.product.shopId),
           ),
       ],
     );

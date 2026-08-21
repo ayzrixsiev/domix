@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:provider/provider.dart';
@@ -10,6 +9,7 @@ import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
 import 'package:frontend/features/home/presentation/controllers/home_controller.dart';
 import 'package:frontend/features/home/presentation/widgets/product_results_view.dart';
+import 'package:frontend/core/widgets/circle_back_button.dart';
 
 /// The screen the home screen's search bar opens: a field at the top, and below it every priced
 /// product whose name contains the query, from every shop, cheapest first.
@@ -104,10 +104,8 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
         // the field wants the whole bar, so the default 16px of title padding beside the leading
         // button goes; the Row below spaces it itself
         titleSpacing: 0,
-        leading: IconButton(
-          icon: const Icon(CupertinoIcons.back, color: AppColors.textDark),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+        leading: const CircleBackButton(),
+        leadingWidth: CircleBackButton.leadingWidth,
         title: Padding(
           padding: const EdgeInsets.only(right: 16),
           child: _SearchField(

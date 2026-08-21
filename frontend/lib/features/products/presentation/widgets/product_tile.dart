@@ -157,7 +157,12 @@ class _ProductBanner extends StatelessWidget {
           // shows while the image is still downloading and what is left if it fails, so the tile
           // never flashes a bare white rectangle mid-scroll
           const _BannerPlaceholder(),
-          if (product.imageUrl case final url?) _BannerPhoto(url: url),
+          // **the thumbnail, not the photo.** a shop card is up to a hundred of these tiles, and
+          // at 1000px apiece that is ~15 MB down a mobile connection for a band 118px tall. the
+          // 400px copy is ~2.5 MB for the same screen. `thumbUrl` already falls back to the
+          // full-size url when the backend did not send one (Product.fromJson).
+          if (product.thumbUrl case final url?)
+            _BannerPhoto(url: url, fallbackUrl: product.imageUrl),
 
           // in stock is the normal case and the one nobody needs told, so only the two exceptions
           // get a chip - otherwise every tile in the grid would carry the same green label
@@ -224,11 +229,19 @@ class _BannerPlaceholder extends StatelessWidget {
 // [cacheWidth] is the one line that keeps a 99-tile grid from running out of memory: without it
 // flutter decodes each jpeg at full size and holds the raw bitmap, so a 1000x1000 photo costs 4 MB
 // of RAM whatever size it is drawn at. this decodes them at roughly the width they are painted,
-// times three for a high-density screen.
+// times three for a high-density screen. it stays a ceiling now that the url is usually a 400px
+// thumbnail - it is what still protects the tile on a backend that sends none.
+//
+// [fallbackUrl] is loaded if [url] fails, and it exists for exactly one shape of failure: a photo
+// whose thumbnail is missing. generating the curated catalogue's thumbnails is a `magick` command
+// somebody runs by hand when a category is shot (see CLAUDE.md §7), so it is precisely the step
+// that gets forgotten - and forgetting it without this would blank every tile in the market rather
+// than costing a few extra kilobytes on some of them.
 class _BannerPhoto extends StatelessWidget {
-  const _BannerPhoto({required this.url});
+  const _BannerPhoto({required this.url, this.fallbackUrl});
 
   final String url;
+  final String? fallbackUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -237,8 +250,12 @@ class _BannerPhoto extends StatelessWidget {
       fit: BoxFit.contain,
       cacheWidth: 540,
       // an unreachable server or a photo the founder hasn't added yet leaves the placeholder
-      // showing, rather than flutter's default grey box with a broken-image glyph
-      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+      // showing, rather than flutter's default grey box with a broken-image glyph. a missing
+      // *thumbnail* is different: the full-size photo is right there, so try it once - the nested
+      // widget passes no fallback of its own, which is what stops this recursing.
+      errorBuilder: (_, _, _) => fallbackUrl == null || fallbackUrl == url
+          ? const SizedBox.shrink()
+          : _BannerPhoto(url: fallbackUrl!),
       // fades in once decoded instead of popping, and shows nothing at all before then - the
       // placeholder underneath is already the loading state
       frameBuilder: (_, child, frame, wasSynchronouslyLoaded) {

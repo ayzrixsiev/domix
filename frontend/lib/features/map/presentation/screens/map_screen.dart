@@ -161,7 +161,7 @@ class _MapScreenState extends State<MapScreen> {
     Widget? statusBanner;
     if (controller.isLoading && controller.stores.isEmpty) {
       statusBanner = _MapMessageBanner(message: strings.loadingShops, isBusy: true);
-    } else if (controller.loadError != null && controller.stores.isEmpty) {
+    } else if (controller.loadFailed && controller.stores.isEmpty) {
       // the retry is the whole point of this branch. the banner used to be a sentence and nothing
       // else, so a user who hit a failed load had no control on screen that could do anything about
       // it - and the automatic re-sync above only fires on a tab switch, which is not something

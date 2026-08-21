@@ -78,7 +78,7 @@ void main() {
       final controller = StoresController(repository: repo);
 
       await controller.loadStores();
-      expect(controller.loadError, isNotNull);
+      expect(controller.loadFailed, isTrue);
       expect(controller.stores, isEmpty);
 
       // the bug this exists for: MapScreen.initState runs once per app session and IndexedStack
@@ -87,7 +87,7 @@ void main() {
       expect(controller.isStoresStale, isTrue);
       await controller.refreshStoresIfStale();
       expect(repo.fetchStoresCalls, 2);
-      expect(controller.loadError, isNull);
+      expect(controller.loadFailed, isFalse);
       expect(controller.stores, hasLength(1));
 
       // and the other half: a list fetched a moment ago is left alone, so flicking between tabs is

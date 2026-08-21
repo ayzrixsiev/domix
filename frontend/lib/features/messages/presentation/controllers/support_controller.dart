@@ -12,7 +12,11 @@ import '../../data/support_repository.dart';
 /// thread the way [ProductsController] is keyed by shop, and nothing else here has to change.
 class SupportController extends ChangeNotifier {
   SupportController({SupportRepository? repository})
-      : _repo = repository ?? SupportRepository();
+      : _repo = repository ?? SupportRepository() {
+    // unawaited on purpose: the first frame must not wait on a keystore read, and until it lands
+    // the watermark is 0, which reads as "everything is unread" - the safe way round for a badge.
+    _restoreWatermark();
+  }
 
   final SupportRepository _repo;
 
@@ -95,6 +99,54 @@ class SupportController extends ChangeNotifier {
 
   bool get isSending => _isSending;
   String? get sendErrorCode => _sendErrorCode;
+
+  // ── what the chats list needs, and nothing more ───────────────────────────────
+  //
+  // the row on ChatsScreen is drawn from the thread this controller already holds, which is why
+  // there is no `GET /api/chats` and must not be one yet: a list of one conversation the app has
+  // in memory would be a round trip to learn what it already knows. when shop chats arrive the app
+  // genuinely cannot know a shop wrote to it without asking, and that is when the endpoint earns
+  // its place.
+
+  /// The newest message id the reader has had the thread open at. 0 until [_restoreWatermark]
+  /// lands, and after a logout.
+  int _lastReadId = 0;
+
+  /// The last message in the thread, or null when there is none - what the chats row previews.
+  SupportMessage? get lastMessage => _messages.isEmpty ? null : _messages.last;
+
+  /// How many messages *from support* have arrived since the thread was last opened.
+  ///
+  /// The user's own messages are excluded: they are not news to the person who typed them, and a
+  /// badge that lights up when you write something is a badge people stop believing.
+  int get unreadCount {
+    var count = 0;
+    for (final message in _messages) {
+      if (message.fromSupport && message.id > _lastReadId) count++;
+    }
+    return count;
+  }
+
+  Future<void> _restoreWatermark() async {
+    final stored = await _repo.readWatermark();
+    if (stored == _lastReadId) return;
+    _lastReadId = stored;
+    notifyListeners();
+  }
+
+  /// Moves the watermark to the newest message. Called when the conversation is opened and again
+  /// when it is closed, so anything that arrived while somebody was reading is read too.
+  ///
+  /// **Only moves forward, and notifies only when it moved** - an idempotent call on every poll
+  /// would otherwise rebuild the list for nothing.
+  Future<void> markThreadRead() async {
+    final newest = lastMessage;
+    if (newest == null || newest.id <= _lastReadId) return;
+
+    _lastReadId = newest.id;
+    notifyListeners();
+    await _repo.writeWatermark(_lastReadId);
+  }
 
   /// Loads the conversation. [force] re-fetches one already in hand.
   Future<void> load({bool force = false}) async {
@@ -287,6 +339,11 @@ class SupportController extends ChangeNotifier {
     _loadErrorCode = null;
     _sendErrorCode = null;
     _fetchedAt = null;
+
+    // the watermark is a fact about one person's reading, so it goes with their thread - otherwise
+    // the next account on this phone opens a conversation that is already marked read.
+    _lastReadId = 0;
+    _repo.clearWatermark();
   }
 
   @override

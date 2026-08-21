@@ -12,13 +12,18 @@ import 'package:frontend/features/messages/data/support_message.dart';
 import 'package:frontend/features/messages/presentation/controllers/support_controller.dart';
 import 'package:frontend/features/messages/presentation/widgets/message_bubble.dart';
 import 'package:frontend/features/profile/presentation/controllers/auth_controller.dart';
+import 'package:frontend/core/widgets/circle_back_button.dart';
 
-/// The Сообщения tab: the user's conversation with Domix support.
+/// The conversation with Domix support, one row deep in the Сообщения tab.
 ///
-/// **The tab is the conversation, not a list containing one.** Exactly one thread exists per
-/// account - support - so a list of a single row would be a screen whose only job is to be tapped
-/// through. When chats with shops and masters arrive this becomes that list and the chat below
-/// moves to a pushed route; nothing in [SupportController] has to change for it.
+/// **It is a pushed route now, opened from [ChatsScreen]** - the tab used to be this screen, and
+/// that stopped being right the moment a second kind of conversation became a plan rather than an
+/// idea. Nothing in [SupportController] changed for the move, which was the argument for making it
+/// early.
+///
+/// [showScaffold] is what distinguishes the two ways it is drawn: false inside a shell that owns
+/// the Scaffold, true as its own route - which is also when it draws a back button, since a route
+/// with no way back but the system gesture is a screen people report as stuck.
 ///
 /// A guest sees why they cannot write rather than a disabled field: the answer has to arrive
 /// somewhere, and without an account there is nowhere to put it.
@@ -136,6 +141,9 @@ class _MessagesScreenState extends State<MessagesScreen> with WidgetsBindingObse
     // first: nothing is looking at this conversation any more, and a timer that outlives its screen
     // is a request nobody asked for - and, in a widget test, a pending timer the framework fails on.
     _support?.setWatching(false);
+    // and again on the way out, so a reply that landed while somebody was reading does not light
+    // the badge on the list they are about to be looking at
+    _support?.markThreadRead();
     WidgetsBinding.instance.removeObserver(this);
     _input.removeListener(_syncCanSend);
     _inputFocus.removeListener(_syncFocus);
@@ -170,7 +178,13 @@ class _MessagesScreenState extends State<MessagesScreen> with WidgetsBindingObse
     // listen: false - this runs from a callback, and `Provider.of` with the default listen: true
     // *asserts* outside a build. that is a crash, not a performance note.
     if (Provider.of<AuthController>(context, listen: false).profileState.isGuest) return;
-    Provider.of<SupportController>(context, listen: false).refreshIfStale();
+
+    final support = Provider.of<SupportController>(context, listen: false);
+    support.refreshIfStale();
+    // **having the thread on screen is what "read" means**, so the watermark moves here rather than
+    // on a button nobody would press. it only moves forward and only notifies when it moved, so
+    // calling it on every visibility edge costs a comparison.
+    support.markThreadRead();
   }
 
   /// Reconciles the live poll with what is actually on screen.
@@ -212,7 +226,13 @@ class _MessagesScreenState extends State<MessagesScreen> with WidgetsBindingObse
       bottom: false,
       child: Column(
         children: [
-          _ChatHeader(title: strings.supportChatTitle, subtitle: strings.supportChatSubtitle),
+          _ChatHeader(
+            title: strings.supportChatTitle,
+            subtitle: strings.supportChatSubtitle,
+            // only as a route: inside the shell there is nothing to pop, and a back arrow that does
+            // nothing is worse than none
+            onBack: widget.showScaffold ? () => Navigator.of(context).maybePop() : null,
+          ),
           Expanded(
             child: isGuest ? _guestState(strings) : _thread(strings),
           ),
@@ -298,7 +318,7 @@ class _MessagesScreenState extends State<MessagesScreen> with WidgetsBindingObse
         iconColor: AppColors.danger,
         iconBackground: AppColors.dangerSoft,
         title: strings.supportLoadError,
-        subtitle: strings.supportLoadErrorHint,
+        subtitle: strings.loadErrorHint,
         action: PrimaryActionButton(
           label: strings.retryButtonShort,
           icon: LucideIcons.refresh_cw,
@@ -463,17 +483,26 @@ class _MessagesScreenState extends State<MessagesScreen> with WidgetsBindingObse
 /// `IndexedStack` and has no Scaffold of its own to hang one on, and a header drawn here is the
 /// same header in both modes.
 class _ChatHeader extends StatelessWidget {
-  const _ChatHeader({required this.title, required this.subtitle});
+  const _ChatHeader({required this.title, required this.subtitle, this.onBack});
 
   final String title;
   final String subtitle;
 
+  /// Null inside the shell, where this screen sits on the root route and there is nothing to pop.
+  final VoidCallback? onBack;
+
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+      // 0 on the left when there is a back button, because CircleBackButton carries the gutter
+      // inset itself and lands the disc on the same 16px line the tab header's title starts on
+      padding: EdgeInsets.fromLTRB(onBack == null ? 20 : 0, 14, 20, 14),
       child: Row(
         children: [
+          if (onBack case final pop?) ...[
+            CircleBackButton(onTap: pop),
+            const SizedBox(width: 10),
+          ],
           Container(
             width: 42,
             height: 42,
