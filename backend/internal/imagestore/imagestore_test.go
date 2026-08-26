@@ -2,6 +2,7 @@ package imagestore
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"hash/crc32"
@@ -71,12 +72,12 @@ func TestAPhotoIsScaledIntoTheServedBound(t *testing.T) {
 		t.Fatalf("Normalize: %v", err)
 	}
 
-	got := decode(t, out).Bounds()
+	got := decode(t, out.Master).Bounds()
 	if got.Dx() != OutputMaxSide || got.Dy() != OutputMaxSide/4 {
 		t.Errorf("got %dx%d, expected %dx%d", got.Dx(), got.Dy(), OutputMaxSide, OutputMaxSide/4)
 	}
-	if len(out) >= len(source) {
-		t.Errorf("the stored copy (%d bytes) is not smaller than the upload (%d bytes)", len(out), len(source))
+	if len(out.Master) >= len(source) {
+		t.Errorf("the stored copy (%d bytes) is not smaller than the upload (%d bytes)", len(out.Master), len(source))
 	}
 }
 
@@ -88,8 +89,44 @@ func TestASmallPhotoIsNotUpscaled(t *testing.T) {
 		t.Fatalf("Normalize: %v", err)
 	}
 
-	if got := decode(t, out).Bounds(); got.Dx() != 300 || got.Dy() != 200 {
+	if got := decode(t, out.Master).Bounds(); got.Dx() != 300 || got.Dy() != 200 {
 		t.Errorf("got %dx%d, expected the original 300x200 - upscaling invents detail", got.Dx(), got.Dy())
+	}
+	// and the thumbnail is not blown up to 400 either - the whole point is fewer bytes
+	if got := decode(t, out.Thumb).Bounds(); got.Dx() != 300 || got.Dy() != 200 {
+		t.Errorf("the thumbnail is %dx%d, expected the original 300x200", got.Dx(), got.Dy())
+	}
+}
+
+// **the file the grid actually loads.** Nearly all of this api's image traffic is thumbnails: one
+// shop card is up to a hundred tiles and one edit screen is one photo, so a master served into a
+// grid is the difference between a catalogue that scrolls and one that stalls on mobile data.
+//
+// The two are checked together because they are stored together and the failure being guarded
+// against is a pair that disagrees - a thumbnail cropped differently from the photo it opens into,
+// or a "thumbnail" that is the master under another name.
+func TestAThumbnailIsStoredBesideTheMaster(t *testing.T) {
+	source := encodeJPEG(t, testImage(2000, 1000, color.RGBA{R: 30, G: 150, B: 90, A: 255}))
+
+	out, err := Normalize(source)
+	if err != nil {
+		t.Fatalf("Normalize: %v", err)
+	}
+
+	master, thumb := decode(t, out.Master).Bounds(), decode(t, out.Thumb).Bounds()
+	if master.Dx() != OutputMaxSide || master.Dy() != OutputMaxSide/2 {
+		t.Errorf("the master is %dx%d, expected %dx%d", master.Dx(), master.Dy(), OutputMaxSide, OutputMaxSide/2)
+	}
+	if thumb.Dx() != ThumbMaxSide || thumb.Dy() != ThumbMaxSide/2 {
+		t.Errorf("the thumbnail is %dx%d, expected %dx%d", thumb.Dx(), thumb.Dy(), ThumbMaxSide, ThumbMaxSide/2)
+	}
+	// same shape, so a tile and the photo it opens into frame the product identically
+	if master.Dx()*thumb.Dy() != master.Dy()*thumb.Dx() {
+		t.Errorf("the two copies have different aspect ratios: %v and %v", master, thumb)
+	}
+	if len(out.Thumb) >= len(out.Master) {
+		t.Errorf("the thumbnail (%d bytes) is not smaller than the master (%d bytes) - it exists to be",
+			len(out.Thumb), len(out.Master))
 	}
 }
 
@@ -111,7 +148,7 @@ func TestTransparencyIsFlattenedOntoWhite(t *testing.T) {
 		t.Fatalf("Normalize: %v", err)
 	}
 
-	result := decode(t, out)
+	result := decode(t, out.Master)
 	assertColour(t, result, 300, 200, color.RGBA{R: 255, G: 255, B: 255}, "the transparent half")
 	assertColour(t, result, 100, 200, color.RGBA{R: 10, G: 160, B: 90}, "the opaque half")
 }
@@ -128,7 +165,7 @@ func TestAPhotoIsTurnedTheRightWayUpBeforeItIsStored(t *testing.T) {
 		t.Fatalf("Normalize: %v", err)
 	}
 
-	result := decode(t, out)
+	result := decode(t, out.Master)
 	if got := result.Bounds(); got.Dx() != 400 || got.Dy() != 800 {
 		t.Fatalf("got %dx%d, expected the sides swapped to 400x800", got.Dx(), got.Dy())
 	}
@@ -148,8 +185,11 @@ func TestMetadataDoesNotSurviveIntoTheStoredCopy(t *testing.T) {
 		t.Fatalf("Normalize: %v", err)
 	}
 
-	if _, found := exifBlock(out); found {
+	if _, found := exifBlock(out.Master); found {
 		t.Error("the stored jpeg still carries an EXIF block")
+	}
+	if _, found := exifBlock(out.Thumb); found {
+		t.Error("the stored thumbnail still carries an EXIF block")
 	}
 }
 
@@ -194,14 +234,18 @@ func TestAnEnormousImageIsRefusedFromItsHeaderAlone(t *testing.T) {
 	}
 }
 
-func TestAStoredFileLandsUnderTheUploadsDirectory(t *testing.T) {
+// one photo is two files on disk, and both halves of every operation have to account for both. the
+// master's path is the only one stored anywhere, so a thumbnail that is not written, or not deleted,
+// is invisible to the database and shows up as a blank tile or as a file nobody can reach.
+func TestAStoredPhotoIsTwoFilesUnderTheUploadsDirectory(t *testing.T) {
+	ctx := context.Background()
 	root := t.TempDir()
-	store, err := New(root)
+	store, err := NewDisk(root)
 	if err != nil {
-		t.Fatalf("New: %v", err)
+		t.Fatalf("NewDisk: %v", err)
 	}
 
-	rel, err := store.Save([]byte("pretend this is a jpeg"))
+	rel, err := store.Save(ctx, Photo{Master: []byte("pretend this is a jpeg"), Thumb: []byte("and this a small one")})
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -209,13 +253,20 @@ func TestAStoredFileLandsUnderTheUploadsDirectory(t *testing.T) {
 	if !IsUpload(rel) {
 		t.Errorf("Save returned %q, which IsUpload does not recognise - Remove would refuse it", rel)
 	}
-	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); err != nil {
+	onDisk := func(path string) error {
+		_, err := os.Stat(filepath.Join(root, filepath.FromSlash(path)))
+		return err
+	}
+	if err := onDisk(rel); err != nil {
 		t.Errorf("the file Save named is not on disk: %v", err)
+	}
+	if err := onDisk(ThumbPath(rel)); err != nil {
+		t.Errorf("the thumbnail beside it is not on disk: %v", err)
 	}
 
 	// a second save must not collide with the first, or replacing a photo would overwrite somebody
 	// else's
-	other, err := store.Save([]byte("a different photo"))
+	other, err := store.Save(ctx, Photo{Master: []byte("a different photo"), Thumb: []byte("small")})
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -223,15 +274,87 @@ func TestAStoredFileLandsUnderTheUploadsDirectory(t *testing.T) {
 		t.Errorf("two saves produced the same path %q", rel)
 	}
 
-	if err := store.Remove(rel); err != nil {
+	if err := store.Remove(ctx, rel); err != nil {
 		t.Errorf("Remove: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); !errors.Is(err, os.ErrNotExist) {
+	if err := onDisk(rel); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("the file is still there after Remove: %v", err)
 	}
+	if err := onDisk(ThumbPath(rel)); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the thumbnail is still there after Remove: %v", err)
+	}
 	// removing what is already gone is a success - the caller is asking for a state, not an event
-	if err := store.Remove(rel); err != nil {
-		t.Errorf("removing an already-deleted file: %v", err)
+	if err := store.Remove(ctx, rel); err != nil {
+		t.Errorf("removing an already-deleted photo: %v", err)
+	}
+}
+
+// what the admin panel's sweep sees. It compares these paths against products.image_path, so a
+// listing that spelled them any other way - absolute, backslashed, prefixed with the root - would
+// match nothing and report the whole market as orphaned.
+func TestListingNamesFilesTheWayTheDatabaseDoes(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	store, err := NewDisk(root)
+	if err != nil {
+		t.Fatalf("NewDisk: %v", err)
+	}
+
+	rel, err := store.Save(ctx, Photo{Master: []byte("a photo"), Thumb: []byte("small")})
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	// a curated catalogue shot in the same root, which must not be listed: the sweep deletes what it
+	// lists, and one of these files is shared by every shop of a category
+	if err := os.MkdirAll(filepath.Join(root, "universal"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "universal", "001.jpg"), []byte("shared"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	listed, err := store.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	found := map[string]int64{}
+	for _, object := range listed {
+		found[object.Path] = object.Size
+		if !IsUpload(object.Path) {
+			t.Errorf("List returned %q, which is not under uploads/", object.Path)
+		}
+	}
+	if len(found) != 2 {
+		t.Fatalf("got %d files, expected the master and its thumbnail: %v", len(found), found)
+	}
+	if size, ok := found[rel]; !ok || size != int64(len("a photo")) {
+		t.Errorf("the master is listed as %d bytes, expected %d", size, len("a photo"))
+	}
+	if _, ok := found[ThumbPath(rel)]; !ok {
+		t.Errorf("the thumbnail %q was not listed", ThumbPath(rel))
+	}
+}
+
+// the sweep deletes one file at a time - a thumbnail whose master is already gone is exactly the
+// kind of thing it is for, and Remove would go looking for a partner that does not exist.
+func TestRemoveFileTakesOneHalfOfAPair(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	store, err := NewDisk(root)
+	if err != nil {
+		t.Fatalf("NewDisk: %v", err)
+	}
+
+	rel, err := store.Save(ctx, Photo{Master: []byte("a photo"), Thumb: []byte("small")})
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if err := store.RemoveFile(ctx, ThumbPath(rel)); err != nil {
+		t.Fatalf("RemoveFile: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); err != nil {
+		t.Errorf("the master went with the thumbnail: %v", err)
 	}
 }
 
@@ -239,10 +362,11 @@ func TestAStoredFileLandsUnderTheUploadsDirectory(t *testing.T) {
 // shared by every shop of a category - one owner clearing their photo must not unlink the file the
 // other forty draw.
 func TestRemoveRefusesAnythingOutsideUploads(t *testing.T) {
+	ctx := context.Background()
 	root := t.TempDir()
-	store, err := New(root)
+	store, err := NewDisk(root)
 	if err != nil {
-		t.Fatalf("New: %v", err)
+		t.Fatalf("NewDisk: %v", err)
 	}
 
 	catalogue := filepath.Join(root, "universal")
@@ -255,8 +379,13 @@ func TestRemoveRefusesAnythingOutsideUploads(t *testing.T) {
 	}
 
 	for _, path := range []string{"universal/001.jpg", "uploads/../universal/001.jpg", "", "uploads"} {
-		if err := store.Remove(path); !errors.Is(err, ErrOutsideUploads) {
+		if err := store.Remove(ctx, path); !errors.Is(err, ErrOutsideUploads) {
 			t.Errorf("Remove(%q) returned %v, expected ErrOutsideUploads", path, err)
+		}
+		// the sweep's deletion path takes the same refusal, and it is the one pointed at files
+		// rather than at a products row - so it is the one that could reach the catalogue
+		if err := store.RemoveFile(ctx, path); !errors.Is(err, ErrOutsideUploads) {
+			t.Errorf("RemoveFile(%q) returned %v, expected ErrOutsideUploads", path, err)
 		}
 	}
 	if _, err := os.Stat(photo); err != nil {

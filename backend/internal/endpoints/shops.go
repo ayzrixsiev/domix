@@ -51,9 +51,12 @@ func (s *Shops) Route(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// dispatches /api/shops/{id} by method both methods here mutate one specific existing shop, so both need the authorization
+// dispatches /api/shops/{id} by method. GET is public and PUT/DELETE mutate one specific shop, so
+// only those two go through RequireAuth.
 func (s *Shops) RouteByID(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
+	case http.MethodGet:
+		s.Get(w, r)
 	case http.MethodPut:
 		auth.RequireAuth(s.JWTSecret, s.Queries, s.Update)(w, r)
 	case http.MethodDelete:
@@ -88,6 +91,43 @@ func (s *Shops) authorizeShopAccess(w http.ResponseWriter, r *http.Request) (sho
 	}
 
 	return shopID, true
+}
+
+// public, unauthenticated: one shop, for a card opened from somewhere that only knows its id.
+//
+// **the only entry point into a shop card that fetches.** the map and the home feed both already
+// hold the whole shop when they push the card, so they pass it and it paints on the first frame; a
+// product row carries nothing but shop_id, and putting a shop's fields on all hundred rows of a
+// category response would repeat one address a hundred times to save a round trip nobody makes
+// until they tap.
+func (s *Shops) Get(w http.ResponseWriter, r *http.Request) {
+	shopID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeShopError(w, http.StatusBadRequest, "invalid_shop_id", "invalid shop id")
+		return
+	}
+
+	ctx, cancel := dbctx.WithTimeout(r.Context())
+	defer cancel()
+
+	shop, err := s.Queries.GetShop(ctx, shopID)
+	if err != nil {
+		// a shop deleted while its products were still on somebody's screen. a 404 rather than a
+		// 500, because nothing is wrong here - the app renders "this shop is no longer available".
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeShopError(w, http.StatusNotFound, "shop_not_found", "shop not found")
+			return
+		}
+		log.Printf("CRITICAL: failed to load shop %d: %v", shopID, err)
+		writeShopError(w, http.StatusInternalServerError, "server_error", "failed to load shop")
+		return
+	}
+
+	// the conversion, rather than a seventh mapper: GetShop selects exactly the columns ListShops
+	// does, so the two row structs are identical and the compiler checks that they stay identical -
+	// a column added to one query and not the other stops the build.
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(shopFromList(db.ListShopsRow(shop)))
 }
 
 // public, unauthenticated: used by the map screen to plot every shop as a pin

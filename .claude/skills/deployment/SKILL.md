@@ -1,5 +1,5 @@
 ---
-name: shipping-to-play
+name: deployment
 description: >
   Releasing Domix to Google Play — Android build config, release signing and the upload
   keystore, the adaptive launcher icon, Yandex MapKit setup and its Android build
@@ -46,12 +46,12 @@ carousel alone is taller than a landscape viewport.
 
 All of it was `flutter create` placeholder:
 
-| | was | is |
-| --- | --- | --- |
-| `applicationId`, `namespace` | `com.example.frontend` | `app.domix` |
-| `android:label` | `frontend` | `Domix` |
-| launcher icon | Flutter logo, no adaptive icon | Domix pin, legacy + adaptive + monochrome |
-| release signing | the debug key | `android/key.properties`, gitignored |
+|                              | was                            | is                                        |
+| ---------------------------- | ------------------------------ | ----------------------------------------- |
+| `applicationId`, `namespace` | `com.example.frontend`         | `app.domix`                               |
+| `android:label`              | `frontend`                     | `Domix`                                   |
+| launcher icon                | Flutter logo, no adaptive icon | Domix pin, legacy + adaptive + monochrome |
+| release signing              | the debug key                  | `android/key.properties`, gitignored      |
 
 **`applicationId` is permanent from the first upload** — it is the listing's primary key, so changing
 it later means publishing a different app and losing every install and review. Play rejects
@@ -104,17 +104,17 @@ or an empty session, discovered after upload.** `make apk-test` is what finds it
 
 ## Build files: `env.json` vs `env.prod.json`
 
-| file | committed? | holds |
-| --- | --- | --- |
-| `env.json` | no, gitignored | the developer's own backend (an ngrok tunnel) |
-| `env.prod.json` | **yes** | the production API address and the Yandex MapKit public key |
+| file            | committed?     | holds                                                       |
+| --------------- | -------------- | ----------------------------------------------------------- |
+| `env.json`      | no, gitignored | the developer's own backend (an ngrok tunnel)               |
+| `env.prod.json` | **yes**        | the production API address and the Yandex MapKit public key |
 
 `env.prod.json` is in git deliberately. **Nothing in a `--dart-define` can be secret** — the values
 become plain constants in the binary and come out of a shipped APK with a hex editor — so the file can
 only hold public facts, and keeping it in git is what makes a release reproducible.
 
 `make release` runs `guard-prod` first and refuses to build on a placeholder `REPLACE_ME`, on an
-`http://` API address, or with `android/key.properties` missing. All three fail *silently* otherwise —
+`http://` API address, or with `android/key.properties` missing. All three fail _silently_ otherwise —
 the app installs and every screen sits on a spinner, or Play rejects the upload.
 
 ---
@@ -139,12 +139,12 @@ live session. `usermod` prints nothing on success, so check the group file, not 
 **On the phone — MIUI needs more than stock Android.** Developer mode is Settings → About phone → tap
 **MIUI version** seven times. Then in Developer options:
 
-| toggle | needed for |
-| --- | --- |
-| **Отладка по USB** | the standard one |
-| **Установка через USB** | MIUI-only, and the one that blocks `adb install`. Requires a signed-in Mi account and working internet — it verifies online |
-| Default USB configuration → **Передача файлов (MTP)** | "Только зарядка" blocks adb on several MIUI builds |
-| Отладка по USB (настройки безопасности) | **not** needed for installing — leave it off |
+| toggle                                                | needed for                                                                                                                  |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Отладка по USB**                                    | the standard one                                                                                                            |
+| **Установка через USB**                               | MIUI-only, and the one that blocks `adb install`. Requires a signed-in Mi account and working internet — it verifies online |
+| Default USB configuration → **Передача файлов (MTP)** | "Только зарядка" blocks adb on several MIUI builds                                                                          |
+| Отладка по USB (настройки безопасности)               | **not** needed for installing — leave it off                                                                                |
 
 A correctly attached phone reads `device` in `adb devices -l` — not `unauthorized` (the fingerprint
 prompt was not accepted) and not `no permissions` (the group step did not take).
@@ -175,7 +175,7 @@ the keystore means never shipping an update to the installed app, and `.env` hol
 
 **The vault is deliberately NOT in git, and the script's own output saying to commit it is stale.** It
 was committed once (`f2ee5ff`, 2026-08-17), removed the same day and the push force-rewound. **Do not
-re-add it.** Encryption is what makes committing it *safe*, not what makes it *desirable* — different
+re-add it.** Encryption is what makes committing it _safe_, not what makes it _desirable_ — different
 questions, and only the first was ever settled.
 
 Committing the files as plain text was asked for and rejected — not because the repo is public (it is
@@ -231,14 +231,14 @@ screens rather than twenty. **Keep it that way.**
   on `_DomixMapState`, never locals. Anything only the native side points at is collected on the next GC
   and the callbacks silently stop — a map that works for ten seconds and then ignores the camera, with
   nothing in any log.
-- **Pins are Flutter widgets rasterized off-screen.** `ViewProvider` takes a widget *builder*, lays it
+- **Pins are Flutter widgets rasterized off-screen.** `ViewProvider` takes a widget _builder_, lays it
   out against a `RenderRepaintBoundary` and hands MapKit the raster — which is why `ShopMarker` survived
   the migration unchanged. Two consequences: **no `InheritedWidget` reaches a pin** (no `Theme`, no
   `Provider` — a pin calling `Theme.of(context)` throws off-screen and nowhere else), and **a
   `GestureDetector` inside a pin does nothing** (taps arrive through `placemark.addTapListener`, which
   is why `MapPin.onTap` is a field and `ShopMarker.onTap` is always null on the map).
 - **`MapPin.visualKey` does two jobs and must capture every visual difference.** It decides when the pin
-  list is rebuilt *and* it is MapKit's raster cache key, so forty identical pins are laid out once
+  list is rebuilt _and_ it is MapKit's raster cache key, so forty identical pins are laid out once
   between them. A key that misses a difference caches the wrong bitmap; a key including the shop's name
   defeats the cache.
 
@@ -250,10 +250,10 @@ Each failed in a way that named neither Yandex nor the real cause:
   their own and two disagree: MapKit compiles against 35, while `flutter_plugin_android_lifecycle` —
   which MapKit itself depends on — requires 36+. Two constraints on packages we do not own, so the fix
   has to be ours. **The placement is load-bearing twice over:** `afterEvaluate` rather than
-  `plugins.withId` (withId fires as the plugin is *applied*, and the rest of its build file then sets 35
-  straight back), and registered inside the *first* `subprojects` block, because the later one calls
+  `plugins.withId` (withId fires as the plugin is _applied_, and the rest of its build file then sets 35
+  straight back), and registered inside the _first_ `subprojects` block, because the later one calls
   `evaluationDependsOn(":app")` and an `afterEvaluate` added after that throws `Cannot run
-  Project.afterEvaluate(Action) when the project is already evaluated`.
+Project.afterEvaluate(Action) when the project is already evaluated`.
 - **`play-services-location`** is declared in `app/build.gradle.kts` — MapKit's location layer needs it
   and the plugin does not pull it in; without it the app compiles and dies at runtime.
 - **Gradle's heap cap** in `android/gradle.properties` — see `frontend/CLAUDE.md`.
@@ -298,10 +298,101 @@ than on effort, and the vault takes ten minutes and removes the worst outcome on
 2. **Start the closed test.** A personal Play developer account cannot apply for production access until
    it has run a closed test with **~12 testers opted in for 14 continuous days.** That is a calendar,
    not a task — start it and do everything else while it runs.
-3. **Get a production domain with HTTPS and a host for the backend.** `env.prod.json` still says
-   `https://REPLACE_ME` and `make release` refuses until it doesn't. Android 9+ blocks cleartext HTTP,
-   so an `http://` address would fail every request silently in release. Nothing else here can be tested
-   end to end without it.
+3. **Stand the production infrastructure up.** Decided 2026-08-21 and written down below; nothing has
+   been bought yet. `env.prod.json` still says `https://REPLACE_ME` and `make release` refuses until it
+   doesn't. Android 9+ blocks cleartext HTTP, so an `http://` address would fail every request silently
+   in release. Nothing else on this page can be tested end to end without it.
+
+### The production stack — decided, not yet bought
+
+The domain is **`domix-api.uz`** (registered at eskiz.uz). It already reads as "api", so there is no
+`api.` subdomain — the apex is the backend and there is exactly one subdomain:
+
+| host               | serves                        | runs on       |
+| ------------------ | ----------------------------- | ------------- |
+| `domix-api.uz`     | the API and the two web pages | Hetzner VPS   |
+| `img.domix-api.uz` | every product photo           | Cloudflare R2 |
+
+**A plain VPS, not a container platform** (Hetzner CX22 / CAX11, ~€4–5/mo). Fly.io, Railway and Cloud
+Run were considered and rejected on four counts, all of which are about _not migrating later_: a VPS is
+the most portable thing there is (a move is rsync plus a dump restore, half a day, zero code changes);
+no platform has a region near Tashkent; PostGIS is `apt install` on a VPS and a coin toss on managed
+Postgres; and **every backend developer already knows how to SSH into Linux**, which matters the moment
+somebody is hired. The cost is that sysadmin work — updates, certificates, backups, monitoring — is the
+founder's. At one small machine that is the right trade.
+
+**Latency to Tashkent is ~87 ms** to Hetzner's German datacentre, measured 2026-08-21 with `mtr` (the
+international leg is one hop; everything before it is 3–5 ms, and the jitter in that trace was the
+founder's own wifi, not the link). Fine for a marketplace, and mobile radio adds 30–80 ms on top
+anyway. A local Uzbek host would give 5–15 ms and is a legitimate future move — **and it is not a
+decision to agonise over, because moving between VPSes costs half a day and no code.**
+
+**Nginx + certbot in front of Go.** Not a photo decision — it is how HTTPS and the domain work at all,
+and Play rejects a cleartext app. Let's Encrypt is free and certbot renews on its own.
+
+**Cloudflare R2 for photos, chosen for decoupling rather than because disk is broken.** On a VPS the
+disk persists, so photos-on-disk would work; what R2 buys is that the one irreplaceable dataset (an
+owner's uploads — the database can be restored from a dump, their photos cannot) stops being part of
+the machine, stops being part of a host migration, and gets its backups for free. Its CDN is included
+and switched on by default, which is worth nothing while the market is Tashkent and worth something the
+day it is not. **The migration is cheap now and expensive later** — today it is one code path with no
+data behind it; in a year it is also a file move plus rewriting every path in the database.
+
+**DNS moves to Cloudflare**, because R2's custom-domain feature wants the zone there. Free: change the
+nameservers at eskiz.uz to the two Cloudflare hands out. Both records then live in one panel — an `A`
+for the apex pointing at the Hetzner IP, and R2 adds its own for `img.`.
+
+Running cost: server ~€4–5, R2 free under 10 GB (then ~$0.015/GB), certificate free, domain owned.
+**Roughly $6–8 a month.**
+
+The order it gets done in: server → Cloudflare account → nameservers at eskiz → `A` record → Postgres
+and nginx → certbot → deploy the binary → R2 bucket and `img.` → **upload `photos/` to the bucket** →
+fill in `.env` (`IMAGE_BASE_URL` **and** the four `R2_*` keys, or the api will not start) → point
+`env.prod.json` at `https://domix-api.uz` and ship the `.aab`.
+
+**Still to verify before buying:** that an international Visa/Mastercard is accepted by both Hetzner and
+Cloudflare. Uzbek Humo/UzCard do not work abroad; Hetzner also takes PayPal and bank transfer.
+
+### The storage code is already written, and it is dormant until `.env` says otherwise
+
+**All of this is built and tested (2026-08-21). Nothing below is a change still to make** — it is a
+description of code that runs today on the disk path and switches to R2 when four variables are set at
+step 9. Root §7 has the mechanics; what belongs here is what the deploy has to do about it.
+
+1. **`imagestore.Storage`, two implementations, chosen once in `mustOpenPhotoStorage`.** `Disk` (laptop,
+   every test, no network) and `R2` (production). The abstraction earns its place because **both are
+   used every day** — an interface with one real implementation and one stub would not.
+2. **Two files per photo** — a 1000px master and a 400px `_thumb`, the grid loading the thumbnail. That
+   is ~99% of all image traffic and turns a 100-tile catalogue from ~15 MB into ~2.5 MB. Only the
+   master's path is in the database; `ProductResponse` sends both urls ready-made.
+3. **`IMAGE_BASE_URL`** is the host Go prepends. Unset, everything is served from this api's own
+   `/static/products/`, which is what a laptop and the test suite want.
+
+**Four things the deploy has to get right, and three of them are silent:**
+
+- **The curated catalogue has to go into the bucket too**, `_thumb` files included. `photos/universal`
+  and `photos/plumbing` are **gitignored**, so they exist only on the founder's laptop — the server will
+  never have them. Every seeded row in every shop points at one, so a bucket with only `uploads/` in it
+  is a market where the only visible photos are the ones owners took themselves:
+  ```bash
+  rclone copy photos/ r2:domix-photos/ --exclude 'uploads/**'   # or aws s3 sync --endpoint-url …
+  ```
+  Regenerate the thumbnails first if they are not there (root §7 has the `magick` loop).
+- **R2 without `IMAGE_BASE_URL` refuses to boot**, deliberately: photos would be written to the bucket
+  and served from a disk that does not have them — `/health` green, uploads answering 200, every tile
+  blank. **Three R2 keys out of four also refuses to boot**, because falling back to the disk there
+  gives a server that works until the next deploy takes the container's filesystem with it.
+- **`img.domix-api.uz` must be R2's _public_ custom domain**, not the S3 endpoint. The S3 host wants a
+  signature on every GET; the custom domain serves objects to anyone, which is what an `<img>` needs.
+- **`PRODUCT_IMAGES_DIR` still matters on R2** only for `/static/products/`, which nothing will ask for
+  once `IMAGE_BASE_URL` is set. The boot log prints which store and which url prefix are in use — that
+  line is the fastest answer to "why are there no photos".
+
+**Sweeping orphaned files is built too**, in the admin panel («Обзор» → «Файлы без товара», see the
+`admin-panel` skill): uploads whose row went away with a deleted shop. It lists the files _first_ and the
+database _second_, deletes only what is unreferenced **and older than an hour**, and treats a master's
+path as claiming its `_thumb`. It is a button rather than a cron job — at this scale the number is zero
+or single digits, and a scheduled process that deletes files is a thing to want a reason for.
 
 ### Play policy — a listing is rejected without each of these
 
@@ -324,7 +415,7 @@ than on effort, and the vault takes ten minutes and removes the worst outcome on
 - **Run `make apk` once the domain exists, with the emulator closed.** `make apk-test` covers most of it
   and is what has run on the Redmi; what it cannot cover is the production address. `make apk` is also
   the only way to confirm the upload key signs a real artifact end to end.
-- **A Yandex MapKit API key in `env.prod.json`** — it says `REPLACE_ME`. The *development* key is in
+- **A Yandex MapKit API key in `env.prod.json`** — it says `REPLACE_ME`. The _development_ key is in
   `env.json` and working. Free plan, from Yandex's developer dashboard. Set a billing alert the day the
   key is created.
 - **Keep testing on the device.** The map draws now, so pin rasterization, the teardrop's anchor, a tap
@@ -374,8 +465,20 @@ than on effort, and the vault takes ten minutes and removes the worst outcome on
   admin route requires an `Authorization` header, which a browser will not attach cross-origin on its
   own. **The day something authenticates with a cookie, this becomes urgent**; while it is bearer tokens
   in `localStorage`, it is not.
-- **No refresh token.** The user-existence check in `RequireAuth` covers deletion, but a *stolen* token
+- **A slow request _body_ is still unbounded in time, on the two public POSTs.** `ReadHeaderTimeout`
+  (10s) and `IdleTimeout` (120s) are set on the server and close the slowloris hole — a connection that
+  dribbles its _headers_ — but `ReadTimeout`/`WriteTimeout` are deliberately absent, because they budget
+  the whole request and would cut off a 6 MiB photo upload on 3G (the comment above `srv` in
+  `cmd/api/main.go` says so at length; **do not add them**). What that leaves: a caller can send valid
+  headers, pass the guard, and then feed the body one byte at a time forever. `http.MaxBytesReader`
+  bounds the bytes (64 KiB generally, 6 MiB on a photo) and nothing bounds the time.
+  **The photo endpoint barely matters** — it sits behind `RequireAuth` and a per-account limiter, so it
+  costs a real Telegram-verified account. The real exposure is `POST /api/auth/init` and
+  `POST /api/account-deletion/init`: public, body-carrying, and the login limiter counts _requests_,
+  which an unfinished one never becomes. **Fix before going live on the domain**, per-handler rather than
+  globally: `http.NewResponseController(w).SetReadDeadline(time.Now().Add(…))` at the top of those two.
+- **No refresh token.** The user-existence check in `RequireAuth` covers deletion, but a _stolen_ token
   belonging to a live account works until it expires. Revoking one without deleting the account needs a
   `token_version` column bumped on logout.
-- **`TRUST_PROXY`**: only turn it on once something in front *always* rewrites `X-Forwarded-For`, since
+- **`TRUST_PROXY`**: only turn it on once something in front _always_ rewrites `X-Forwarded-For`, since
   both ways of getting it wrong fail silently.

@@ -381,6 +381,99 @@ func readUnreadCount(t *testing.T, ctx context.Context, a *Admin, asAdminID int6
 	return body.Support.Unread
 }
 
+// ─────────────────────────── clearing a conversation ───────────────────────────
+
+// **the founder's «Очистить» has to reach the user's phone, and that is the whole test.** There is
+// one `support_messages` table and both endpoints read it, so a delete on the admin side is a delete
+// on the app side by construction - but "by construction" is exactly the kind of claim that stops
+// being true when somebody adds a `deleted_at` column and forgets one of the four queries. This
+// pins the behaviour rather than the mechanism.
+//
+// The other half is what must *not* happen: the account, and everything hanging off it, survives.
+// «Очистить переписку» sitting one click from «Удалить пользователя» is the reason the confirm
+// dialog spells that out, and the reason it is asserted here.
+func TestClearingAThreadEmptiesItForTheUserToo(t *testing.T) {
+	support, adminEndpoints, ctx, _, q := supportUnderTest(t)
+
+	asker := makeUser(t, ctx, q, "Asker", "customer")
+	other := makeUser(t, ctx, q, "Other", "customer")
+	adminID := makeUser(t, ctx, q, "Admin", "admin")
+
+	sendSupport(t, ctx, support, asker, "не могу указать цену")
+	sendSupport(t, ctx, support, other, "вопрос про VIP")
+	openThread(t, ctx, adminEndpoints, adminID, asker)
+	requestAdminBody(t, ctx, adminEndpoints, http.MethodPost,
+		"/api/admin/support/threads/"+strconv.FormatInt(asker, 10), adminID,
+		`{"body":"смотрим"}`, adminEndpoints.RouteSupportThread)
+
+	rec := requestAdmin(t, ctx, adminEndpoints, http.MethodDelete,
+		"/api/admin/support/threads/"+strconv.FormatInt(asker, 10), adminID,
+		adminEndpoints.RouteSupportThread)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("clear thread = %d (%s), want 200", rec.Code, rec.Body.String())
+	}
+
+	// the app's own endpoint, through the app's own middleware - the user opening Сообщения
+	if left := readThread(t, ctx, support, asker); len(left) != 0 {
+		t.Errorf("the user still sees %d messages after the thread was cleared (%v) - «очистить» has "+
+			"to mean gone on the phone too, or the founder is promising something the panel does not do",
+			len(left), bodies(left))
+	}
+
+	inbox := readInbox(t, ctx, adminEndpoints, adminID)
+	if len(inbox) != 1 || inbox[0].UserID != other {
+		t.Errorf("inbox holds %d threads after clearing one, want only the other user's", len(inbox))
+	}
+
+	// the account is untouched: still there, still able to write, and the new message is a new
+	// conversation rather than a resurrected one
+	if _, err := q.GetUserByID(ctx, asker); err != nil {
+		t.Fatalf("the account was deleted along with its messages: %v", err)
+	}
+	sendSupport(t, ctx, support, asker, "снова здравствуйте")
+	if again := readThread(t, ctx, support, asker); len(again) != 1 {
+		t.Errorf("after clearing, a new message gives a thread of %d, want exactly 1", len(again))
+	}
+}
+
+// the watermark rows point at message ids that no longer exist, so they go with the messages. what
+// this actually protects is the badge: a stale watermark higher than every id in a fresh thread
+// would hide the next message the user sends.
+func TestAClearedThreadLightsTheBadgeAgainWhenTheUserWritesBack(t *testing.T) {
+	support, adminEndpoints, ctx, _, q := supportUnderTest(t)
+
+	asker := makeUser(t, ctx, q, "Asker", "customer")
+	adminID := makeUser(t, ctx, q, "Admin", "admin")
+
+	sendSupport(t, ctx, support, asker, "первый вопрос")
+	openThread(t, ctx, adminEndpoints, adminID, asker)
+
+	requestAdmin(t, ctx, adminEndpoints, http.MethodDelete,
+		"/api/admin/support/threads/"+strconv.FormatInt(asker, 10), adminID,
+		adminEndpoints.RouteSupportThread)
+
+	if unread := readUnreadCount(t, ctx, adminEndpoints, adminID); unread != 0 {
+		t.Fatalf("the badge counts %d after the only thread was cleared, want 0", unread)
+	}
+
+	sendSupport(t, ctx, support, asker, "ещё один вопрос")
+	if unread := readUnreadCount(t, ctx, adminEndpoints, adminID); unread != 1 {
+		t.Errorf("the badge counts %d after the user wrote back, want 1", unread)
+	}
+}
+
+func TestClearingTheThreadOfAMissingUserIs404(t *testing.T) {
+	_, adminEndpoints, ctx, _, q := supportUnderTest(t)
+
+	adminID := makeUser(t, ctx, q, "Admin", "admin")
+
+	rec := requestAdmin(t, ctx, adminEndpoints, http.MethodDelete,
+		"/api/admin/support/threads/999999", adminID, adminEndpoints.RouteSupportThread)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("clearing a missing user's thread = %d, want 404", rec.Code)
+	}
+}
+
 // ─────────────────────────── what is not a message ───────────────────────────
 
 func TestSupportRefusesAnEmptyMessage(t *testing.T) {

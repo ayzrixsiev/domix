@@ -1,17 +1,5 @@
 package catalog
 
-// the templates moved out of this package's source and into `product_templates` (migration 000014),
-// so these tests split in two.
-//
-// The first half is about the in-memory store: Load replacing the world atomically, Template handing
-// out copies, and the slot key set being derived from the declared owner-named *categories* rather
-// than written down separately. Those run on synthetic rows and need no database.
-//
-// The second half is about the real table, and it is what used to be asserted against the Go
-// literal: unique keys, values that fit the columns they get copied into, product categories the app
-// has a label for, and photos that exist on disk. Those need the database, and skip cleanly without
-// one.
-
 import (
 	"context"
 	"os"
@@ -23,6 +11,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
+
+	// test-only, for the one declaration of the "_thumb beside the master" rule. no cycle: nothing
+	// in imagestore knows the catalogue exists.
+	"domix/backend/internal/imagestore"
 )
 
 func rows(shopCategory string, keys ...string) []Row {
@@ -36,10 +28,6 @@ func rows(shopCategory string, keys ...string) []Row {
 	return out
 }
 
-// ─────────────────────────── the in-memory store ───────────────────────────
-
-// if this regresses, every shop created after the first accidental mutation is seeded with corrupted
-// data - silently, and only in production, since a fresh process starts clean again.
 func TestTemplateReturnsACopy(t *testing.T) {
 	Load(rows("wood", "wood.a", "wood.b"))
 
@@ -51,9 +39,6 @@ func TestTemplateReturnsACopy(t *testing.T) {
 	}
 }
 
-// Load replaces the whole map rather than merging into it, so a product removed from a template
-// through the panel is actually gone from the next shop created - not still there because nothing
-// deleted it from memory.
 func TestLoadReplacesRatherThanMerges(t *testing.T) {
 	Load(rows("wood", "wood.a", "wood.b", "wood.c"))
 	if got := Size("wood"); got != 3 {
@@ -69,9 +54,6 @@ func TestLoadReplacesRatherThanMerges(t *testing.T) {
 	}
 }
 
-// a slot that stopped being recognised would silently become an ordinary template row: the обои
-// owner would find the name locked to the placeholder with no error explaining it. the key set is
-// rebuilt by Load off ownerNamedCategories, so this also pins that the derivation survives a reload.
 func TestOwnerNamedSlotsAreDerivedFromTheCategory(t *testing.T) {
 	Load(append(rows("wallpaper", "wallpaper.premium_ru", "wallpaper.econom_cn_1"),
 		rows("wood", "wood.board")...))
@@ -84,8 +66,7 @@ func TestOwnerNamedSlotsAreDerivedFromTheCategory(t *testing.T) {
 	if IsOwnerNamedSlot("wood.board") {
 		t.Error("IsOwnerNamedSlot(\"wood.board\") = true - wood names its own products")
 	}
-	// the empty string is what a caller reads off an invalid pgtype.Text, i.e. a product the owner
-	// added themselves
+
 	if IsOwnerNamedSlot("") {
 		t.Error(`IsOwnerNamedSlot("") = true, want false`)
 	}
@@ -95,8 +76,6 @@ func TestOwnerNamedSlotsAreDerivedFromTheCategory(t *testing.T) {
 	}
 }
 
-// emptying a template from the panel must not make its code stop being a category - the add-store
-// form would start rejecting it, which is a much stranger failure than an empty catalogue.
 func TestCategoryValidityDoesNotDependOnWhatIsLoaded(t *testing.T) {
 	Load(rows("wood", "wood.a"))
 
@@ -112,8 +91,6 @@ func TestCategoryValidityDoesNotDependOnWhatIsLoaded(t *testing.T) {
 	}
 }
 
-// the app's exhaustive switch over its own copy of this list means a code added on one side and not
-// the other is a missing label rather than a crash - the kind of drift that goes unnoticed.
 func TestProductCategoryCodes(t *testing.T) {
 	want := []string{
 		"mixes", "blocks", "lumber", "metal", "fasteners", "roofing",
@@ -132,15 +109,12 @@ func TestProductCategoryCodes(t *testing.T) {
 		}
 	}
 
-	// the old free-text values must not pass - migration 000006 remapped them
 	for _, invalid := range []string{"", "MIXES", "Крепёж", "Сантехника", "universal"} {
 		if IsValidProductCategory(invalid) {
 			t.Errorf("IsValidProductCategory(%q) = true, want false", invalid)
 		}
 	}
 }
-
-// ─────────────────────────── the real table ───────────────────────────
 
 type storedRow struct {
 	shopCategory, key, name, category, unit, imagePath string
@@ -188,14 +162,11 @@ func storedTemplates(t *testing.T) []storedRow {
 	return out
 }
 
-// every value here is copied verbatim into `products` at seeding, so a row that fits this table and
-// not that one fails at shop creation - the worst possible moment to find out. the UNIQUE constraint
-// covers the key; these are the checks the schema cannot make.
 func TestStoredTemplatesFitTheProductsTable(t *testing.T) {
 	const (
-		maxKeyLen  = 60  // products.template_key VARCHAR(60)
-		maxNameLen = 150 // products.name VARCHAR(150)
-		maxUnitLen = 20  // products.unit VARCHAR(20)
+		maxKeyLen  = 60
+		maxNameLen = 150
+		maxUnitLen = 20
 	)
 
 	seen := map[string]bool{}
@@ -214,8 +185,7 @@ func TestStoredTemplatesFitTheProductsTable(t *testing.T) {
 		if !IsValidProductCategory(row.category) {
 			t.Errorf("%s: unknown product category %q - the app has no label for it", row.key, row.category)
 		}
-		// rune counts, not len(): cyrillic characters are two bytes and postgres counts varchar
-		// limits in characters
+
 		if utf8.RuneCountInString(row.key) > maxKeyLen ||
 			utf8.RuneCountInString(row.name) > maxNameLen ||
 			utf8.RuneCountInString(row.unit) > maxUnitLen {
@@ -224,14 +194,8 @@ func TestStoredTemplatesFitTheProductsTable(t *testing.T) {
 	}
 }
 
-// the workflow this guards: a photo is dropped into /photos/<category>/ and a row points at it. a
-// row whose file is missing is a broken image on a tile in every shop of the category, and nothing
-// in the app says why - the request just 404s and the placeholder shows instead.
-//
-// only rows that *claim* a photo are checked. wood has none taken and an обои slot names no product
-// to photograph, so an empty image_path is a legitimate state rather than a missing file.
 func TestStoredTemplatePhotosExist(t *testing.T) {
-	// backend/internal/catalog -> repo root
+
 	dir := filepath.Join("..", "..", "..", "photos")
 	if _, err := os.Stat(dir); err != nil {
 		t.Skipf("no %s directory here (%v) - skipping", dir, err)
@@ -243,14 +207,24 @@ func TestStoredTemplatePhotosExist(t *testing.T) {
 			continue
 		}
 		if other, taken := seen[row.imagePath]; taken && other != row.key {
-			// two rows sharing a photo is legal for the same product in two sizes, but not within
-			// one category's list, where it means a number was pasted twice
 			t.Logf("note: %s and %s share photo %s", other, row.key, row.imagePath)
 		}
 		seen[row.imagePath] = row.key
 
 		if _, err := os.Stat(filepath.Join(dir, row.imagePath)); err != nil {
 			t.Errorf("%s points at %s, which does not exist", row.key, row.imagePath)
+		}
+
+		// **the thumbnail is not optional and nothing else would catch it missing.** Only the
+		// master's path is stored; the api derives the thumbnail's by appending `_thumb`, sends both
+		// urls, and the app loads the small one in every grid. So a catalogue shot without its
+		// thumbnail is a tile that is blank in every shop of that category - and generating them is a
+		// `magick` line somebody runs by hand when a category is photographed (CLAUDE.md §7), which
+		// is exactly the kind of step that gets skipped.
+		thumb := imagestore.ThumbPath(row.imagePath)
+		if _, err := os.Stat(filepath.Join(dir, thumb)); err != nil {
+			t.Errorf("%s points at %s, whose thumbnail %s does not exist - run the resize command in "+
+				"CLAUDE.md §7 over that directory", row.key, row.imagePath, thumb)
 		}
 	}
 }

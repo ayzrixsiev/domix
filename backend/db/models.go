@@ -8,6 +8,15 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type BasketHistory struct {
+	Day       pgtype.Date `json:"day"`
+	Category  string      `json:"category"`
+	Shops     int32       `json:"shops"`
+	AvgBasket int64       `json:"avg_basket"`
+	MinBasket int64       `json:"min_basket"`
+	MaxBasket int64       `json:"max_basket"`
+}
+
 type Product struct {
 	ID           int64              `json:"id"`
 	ShopID       int64              `json:"shop_id"`

@@ -41,9 +41,9 @@ func imageProductsUnderTest(t *testing.T) (*Products, string, context.Context, p
 	products, ctx, tx, q := productsUnderTest(t)
 
 	root := t.TempDir()
-	store, err := imagestore.New(root)
+	store, err := imagestore.NewDisk(root)
 	if err != nil {
-		t.Fatalf("imagestore.New: %v", err)
+		t.Fatalf("imagestore.NewDisk: %v", err)
 	}
 	products.Images = store
 	// Uploads stays nil: the per-account bucket is ratelimit's to test, and a limiter here would
@@ -125,13 +125,25 @@ func storedFile(t *testing.T, root string, imageURL *string) string {
 	t.Helper()
 
 	if imageURL == nil {
-		t.Fatal("the product came back with no image_url")
+		t.Fatal("the product came back with no image url")
 	}
-	rel := strings.TrimPrefix(*imageURL, productImageURLPrefix)
+	rel := strings.TrimPrefix(*imageURL, imagestore.DefaultURLPrefix)
 	if rel == *imageURL {
-		t.Fatalf("image_url %q does not start with %q", *imageURL, productImageURLPrefix)
+		t.Fatalf("%q does not start with %q", *imageURL, imagestore.DefaultURLPrefix)
 	}
 	return filepath.Join(root, filepath.FromSlash(rel))
+}
+
+// both files a response names, so a test can assert on the pair. **A master with no thumbnail is the
+// failure that does not look like one**: the edit screen works, the row is right, and every tile in
+// every grid is blank.
+func storedPair(t *testing.T, root string, saved ProductResponse) (master, thumb string) {
+	t.Helper()
+
+	if saved.ImageThumbURL == nil {
+		t.Fatal("the product came back with an image_url and no image_thumb_url")
+	}
+	return storedFile(t, root, saved.ImageURL), storedFile(t, root, saved.ImageThumbURL)
 }
 
 func TestAnOwnerPutsAPhotoOnTheirOwnProduct(t *testing.T) {
@@ -154,8 +166,15 @@ func TestAnOwnerPutsAPhotoOnTheirOwnProduct(t *testing.T) {
 	}
 
 	saved := decodeProduct(t, rec)
-	if _, err := os.Stat(storedFile(t, root, saved.ImageURL)); err != nil {
-		t.Fatalf("the file the response names is not on disk: %v", err)
+	// **two files, and the response names both.** the database holds only the master's path; the
+	// thumbnail's is derived from it, so nothing else in the system would notice it missing until a
+	// hundred tiles came up blank on somebody's phone.
+	master, thumb := storedPair(t, root, saved)
+	if _, err := os.Stat(master); err != nil {
+		t.Fatalf("the photo the response names is not on disk: %v", err)
+	}
+	if _, err := os.Stat(thumb); err != nil {
+		t.Fatalf("the thumbnail the response names is not on disk: %v", err)
 	}
 	// the flag the edit screen draws its delete button off: this photo is the shop's own
 	if !saved.OwnImage {
@@ -285,7 +304,7 @@ func TestReplacingAPhotoUnlinksTheOneItReplaced(t *testing.T) {
 	}`))
 
 	first := decodeProduct(t, callUpload(t, ctx, products, created.ID, owner, "a.jpg", testPhoto(t, 800, 600)))
-	firstPath := storedFile(t, root, first.ImageURL)
+	firstMaster, firstThumb := storedPair(t, root, first)
 
 	second := decodeProduct(t, callUpload(t, ctx, products, created.ID, owner, "b.jpg", testPhoto(t, 700, 700)))
 	if *second.ImageURL == *first.ImageURL {
@@ -293,11 +312,21 @@ func TestReplacingAPhotoUnlinksTheOneItReplaced(t *testing.T) {
 		// year - the photo would look unchanged on every phone that had seen the product
 		t.Fatal("the replacement reused the same url")
 	}
-	if _, err := os.Stat(firstPath); !os.IsNotExist(err) {
-		t.Errorf("the replaced file is still on disk: %v", err)
+	if _, err := os.Stat(firstMaster); !os.IsNotExist(err) {
+		t.Errorf("the replaced photo is still on disk: %v", err)
 	}
-	if _, err := os.Stat(storedFile(t, root, second.ImageURL)); err != nil {
+	// **the thumbnail has to go with it.** nothing in the database ever named this file, so if the
+	// replacement path forgets it, every replaced photo leaves one behind forever and the only thing
+	// that would ever notice is the admin panel's sweep.
+	if _, err := os.Stat(firstThumb); !os.IsNotExist(err) {
+		t.Errorf("the replaced thumbnail is still on disk: %v", err)
+	}
+	newMaster, newThumb := storedPair(t, root, second)
+	if _, err := os.Stat(newMaster); err != nil {
 		t.Errorf("the replacement is not on disk: %v", err)
+	}
+	if _, err := os.Stat(newThumb); err != nil {
+		t.Errorf("the replacement's thumbnail is not on disk: %v", err)
 	}
 }
 
@@ -330,7 +359,11 @@ func TestRemovingAPhotoRestoresTheCatalogueShot(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	stored, err := products.Images.Save(testPhoto(t, 640, 480))
+	normalized, err := imagestore.Normalize(testPhoto(t, 640, 480))
+	if err != nil {
+		t.Fatalf("normalize an upload: %v", err)
+	}
+	stored, err := products.Images.Save(ctx, normalized)
 	if err != nil {
 		t.Fatalf("save an upload: %v", err)
 	}
@@ -341,7 +374,7 @@ func TestRemovingAPhotoRestoresTheCatalogueShot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("point the row at it: %v", err)
 	}
-	uploadedURL, _ := productImage(uploaded.ImagePath)
+	uploadedURL, _, _ := productImage(products.URLs, uploaded.ImagePath)
 	uploadedPath := storedFile(t, root, uploadedURL)
 
 	rec := callRemoveImage(t, ctx, products, product, owner)
@@ -350,7 +383,7 @@ func TestRemovingAPhotoRestoresTheCatalogueShot(t *testing.T) {
 	}
 
 	restored := decodeProduct(t, rec)
-	if restored.ImageURL == nil || *restored.ImageURL != productImageURLPrefix+catalogueImage {
+	if restored.ImageURL == nil || *restored.ImageURL != imagestore.DefaultURLPrefix+catalogueImage {
 		t.Fatalf("got %v, expected the catalogue photo %q back", restored.ImageURL, catalogueImage)
 	}
 	// and it is no longer the shop's own, which is what hides "удалить фото" - pressing it again

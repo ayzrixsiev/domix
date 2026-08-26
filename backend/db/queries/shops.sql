@@ -15,6 +15,20 @@ FROM shops s
 LEFT JOIN shop_basket_index bi ON bi.shop_id = s.id
 ORDER BY s.created_at DESC;
 
+-- name: GetShop :one
+--
+-- one shop, for the card a customer opens from a product tile. the same columns and the same
+-- LEFT JOIN as ListShops - a shop with an incomplete basket has to open, it just opens without a
+-- badge - so the two rows stay field-for-field identical and share a mapper.
+SELECT s.id, s.user_id, s.name, s.contact_phone, s.image_url, s.address, s.category, s.rating,
+       COALESCE(s.vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip,
+       ST_Y(s.location)::float8 AS latitude, ST_X(s.location)::float8 AS longitude,
+       s.created_at, s.updated_at,
+       bi.price_index, bi.basket_price
+FROM shops s
+LEFT JOIN shop_basket_index bi ON bi.shop_id = s.id
+WHERE s.id = $1;
+
 -- name: GetShopOwner :one
 SELECT user_id FROM shops WHERE id = $1;
 

@@ -16,6 +16,7 @@ import (
 	"domix/backend/db"
 	"domix/backend/internal/auth"
 	"domix/backend/internal/catalog"
+	"domix/backend/internal/dbctx"
 	"domix/backend/internal/endpoints"
 	"domix/backend/internal/imagestore"
 	"domix/backend/internal/ratelimit"
@@ -148,21 +149,18 @@ func main() {
 	shopsEndpoints := &endpoints.Shops{Pool: dbPool, Queries: queries, JWTSecret: jwtSecret}
 	http.HandleFunc("/api/shops", endpoints.WithCORS("GET, POST", apiLimiter.Wrap(shopsEndpoints.Route)))
 	http.HandleFunc("/api/shops/mine", endpoints.WithCORS("GET", apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, shopsEndpoints.ListMine))))
-	http.HandleFunc("/api/shops/{id}", endpoints.WithCORS("PUT, DELETE", apiLimiter.Wrap(shopsEndpoints.RouteByID)))
+	http.HandleFunc("/api/shops/{id}", endpoints.WithCORS("GET, PUT, DELETE", apiLimiter.Wrap(shopsEndpoints.RouteByID)))
 
-	// the uploads directory is created here rather than on the first upload: a directory the process
-	// cannot write is a misconfigured deployment, and the right time to find that out is at boot
-	// rather than from the first shop owner who presses "добавить фото".
-	productImages, err := imagestore.New(productImagesDir())
-	if err != nil {
-		log.Fatalf("Cannot prepare the product photo directory: %v", err)
-	}
-	log.Printf("Storing uploaded product photos in %s", productImages.Dir())
+	// where product photos are written, and where the app is told to fetch them from. two
+	// independent settings, decided together because getting one without the other is a server that
+	// looks healthy and serves blank tiles - see mustOpenPhotoStorage.
+	productImages, imageURLs := mustOpenPhotoStorage()
 
 	productsEndpoints := &endpoints.Products{
 		Queries:   queries,
 		JWTSecret: jwtSecret,
 		Images:    productImages,
+		URLs:      imageURLs,
 		Uploads:   uploadLimiter,
 	}
 	http.HandleFunc("/api/shops/{id}/products", endpoints.WithCORS("GET, POST", apiLimiter.Wrap(productsEndpoints.RouteByShop)))
@@ -172,7 +170,7 @@ func main() {
 	// different limits.
 	http.HandleFunc("/api/products/{id}/image", endpoints.WithCORS("POST, DELETE", apiLimiter.Wrap(productsEndpoints.RouteImage)))
 
-	homeEndpoints := &endpoints.Home{Queries: queries}
+	homeEndpoints := &endpoints.Home{Queries: queries, URLs: imageURLs}
 	http.HandleFunc("/api/home", endpoints.WithCORS("GET", apiLimiter.Wrap(homeEndpoints.Get)))
 	http.HandleFunc("/api/categories/{code}/products", endpoints.WithCORS("GET", apiLimiter.Wrap(homeEndpoints.ProductsByCategory)))
 	// the home screen's search field. public like the rest of Home, and on the same limiter - a
@@ -200,7 +198,7 @@ func main() {
 	// the shape of the thing being granted, not about admin apis in general: a placement is sold,
 	// and an api that can grant it is an api somebody will eventually ask to have pointed at their
 	// own shop. deleting a user and deleting a shop are moderation, which is what a panel is for.
-	adminEndpoints := &endpoints.Admin{Pool: dbPool, Queries: queries}
+	adminEndpoints := &endpoints.Admin{Pool: dbPool, Queries: queries, URLs: imageURLs, Images: productImages}
 	adminRoute := func(methods string, handler http.HandlerFunc) http.HandlerFunc {
 		return endpoints.WithCORS(methods, apiLimiter.Wrap(
 			auth.RequireAuth(jwtSecret, queries, adminEndpoints.RequireAdmin(handler)),
@@ -221,7 +219,8 @@ func main() {
 	// the support inbox, the privileged half. `{id}` is a *user* id and not a thread id - a thread is
 	// exactly one user's messages, so there is no separate row to address.
 	http.HandleFunc("/api/admin/support/threads", adminRoute("GET", adminEndpoints.SupportThreads))
-	http.HandleFunc("/api/admin/support/threads/{id}", adminRoute("GET, POST", adminEndpoints.RouteSupportThread))
+	// DELETE erases the conversation from both sides at once - see Admin.DeleteSupportThread.
+	http.HandleFunc("/api/admin/support/threads/{id}", adminRoute("GET, POST, DELETE", adminEndpoints.RouteSupportThread))
 
 	// the templates themselves, editable since migration 000014 moved them out of Go and into
 	// product_templates. every write here reloads internal/catalog's in-memory copy before it
@@ -235,6 +234,11 @@ func main() {
 	// the sync is the second, louder half: editing a template above decides what the *next* shop is
 	// created with, this pushes it into the shops that already exist.
 	http.HandleFunc("/api/admin/templates/{category}/sync", adminRoute("POST", adminEndpoints.SyncTemplate))
+
+	// uploaded photos whose products row went away with a deleted shop. GET counts and measures,
+	// DELETE sweeps - two verbs on one path because they are one question asked twice, and the
+	// DELETE re-runs the whole scan rather than trusting a list the browser sent back.
+	http.HandleFunc("/api/admin/storage/orphans", adminRoute("GET, DELETE", adminEndpoints.RouteOrphans))
 
 	http.Handle("/static/products/", staticFiles("/static/products/", productImagesDir()))
 	http.HandleFunc("/health", healthCheck(dbPool))
@@ -299,7 +303,33 @@ func main() {
 
 	// 7. run the http server and the telegram update loop concurrently, each in its own
 	// goroutine, so main() itself is free to just wait for a shutdown signal (step 8)
-	srv := &http.Server{Addr: ":" + port}
+	//
+	// every timeout field on http.Server defaults to zero, and zero means wait forever. exactly two
+	// of the four are set here, and which two is the whole point:
+	//
+	// ReadHeaderTimeout is the slowloris guard. a connection that opens and then dribbles its headers
+	// one byte at a time holds a goroutine and a file descriptor for as long as it likes; a few
+	// thousand of them from one laptop take the server down at a few bytes per second, and the log
+	// stays empty throughout because no request ever finished. a real client's headers are 200-400
+	// bytes - a fraction of a second even on 2G - so ten seconds is twenty times the room an honest
+	// phone needs and there is no grey area in between. ngrok happens to absorb this today, which
+	// only means the mine goes off on the day we move to domix-api.uz (see the shipping-to-play skill).
+	//
+	// ReadTimeout and WriteTimeout are deliberately absent, and this comment matters more than the
+	// code: both budget the *whole* request, body included. POST /api/products/{id}/image accepts up
+	// to 6 MiB, which is over five minutes on 3G, so a whole-request limit would cut off photo upload
+	// for precisely the owners with the worst connection and would never reproduce on a good one.
+	// don't add them "for completeness" - that breaks photo upload.
+	//
+	// IdleTimeout only counts silence on an already-open keep-alive connection, so by definition it
+	// cannot interrupt a request in flight. it does mean the server now closes idle sockets itself,
+	// i.e. more of the "the phone's pool holds a dead socket" case - already handled on the client
+	// side, where core/network/api_get.dart retries a GET once on a fresh connection.
+	srv := &http.Server{
+		Addr:              ":" + port,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
 	go func() {
 		log.Printf("HTTP Server booting up on port %s...", port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -309,6 +339,10 @@ func main() {
 
 	telegramHandler := &telegram.Handler{Bot: bot, SessionMgr: sessionMgr, Queries: queries, JWTSecret: jwtSecret}
 	go telegramHandler.ProcessUpdates(updates)
+
+	// the third goroutine: one row per market per day, so the admin panel can draw what a basket
+	// cost last week. see startBasketHistory.
+	go startBasketHistory(queries)
 
 
 
@@ -328,6 +362,47 @@ func main() {
 
 }
 
+// startBasketHistory keeps `basket_history` current: one row per shop category per day.
+//
+// **It exists because the basket price is the one number in this product that cannot be recomputed.**
+// `shop_basket_index` is a view over `products.price`, so it always answers about *now* - the moment
+// an owner retypes a price, what their basket cost yesterday is gone and nothing anywhere remembers
+// it. Every other figure on the admin dashboard is derived from current rows; "средний чек по
+// категории за месяц" needs something to have been written down at the time.
+//
+// **Hourly, not nightly.** A daily job is one `time.Ticker` firing at whatever moment the process
+// happened to start, so a server restarted around that time skips whole days and a laptop that is
+// only on during the afternoon records nothing at all. The statement is an idempotent upsert keyed
+// by (day, category), so running it twenty-four times a day writes the same rows the last of those
+// runs would have written on its own - and today's point stays current to within the hour instead of
+// being yesterday's until midnight.
+//
+// **The whole aggregate runs in the database** (RecordBasketHistory) - one statement over a view,
+// nothing travelling through Go - which is what makes it cheap enough to put on a timer at all.
+//
+// A failure is logged and the loop continues: this is a chart, and a missing hour costs nothing that
+// the next hour does not fix. It also deliberately does *not* take the shutdown path - there is no
+// state to flush, and `dbPool.Close()` ending an in-flight upsert loses at most one hour of a
+// number that is rewritten every hour anyway.
+func startBasketHistory(queries *db.Queries) {
+	record := func() {
+		ctx, cancel := dbctx.WithTimeout(context.Background())
+		defer cancel()
+		if err := queries.RecordBasketHistory(ctx); err != nil {
+			log.Printf("WARNING: could not record today's basket history: %v", err)
+		}
+	}
+
+	// once at boot, so a fresh deploy has today's row without waiting an hour for it
+	record()
+
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for range ticker.C {
+		record()
+	}
+}
+
 // reads product_templates into internal/catalog's in-memory copy, or dies trying.
 func mustLoadTemplates(queries *db.Queries) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -335,10 +410,10 @@ func mustLoadTemplates(queries *db.Queries) {
 
 	rows, err := queries.ListProductTemplates(ctx)
 	if err != nil {
-		log.Fatalf("Cannot read product_templates: %v (has migration 000014 been run?)", err)
+		log.Fatalf("Cannot read product_templates: %v", err)
 	}
 	if len(rows) == 0 {
-		log.Fatal("product_templates is empty - every new shop would be created with an empty catalogue. Run `migrate -database \"$DB_URL\" -path db/migrations up`.")
+		log.Fatal("product_templates is empty - every new shop would be created with an empty catalogue.")
 	}
 
 	loaded := make([]catalog.Row, 0, len(rows))
@@ -412,6 +487,59 @@ func productImagesDir() string {
 		return dir
 	}
 	return filepath.Join("..", "photos")
+}
+
+// where product photos are stored, and what address the api tells the app to fetch them from.
+//
+// **Two settings, and they have to be decided together.** Storage is chosen by whether the R2 keys
+// are in the environment; the address comes from IMAGE_BASE_URL. Neither can see the other's
+// mistake, and the combination that is always wrong - photos written to a bucket while the api
+// hands out urls pointing at its own disk - produces a server whose /health is green, whose uploads
+// return 200, and whose every product tile is blank. That is a log line nobody reads at 2am, so it
+// is a refusal to boot instead.
+//
+// The disk is not a fallback for a missing deployment: it is what runs on the founder's laptop and
+// in every test, which is the whole argument for imagestore.Storage being an interface.
+func mustOpenPhotoStorage() (imagestore.Storage, imagestore.URLs) {
+	urls := imagestore.NewURLs(os.Getenv("IMAGE_BASE_URL"))
+
+	r2cfg, wanted, err := imagestore.R2ConfigFromEnv()
+	if err != nil {
+		// a partly-filled .env. answering it by quietly writing photos onto the machine's disk gives
+		// a server that works perfectly until it is redeployed, at which point every photo uploaded
+		// since is gone - so this is fatal too.
+		log.Fatalf("Cannot configure photo storage: %v", err)
+	}
+
+	if !wanted {
+		// the uploads directory is created here rather than on the first upload: a directory the
+		// process cannot write is a misconfigured deployment, and the right time to find that out is
+		// at boot rather than from the first shop owner who presses "добавить фото".
+		disk, err := imagestore.NewDisk(productImagesDir())
+		if err != nil {
+			log.Fatalf("Cannot prepare the product photo directory: %v", err)
+		}
+		log.Printf("Product photos: %s", disk.Describe())
+		if urls.Configured() {
+			// legitimate: nginx or a CDN serving the same directory under its own hostname
+			log.Printf("Product photo urls: %s", urls.Master("<path>"))
+		}
+		return disk, urls
+	}
+
+	if !urls.Configured() {
+		log.Fatalf("R2 is configured but IMAGE_BASE_URL is not - photos would be written to the "+
+			"bucket %q and served from this api's own /static/products/, which does not have them. "+
+			"Set IMAGE_BASE_URL to the bucket's public hostname (https://img.domix-api.uz).", r2cfg.Bucket)
+	}
+
+	bucket, err := imagestore.NewR2(r2cfg)
+	if err != nil {
+		log.Fatalf("Cannot configure R2: %v", err)
+	}
+	log.Printf("Product photos: %s", bucket.Describe())
+	log.Printf("Product photo urls: %s", urls.Master("<path>"))
+	return bucket, urls
 }
 
 // check whether images folder available

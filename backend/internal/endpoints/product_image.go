@@ -95,13 +95,16 @@ func (p *Products) UploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// one decode, two files: a 1000px master and a 400px thumbnail. they travel as one value so
+	// that no path through this handler can store a master whose thumbnail is missing - which would
+	// be a product with a working edit screen and a blank tile in every grid.
 	normalized, err := imagestore.Normalize(raw)
 	if err != nil {
 		writeImageError(w, err)
 		return
 	}
 
-	stored, err := p.Images.Save(normalized)
+	stored, err := p.Images.Save(r.Context(), normalized)
 	if err != nil {
 		log.Printf("CRITICAL: could not store a photo for product %d: %v", existing.ID, err)
 		writeAPIError(w, http.StatusInternalServerError, "server_error", "failed to save the photo")
@@ -111,14 +114,14 @@ func (p *Products) UploadImage(w http.ResponseWriter, r *http.Request) {
 	updated, ok := p.pointProductAt(w, r, existing.ID, pgtype.Text{String: stored, Valid: true})
 	if !ok {
 		// the row still names the old photo, so this one is referenced by nothing
-		if err := p.Images.Remove(stored); err != nil {
+		if err := p.Images.Remove(r.Context(), stored); err != nil {
 			log.Printf("WARNING: orphaned upload %q could not be removed: %v", stored, err)
 		}
 		return
 	}
 
-	p.forgetPreviousUpload(existing.ImagePath)
-	writeProductResponse(w, http.StatusOK, updated)
+	p.forgetPreviousUpload(r, existing.ImagePath)
+	p.writeProductResponse(w, http.StatusOK, updated)
 }
 
 // RemoveImage takes the owner's photo off a product.
@@ -154,8 +157,8 @@ func (p *Products) RemoveImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p.forgetPreviousUpload(existing.ImagePath)
-	writeProductResponse(w, http.StatusOK, updated)
+	p.forgetPreviousUpload(r, existing.ImagePath)
+	p.writeProductResponse(w, http.StatusOK, updated)
 }
 
 // the shared tail of both handlers: write the column, or report why not.
@@ -179,18 +182,18 @@ func (p *Products) pointProductAt(w http.ResponseWriter, r *http.Request, produc
 	return updated, true
 }
 
-// unlink the photo the row used to name, now that nothing points at it.
+// unlink the photo the row used to name - both files - now that nothing points at it.
 //
 // **Guarded by IsUpload, which is the line that protects the catalogue.** products.image_path holds
 // curated shots as well as uploads, and those are shared by every shop seeded from the same
 // template - deleting one because a single owner replaced their photo would blank the tile in every
 // other shop of that category. A failure here is logged and swallowed: the row is already correct,
-// and the cost of the leak is one file.
-func (p *Products) forgetPreviousUpload(previous pgtype.Text) {
+// and the cost of the leak is two files the admin panel's sweep will collect.
+func (p *Products) forgetPreviousUpload(r *http.Request, previous pgtype.Text) {
 	if !previous.Valid || !imagestore.IsUpload(previous.String) {
 		return
 	}
-	if err := p.Images.Remove(previous.String); err != nil {
+	if err := p.Images.Remove(r.Context(), previous.String); err != nil {
 		log.Printf("WARNING: could not remove the replaced photo %q: %v", previous.String, err)
 	}
 }
@@ -281,9 +284,9 @@ func (p *Products) allowUpload(w http.ResponseWriter, r *http.Request) bool {
 
 // the SetProductImage row shares every field the other four product statements return, so it maps
 // through the same shape - one response type for a product, whichever statement produced it.
-func writeProductResponse(w http.ResponseWriter, status int, row db.SetProductImageRow) {
+func (p *Products) writeProductResponse(w http.ResponseWriter, status int, row db.SetProductImageRow) {
 	isTemplate, nameEditable, photoEditable := templateFlags(row.TemplateKey)
-	imageURL, ownImage := productImage(row.ImagePath)
+	imageURL, thumbURL, ownImage := productImage(p.URLs, row.ImagePath)
 
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(ProductResponse{
@@ -297,6 +300,7 @@ func writeProductResponse(w http.ResponseWriter, status int, row db.SetProductIm
 		IsTemplate:    isTemplate,
 		NameEditable:  nameEditable,
 		ImageURL:      imageURL,
+		ImageThumbURL: thumbURL,
 		OwnImage:      ownImage,
 		PhotoEditable: photoEditable,
 	})

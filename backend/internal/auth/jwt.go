@@ -14,16 +14,6 @@ type TokenClaims struct {
 	jwt.RegisteredClaims
 }
 
-// how long a login lasts. AddDate(years, months, days), so this is four calendar months - not
-// 120 days: AddDate walks the calendar, so a token issued on 31 January expires on 31 May rather
-// than drifting by the length of the months in between.
-//
-// it was a year, which is a long time to be unable to revoke anything. there is still no refresh
-// token and no server-side revocation list, so the expiry *is* the only way a session ever ends -
-// which is the whole argument for keeping it short. four months is the compromise: long enough that
-// a customer who opens the app twice a year is not locked out, short enough that a leaked token is
-// not a year-long problem. when refresh tokens exist this drops to hours and stops being a
-// judgement call.
 const tokenLifetimeMonths = 4
 
 func GenerateJWT(userID int64, phone string, secretKey string) (string, error) {

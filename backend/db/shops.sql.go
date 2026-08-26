@@ -88,6 +88,61 @@ func (q *Queries) DeleteShop(ctx context.Context, id int64) (int64, error) {
 	return result.RowsAffected(), nil
 }
 
+const getShop = `-- name: GetShop :one
+SELECT s.id, s.user_id, s.name, s.contact_phone, s.image_url, s.address, s.category, s.rating,
+       COALESCE(s.vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip,
+       ST_Y(s.location)::float8 AS latitude, ST_X(s.location)::float8 AS longitude,
+       s.created_at, s.updated_at,
+       bi.price_index, bi.basket_price
+FROM shops s
+LEFT JOIN shop_basket_index bi ON bi.shop_id = s.id
+WHERE s.id = $1
+`
+
+type GetShopRow struct {
+	ID           int64              `json:"id"`
+	UserID       int64              `json:"user_id"`
+	Name         string             `json:"name"`
+	ContactPhone string             `json:"contact_phone"`
+	ImageUrl     pgtype.Text        `json:"image_url"`
+	Address      string             `json:"address"`
+	Category     string             `json:"category"`
+	Rating       pgtype.Numeric     `json:"rating"`
+	IsVip        bool               `json:"is_vip"`
+	Latitude     float64            `json:"latitude"`
+	Longitude    float64            `json:"longitude"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	PriceIndex   pgtype.Int8        `json:"price_index"`
+	BasketPrice  pgtype.Int8        `json:"basket_price"`
+}
+
+// one shop, for the card a customer opens from a product tile. the same columns and the same
+// LEFT JOIN as ListShops - a shop with an incomplete basket has to open, it just opens without a
+// badge - so the two rows stay field-for-field identical and share a mapper.
+func (q *Queries) GetShop(ctx context.Context, id int64) (GetShopRow, error) {
+	row := q.db.QueryRow(ctx, getShop, id)
+	var i GetShopRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.ContactPhone,
+		&i.ImageUrl,
+		&i.Address,
+		&i.Category,
+		&i.Rating,
+		&i.IsVip,
+		&i.Latitude,
+		&i.Longitude,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PriceIndex,
+		&i.BasketPrice,
+	)
+	return i, err
+}
+
 const getShopOwner = `-- name: GetShopOwner :one
 SELECT user_id FROM shops WHERE id = $1
 `

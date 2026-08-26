@@ -10,6 +10,7 @@ import (
 	"domix/backend/db"
 	"domix/backend/internal/catalog"
 	"domix/backend/internal/dbctx"
+	"domix/backend/internal/imagestore"
 )
 
 // everything behind the home screen's three sections - VIP Магазины, Популярные категории and
@@ -20,6 +21,10 @@ import (
 // and no JWTSecret, unlike Shops and Products: there is nothing here to authorize.
 type Home struct {
 	Queries *db.Queries
+
+	// how a stored image path becomes an address the app can fetch. the zero value serves from this
+	// api's own /static/products/; IMAGE_BASE_URL points it at img.domix-api.uz in production.
+	URLs imagestore.URLs
 }
 
 const (
@@ -204,7 +209,7 @@ func (h *Home) ProductsByCategory(w http.ResponseWriter, r *http.Request) {
 
 	response := make([]CategoryProductResponse, 0, len(rows))
 	for _, row := range rows {
-		response = append(response, categoryProductFromRow(row))
+		response = append(response, categoryProductFromRow(h.URLs, row))
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -255,7 +260,7 @@ func (h *Home) SearchProducts(w http.ResponseWriter, r *http.Request) {
 		// the same order - so one converts to the other and both endpoints share a mapper. the
 		// conversion is checked by the compiler, so a column added to one query and not the other
 		// stops the build instead of silently changing what search returns.
-		response = append(response, categoryProductFromRow(db.ListProductsByCategoryRow(row)))
+		response = append(response, categoryProductFromRow(h.URLs, db.ListProductsByCategoryRow(row)))
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -264,9 +269,9 @@ func (h *Home) SearchProducts(w http.ResponseWriter, r *http.Request) {
 
 // turns one product row into the wire shape, for the two endpoints that return products across
 // shops. it exists so a change to what a product looks like on the wire happens once.
-func categoryProductFromRow(row db.ListProductsByCategoryRow) CategoryProductResponse {
+func categoryProductFromRow(urls imagestore.URLs, row db.ListProductsByCategoryRow) CategoryProductResponse {
 	isTemplate, nameEditable, photoEditable := templateFlags(row.TemplateKey)
-	imageURL, ownImage := productImage(row.ImagePath)
+	imageURL, thumbURL, ownImage := productImage(urls, row.ImagePath)
 	return CategoryProductResponse{
 		ProductResponse: ProductResponse{
 			ID:            row.ID,
@@ -279,6 +284,7 @@ func categoryProductFromRow(row db.ListProductsByCategoryRow) CategoryProductRes
 			IsTemplate:    isTemplate,
 			NameEditable:  nameEditable,
 			ImageURL:      imageURL,
+			ImageThumbURL: thumbURL,
 			OwnImage:      ownImage,
 			PhotoEditable: photoEditable,
 		},

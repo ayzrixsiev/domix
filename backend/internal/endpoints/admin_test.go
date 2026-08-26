@@ -204,33 +204,27 @@ func TestAdminDeletingAUserTakesTheirShopsAndProducts(t *testing.T) {
 	}
 }
 
-// a panel whose delete button can remove the last administrator is a tool that can destroy itself,
-// and the recovery is SQL against production. the guard covers the caller's own row too, which is
-// the realistic way it gets hit - an admin scrolling their own user list.
-func TestAnAdminAccountCannotBeDeletedThroughThePanel(t *testing.T) {
+// **the founder's own account is the realistic way the last-admin guard gets hit** - an admin
+// scrolling their own user list - and the panel refuses that one whether or not anybody else is
+// looking at it. Everything else about an administrator's row is now ordinary; see
+// TestTheLastAdministratorCannotBeRemoved and TestAnAdminCanBeDeletedOnceAnotherExists.
+func TestAnAdminCannotDeleteThemselvesWhenTheyAreTheOnlyOne(t *testing.T) {
 	adminEndpoints, ctx, tx, q := adminUnderTest(t)
 
 	adminID := makeUser(t, ctx, q, "First", "admin")
-	otherAdminID := makeUser(t, ctx, q, "Second", "admin")
 
-	for _, target := range []struct {
-		name string
-		id   int64
-	}{{"another admin", otherAdminID}, {"themselves", adminID}} {
-		rec := requestAdmin(t, ctx, adminEndpoints, http.MethodDelete,
-			"/api/admin/users/"+strconv.FormatInt(target.id, 10), adminID, adminEndpoints.DeleteUser)
-
-		if rec.Code != http.StatusForbidden {
-			t.Errorf("deleting %s = %d, want 403", target.name, rec.Code)
-		}
-		var body map[string]string
-		decodeBody(t, rec, &body)
-		if body["code"] != "cannot_delete_admin" {
-			t.Errorf("deleting %s returned code %q, want cannot_delete_admin", target.name, body["code"])
-		}
-		if n := countRows(t, ctx, tx, "SELECT COUNT(*) FROM users WHERE id = $1", target.id); n != 1 {
-			t.Errorf("deleting %s actually removed the row", target.name)
-		}
+	rec := requestAdmin(t, ctx, adminEndpoints, http.MethodDelete,
+		"/api/admin/users/"+strconv.FormatInt(adminID, 10), adminID, adminEndpoints.DeleteUser)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("deleting themselves = %d, want 409", rec.Code)
+	}
+	var body map[string]string
+	decodeBody(t, rec, &body)
+	if body["code"] != "last_admin" {
+		t.Errorf("returned code %q, want last_admin", body["code"])
+	}
+	if n := countRows(t, ctx, tx, "SELECT COUNT(*) FROM users WHERE id = $1", adminID); n != 1 {
+		t.Errorf("the row was removed anyway")
 	}
 }
 
@@ -434,11 +428,13 @@ func TestVIPIsGrantedAndRevokedThroughOneEndpoint(t *testing.T) {
 
 // ─────────────────────────── editing ───────────────────────────
 
-// the invariant §7 states, as a test: no path reachable over the network may grant `admin`. this
-// endpoint is behind RequireAdmin, so only an administrator could ever call it - it stays closed
-// anyway, because "there is no code path" survives a stolen token and a mistake in the middleware
-// wiring, where "an attacker cannot reach it" does not.
-func TestAdminRoleCannotBeAssignedOverTheAPI(t *testing.T) {
+// **the panel grants and revokes `admin`, and the only thing it refuses is emptying the role.**
+//
+// This reverses a rule that was pinned here for good reasons - a token that cannot mint another
+// administrator is a token whose theft ends when it expires - and the founder asked for the power on
+// his own product. What replaces the blanket refusal is arithmetic: zero administrators is the one
+// state no screen can undo, because signing into the panel requires one.
+func TestAnAdminCanGrantAndRevokeTheRole(t *testing.T) {
 	adminEndpoints, ctx, tx, q := adminUnderTest(t)
 
 	adminID := makeUser(t, ctx, q, "EditBoss", "admin")
@@ -447,25 +443,175 @@ func TestAdminRoleCannotBeAssignedOverTheAPI(t *testing.T) {
 	rec := requestAdminBody(t, ctx, adminEndpoints, http.MethodPut,
 		"/api/admin/users/"+strconv.FormatInt(targetID, 10), adminID,
 		`{"name":"Hopeful","role":"admin"}`, adminEndpoints.UpdateUser)
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("assigning admin = %d, want 400", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("granting admin = %d (%s), want 200", rec.Code, rec.Body.String())
 	}
 
 	var role string
 	if err := tx.QueryRow(ctx, "SELECT role FROM users WHERE id = $1", targetID).Scan(&role); err != nil {
 		t.Fatalf("read role: %v", err)
 	}
-	if role != "customer" {
-		t.Errorf("role is now %q - the api granted admin", role)
+	if role != "admin" {
+		t.Fatalf("role is %q after the grant, want admin", role)
 	}
 
-	// and the mirror: an existing admin cannot be demoted here either, or the panel would have a
-	// one-click path to locking every administrator out of itself
+	// with a second administrator in place, the first can now step down - including on themselves
 	demote := requestAdminBody(t, ctx, adminEndpoints, http.MethodPut,
 		"/api/admin/users/"+strconv.FormatInt(adminID, 10), adminID,
 		`{"name":"EditBoss","role":"customer"}`, adminEndpoints.UpdateUser)
-	if demote.Code != http.StatusForbidden {
-		t.Errorf("demoting an admin = %d, want 403", demote.Code)
+	if demote.Code != http.StatusOK {
+		t.Errorf("demoting one of two admins = %d (%s), want 200", demote.Code, demote.Body.String())
+	}
+}
+
+// the guard that replaced the blanket refusal, in both directions it can be reached from.
+func TestTheLastAdministratorCannotBeRemoved(t *testing.T) {
+	adminEndpoints, ctx, _, q := adminUnderTest(t)
+
+	adminID := makeUser(t, ctx, q, "OnlyBoss", "admin")
+
+	demote := requestAdminBody(t, ctx, adminEndpoints, http.MethodPut,
+		"/api/admin/users/"+strconv.FormatInt(adminID, 10), adminID,
+		`{"name":"OnlyBoss","role":"customer"}`, adminEndpoints.UpdateUser)
+	if demote.Code != http.StatusConflict {
+		t.Errorf("demoting the last admin = %d, want 409 - there is no screen that could undo it",
+			demote.Code)
+	}
+
+	del := requestAdmin(t, ctx, adminEndpoints, http.MethodDelete,
+		"/api/admin/users/"+strconv.FormatInt(adminID, 10), adminID, adminEndpoints.DeleteUser)
+	if del.Code != http.StatusConflict {
+		t.Errorf("deleting the last admin = %d, want 409", del.Code)
+	}
+}
+
+// an administrator is an ordinary account once another one exists - the panel edits and deletes it
+// like any other, which is the whole of what «полная власть над юзерами» asked for.
+func TestAnAdminCanBeDeletedOnceAnotherExists(t *testing.T) {
+	adminEndpoints, ctx, _, q := adminUnderTest(t)
+
+	adminID := makeUser(t, ctx, q, "BossOne", "admin")
+	otherID := makeUser(t, ctx, q, "BossTwo", "admin")
+
+	del := requestAdmin(t, ctx, adminEndpoints, http.MethodDelete,
+		"/api/admin/users/"+strconv.FormatInt(otherID, 10), adminID, adminEndpoints.DeleteUser)
+	if del.Code != http.StatusOK {
+		t.Errorf("deleting one of two admins = %d (%s), want 200", del.Code, del.Body.String())
+	}
+}
+
+// **the reversal is about the panel, not about the wire.** Nothing unauthenticated may still assign
+// the role: /api/auth/init maps anything that is not shop_owner to customer, and this is the check
+// that would notice if that ever stopped being true.
+func TestSignupStillCannotAskForAdmin(t *testing.T) {
+	adminEndpoints, ctx, _, q := adminUnderTest(t)
+
+	adminID := makeUser(t, ctx, q, "WireBoss", "admin")
+	targetID := makeUser(t, ctx, q, "Sneaky", "customer")
+
+	rec := requestAdminBody(t, ctx, adminEndpoints, http.MethodPut,
+		"/api/admin/users/"+strconv.FormatInt(targetID, 10), adminID,
+		`{"name":"Sneaky","role":"root"}`, adminEndpoints.UpdateUser)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("an unknown role = %d, want 400 - assignableRoles is the whole list", rec.Code)
+	}
+}
+
+// ─────────────────────────── the market picture ───────────────────────────
+
+// **the ranking is the whole point of the card it feeds**: not who is cheapest, but by how much and
+// against whom. It has to come back cheapest-first and it has to stay inside one shop category,
+// because a basket of ten wallpaper slots and a basket of a hundred universal rows are not
+// comparable numbers (§5) and putting them in one list would draw a chart of the templates.
+func TestTheMarketRankingIsPerCategoryAndCheapestFirst(t *testing.T) {
+	adminEndpoints, ctx, tx, q := adminUnderTest(t)
+
+	adminID := makeUser(t, ctx, q, "RankBoss", "admin")
+
+	// three wallpaper shops, priced apart, plus one plumbing shop that must not appear among them
+	cheap := makeSeededShop(t, ctx, tx, q, "RankCheap", catalog.CategoryWallpaper, false)
+	priceAll(t, ctx, tx, cheap, 90_000)
+	mid := makeSeededShop(t, ctx, tx, q, "RankMid", catalog.CategoryWallpaper, false)
+	priceAll(t, ctx, tx, mid, 100_000)
+	dear := makeSeededShop(t, ctx, tx, q, "RankDear", catalog.CategoryWallpaper, false)
+	priceAll(t, ctx, tx, dear, 110_000)
+	other := makeSeededShop(t, ctx, tx, q, "RankPlumb", catalog.CategoryPlumbing, false)
+	priceAll(t, ctx, tx, other, 50_000)
+
+	rec := requestAdmin(t, ctx, adminEndpoints, http.MethodGet, "/api/admin/stats", adminID, adminEndpoints.Stats)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("stats = %d (%s)", rec.Code, rec.Body.String())
+	}
+	var body adminStatsResponse
+	decodeBody(t, rec, &body)
+
+	var wallpaper []adminRankedShop
+	for _, r := range body.Rankings {
+		if r.Category == string(catalog.CategoryWallpaper) {
+			wallpaper = append(wallpaper, r)
+		}
+		if r.ShopID == other && r.Category != string(catalog.CategoryPlumbing) {
+			t.Errorf("the plumbing shop appears under %q", r.Category)
+		}
+	}
+	if len(wallpaper) != 3 {
+		t.Fatalf("wallpaper ranking has %d rows, want 3", len(wallpaper))
+	}
+	if wallpaper[0].ShopID != cheap || wallpaper[2].ShopID != dear {
+		t.Errorf("ranking is %d,%d,%d - want cheapest (%d) first and dearest (%d) last",
+			wallpaper[0].ShopID, wallpaper[1].ShopID, wallpaper[2].ShopID, cheap, dear)
+	}
+	if !(wallpaper[0].PriceIndex < 100 && wallpaper[2].PriceIndex > 100) {
+		t.Errorf("indices are %d and %d - the cheapest must sit under 100 and the dearest over it",
+			wallpaper[0].PriceIndex, wallpaper[2].PriceIndex)
+	}
+}
+
+// **the one number in this product that cannot be recomputed**, so this checks the round trip that
+// makes it exist at all: the hourly job's statement writes today's row, and the dashboard reads it
+// back. Without a row written at the time, "средний чек за месяц" is unanswerable - `shop_basket_index`
+// is a view over current prices and yesterday's basket is gone the moment somebody retypes one.
+func TestTodaysBasketIsRecordedAndComesBackOnTheDashboard(t *testing.T) {
+	adminEndpoints, ctx, tx, q := adminUnderTest(t)
+
+	adminID := makeUser(t, ctx, q, "HistBoss", "admin")
+	shop := makeSeededShop(t, ctx, tx, q, "HistShop", catalog.CategoryWallpaper, false)
+	priceAll(t, ctx, tx, shop, 100_000)
+
+	// exactly what startBasketHistory runs, twice - the upsert is what lets it run hourly
+	for i := 0; i < 2; i++ {
+		if err := q.RecordBasketHistory(ctx); err != nil {
+			t.Fatalf("record basket history (run %d): %v", i+1, err)
+		}
+	}
+
+	rec := requestAdmin(t, ctx, adminEndpoints, http.MethodGet, "/api/admin/stats", adminID, adminEndpoints.Stats)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("stats = %d (%s)", rec.Code, rec.Body.String())
+	}
+	var body adminStatsResponse
+	decodeBody(t, rec, &body)
+
+	var days []adminBasketDay
+	for _, d := range body.BasketHistory {
+		if d.Category == string(catalog.CategoryWallpaper) {
+			days = append(days, d)
+		}
+	}
+	if len(days) != 1 {
+		t.Fatalf("wallpaper has %d days of history after two runs, want exactly 1 - the upsert is "+
+			"keyed by (day, category) so running the job every hour must not add a row per run", len(days))
+	}
+
+	// computed, never written down: a size pinned as a literal breaks silently the day the template
+	// grows, which is the trap §7 records three separate versions of
+	want := int64(catalog.Size(string(catalog.CategoryWallpaper))) * 100_000
+	if days[0].AvgBasket != want {
+		t.Errorf("recorded average is %d, want %d", days[0].AvgBasket, want)
+	}
+	if days[0].Shops != 1 {
+		t.Errorf("recorded shop count is %d, want 1 - it is what explains a move in the average later",
+			days[0].Shops)
 	}
 }
 
@@ -518,6 +664,17 @@ func TestAnomaliesFlagThePriceThatDisagreesWithTheMedian(t *testing.T) {
 	}
 	if found.DeviationPercent != 900 {
 		t.Errorf("deviation = %d%%, want 900%%", found.DeviationPercent)
+	}
+
+	// **a row on this report is a phone call, not a fact**, so the way to make it travels with it.
+	// Without the number the founder has to leave the report, open Магазины and search for the shop
+	// - which is the step at which a report stops being acted on.
+	if found.ContactPhone == "" || found.OwnerPhone == "" {
+		t.Errorf("anomaly carries contact=%q owner=%q, want both - the row has to be dialable",
+			found.ContactPhone, found.OwnerPhone)
+	}
+	if found.OwnerName != "AnomA" {
+		t.Errorf("owner name = %q, want AnomA", found.OwnerName)
 	}
 }
 

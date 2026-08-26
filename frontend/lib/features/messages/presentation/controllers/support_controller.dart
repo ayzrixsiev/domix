@@ -85,6 +85,19 @@ class SupportController extends ChangeNotifier {
   Timer? _pollTimer;
   Duration _pollEvery = _pollFast;
 
+  /// When this app last changed the list itself - today, a message being appended by [send].
+  ///
+  /// A poll that *started* before that moment is answering a question about an older thread, so its
+  /// response is dropped rather than applied. That guard is what makes it safe for [_pollOnce] to
+  /// accept a list that got **shorter**: before it, the only comparison that could not lose data was
+  /// "did it get longer", since a stale response can never be longer than what is already held.
+  ///
+  /// The shrinking case is real now. Support can clear a conversation from the admin panel, and it
+  /// is one table - the messages are gone for both sides. Without this the phone kept showing a
+  /// thread that no longer existed for as long as somebody sat on the screen, and only dropped it on
+  /// the next full [load] - a tab switch, or a restart.
+  DateTime? _lastLocalChange;
+
   /// Whether a screen is currently showing this thread to somebody. Set by MessagesScreen from three
   /// inputs it owns: the tab is visible, the app is in the foreground, and there is an account.
   bool _watching = false;
@@ -233,18 +246,26 @@ class SupportController extends ChangeNotifier {
     // just watched arrive would disappear - the exact failure `send` refuses to be optimistic about.
     if (_isLoading || _isSending || !_watching) return;
 
+    final startedAt = DateTime.now();
+
     try {
       final fresh = await _repo.fetchMessages();
       // still the tab on screen? the await above can outlive a tab switch or a logout.
       if (!_watching) return;
 
+      // a send landed while this request was in flight, so this answer predates the message the user
+      // is already looking at. dropping it is what lets the comparison below accept a shorter list.
+      final localChange = _lastLocalChange;
+      if (localChange != null && localChange.isAfter(startedAt)) return;
+
       _fetchedAt = DateTime.now();
 
-      // `support_messages` is insert-only and this thread is one user's, so the list can only ever
-      // grow - which makes the length the whole of the change detection. it is also what makes the
-      // comparison safe against the race above: a stale response can never be *longer*, so it can
-      // never overwrite something newer.
-      if (fresh.length <= _messages.length) {
+      // **the thread is the same thread when it is the same length and ends on the same message.**
+      // Length alone was enough while the table was insert-only in both directions; support can now
+      // clear a conversation, so "shorter" is a real answer and not evidence of a stale response -
+      // which the guard above is what rules out.
+      if (fresh.length == _messages.length &&
+          (fresh.isEmpty || fresh.last.id == _messages.last.id)) {
         _backOff();
         return;
       }
@@ -288,6 +309,9 @@ class SupportController extends ChangeNotifier {
     try {
       final message = await _repo.sendMessage(body);
       _messages = [..._messages, message];
+      // stamped so an in-flight poll started before this cannot answer with a list that does not
+      // have it yet - see _lastLocalChange
+      _lastLocalChange = DateTime.now();
       _hasLoaded = true;
       // the thread now ends with something we put there ourselves, so it is as fresh as a fetch
       _fetchedAt = DateTime.now();
@@ -343,6 +367,7 @@ class SupportController extends ChangeNotifier {
     // the watermark is a fact about one person's reading, so it goes with their thread - otherwise
     // the next account on this phone opens a conversation that is already marked read.
     _lastReadId = 0;
+    _lastLocalChange = null;
     _repo.clearWatermark();
   }
 

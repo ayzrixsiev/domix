@@ -97,10 +97,9 @@ tidiness: a route registered without `RequireAdmin` still compiles, still return
 whole user list to any logged-in customer. `TestOnlyAnAdminReachesTheAdminAPI` checks a customer *and*
 a shop owner are refused, because both hold perfectly valid tokens.
 
-**Deleting an admin account is refused, including your own.** The small reason: a panel whose delete
-button can remove the last administrator can destroy itself. The real one: every other account can
-register again with the same phone number, where an admin cannot re-grant themselves a role only SQL
-can set.
+**The panel grants the role too, as of 2026-08-22 — the SQL above is now a fallback rather than the
+only way.** `PUT /api/admin/users/{id}` accepts `role: "admin"`, and an administrator can edit and
+delete another one. See «Full power over users» below for what was reversed and what it costs.
 
 **The raw price index is shown here and nowhere else.** Root §5 is emphatic that `price_index` must
 not reach the app; an administrator is the reader who has been taught to read it. **This is not a
@@ -112,12 +111,37 @@ licence to add it to `ShopResponse`.**
 
 | tab | holds |
 | --- | --- |
-| **Обзор** | four KPIs, a 30-day signups line, the catalogue funnel, «кому позвонить», and «Рынки» — a donut and a per-category table in one card |
-| **Поддержка** | the support inbox: who wrote in, who is waiting, and the reply box |
+| **Главная** | three KPIs beside the «Категории магазинов» ring, then «Регистрации за 30 дней» beside the «Заполнение каталогов» gauge, then «Кто дешевле» beside «Средний чек». Three rows, and nothing below the fold |
+| **Поддержка** | the support inbox: who wrote in, who is waiting, the reply box, and «Очистить переписку» |
 | **Аномалии** | prices that disagree with the market for the same basket line |
 | **Пользователи** | edit name and role, delete |
 | **Магазины** | edit the four editable fields, grant/revoke VIP, open the catalogue, delete |
-| **Шаблоны** | what each template holds, how far shops have drifted, and one button to push it to all of them |
+| **Шаблоны** | the «Файлы без товара» strip, then what each template holds, how far shops have drifted, and one button to push it to all of them. The three paragraphs explaining what an edit reaches are behind the «i» in its toolbar (`templateHelp`), not printed above the tables |
+
+### The page header — `.topbar`
+
+**One row across the top of the work area on every section**: the section's name on the left, the
+page's single search field, and `#refresh` and sign-out on the right. Added 2026-08-22, and it is
+worth knowing what it is *not*, because a version of it was deleted before.
+
+**What was deleted was a title plus a sentence** — the open section's name and its `sub` string,
+printed one line under the sidebar entry already lit orange, the same fact twice at the top of every
+screen for about 80px. **That does not come back**: there is no sub-line here, the `sub` strings stay
+on each nav button's `title`, and `aria-current` remains what answers "where am I". What earns the
+row its height is the two controls it carries. They lived in the sidebar's foot, the corner of the
+screen nobody looks at, and «Обновить» is a button whose whole value is being reachable at the moment
+the numbers look stale. `.side-foot` is gone.
+
+**The search moved up here and there is exactly one of it.** A header field that mirrored whichever
+list was open used to stand above a second, identical one inside the section; the fix then was to
+delete the header's copy, and this is the same rule from the other end — the sections no longer carry
+their own, so the field under the title is the only search on the page. `SEARCH` maps a section to
+its `state.q` key and its render function, `setView` shows or hides the field and restores the value
+from state, and Главная and Шаблоны hide it outright because they have no list to filter. **A search
+spanning every section is still a different feature** and would need results of its own.
+
+`.topbar .search:not([hidden]) + .top-acts{margin-left:0}` is load-bearing: a hidden element is still
+a sibling, so a bare `+` would pull the two buttons back to the title's shoulder on Главная.
 
 ### Four rules inside it
 
@@ -131,6 +155,24 @@ Comparison is per (shop category, `template_key`) and a line needs at least thre
 its median means anything; both numbers are query parameters, because the right ones are unknown until
 there is real data.
 
+**The report reads as a phone call, not as a fact** (2026-08-22). Three things changed together after
+the founder read it and could not tell whose price was in which column:
+
+- **The columns are named for their owners** — «Цена магазина» and «Обычная цена», both right-aligned
+  so the two numbers the row exists to compare line up on their last digit, with the median's sample
+  size («по 7 магазинам») under it rather than in a column of its own. Each header carries the long
+  explanation on its `title`.
+- **One sentence stands above the table** (`.lede`, `#anom-sum`), plus what is in the report right
+  now, counted from the rows on screen so it agrees with the table while a search is open. The full
+  five paragraphs — including *why* the baseline is a median and the index is a mean — are behind the
+  «i» in the toolbar (`anomalyHelp`), the way the templates section keeps its rules. This is the one
+  section with a standing sentence; everywhere else the column heading is the whole story.
+- **The number to ring is in the row.** `AdminPriceAnomalies` joins `users` and carries
+  `contact_phone`, `owner_name` and `owner_phone`; the panel renders the shop's line as a `tel:` link
+  and prints the owner's number only when it differs, since two identical lines would say the shop has
+  two numbers. A report that makes the founder open Магазины and search for the shop is one that gets
+  read and not acted on.
+
 **An admin editing a product goes through the same three-way rule the owner does**, not a bypass —
 `UpdateProductPricing` has no `SET` for name at all, so a template row cannot be renamed from here
 either. The rule is data integrity rather than permissions: a renamed template row stops being the same
@@ -138,11 +180,40 @@ product as its counterpart down the road. What an admin actually needs is the pr
 row. **Shop category is not editable from here or anywhere** — the panel reuses `UpdateShop`, which
 keeps that true by construction.
 
-**`admin` cannot be assigned or removed over the API.** The endpoint is behind `RequireAdmin`, so only
-an administrator could call it, and it stays closed anyway: the property worth having is "there is no
-code path", which survives a stolen token and a mistake in the middleware wiring.
-`TestAdminRoleCannotBeAssignedOverTheAPI` pins both directions — granting is a 400, demoting an
-existing admin a 403.
+### Full power over users — and what it cost
+
+**`admin` used to be unassignable over the API, and is not any more** (changed 2026-08-22). The old
+rule refused three things: granting the role, editing an administrator's row, and deleting one. The
+argument was good and is worth keeping written down, because it is the thing that was traded away:
+the property worth having is not "an attacker cannot reach it" but **"there is no code path at all"**,
+which survives a stolen token, an XSS bug in the panel and a mistake in the middleware wiring.
+
+The founder asked for the power over his own product, which is his call. **The cost, stated plainly:
+an admin token is now enough to mint another administrator, so a stolen one is a permanent compromise
+rather than one that ends when the token expires.**
+
+- **Nothing unauthenticated may still assign it, and that is the half that must not move.**
+  `/api/auth/init` maps anything that is not `shop_owner` to `customer`; the Telegram handler only
+  upgrades `customer → shop_owner`. That was the original hole and it stays closed.
+  `TestSignupStillCannotAskForAdmin` is the check that notices if `assignableRoles` ever grows a
+  fourth entry.
+- **The one refusal left is arithmetic rather than policy**: the last administrator cannot be demoted
+  or deleted. Zero administrators is the only state no screen can undo — signing into this panel
+  requires one — so from there the way back is SQL on production. `anotherAdminRemains` in `admin.go`
+  is the whole of it, and it answers **409, not 403**, because the panel signs itself out on a 403
+  (that is what a revoked admin looks like) and this is a request that was understood and allowed and
+  is simply impossible right now.
+- **The count and the write are two statements, not a transaction.** Two administrators demoting each
+  other in the same second could both pass; at one machine and one person that is not a race worth a
+  lock, and the honest fix if it ever matters is a constraint in the database.
+- Panel-side: both row buttons are enabled on an administrator's row (they used to be disabled with a
+  tooltip), the role select carries a third option with a note saying what it grants, and the confirm
+  dialog names the role when the account being deleted holds it. The `last_admin` refusal arrives as a
+  toast rather than a disabled button, because whether it applies depends on how many admins exist,
+  which a row does not know.
+- Pinned by `TestAnAdminCanGrantAndRevokeTheRole`, `TestTheLastAdministratorCannotBeRemoved`,
+  `TestAnAdminCanBeDeletedOnceAnotherExists` and
+  `TestAnAdminCannotDeleteThemselvesWhenTheyAreTheOnlyOne`.
 
 ### VIP placements
 
@@ -209,6 +280,36 @@ that clears five seconds after you opened the thread still reads as stuck.
 - **Nothing notifies the user.** The app has no push at all; the reply waits until they open the tab,
   where a poll of its own picks it up (root §7).
 
+#### «Очистить переписку» — `DELETE /api/admin/support/threads/{id}`
+
+**The founder's way to end a conversation, and "end" means gone from both sides.** A settled thread
+that stays in the list is a thread read again next week, and an inbox with a hundred of them is one
+the queue gets hunted for inside.
+
+- **It is a hard delete, for the reason `DELETE /api/me` is** (root §7): there is one
+  `support_messages` table and the app reads it through its own endpoint, so a `deleted_at` column
+  would have to be honoured identically by four queries forever, and the first one written without it
+  resurrects a conversation somebody was told had been erased. The read watermarks go in the same
+  statement, in a data-modifying CTE — they point at message ids that no longer exist.
+- **The account survives, and the dialog says so.** «Очистить переписку» sits one click from «Удалить
+  пользователя», so the confirm names what does *not* happen as well as what does — and it says out
+  loud that the messages disappear from the user's phone too, which is the only action on this panel
+  whose effect somebody else watches happen on their own screen.
+- **The button is in the conversation's header, not on the inbox row**: you should have the messages
+  in front of you when you decide. It is the `.chat-head .rm`, styled as the × in red, and placed
+  *before* the × because the last position in that row is where closing is expected to be.
+- **Escape closes one modal, not both.** The confirm opens on top of the chat window, and every modal
+  wires its own `keydown`, so one press used to reach all of them — cancelling the confirm also closed
+  the conversation behind it. `shell` keeps an `openModals` stack and only the innermost `shut` runs.
+- **The phone drops it while somebody is sitting on the screen**, which needed a change on the app
+  side: `SupportController._pollOnce` compared lengths only, so a list that got *shorter* was read as
+  a stale response and ignored. It now compares length **and** the last id, guarded by a
+  `_lastLocalChange` stamp that discards a poll started before a local send — which is what made the
+  length-only comparison safe in the first place. Pinned by `TestClearingAThreadEmptiesItForTheUserToo`
+  and `TestAClearedThreadLightsTheBadgeAgainWhenTheUserWritesBack`.
+- Ids are a global `BIGSERIAL`, so a cleared thread's next message still outranks every watermark that
+  ever pointed at it — nothing has to be reset for the badge to light again.
+
 ### The panel refreshes itself — `liveTick`
 
 `«Обновить»` is a button nobody presses at the moment it would matter, so one `setInterval` (5s tick)
@@ -238,34 +339,223 @@ query string — server logs, browser history — or a short-lived ticket endpoi
 
 ## What the dashboard reports, and why those things
 
-An admin panel that counts rows tells you how much of the product exists. These tell you what to *do*:
+An admin panel that counts rows tells you how much of the product exists. These tell you what to *do*.
+**The layout was rebuilt on 2026-08-22** around a reference dashboard the founder chose, and trimmed
+twice in the same day. It is **three rows and nothing below the fold**: three counts with a ring
+beside them, one analytic band, and the leaders. Everything that was a table permanently on the front
+page either moved behind a number or left.
 
-- **The catalogue funnel** — how many shops sit at nothing / started / half / almost / done. It matters
-  more here than in most marketplaces because of the all-or-nothing rule: a shop at 99% publishes
-  exactly as much as one at 0%, which is nothing. «Почти готово» is not a progress bar, it is a list of
-  people who did nearly all the work and are getting none of the benefit.
-- **«Кому позвонить»** — the same fact turned into an afternoon: owners nearest the line, their phone
-  numbers, rows remaining. The panel's most useful screen, and it is four columns of a table.
-- **«Рынки»** — a donut of the shop split plus a table of shops / coverage / basket price / spread per
-  category. The app shows a customer one shop's badge; nobody could see whether сантехника varies by 4%
-  or 60%, which is the difference between the comparison being the product and being a decoration.
-  **It iterates the shop categories, not the baskets**: a market with shops and nobody in the comparison
-  is the row most worth seeing, and the basket query cannot return it (it reads the index view, which
-  has no row for an incomplete catalogue).
-- **Pricing activity** — did anybody price anything this week, counted by shop as well as by row so one
-  owner's evening does not read as a busy market. It is the funnel card's footer, not a KPI: it is the
-  rate of change of exactly what those bars measure.
-- **Live VIP placements** ride in the VIP KPI's note, soonest to lapse first — a placement that expires
-  unnoticed is revenue that stopped without anybody deciding it should.
+### Row 1 — three counts and the shape of the market
 
-**The editing rule: every panel answers a question no other panel answers.** `ranked / total` had been
-drawn four times over — a KPI, a gauge, two boxes under the gauge, and the funnel's terminal bar — and
-four renderings of one ratio read as four findings. The gauge is gone; the KPI states the number and
-the funnel explains how it got there. **Removed on purpose:** the product-category bar chart (a picture
-of the catalogue, not a fact about the business), the anomaly teaser (a worse version of a screen one
-click away), and the identity block in the top bar.
+- **«Магазины» is the count and nothing else.** It briefly carried «16 в сравнении цен» underneath;
+  the gauge one row down is about that ratio, and a tile that also states it makes the reader compare
+  two renderings of the same thing.
+- **«Пользователи»**, with `покупатели N · владельцы M` underneath — the split says how much of the
+  number is demand and how much is supply. It was «Клиенты» for a few hours and is not: the sidebar
+  entry is «Пользователи» and a tile calling the same set something else is a second name for one
+  thing. The `.k-sub` line sits under the whole `.k-bot` row rather than beside the delta, which is
+  what stops it truncating to «32 влад…».
+- **«VIP-места» is a fraction, `2 / 5`, because VIP is inventory.** The denominator is
+  `shops.vip_slots`, sent by the server from `home.go`'s `vipShopsLimit` — the carousel draws that
+  many places whether or not they are sold (root §7), and a panel with its own copy would keep
+  saying «из 5» the day it grows to six. **Do not hardcode it here.**
+- **«Категории магазинов»** — the reference's «Top Categories», and the same question: what is this
+  market made of. The ring plus its list is one object, which is why `buildDonut` carries no legend of
+  its own. It is `b3 r2`, standing beside the KPI row *and* the chart under it — the only piece of
+  real structure in the layout. `в сравнении` per category rides on each row's `title`.
+
+### Row 2 — the two things that move day to day, and they are one row
+
+Both cards carry `tall`, which is `align-self:stretch` plus a flex column: `align-items:start` is
+right for the rest of the grid and wrong for these two, because they are one row of one subject and a
+card ending 160px short of its neighbour reads as one that failed to load. The gauge's arc and
+sentence sit in a `.grow` that takes the slack, so the two boxes stay pinned to the bottom edge
+rather than leaving fill under them.
+
+- **«Регистрации за 30 дней»** (`b6`) — `generate_series` in `AdminSignupsByDay` is what produces the
+  empty days; `GROUP BY created_at::date` returns only days that have rows, and the gap is the
+  information. The axis draws `min(top, 4)` gridlines, because quarters of 1 rounded for the label
+  printed «1 1 1 0 0» up the side of an empty install.
+- **«Заполнение каталогов»** (`b3`) — the completion gauge, **and it is a return of something deleted
+  on 2026-08-21** for drawing `ranked / total` a third time. It is now the only place that draws it.
+  **Two states, never more**: a catalogue is finished and the shop is in the comparison, or it is not,
+  because 1% and 99% publish the same nothing. `AdminCatalogueFunnel` still returns `empty` and
+  `started` separately; the panel sums them.
+  - **No caption under the title.** «Магазин попадает в сравнение, только когда заполнен целиком» is
+    the rule the whole card is about, and printing it on every load is explaining the same thing to
+    the same person forever.
+  - **One sentence, and it does not change subject with the answer.** It used to congratulate a
+    finished market and report the shortfall the rest of the time; it is `16 из 37 магазинов в
+    сравнении цен` at every value. **No plural agreement anywhere in it** — «21 магазин», «22
+    магазина» and «25 магазинов» are three endings, so the count sits after a preposition where
+    russian does not decline it.
+  - **The two boxes are one tinted block split by a hairline**, not two bordered cards: they are one
+    measurement cut in two. `grid-template-columns:repeat(2,minmax(0,1fr))` written the long way is
+    load-bearing — a `1fr` track is `minmax(auto,1fr)`, and `auto` is the child's min-content width,
+    which a nowrap label pushes past its share and visibly outside the card's own edge.
+  - **«Не заполнены» is a button** and the only way into the list of who has not finished. **It is
+    disabled at zero**, and that is worth knowing before it is reported as broken: on a market where
+    every catalogue is finished — which is the state a founder's own test database is usually in —
+    the number reads `0`, the underline disappears and it does not open. There is nothing to list.
+    It keeps its colour rather than fading, because it is still half a measurement.
+  - The «Каталог за неделю пополняли» footer went with `AdminPricingActivity`, which nothing reads
+    any more.
+
+### Row 3 — «Кто дешевле» and «Средний чек»
+
+**The only two panels here that report what the product *says* rather than how much of it exists.**
+Everything else counts rows; these are the screen a customer sees.
+
+#### «Кто дешевле» (`b8`, `buildRace`)
+
+Up to five shops of one market, cheapest first, from `AdminMarketRankings` (`adminRankingDepth = 5`).
+It replaced a card that printed only the winner, which could not answer the question the founder
+actually has — **is anybody competing?** Three shops at 4.61, 4.63 and 4.65 million are fighting;
+4.6, 5.4 and 6.2 is one shop with nothing pressing on it, and a single leader row makes those two
+markets look identical.
+
+- **`CROSS JOIN LATERAL`, not `ROW_NUMBER()`** — sqlc cannot compile a window function filtered from
+  an outer `WHERE` (root §6), and "for each category, the first N of this ordered list" is what
+  lateral is for. **The rank is not on the wire**: it is the row's position in the result, and a
+  stored rank could disagree with the order it came in.
+- **The bar measures the distance from that market's average, not the basket.** Drawn from zero, five
+  baskets between 4.6 and 5.6 million are five bars within 20% of each other's length — a picture
+  saying "these all cost about the same", which is the opposite of the finding — and starting the
+  axis at a flattering floor is the usual lie. So the axis *is* the average: cheaper grows left,
+  dearer grows right, length is `|индекс − 100|` against the widest gap on screen with a floor of 4
+  points, and the centre tick repeated down every row is what makes five bars read as one line.
+  Dearer bars are pale, not red: somebody has to be the expensive one, and the chip carries the sign.
+- **One market at a time, chosen by tabs on their own row.** Four rankings side by side would be four
+  charts on four different scales — an Обои basket is ten lines and a Универсальный one is a hundred —
+  and the eye compares whatever is adjacent whether or not the comparison means anything (root §5).
+  The tabs are below the header because four category names is ~560px of pills, which wraps inside a
+  `b8` header and takes the title with it. `state.raceCat` survives the 45-second poll and falls back
+  to the busiest market when the one it names empties.
+- A row opens that shop's catalogue.
+
+#### «Средний чек» (`b4`, `buildTrend`)
+
+One row per market: what a basket costs there now (`AdminCategoryBaskets`) and a sparkline of the last
+thirty days beside it (`AdminBasketHistory`). Two halves of one subject — the figure says what the
+category is worth, the line says whether that is moving, and neither carries the other.
+
+- **Not four lines on one chart.** Four oranges crossing each other is a picture nobody reads, and the
+  four numbers are not on the same scale anyway.
+- **Dearer is red here and cheaper is green, which is inverted from everywhere else on this panel.**
+  The thing being measured is what a customer pays, so a market getting more expensive is the bad
+  direction — the same convention the price badge uses.
+- The sparkline has no axes, labels or tooltip: at 78×26 the only thing it can say is which way the
+  line went, which is what it is being asked. A flat series draws down the middle rather than dividing
+  by zero.
+- **Fewer than two days of history prints «с сегодня» instead of a line**, because the table starts
+  empty on any database that has not been running — see below. It is not a failure state and does not
+  get an error colour.
+
+#### The history is written down, because it cannot be recomputed
+
+`shop_basket_index` is a view over `products.price`: it always answers about *now*, and yesterday's
+basket is gone the moment an owner retypes a number. `basket_history` (migration `000003`) is one row
+per `(day, category)`, upserted by **`startBasketHistory`, the third goroutine in `main.go`**.
+
+- **Hourly, not nightly.** A daily ticker fires at whatever moment the process happened to start, so
+  a server restarted around then skips whole days and a laptop that is only on in the afternoon
+  records nothing. The statement is an idempotent upsert keyed by `(day, category)`, so twenty-four
+  runs write what the last of them would have written alone — and today's point stays current to
+  within the hour instead of being yesterday's until midnight.
+- **The whole aggregate runs in the database** (`RecordBasketHistory`) — one statement over a view,
+  nothing travelling through Go — which is what makes it cheap enough to put on a timer.
+- A failure is logged and the loop continues; it does not join the shutdown path, because there is no
+  state to flush and losing an in-flight upsert costs an hour of a number rewritten every hour.
+- **A day with no row is a day the server was not running**, and the sparkline joins across the gap
+  rather than inventing a point. `AdminBasketHistory` deliberately has no `generate_series`, unlike
+  `AdminSignupsByDay`, where the empty days *are* the information.
+- Pinned by `TestTodaysBasketIsRecordedAndComesBackOnTheDashboard` (which runs the job's statement
+  twice and asserts one row) and `TestTheMarketRankingIsPerCategoryAndCheapestFirst`.
+
+### Behind a number instead of on the page
+
+- **«Не заполнили каталог»** (`openUnfinished`) — the «Кому позвонить» card, turned into a window. It
+  was `b8` on the front page, eight rows of a table permanently answering a question the founder asks
+  about once a week, hanging off a number («Не заполнены») that was already on screen two cards up.
+  Behind that number it costs nothing until it is wanted and can carry **every** unfinished shop
+  instead of the top eight: shop and category, the date it was created, how many rows are still
+  unpriced out of how many, and a `tel:` link. A row opens that shop's catalogue.
+  It reads `state.stats.attention`, which the dashboard request already carries — capped at
+  `adminAttentionLimit` (100), a ceiling rather than a page. **No second endpoint.**
+- **«Файлы без товара»** moved to Шаблоны, below.
+
+### Removed, and not to be re-added
+
+«Цены по рынкам» (per-category coverage, median basket and spread) — the founder's call, and the
+queries behind it went with it rather than being left dead: **`AdminPricingActivity` is deleted**,
+along with `funnel.stalled` and `activity.*` on the wire. `AdminBasketByCategory` went the same way
+and came back a day later as `AdminCategoryBaskets` for «Средний чек» — the same aggregate for a
+reader that exists this time, which is the whole test a query has to pass here. Before this: the product-category bar chart (a picture of the catalogue, not a fact about the
+business), the anomaly teaser (a worse version of a screen one click away), the identity block in the
+top bar, and the page title's sentence.
+
+**The editing rule stands: every panel answers a question no other panel answers.** `ranked / total`
+was once drawn four times over — a KPI, a gauge, two boxes under it, and a funnel's terminal bar — and
+four renderings of one ratio read as four findings. One card draws it now, and the KPI beside it
+stopped repeating it.
+
+**`.dash` is `align-items:start`, not the grid default** — an unfinished card's empty `--card` fill
+reads as a broken panel where the same space left as page reads as the page. The two exceptions are
+deliberate and both are rows of one subject: `.kpi{align-self:stretch}` and `.card.tall`.
 
 ---
+
+## The orphan sweep — «Файлы без товара»
+
+`GET /api/admin/storage/orphans` counts and measures; `DELETE` does it. Both are `RouteOrphans` at the
+bottom of `admin.go`, and both re-derive the list from scratch.
+
+**Why there is anything to sweep:** deleting a shop is one statement and the schema cascades, so its
+products go and their uploaded photos stay — they are not in Postgres and nothing in that transaction
+could reach them. Replacing and removing a photo both unlink correctly; a deleted shop and a crash
+between "write the file" and "point the row at it" are what feed this.
+
+**Three rules, and every one of them deletes a live photo if it is reversed:**
+
+1. **List the files first, read the database second.** In that order a row committed between the two
+   reads is *seen*, so its file is protected. Reversed, a row written after the query whose file was
+   already on disk looks unreferenced — and the sweep deletes a photo a product is pointing at.
+2. **Nothing younger than an hour.** The real window between "the file exists" and "the row exists" is
+   one upload request, bounded by `dbctx`'s 5-second deadline. An hour is several orders of magnitude of
+   headroom and costs nothing, since these files have been dead since a shop was deleted. The card says
+   how many were held back, or "12 files, 0 deleted" reads as a broken button.
+3. **A referenced master claims its `_thumb`.** Only the master's path is stored (root §7), so a sweep
+   matching paths literally would find every thumbnail unreferenced and **blank every grid in the market
+   on its first run**, with the database perfectly consistent throughout.
+
+Plus the property that is not a rule: **nothing outside `uploads/` is listed or deletable**.
+`imagestore.Storage.List` walks only that prefix and `RemoveFile` refuses anything else, so the curated
+catalogue — one file per row shared by every shop of a category — is not reachable from here even by a
+bug in this file. `TestASweepCannotReachTheCuratedCatalogue` pins it;
+`TestASweepKeepsThumbnailsAndAnythingWrittenRecently` pins rules 2 and 3.
+
+Panel-side, four things:
+
+- **It lives under Шаблоны, above the template tables** (`drawStorage`, `#tpl-storage`), moved off the
+  dashboard on 2026-08-22. It is maintenance rather than a fact about the business, and it was the
+  only card on the front page that could not tell the founder anything until he pressed something.
+  **It is one strip and no card around it** — a `card()` would put a title and a caption above it and
+  repeat in two lines what the strip says in two — with the glyph carrying which of three states it is
+  in (`.stor.idle` / `.stor.ok` / `.stor.hit`). Deliberately small, because every pixel it takes is
+  one the section's real content loses. The proportion bar it had for half a day went with the move.
+- **It does not load itself.** Every other panel rides on a timer, and this one would mean walking the
+  whole store and reading every image path every 45 seconds — on R2, a paged listing over the network.
+  «Проверить» is a button and the result sits in `state.storage`.
+- **The result is rendered from state, never written into the DOM by the click handler.** `state.storage`
+  survives until the page is reloaded, and `drawStorage()` repaints from it — which is what lets
+  opening Шаблоны again show the last scan rather than an empty strip.
+- **After a sweep the card re-scans rather than rendering the DELETE's own answer.** That response's
+  `files` is how many were removed, not how many are left — and after a capped sweep (`orphanSweepLimit`,
+  2000, so one press cannot be an hour of network round trips) there genuinely are more.
+
+The confirm dialog names what is *not* touched as well as what is, because the fear it has to answer is
+"will this delete a live photo". **The DELETE takes no list of paths** — a client-supplied list would be
+a request naming files to delete, behind one middleware check, operating on a scan minutes old.
 
 ## The template sync
 
@@ -319,9 +609,74 @@ restarted — the founder would edit a template, press sync, and watch nothing h
 ## The visual language is deliberately not the app's
 
 The phone app is cool grey on white with soft shadows. This panel is a warm neutral ramp, flat — **no
-shadows on content at all**, separation comes from fill — with a white shell floating on beige, a white
-sidebar whose active item is a filled orange pill, and charts along a graduated orange ramp. Same brand
-orange (`#FF6F00`), different surface.
+shadows on content at all**, separation comes from fill — with a shell floating on beige, a sidebar
+whose active item is an orange pill, and charts along a graduated orange ramp. Same brand orange
+(`#FF6F00`), different surface.
+
+### The ramp runs beige → `--surface` → `--shell` → `--card`, and the direction is the point
+
+It ran the other way until 2026-08-21: `main` was `--surface` and every dashboard card was
+`.card.plain`, white with a `--line` hairline. **Two fills two units apart is not separation by fill**,
+which is the principle the panel claims, so the cards read as nothing at all — reported, correctly, as
+«карточки просто белые на почти белом».
+
+Now: `aside` is `--surface`, `main` is `--shell`, cards and `.kpi` are `--card` with a `--line-2`
+hairline. **`.card.plain` is gone rather than left as a class that no longer changes anything**, and so
+are its six call sites. Three consequences worth knowing before editing:
+
+- **`.tbl` stays white with a `--line-2` border.** Standing on `main` it is a white object with a
+  visible edge; inside a card it is a lighter block inset into a darker one, which is the same idiom
+  the reference dashboards use. `thead` at `--card` gives it its header band either way.
+- **`--card` is used in fifteen other places** — nav pips, `thead`, `.tag.g`, `.empty .bx`, the chat
+  background, several `:hover`s. Anything that sits *inside* a card and used `--card` to differ from
+  white now needs checking. `.btn-g` was the one that broke: grey-on-grey on the storage card, a button
+  you had to look for, so it is `--shell` with a `--card` hover.
+- **`C.line2` exists in the JS colour mirror for the chart grid**, because `--line` on `--card` is a
+  gridline nobody can see. Svg attributes cannot read a custom property, which is why that mirror
+  exists at all.
+
+**The principle did not change, only which end of the ramp the content sits at: still no shadows on
+content.** Modals, tooltips and the map's own controls are the only things that lift, and adding a
+shadow to a card would be a change of language, not a polish pass.
+
+### The section highlight is one object that moves
+
+`nav` is `position:relative` and holds an absolutely positioned `.nav-pill` that `moveNavPill()` sizes
+and moves by `transform` from the active button's `offsetLeft/offsetTop/offsetWidth/offsetHeight`.
+Before, the highlight was `background` on whichever button carried `[aria-current]` — one fill dying and
+another being born, two events in two places, which reads as a flicker rather than as a change of place.
+The model is `BestOffersList` in the phone app: a pill sliding along a track, **drawn under the labels**.
+
+- **`z-index` on both is load-bearing.** An absolutely positioned element paints above its in-flow
+  siblings, so without `z-index:0` on the pill and `z-index:1` on the buttons the orange fill lands on
+  top of the label it is supposed to sit behind.
+- **The active button paints no background of its own, and its `:hover` is killed too** — a fill on top
+  of the pill covers the thing that just slid underneath.
+- **Measured, never derived.** The sidebar is a column on a laptop and a scrolling row under 900px where
+  the labels are hidden and the widths change, so the same four numbers answer both layouts. The
+  debounced `resize` listener calls `moveNavPill(true)`.
+- **`.cold` suppresses the transition for a placement that is not a movement** — the first paint and a
+  resize. Reading `offsetWidth` between removing and re-adding the class is what forces the layout that
+  makes the suppression real; without it the two class changes collapse into one style recalculation.
+  Verified per-frame in headless chrome: 13 distinct positions on a section change, exactly one on load.
+
+### The black borders on the nav buttons
+
+Reported as "the section buttons grow black borders after a while", and it was **Chrome's own focus
+ring**: `outline: auto 1px rgb(16,16,16)`. Nothing in the file had ever styled a focus ring, so the user
+agent's took over — and it appears on whatever still holds focus the moment the browser decides the user
+is on the keyboard. One arrow key to scroll a table, or the window being clicked away from and back, and
+the nav button clicked minutes ago lights up. Nothing the reader did was aimed at that button, so it
+reads as a rendering fault.
+
+The fix is a **replacement, never `outline:none`** — that deletes the ring for the one person it exists
+for. Zero-specificity `:where(button,a[href],[tabindex]):focus-visible` gets `2px solid var(--o-600)` at
+a 3px offset, and `:where(input,select,textarea):focus-visible` opts out because those already carry a
+ring of their own (`border-color` + `box-shadow`). A mouse click still shows nothing: `:focus-visible`
+does not match on a pointer.
+
+> Reproducing this needs `Emulation.setFocusEmulationEnabled` **and** a keyboard event after the click —
+> the click alone gives `:focus` without `:focus-visible`, which is the state that looks fine.
 
 Before editing it:
 
@@ -380,10 +735,16 @@ web-mercator arithmetic, a grid of 256px `<img>` tiles positioned by `transform`
 - **The modal's action row is `position: sticky`** — the map makes this the one form tall enough to
   scroll, and a Save button that scrolls off the bottom is one people cannot find.
 
-**Unseen:** a real browser. Every screen was rendered headless and read back — the chat window through
-the real page, driven over the devtools protocol with a signed token, at both a normal and a 560px-tall
-viewport — and the API was exercised end to end against the live database. But nobody has logged in
-through Telegram on this page, the one path a screenshot cannot stand in for.
+**Unseen:** a real browser. Every screen was rendered headless and read back — driven over the devtools
+protocol with a signed token, at 1440px and at 880px, against the live database and against stubbed
+`/api/admin/stats` payloads for the empty market and a half-filled one — plus search, sort, the support
+badge lighting and clearing on read, the templates help modal, the pill's per-frame motion and the focus
+ring. The two 2026-08-22 rebuilds were checked the cheaper way: a copy of `admin.html` with a `<script>`
+injected before `</head>` that stubs `fetch` and `localStorage`, opened as a `file://` URL under
+`chromium --headless --screenshot` and driven by a `?view=` parameter that clicks the nav button. That
+covers layout at both widths, the empty market, the chat modal and the anomaly table — it does **not**
+cover the live loop, the real endpoints or `:focus-visible`. Nobody has logged in through Telegram on
+this page, the one path a screenshot cannot stand in for.
 
 > **Headless never applies `:focus` unless `Emulation.setFocusEmulationEnabled` is on.** Checking a
 > focus ring without it shows the resting border and looks like the css is wrong.

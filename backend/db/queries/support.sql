@@ -110,3 +110,23 @@ FROM (
       AND m.id > COALESCE(r.last_read_id, 0)
     GROUP BY m.user_id
 ) unread;
+
+-- name: AdminDeleteSupportThread :execrows
+--
+-- **the whole conversation, gone from both sides.** There is no thread row, so a thread is deleted
+-- by deleting its messages - which is also why this cannot be a soft delete: the user's own app
+-- reads the same table through GET /api/support/messages, and a `deleted_at` column would have to be
+-- honoured identically by two endpoints forever. What the founder is promising when they press the
+-- button is that it is gone, and one DELETE is the only version of that which cannot drift.
+--
+-- The read watermarks go in the same statement, in a data-modifying CTE, because they point at
+-- message ids that no longer exist. Leaving them would be harmless arithmetic today - ids only go
+-- up, so a stale watermark keeps counting correctly - and a row about a conversation that does not
+-- exist is exactly the kind of thing that is true until somebody writes a query assuming otherwise.
+--
+-- :execrows so the handler can log how much it destroyed. The count is the messages; the CTE's rows
+-- are not counted, which is right - the watermarks are bookkeeping, not the thing being deleted.
+WITH cleared AS (
+    DELETE FROM support_thread_reads WHERE thread_user_id = $1 RETURNING 1
+)
+DELETE FROM support_messages WHERE user_id = $1;

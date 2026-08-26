@@ -23,7 +23,19 @@ const (
 	// owner's photo sits in the same grid beside them - a tile that downloads four times as much
 	// data as its neighbour for the same 118px band is the difference between a grid that scrolls
 	// and one that stalls on a phone tethered to mobile data.
+	//
+	// This is the copy the *edit screen* loads, and any future full-size view. It is not what a grid
+	// loads - see [ThumbMaxSide].
 	OutputMaxSide = 1000
+
+	// ThumbMaxSide is the longest side of the copy a catalogue grid loads, which is very nearly all
+	// the image traffic this api will ever serve: one shop card is up to a hundred tiles and one
+	// edit screen is one photo.
+	//
+	// 400 rather than the ~180dp a tile is actually painted at, because the same file has to survive
+	// a 3x screen without going soft, and because a thumbnail is also what a future full-width list
+	// row would use. It turns a 100-tile universal catalogue from roughly 15 MB into roughly 2.5 MB.
+	ThumbMaxSide = 400
 
 	// 85 is where JPEG stops paying for itself: the file roughly doubles between 85 and 95 and the
 	// difference is not visible on a photo of a bag of cement at 180dp. Same value as the catalogue.
@@ -51,8 +63,8 @@ var (
 	ErrBroken            = errors.New("imagestore: the image could not be decoded")
 )
 
-// Normalize turns whatever arrived into the one shape this api stores: a JPEG, no wider or taller
-// than [OutputMaxSide], with no alpha channel and no metadata.
+// Normalize turns whatever arrived into the two files this api stores: JPEGs, no alpha channel and
+// no metadata, one bounded by [OutputMaxSide] and one by [ThumbMaxSide].
 //
 // Four things happen here and each is load-bearing:
 //
@@ -69,49 +81,68 @@ var (
 //   - **It flattens transparency onto white.** JPEG has no alpha, and Go's encoder composites
 //     against black, so a PNG with a transparent background would come out as a product floating on
 //     a black rectangle in a grid of white tiles.
-func Normalize(src []byte) ([]byte, error) {
+//
+// **The thumbnail is scaled from the master, not from the source**, which is worth being deliberate
+// about. It is fractionally lossier - two resamples instead of one, invisible at 400px on a
+// photograph - and it buys two things: the expensive work (decode, EXIF, the big downscale) happens
+// once, and the two files are guaranteed to frame the product identically. Two independent scales of
+// the same source would round their dimensions separately, so a tile and the photo it opens into
+// could differ by a pixel of crop.
+func Normalize(src []byte) (Photo, error) {
 	// header only - no pixels are allocated until the two bounds below have been checked
 	cfg, format, err := image.DecodeConfig(bytes.NewReader(src))
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrUnsupportedFormat, err)
+		return Photo{}, fmt.Errorf("%w: %v", ErrUnsupportedFormat, err)
 	}
 	if format != "jpeg" && format != "png" {
-		return nil, fmt.Errorf("%w: got %s", ErrUnsupportedFormat, format)
+		return Photo{}, fmt.Errorf("%w: got %s", ErrUnsupportedFormat, format)
 	}
 	if cfg.Width < minSourceSide || cfg.Height < minSourceSide {
-		return nil, fmt.Errorf("%w: %dx%d", ErrTooSmall, cfg.Width, cfg.Height)
+		return Photo{}, fmt.Errorf("%w: %dx%d", ErrTooSmall, cfg.Width, cfg.Height)
 	}
 	if cfg.Width > maxSourceSide || cfg.Height > maxSourceSide ||
 		cfg.Width*cfg.Height > maxSourcePixels {
-		return nil, fmt.Errorf("%w: %dx%d", ErrTooLarge, cfg.Width, cfg.Height)
+		return Photo{}, fmt.Errorf("%w: %dx%d", ErrTooLarge, cfg.Width, cfg.Height)
 	}
 
 	img, _, err := image.Decode(bytes.NewReader(src))
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrBroken, err)
+		return Photo{}, fmt.Errorf("%w: %v", ErrBroken, err)
 	}
 
 	// **Scaled first, rotated second, and the order is free.** The target is a square bound - fit
 	// inside 1000x1000 - so it is the same box whichever way up the photo ends up, and rotating a
 	// one-megapixel result costs a hundredth of what rotating a twelve-megapixel source does.
-	out := orient(fit(img), orientationOf(src))
+	master := orient(fit(img, OutputMaxSide), orientationOf(src))
 
-	var encoded bytes.Buffer
-	if err := jpeg.Encode(&encoded, out, &jpeg.Options{Quality: jpegQuality}); err != nil {
-		return nil, fmt.Errorf("imagestore: encoding: %w", err)
+	masterJPEG, err := encode(master)
+	if err != nil {
+		return Photo{}, err
 	}
-	return encoded.Bytes(), nil
+	thumbJPEG, err := encode(fit(master, ThumbMaxSide))
+	if err != nil {
+		return Photo{}, err
+	}
+	return Photo{Master: masterJPEG, Thumb: thumbJPEG}, nil
 }
 
-// fit draws the source onto an opaque white canvas no larger than [OutputMaxSide] on its longest
-// side, preserving the aspect ratio. Always returns a fresh *image.RGBA, so everything downstream
-// has one concrete type to work with.
-func fit(src image.Image) *image.RGBA {
+func encode(img image.Image) ([]byte, error) {
+	var out bytes.Buffer
+	if err := jpeg.Encode(&out, img, &jpeg.Options{Quality: jpegQuality}); err != nil {
+		return nil, fmt.Errorf("imagestore: encoding: %w", err)
+	}
+	return out.Bytes(), nil
+}
+
+// fit draws the source onto an opaque white canvas no larger than `maxSide` on its longest side,
+// preserving the aspect ratio. Always returns a fresh *image.RGBA, so everything downstream has one
+// concrete type to work with.
+func fit(src image.Image, maxSide int) *image.RGBA {
 	bounds := src.Bounds()
 	width, height := bounds.Dx(), bounds.Dy()
 
-	if longest := max(width, height); longest > OutputMaxSide {
-		scale := float64(OutputMaxSide) / float64(longest)
+	if longest := max(width, height); longest > maxSide {
+		scale := float64(maxSide) / float64(longest)
 		width = max(1, int(math.Round(float64(width)*scale)))
 		height = max(1, int(math.Round(float64(height)*scale)))
 	}

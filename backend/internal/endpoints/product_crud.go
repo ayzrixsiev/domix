@@ -39,10 +39,17 @@ type Products struct {
 	Queries   *db.Queries
 	JWTSecret string
 
-	// where an owner's uploaded product photos are written. see product_image.go, and
-	// internal/imagestore for why the catalogue's own shots and these share one directory tree
-	// without being able to delete each other.
-	Images *imagestore.Store
+	// where an owner's uploaded product photos are written. an interface with two implementations
+	// (a local directory, a Cloudflare R2 bucket) chosen once in main.go by whether the R2 keys are
+	// in the environment - see internal/imagestore for why that abstraction earns its place and for
+	// why the catalogue's own shots and these share one namespace without being able to delete each
+	// other.
+	Images imagestore.Storage
+
+	// how a stored path becomes an address the app can fetch. the zero value serves from this api's
+	// own /static/products/, which is the laptop and every test; IMAGE_BASE_URL points it at
+	// img.domix-api.uz in production.
+	URLs imagestore.URLs
 
 	// the per-account ceiling on uploads, which the per-IP limiter in front of every route cannot
 	// express. nil in the tests, which call the handlers directly.
@@ -102,9 +109,23 @@ type ProductResponse struct {
 	// owner's to write - that is what a slot is. for every other row the two agree.
 	NameEditable bool `json:"name_editable"`
 
-	// root-relative, e.g. "/static/products/universal/001.jpg". null for a product with no photo,
-	// which the app draws as the placeholder banner it drew for every product before this existed.
+	// the full-size copy: "/static/products/universal/001.jpg" on a laptop, an absolute
+	// "https://img.domix-api.uz/universal/001.jpg" once IMAGE_BASE_URL is set. null for a product
+	// with no photo, which the app draws as the placeholder banner it drew for every product before
+	// this existed.
+	//
+	// What the *edit screen* loads. A grid loads [ProductResponse.ImageThumbURL].
 	ImageURL *string `json:"image_url"`
+
+	// the 400px copy of the same photo, and null exactly when ImageURL is.
+	//
+	// **Sent ready-made rather than derived in the app, and that is the whole reason it is a second
+	// field instead of a documented suffix.** An apk that appended "_thumb" itself would freeze the
+	// naming convention inside every build already on a phone, so changing it would mean a release
+	// in Play rather than a deploy - and there is no way to fix an old build that guessed wrong.
+	// The app's only rule is "prefer this one, fall back to image_url if it is absent", which is
+	// what a build talking to a backend from before thumbnails existed does by itself.
+	ImageThumbURL *string `json:"image_thumb_url"`
 
 	// whether that photo is this shop's own upload rather than the shared catalogue shot the row was
 	// seeded with. the third derived boolean on this struct, and it is here for the same reason the
@@ -125,20 +146,20 @@ type ProductResponse struct {
 	PhotoEditable bool `json:"photo_editable"`
 }
 
-// where the api serves product photos. the database stores only the path inside the images folder
-// ("universal/001.jpg"), because the host differs between the ngrok tunnel, staging and production
-// and a stored absolute url would be wrong in two of the three. the app prepends the host.
-const productImageURLPrefix = "/static/products/"
-
-// the two photo fields, filled from the one column that carries the fact. together rather than one
-// each, so a response can never leave with a url and the wrong answer beside it - the same reason
-// templateFlags derives its pair in one place.
-func productImage(path pgtype.Text) (url *string, own bool) {
+// the three photo fields, filled from the one column that carries the fact. together rather than
+// one each, so a response can never leave with a url and the wrong answer beside it - the same
+// reason templateFlags derives its trio in one place.
+//
+// **The database stores only the path inside the images namespace** ("universal/001.jpg"), never a
+// full url, because the host differs between the ngrok tunnel, a laptop and img.domix-api.uz - a
+// stored absolute url would be wrong in two of the three, changing the host would mean rewriting
+// every row, and a dump taken from production would point every local tile at production.
+func productImage(urls imagestore.URLs, path pgtype.Text) (url, thumb *string, own bool) {
 	if !path.Valid || path.String == "" {
-		return nil, false
+		return nil, nil, false
 	}
-	full := productImageURLPrefix + path.String
-	return &full, imagestore.IsUpload(path.String)
+	full, small := urls.Master(path.String), urls.Thumb(path.String)
+	return &full, &small, imagestore.IsUpload(path.String)
 }
 
 // the three flags above, all derived from the one column that carries the fact. kept in a single
@@ -224,7 +245,7 @@ func (p *Products) ListByShop(w http.ResponseWriter, r *http.Request) {
 	response := make([]ProductResponse, 0, len(products))
 	for _, product := range products {
 		isTemplate, nameEditable, photoEditable := templateFlags(product.TemplateKey)
-		imageURL, ownImage := productImage(product.ImagePath)
+		imageURL, thumbURL, ownImage := productImage(p.URLs, product.ImagePath)
 		response = append(response, ProductResponse{
 			ID:            product.ID,
 			ShopID:        product.ShopID,
@@ -236,6 +257,7 @@ func (p *Products) ListByShop(w http.ResponseWriter, r *http.Request) {
 			IsTemplate:    isTemplate,
 			NameEditable:  nameEditable,
 			ImageURL:      imageURL,
+			ImageThumbURL: thumbURL,
 			OwnImage:      ownImage,
 			PhotoEditable: photoEditable,
 		})
@@ -314,7 +336,7 @@ func (p *Products) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	isTemplate, nameEditable, photoEditable := templateFlags(product.TemplateKey)
-	imageURL, ownImage := productImage(product.ImagePath)
+	imageURL, thumbURL, ownImage := productImage(p.URLs, product.ImagePath)
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(ProductResponse{
@@ -328,6 +350,7 @@ func (p *Products) Create(w http.ResponseWriter, r *http.Request) {
 		IsTemplate:    isTemplate,
 		NameEditable:  nameEditable,
 		ImageURL:      imageURL,
+		ImageThumbURL: thumbURL,
 		OwnImage:      ownImage,
 		PhotoEditable: photoEditable,
 	})
@@ -439,7 +462,7 @@ func (p *Products) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	imageURL, ownImage := productImage(product.ImagePath)
+	imageURL, thumbURL, ownImage := productImage(p.URLs, product.ImagePath)
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(ProductResponse{
@@ -453,6 +476,7 @@ func (p *Products) Update(w http.ResponseWriter, r *http.Request) {
 		IsTemplate:    isTemplate,
 		NameEditable:  nameEditable,
 		ImageURL:      imageURL,
+		ImageThumbURL: thumbURL,
 		OwnImage:      ownImage,
 		PhotoEditable: photoEditable,
 	})

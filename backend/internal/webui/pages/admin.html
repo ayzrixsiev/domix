@@ -12,6 +12,14 @@
      warm neutral ramp with no shadows on content at all - separation comes from
      fill, not from lift. Deliberately a different surface, not a different brand:
      `--o` is the app's #FF6F00 unchanged.
+
+     **The ramp runs dark-to-light-to-dark and the direction matters**: beige page,
+     `--surface` sidebar, `--shell` work area, `--card` blocks sitting on it. It ran
+     the other way until 2026-08-21 - white cards on an almost-white `--surface` -
+     and separation by fill cannot work when the fills are two units apart. The
+     principle did not change, only which end of the ramp the content sits at, so
+     there are still no shadows on content: modals, tooltips and the map's own
+     controls are the only things that lift.
      ───────────────────────────────────────────────────────────────────────────── */
   :root{
     --beige:#E9DFD2; --shell:#FFFFFF; --surface:#FCFBFA;
@@ -37,6 +45,21 @@
   }
   button,input,select,textarea{font:inherit;color:inherit}
   [hidden]{display:none !important}
+
+  /* ── keyboard focus ──
+     Chrome's own ring is `outline: auto 1px rgb(16,16,16)`, a near-black double line, and it appears
+     on whatever still holds focus the moment the browser decides the user is on the keyboard - one
+     arrow key to scroll a table, or the window being clicked away from and back. That is the "the
+     section buttons grow black borders after a while" report: the nav button clicked minutes ago
+     still had focus, nothing here had ever styled its ring, so the user agent's took over. It looks
+     like a rendering fault because nothing the reader did was aimed at that button.
+     `outline:none` would be the wrong answer - it deletes the ring for whoever navigates by
+     keyboard, which is the one person it exists for - so this is a replacement, in the panel's own
+     colour. Inputs opt out because they already carry a ring of their own (border-color plus a
+     box-shadow, further down); everything else had nothing. Zero-specificity `:where` on purpose,
+     so any control that wants its own focus treatment can simply declare one. */
+  :where(button,a[href],[tabindex]):focus-visible{outline:2px solid var(--o-600);outline-offset:3px}
+  :where(input,select,textarea):focus-visible{outline:none}
   .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
   ::selection{background:var(--o-200)}
 
@@ -58,8 +81,10 @@
   .btn svg{width:17px;height:17px}
   .btn-p{background:var(--o);color:#fff}
   .btn-p:hover{background:#EA6600;transform:translateY(-1px)}
-  .btn-g{background:var(--card);color:var(--ink);border:1px solid var(--line-2)}
-  .btn-g:hover{background:var(--line)}
+  /* white rather than `--card`: this one sits on a card now (storage's «Проверить») as well as in
+     a modal, and grey-on-grey there was a button you had to look for. */
+  .btn-g{background:var(--shell);color:var(--ink);border:1px solid var(--line-2)}
+  .btn-g:hover{background:var(--card)}
   .btn-d{background:var(--red);color:#fff}
   .btn-d:hover{background:#9c1717}
   .btn:disabled{opacity:.5;cursor:default;transform:none}
@@ -77,36 +102,75 @@
 
   /* ── shell ── */
   .app{display:flex;min-height:calc(100vh - 28px);margin:14px;background:var(--shell);border-radius:var(--r-5);overflow:hidden}
-  aside{width:246px;flex:none;padding:26px 18px;display:flex;flex-direction:column;border-right:1px solid var(--line)}
+  aside{width:246px;flex:none;padding:26px 18px;display:flex;flex-direction:column;
+        background:var(--surface);border-right:1px solid var(--line)}
   aside .brand{margin:0 0 30px;padding-left:6px}
-  nav{display:flex;flex-direction:column;gap:4px}
+
+  /* ── the section highlight is one object that moves ──
+     it used to be `background` on whichever button carried [aria-current], so switching sections
+     meant one fill dying and another being born - two events, in two places, reading as a flicker
+     rather than as a change of place. the phone app already had the answer in BestOffersList
+     (features/home/presentation/widgets/best_offers.dart): a pill that slides along a recessed
+     track, drawn UNDER the labels, which is what makes the eye follow one thing instead of
+     watching two. same here - the pill is absolutely positioned inside `nav` and moved by
+     transform, the buttons sit above it with transparent backgrounds and animate only their
+     colour. z-index on both is what settles the paint order: an absolutely positioned element
+     otherwise paints above its in-flow siblings, which would put the orange fill on top of the
+     label it is supposed to sit behind. */
+  nav{position:relative;display:flex;flex-direction:column;gap:4px}
+  .nav-pill{
+    position:absolute;left:0;top:0;z-index:0;border-radius:var(--r-2);background:var(--o);
+    transition:transform .34s var(--ease),width .34s var(--ease),height .34s var(--ease)
+  }
+  /* the first placement is a measurement, not a move. without this the pill would slide in from
+     the corner of the sidebar on every page load, which reads as a glitch rather than as an
+     animation - and the same class is reused when a resize re-measures. */
+  .nav-pill.cold{transition:none}
   nav button{
+    position:relative;z-index:1;
     display:flex;align-items:center;gap:13px;width:100%;text-align:left;background:transparent;border:0;
     color:var(--ink-2);padding:12px 15px;border-radius:var(--r-2);cursor:pointer;font-size:14.5px;font-weight:600;
-    transition:background .16s var(--ease),color .16s
+    transition:background .16s var(--ease),color .24s var(--ease)
   }
-  nav button svg{width:19px;height:19px;flex:none;color:var(--muted);transition:color .16s}
-  nav button:hover{background:var(--card)}
-  nav button[aria-current]{background:var(--o);color:#fff}
+  nav button svg{width:19px;height:19px;flex:none;color:var(--muted);transition:color .24s var(--ease)}
+  nav button:hover{background:var(--line)}
+  /* the active button paints no background of its own - the pill behind it is the background. its
+     hover is killed for the same reason: a fill on top of the pill would cover the thing that just
+     slid underneath, and the section you are already in has nothing to preview anyway. */
+  nav button[aria-current],nav button[aria-current]:hover{background:transparent;color:#fff}
   nav button[aria-current] svg{color:#fff}
   nav button[aria-current] .pip{background:rgba(255,255,255,.28);color:#fff}
-  nav .pip{margin-left:auto;font-size:11.5px;font-weight:700;background:var(--card);color:var(--muted);padding:2px 8px;border-radius:999px;min-width:24px;text-align:center}
+  nav .pip{margin-left:auto;font-size:11.5px;font-weight:700;background:var(--line);color:var(--muted);padding:2px 8px;border-radius:999px;min-width:24px;text-align:center}
   /* the one pip that is a count of people waiting rather than a count of rows, so it is the one
      allowed to be loud. the [aria-current] rule above is more specific and still wins, which is
      what keeps the pip white while its own section is open. */
   nav .pip.hot{background:var(--o);color:#fff}
-  .sep{height:1px;background:var(--line);margin:22px 6px}
 
-  main{flex:1;min-width:0;background:var(--surface);padding:26px 30px 44px}
-  .top{display:flex;align-items:center;justify-content:space-between;gap:22px;margin-bottom:26px}
-  .top h1{font-size:29px;letter-spacing:-.035em;margin:0;font-weight:750}
-  .top .sub{color:var(--muted);font-size:13.5px;margin-top:1px}
-  .top-r{display:flex;align-items:center;gap:11px}
-  .field{position:relative;width:260px}
-  .field svg{position:absolute;right:14px;top:50%;transform:translateY(-50%);width:17px;height:17px;color:var(--faint);pointer-events:none}
-  .field input{width:100%;border:1px solid var(--line-2);background:var(--shell);border-radius:999px;padding:11px 42px 11px 17px;font-size:13.5px;outline:none;transition:border-color .16s,box-shadow .16s}
-  .field input:focus{border-color:var(--o-300);box-shadow:0 0 0 3px var(--o-50)}
-  .field input::placeholder{color:var(--faint)}
+  main{flex:1;min-width:0;background:var(--shell);padding:24px 30px 40px}
+
+  /* ── the page header ──
+     one row across the top of the work area on every section: what you are looking at on the left,
+     the section's search in the middle, and the two session controls on the right.
+
+     it replaces two things at once. **the old page header printed the section name and a sentence
+     about it**, one line under a sidebar entry already lit orange - the same fact twice, costing
+     80px before anything was read - and that is not what this is: there is no sub-line, and the
+     row earns its height by carrying the controls that were homeless without it. **refresh and
+     sign-out lived at the bottom of the sidebar**, the corner of the screen nobody looks at, and
+     «Обновить» is a button whose whole value is being reachable the moment the numbers look stale.
+
+     **the search moved up here and there is exactly one of it.** A global field mirroring whichever
+     list was open used to sit above a second, identical one inside the section; the fix then was to
+     delete the header's copy, and the fix now is the same rule from the other end - the section's
+     own `.bar` no longer has one, so the row under the title is the only search on the page. It is
+     hidden outright on Главная and Шаблоны, which have no list to filter. */
+  .topbar{display:flex;align-items:center;gap:16px;margin-bottom:22px;min-height:44px}
+  .topbar h1{font-size:24px;font-weight:750;letter-spacing:-.035em;margin:0;white-space:nowrap;flex:none}
+  .topbar .search{margin-left:auto;flex:0 1 400px}
+  .top-acts{display:flex;gap:10px;flex:none;margin-left:auto}
+  /* `:not([hidden])` and not a bare sibling selector: a hidden element is still a sibling, so
+     without it the two buttons would jump back to the title's shoulder on Главная. */
+  .topbar .search:not([hidden]) + .top-acts{margin-left:0}
   .ib{width:40px;height:40px;border-radius:50%;border:1px solid var(--line-2);background:var(--shell);display:grid;place-items:center;cursor:pointer;position:relative;
       transition:background .16s var(--ease),border-color .16s,transform .11s var(--ease)}
   .ib:hover{background:var(--card)}
@@ -121,10 +185,14 @@
   .ib.dg:hover{background:var(--red-bg);border-color:#F1BDBD}
   .ib.dg:hover svg{color:var(--red)}
 
-  /* ── cards ── */
-  .card{background:var(--card);border-radius:var(--r-4);padding:20px 22px}
-  .card.plain{background:var(--shell);border:1px solid var(--line)}
-  .card > header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:18px}
+  /* ── cards ──
+     one surface, `--card` on the white work area, with a hairline doing the last of the separating.
+     there used to be a second, `.card.plain`, which was white-on-`--surface` - two fills a couple of
+     units apart, which is to say no fill separation at all - and every card on the dashboard asked
+     for it. inverting the ramp made it meaningless, so it is gone rather than left as a class that
+     no longer changes anything. */
+  .card{background:var(--card);border:1px solid var(--line-2);border-radius:var(--r-4);padding:18px 20px}
+  .card > header{flex:none;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:16px}
   .card h2{font-size:16.5px;font-weight:750;letter-spacing:-.02em;margin:0}
   .card .cap{font-size:12.5px;color:var(--muted);margin-top:3px}
   .pill{
@@ -138,16 +206,30 @@
   .legend i{width:9px;height:9px;border-radius:3px;display:block;flex:none}
   .legend i.dash{width:14px;height:0;border-top:2px dashed var(--o-300);border-radius:0}
 
-  /* ── dashboard grid ── */
-  .dash{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
+  /* ── dashboard grid ──
+     `align-items:start` and not the default stretch, which is the difference between a card that
+     ends and a card with a hole in it. «Кому позвонить» is up to eight rows and the catalogue split
+     beside it is a fixed six lines, so stretched the shorter one carried three hundred pixels of
+     empty `--card` - and empty *fill* reads as a broken panel, where the same space left as page
+     reads as the page. The KPI row opts back in below: those four are one control, and one of them
+     ending short because its label wrapped would look like a fault rather than like breathing. */
+  .dash{display:grid;grid-template-columns:repeat(12,1fr);gap:14px;align-items:start}
   .kpi{grid-column:span 3}
+  .b3{grid-column:span 3}
   .b4{grid-column:span 4}
+  .b6{grid-column:span 6}
   .b8{grid-column:span 8}
+  .b9{grid-column:span 9}
   .b12{grid-column:span 12}
+  /* the categories card stands beside the KPI row *and* the row under it, which is the reference
+     layout's one piece of real structure: three counts and a chart on the left, one tall panel on
+     the right. `align-items:start` still applies, so it takes its own height rather than being
+     stretched to the two rows it spans. */
+  .r2{grid-row:span 2}
 
-  .kpi{background:var(--card);border-radius:var(--r-4);padding:19px 20px}
-  .kpi.hi{background:var(--card-hi)}
-  .kpi .k-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:22px}
+  .kpi{align-self:stretch;background:var(--card);border:1px solid var(--line-2);border-radius:var(--r-4);padding:18px 20px}
+  .kpi.hi{background:var(--card-hi);border-color:var(--o-200)}
+  .kpi .k-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:18px}
   .kpi .k-lab{font-size:13.5px;font-weight:600;color:var(--ink-2)}
   .kpi.hi .k-lab{color:#8A4302}
   .kpi .k-ico{width:36px;height:36px;border-radius:12px;background:var(--shell);display:grid;place-items:center;flex:none}
@@ -155,8 +237,18 @@
   .kpi .k-ico svg{width:17px;height:17px;color:var(--ink-2)}
   .kpi.hi .k-ico svg{color:#fff}
   .kpi .k-bot{display:flex;align-items:flex-end;justify-content:space-between;gap:10px}
+  .kpi .k-main{min-width:0}
   .kpi .k-val{font-size:29px;font-weight:750;letter-spacing:-.04em;line-height:1}
-  .kpi .k-side{text-align:right}
+  /* the second fact about the same thing, under the number rather than in a tile of its own.
+     «Магазины» and «сколько из них активны» are one question asked twice, and two tiles side by
+     side made the reader compare them - which is the funnel's job, with the whole market in it. */
+  /* under the whole row rather than beside the delta: sharing the line with `.k-side` left it about
+     140px, which truncated «151 покупателей · 32 владельцев» to «32 влад…» - a line that is cut off
+     is worse than no line, because the reader stops to work out what was there. */
+  .kpi .k-sub{font-size:12px;font-weight:650;color:var(--muted);margin-top:12px;
+              white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .kpi.hi .k-sub{color:#A4642C}
+  .kpi .k-side{text-align:right;flex:none}
   .kpi .k-d{font-size:12.5px;font-weight:750}
   .kpi .k-d.up{color:var(--green)}
   .kpi .k-d.dn{color:var(--red)}
@@ -165,10 +257,6 @@
 
   .card .foot{margin-top:16px;padding-top:14px;border-top:1px solid var(--line-2);font-size:12.5px;color:var(--ink-2);font-weight:600}
 
-  /* the markets card: ring on the left, numbers on the right, one subject */
-  .split{display:flex;gap:24px;align-items:flex-start}
-  .split .ring{flex:none}
-  .split .tbl{flex:1;min-width:0}
   .swatch{width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:9px;vertical-align:middle}
 
   .chart{position:relative;width:100%}
@@ -188,13 +276,139 @@
   .donut .d-mid span{font-size:11.5px;color:var(--muted);font-weight:600;display:block}
   .donut .d-mid b{font-size:23px;font-weight:750;letter-spacing:-.03em;display:block;margin-top:2px}
 
-  /* progress rows */
-  .prows{display:flex;flex-direction:column;gap:15px}
-  .prow .pl{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:7px}
-  .prow .pn{font-size:13.5px;font-weight:600}
-  .prow .pv{font-size:13px;font-weight:750}
-  .prow .pt{height:8px;border-radius:99px;background:var(--o-100);overflow:hidden}
-  .prow .pt i{display:block;height:100%;border-radius:99px;background:var(--o);transition:width .55s var(--ease)}
+  /* ── the completion gauge ──
+     the same ratio the funnel's stacked bar carried, drawn as one arc because there are only two
+     states worth naming: a catalogue is finished and the shop is in the price comparison, or it is
+     not - 1% and 99% publish exactly the same thing, which is nothing. The three-state bar was
+     honest about *how* the market got here and made the reader do the arithmetic for the number
+     that matters; this says the number and keeps the two counts underneath.
+
+     the arc is a semicircle drawn as a stroked path with a dasharray, not two SVG wedges: one
+     `stroke-linecap:round` gives the end its cap for free, and the value is a single number to
+     animate if that is ever wanted. */
+  /* **the same height as the chart beside it.** `align-items:start` is right for the rest of the
+     grid, and wrong for these two: they are one row of one subject, and a card ending 160px short of
+     its neighbour reads as a card that failed to load. The content spreads instead of leaving fill -
+     the arc takes the slack, the boxes stay pinned to the bottom edge. */
+  .card.tall{align-self:stretch;display:flex;flex-direction:column}
+  .card.tall .grow{flex:1;display:flex;flex-direction:column;justify-content:center;min-height:0}
+
+  .gauge{position:relative;margin:2px auto 0;width:100%;max-width:240px}
+  .gauge svg{display:block;width:100%;height:auto}
+  /* the readout sits inside the arc's own opening rather than under it - the arc is a container,
+     and a number below it would read as a caption of a picture instead of the picture's subject */
+  .gauge .g-mid{position:absolute;left:0;right:0;bottom:6px;text-align:center}
+  .gauge .g-mid b{display:block;font-size:32px;font-weight:750;letter-spacing:-.04em;line-height:1}
+  .gauge .g-mid span{display:block;margin-top:5px;font-size:11.5px;font-weight:650;color:var(--muted)}
+  .g-note{text-align:center;font-size:12.5px;color:var(--ink-2);line-height:1.5;margin-top:14px}
+  .g-note b{font-weight:750;color:var(--ink)}
+
+  /* **one tinted block split in two, not two bordered boxes.** The two halves are the same
+     measurement cut in two, so they belong inside one shape - two separate cards invited reading
+     them as two findings, and the pair sat noticeably outside the card's own edge: a grid track of
+     `1fr` is `minmax(auto, 1fr)`, and `auto` is the child's min-content width, which a nowrap label
+     pushes past its share. `minmax(0,1fr)` is the fix and the reason it is written the long way. */
+  .g-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin-top:18px;
+         background:var(--o-100);border-radius:var(--r-2);overflow:hidden}
+  .g-two > *{padding:12px 10px;text-align:center;min-width:0;border:0;background:transparent;
+             font:inherit;color:inherit}
+  .g-two > * + *{box-shadow:inset 1px 0 0 rgba(154,74,2,.16)}
+  .g-two .gl{font-size:11.5px;font-weight:650;color:#A4642C;white-space:nowrap;overflow:hidden;
+             text-overflow:ellipsis}
+  .g-two .gv{margin-top:4px;font-size:20px;font-weight:750;letter-spacing:-.035em;line-height:1}
+  /* the half that is a button. it opens the list of who has not finished, so it says so - an
+     underline on hover rather than a border, which would make one half a different shape */
+  .g-two button{cursor:pointer;transition:background .16s var(--ease)}
+  .g-two button:hover{background:rgba(255,111,0,.14)}
+  .g-two button .gl{text-decoration:underline;text-decoration-color:rgba(164,100,44,.4);
+                    text-underline-offset:3px}
+  /* nothing to show when nobody is unfinished, so it stops looking like a control - it keeps its
+     colour rather than fading, because it is still one half of a measurement */
+  .g-two button:disabled{cursor:default}
+  .g-two button:disabled:hover{background:transparent}
+  .g-two button:disabled .gl{text-decoration:none}
+
+  /* ── the race for the cheapest basket ──
+     **the panel's one competitive picture.** A single leader per market said who was cheapest and
+     could not say the thing that matters - whether anybody is *competing*: 4.61, 4.63 and 4.65
+     million is a fight, 4.6, 5.4 and 6.2 is one shop with no pressure on it, and printing only the
+     first row makes those identical.
+
+     Bars are the basket itself, so **shorter is cheaper and the winner is the shortest bar** - the
+     ranking reads down the left edge and the length says by how much. The dashed tick repeated
+     across every row is the category's average: a market where every bar crosses it in the same
+     place has no spread worth a badge. */
+  .tabs{display:flex;gap:6px;flex-wrap:wrap}
+  .tabs button{border:1px solid var(--line-2);background:var(--shell);color:var(--ink-2);
+               border-radius:999px;padding:7px 14px;font-size:12.5px;font-weight:650;cursor:pointer;
+               white-space:nowrap;transition:background .16s var(--ease),color .16s,border-color .16s}
+  .tabs button:hover{background:var(--card)}
+  .tabs button[aria-current]{background:var(--o);border-color:var(--o);color:#fff}
+
+  .race{display:flex;flex-direction:column}
+  .rc{display:flex;align-items:center;gap:14px;padding:12px 0;background:none;border:0;width:100%;
+      font:inherit;color:inherit;text-align:left;cursor:pointer;border-radius:var(--r-1);
+      transition:background .16s var(--ease)}
+  .rc + .rc{box-shadow:inset 0 1px 0 var(--line)}
+  .rc:hover{background:var(--o-50)}
+  .rc .rk{flex:none;width:26px;height:26px;border-radius:9px;background:var(--card);color:var(--muted);
+          font-size:12px;font-weight:750;display:grid;place-items:center}
+  .rc.win .rk{background:var(--o);color:#fff}
+  .rc .rn{flex:0 1 200px;min-width:90px;font-weight:650;white-space:nowrap;overflow:hidden;
+          text-overflow:ellipsis}
+  .rc.win .rn{font-weight:750}
+  /* **the bar measures the distance from the market average, not the basket itself.**
+     Drawn from zero, five baskets between 4.6 and 5.6 million are five bars within 20% of each
+     other's length - the picture says "these shops all cost about the same", which is the opposite
+     of the finding. Starting the axis at some flattering floor instead would be the usual lie.
+     So the axis is the average: everyone's own market is the middle of the bar, cheaper goes left,
+     dearer goes right, and the length is `|индекс − 100|` against the largest gap on screen. The
+     centre tick repeated down every row is what makes it read as one line rather than five bars. */
+  .rc .rb{flex:1 1 auto;min-width:90px;position:relative;height:12px;background:var(--o-50);
+          border-radius:99px}
+  .rc .rb::after{content:"";position:absolute;top:-4px;bottom:-4px;left:50%;margin-left:-1px;
+                 width:2px;border-radius:2px;background:var(--ink-2);opacity:.32}
+  .rc .rb i{position:absolute;top:0;bottom:0;min-width:3px;border-radius:99px;
+            background:var(--o-400);transition:width .5s var(--ease)}
+  .rc.win .rb i{background:var(--o)}
+  /* dearer than its own market: pale rather than red. The row is not a fault - somebody has to be
+     the expensive one - and the chip on the right already carries the sign. */
+  .rc .rb i.dear{background:var(--o-200)}
+  .rc .rp{flex:none;font-weight:750;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .rc .rx{flex:none;width:64px;text-align:right}
+  .race-foot{display:flex;align-items:center;gap:8px;margin-top:14px;padding-top:13px;
+             border-top:1px solid var(--line-2);font-size:12.5px;color:var(--ink-2);font-weight:600}
+  .race-foot i{width:2px;height:13px;border-radius:2px;background:var(--ink-2);opacity:.32;flex:none}
+  /* the tabs sit on their own row rather than in the card's header slot: four category names is
+     ~560px of pills, which wraps inside a `b8` header and takes the title with it */
+  .race-tabs{margin-bottom:6px}
+
+  /* ── the average basket, per market and over time ──
+     the figure says what a category is worth; the sparkline beside it says whether that is moving,
+     which is the half no single number can carry. Deliberately not four lines on one chart: four
+     oranges crossing each other is a picture nobody reads, and these four numbers are not on the
+     same scale anyway - an Обои basket is ten lines and a Универсальный one is a hundred. */
+  .trend{display:flex;flex-direction:column;gap:2px}
+  .tr{display:flex;align-items:center;gap:12px;padding:11px 0}
+  .tr + .tr{box-shadow:inset 0 1px 0 var(--line)}
+  .tr .tn{flex:1;min-width:0}
+  .tr .tn b{display:block;font-size:13.5px;font-weight:650;white-space:nowrap;overflow:hidden;
+            text-overflow:ellipsis}
+  .tr .tn span{display:block;margin-top:3px;font-size:16px;font-weight:750;letter-spacing:-.03em;
+               font-variant-numeric:tabular-nums}
+  .tr .tg{flex:none;width:78px;display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+  .tr .tg svg{display:block}
+  .tr .tg em{font-style:normal;font-size:11px;font-weight:700}
+  .tr .tg em.up{color:var(--red)}
+  .tr .tg em.dn{color:var(--green)}
+  .tr .tg em.fl{color:var(--muted)}
+
+  /* it moved off the dashboard and under Шаблоны on 2026-08-22 - it is maintenance rather than a
+     fact about the business, and it was the only card on the front page nobody could act on without
+     pressing something first. Small on purpose here: one strip, one button, and no proportion bar,
+     so it cannot push the template tables it now sits above off the first screen. */
+  .stor.tpl-stor{margin-bottom:16px;align-items:center}
+  .stor-act{display:flex;gap:10px;align-items:center;margin-left:auto;flex:none}
 
   .flist{display:flex;flex-direction:column;gap:13px}
   .flist .fr{display:flex;align-items:center;gap:10px;font-size:13.5px}
@@ -210,8 +424,16 @@
   .search input:focus{border-color:var(--o-300);box-shadow:0 0 0 3px var(--o-50)}
   .search input::placeholder{color:var(--faint)}
   .count{font-size:13px;color:var(--muted);font-weight:600;margin-left:auto}
+  /* a section's own standing explanation, above its table. only Аномалии has one, and it has one
+     because the two numbers it prints are a comparison the reader has to be told the shape of -
+     everywhere else the column heading is the whole story. */
+  .lede{font-size:12.5px;color:var(--ink-2);line-height:1.6;margin:-2px 0 14px;max-width:900px}
+  .lede b{font-weight:750;color:var(--ink)}
 
-  .tbl{background:var(--shell);border:1px solid var(--line);border-radius:var(--r-4);overflow:hidden}
+  /* white, on a white page - so the hairline is the whole edge and it is `--line-2` rather than
+     `--line`. inside a card it inverts into the reference's own idiom: a lighter block inset into
+     a darker one. */
+  .tbl{background:var(--shell);border:1px solid var(--line-2);border-radius:var(--r-4);overflow:hidden}
   .scroll{overflow-x:auto}
   table{width:100%;border-collapse:collapse;font-size:13.5px}
   thead th{
@@ -239,6 +461,11 @@
   tbody tr.nw .b{font-weight:750}
 
   .d{color:var(--muted)}
+  /* a phone number in a table is a `tel:` link, and the user agent's blue underline is the one
+     colour on this page that belongs to no palette. it keeps the cell's colour and its underline
+     appears on hover, where a pointer is already saying it is a target. */
+  .tbl a{color:inherit;text-decoration:none}
+  .tbl a:hover{text-decoration:underline;text-underline-offset:3px}
   .mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,Menlo,monospace;font-size:12.5px}
   .idc{color:var(--faint);font-size:12px;font-variant-numeric:tabular-nums}
 
@@ -334,6 +561,10 @@
                 display:grid;place-items:center;cursor:pointer;color:var(--muted);
                 transition:background .16s,color .16s,transform .12s}
   .chat-head .x:hover{background:var(--card);color:var(--ink)}
+  /* the same control shape as the ×, in the one colour that says what it does. it sits *before* the
+     × rather than after it: closing is the button the hand goes to without looking, and the last
+     position in a row is where it is expected to be. */
+  .chat-head .rm:hover{background:var(--red-bg);color:var(--red)}
   .chat-head .x:active{transform:scale(.9)}
   .chat-head .x svg{width:18px;height:18px}
 
@@ -416,8 +647,10 @@
   .toast svg{width:17px;height:17px;flex:none}
 
   @media (max-width:1240px){
-    .kpi{grid-column:span 6}
-    .b4,.b8{grid-column:span 12}
+    .kpi,.b3,.b4{grid-column:span 6}
+    .b6,.b8,.b9{grid-column:span 12}
+    /* the tall right-hand column only exists while there is a column to its left */
+    .r2{grid-row:auto}
   }
   @media (max-width:900px){
     .app{flex-direction:column;margin:8px}
@@ -427,13 +660,16 @@
     nav button{padding:10px 12px;white-space:nowrap}
     nav button .lb2{display:none}
     nav .pip{display:none}
-    .sep{display:none}
     main{padding:18px 16px 36px}
-    .kpi,.b4,.b8{grid-column:span 12}
-    .split{flex-direction:column}
-    .split .ring{align-self:center}
-    .top{flex-wrap:wrap}
-    .field{width:100%;order:3}
+    /* the title keeps the two buttons company on the first line and the search takes the second -
+       a 400px field beside a 24px heading is what makes this row overflow first, and putting the
+       *title* on its own line instead left a whole empty row on Главная, where there is no search */
+    .topbar{flex-wrap:wrap;gap:12px}
+    .topbar h1{flex:1 1 auto}
+    .topbar .search{order:3;flex:1 1 100%;margin-left:0}
+    .topbar .search:not([hidden]) + .top-acts,.top-acts{margin-left:auto}
+    .kpi,.b3,.b4,.b6,.b8,.b9{grid-column:span 12}
+    .lead .lc{min-width:150px}
   }
 </style>
 </head>
@@ -478,20 +714,20 @@
       Domix
     </div>
     <nav id="nav"></nav>
-
   </aside>
 
   <main>
-    <div class="top">
-      <div>
-        <h1 id="pg-title">Обзор</h1>
-        <div class="sub" id="pg-sub">—</div>
+    <!-- one header for every section: the name of what is on screen, the one search field on the
+         page, and the two session controls. `sub`-lines are deliberately absent - the sidebar
+         entry is already lit and the tooltip carries the sentence - and the search is hidden on
+         the sections with no list to filter. -->
+    <header class="topbar">
+      <h1 id="page-title">Главная</h1>
+      <div class="search" id="top-search" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="search" id="q-global" autocomplete="off">
       </div>
-      <div class="top-r">
-        <div class="field">
-          <input type="search" id="q-global" placeholder="Магазин, товар, пользователь…" autocomplete="off">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-        </div>
+      <div class="top-acts">
         <button class="ib" id="refresh" title="Обновить">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
         </button>
@@ -499,36 +735,35 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
         </button>
       </div>
-    </div>
+    </header>
 
     <section id="v-dash"><div class="dash" id="dash"></div></section>
 
     <section id="v-anomalies" hidden>
       <div class="bar">
-        <div class="search">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          <input type="search" id="q-anom" placeholder="Товар или магазин" autocomplete="off">
-        </div>
         <button class="pill" id="an-th" type="button"></button>
+        <button class="ib" id="anom-info" title="Как читать этот отчёт">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        </button>
         <div class="count" id="c-anom"></div>
       </div>
+      <!-- what the table is counting, in one sentence, above the table rather than behind the «i».
+           the columns were «Цена» and «Медиана рынка» with nothing saying which was which shop's,
+           and a report whose own headings need explaining is a report that gets scrolled past. -->
+      <div class="lede" id="anom-sum"></div>
       <div class="tbl"><div class="scroll"><table id="t-anom">
         <thead><tr>
-          <th class="s" data-key="deviation_percent">Отклонение<span class="ar">▼</span></th>
+          <th class="s" data-key="deviation_percent" title="Насколько цена в этом магазине отличается от обычной цены на тот же товар">Отклонение<span class="ar">▼</span></th>
           <th class="s" data-key="name">Товар<span class="ar">▼</span></th>
           <th class="s" data-key="shop_name">Магазин<span class="ar">▼</span></th>
-          <th class="s" data-key="price">Цена<span class="ar">▼</span></th>
-          <th class="s" data-key="median_price">Медиана рынка<span class="ar">▼</span></th>
-          <th>Магазинов</th><th></th>
+          <th class="s r" data-key="price" title="Что за этот товар просит именно этот магазин">Цена магазина<span class="ar">▼</span></th>
+          <th class="s r" data-key="median_price" title="Середина цен на тот же товар у остальных магазинов этой категории — половина дороже, половина дешевле">Обычная цена<span class="ar">▼</span></th>
+          <th>Связаться</th><th></th>
         </tr></thead><tbody></tbody></table></div><div id="s-anom"></div></div>
     </section>
 
     <section id="v-support" hidden>
       <div class="bar">
-        <div class="search">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          <input type="search" id="q-support" placeholder="Имя, телефон или текст сообщения" autocomplete="off">
-        </div>
         <div class="count" id="c-support"></div>
       </div>
       <div class="tbl"><div class="scroll"><table id="t-support">
@@ -543,10 +778,6 @@
 
     <section id="v-users" hidden>
       <div class="bar">
-        <div class="search">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          <input type="search" id="q-users" placeholder="Имя, телефон или ID" autocomplete="off">
-        </div>
         <div class="count" id="c-users"></div>
       </div>
       <div class="tbl"><div class="scroll"><table id="t-users">
@@ -562,10 +793,6 @@
 
     <section id="v-shops" hidden>
       <div class="bar">
-        <div class="search">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          <input type="search" id="q-shops" placeholder="Название, адрес, владелец или ID" autocomplete="off">
-        </div>
         <div class="count" id="c-shops"></div>
       </div>
       <div class="tbl"><div class="scroll"><table id="t-shops">
@@ -581,7 +808,18 @@
         </tr></thead><tbody></tbody></table></div><div id="s-shops"></div></div>
     </section>
 
-    <section id="v-templates" hidden><div id="tpl-list"></div></section>
+    <section id="v-templates" hidden>
+      <div class="bar">
+        <div class="count" id="c-tpl"></div>
+        <button class="ib" id="tpl-info" title="Как это работает">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        </button>
+      </div>
+      <!-- the orphan sweep lives here rather than on the dashboard: it is maintenance, not a fact
+           about the business, and this is the section about what is *in* the catalogues. -->
+      <div id="tpl-storage"></div>
+      <div id="tpl-list"></div>
+    </section>
   </main>
 </div>
 
@@ -597,8 +835,11 @@ var TOKEN_KEY = "domix.admin.token";
 // oranges is unreadable and a donut of twelve *hues* stops looking like one brand, so segments are
 // ordered by size and shaded along one ramp - position in the ramp carries the ranking.
 var RAMP = ["#FF6F00","#FB8C3C","#FDA968","#FDC48F","#FEDCB6","#FFEDD5"];
-var C = { o:"#FF6F00", o3:"#FDC48F", o1:"#FFEDD5", line:"#EFEEEB", muted:"#9A9A93", faint:"#B9B8B1",
-          green:"#15803D", red:"#B91C1C", ink:"#1A1A1A" };
+// mirrors the :root tokens, because svg attributes cannot read a custom property. `line2` is here
+// rather than `line` for the chart's own grid: the cards are `--card` now, and `--line` against it
+// is a two-unit difference - a gridline nobody can see.
+var C = { o:"#FF6F00", o3:"#FDC48F", o1:"#FFEDD5", line:"#EFEEEB", line2:"#E6E4E0",
+          muted:"#9A9A93", faint:"#B9B8B1", green:"#15803D", red:"#B91C1C", ink:"#1A1A1A" };
 
 function shade(i, n) {
   if (n <= 1) return RAMP[0];
@@ -618,7 +859,12 @@ var AVAIL = { in_stock:"В наличии", on_order:"Под заказ", unavai
 
 var state = {
   token:null, me:null, stats:null, users:null, shops:null, anomalies:null, templates:null, support:null,
-  view:"dash", threshold:0.5,
+  // the orphaned-file scan. null until somebody presses «Проверить» - unlike every other field here
+  // it is never fetched on a timer, because answering it means walking the whole photo store.
+  storage:null,
+  // which market «Кто дешевле» is showing. it survives the 45-second stats poll, and falls back to
+  // the busiest category when the one it names stops having anybody in the comparison.
+  view:"dash", threshold:0.5, raceCat:null,
   q:{ users:"", shops:"", anom:"", support:"" },
   sort:{ users:{key:"created_at",dir:-1}, shops:{key:"created_at",dir:-1}, anom:{key:"deviation_percent",dir:-1},
          support:{key:"last_at",dir:-1} },
@@ -684,7 +930,9 @@ var ICONS = {
   search:["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z","m21 21-4.3-4.3"],
   chat:["M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"],
   x:["M18 6 6 18","m6 6 12 12"],
-  send:["m22 2-7 20-4-9-9-4Z","M22 2 11 13"]
+  send:["m22 2-7 20-4-9-9-4Z","M22 2 11 13"],
+  info:["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z","M12 16v-4","M12 8h.01"],
+  broom:["m13 11 9-9","M14.6 12.6c.8.8.9 2 .2 2.7l-1.3 1.3c-.7.7-2 .6-2.7-.2L5.6 11.2c-.8-.8-.9-2-.2-2.7l1.3-1.3c.7-.7 2-.6 2.7.2Z","M6 15l-3 3","M9 18l-3 3","M3 21h6"]
 };
 
 // ── api ──
@@ -782,10 +1030,15 @@ function signOut(reason) {
 
 // one place decides that a failed call means the session is over, so a dead token returns the whole
 // page to the login screen once instead of leaving several broken panels on screen.
-function guard(e){ if(e.status===401){signOut("expired");return true;} if(e.status===403 && e.code!=="cannot_delete_admin" && e.code!=="cannot_edit_admin"){signOut("forbidden");return true;} return false; }
+// one place decides that a failed call means the session is over. it used to carry two exceptions -
+// `cannot_delete_admin` and `cannot_edit_admin`, the two 403s that were about the *target* rather
+// than the caller - and both are gone with the rule they enforced: the panel edits administrators
+// now, and the one refusal left (`last_admin`) is a 409, which is not a statement about permission
+// at all and never reaches this function.
+function guard(e){ if(e.status===401){signOut("expired");return true;} if(e.status===403){signOut("forbidden");return true;} return false; }
 
 var NAV = [
-  { v:"dash",      label:"Обзор",         icon:ICONS.dash,  title:"Обзор",         sub:"Всё, что происходит в Domix" },
+  { v:"dash",      label:"Главная",       icon:ICONS.dash,  title:"Главная",       sub:"Всё, что происходит в Domix" },
   // second, above everything else: a person is waiting on the other end of these and nothing
   // else on this panel has somebody's attention held while it goes unread.
   { v:"support",   label:"Поддержка",     icon:ICONS.chat,  title:"Поддержка",     sub:"Сообщения от пользователей" },
@@ -795,16 +1048,69 @@ var NAV = [
   { v:"templates", label:"Шаблоны",       icon:ICONS.tpl,   title:"Шаблоны",       sub:"Списки, которыми заполняется новый магазин" }
 ];
 
+// which list the header's field is standing over, per section. `q` is its key in state.q and
+// `render` is what redraws the rows it filters - the two things that used to be hardcoded four
+// times over, once per section's own input.
+var SEARCH = {
+  support:   { q:"support", placeholder:"Имя, телефон или текст сообщения", render:function(){ renderSupport(); } },
+  anomalies: { q:"anom",    placeholder:"Товар или магазин",                render:function(){ renderAnomalies(); } },
+  users:     { q:"users",   placeholder:"Имя, телефон или ID",              render:function(){ renderUsers(); } },
+  shops:     { q:"shops",   placeholder:"Название, адрес, владелец или ID", render:function(){ renderShops(); } }
+};
+
 function buildNav() {
   var nav = $("#nav"); clear(nav);
+
+  // the sliding highlight, added before the buttons so it is first in tree order too. it carries no
+  // text and no role - it is the fill that used to live on the active button - so it is aria-hidden
+  // and `aria-current` on the button remains the only thing announcing where the reader is.
+  var pill = el("i","nav-pill cold"); pill.id = "nav-pill";
+  pill.setAttribute("aria-hidden","true");
+  nav.appendChild(pill);
+
   NAV.forEach(function (item) {
     var b = el("button"); b.dataset.view = item.v;
     b.appendChild(ico(item.icon, 19));
     b.appendChild(el("span","lb2",item.label));
+    // the sentence that used to be printed under the page title. it is the whole of what that line
+    // said, and here it costs no vertical space at all. the support button's title is overwritten
+    // by loadStats with the unread/waiting counts - a live number outranks a fixed description on
+    // the one button that has one.
+    b.title = item.sub;
     if (item.v==="users"||item.v==="shops"||item.v==="anomalies"||item.v==="support") { var p=el("span","pip","—"); p.id="pip-"+item.v; b.appendChild(p); }
     b.addEventListener("click", function(){ setView(item.v); });
     nav.appendChild(b);
   });
+}
+
+// ── where the highlight is ──
+//
+// measured rather than derived: the buttons are one column on a laptop and a scrolling row under
+// 900px, and at that width the labels are hidden so their widths change too. offsetLeft/offsetTop
+// against `nav` (which is `position:relative`, so it is the offset parent) answers both layouts
+// with the same four numbers and cannot fall out of step with the css the way a hardcoded row
+// height would.
+//
+// `cold` suppresses the transition for a placement that is not a movement - the first paint, and a
+// resize, where animating from the old geometry to the new one would draw a slide nobody asked for.
+// Reading `offsetWidth` between removing and re-adding the class forces the layout that makes the
+// browser commit to the new position before transitions are turned back on; without it the two
+// class changes collapse into one style recalculation and the suppression does nothing.
+function moveNavPill(instant) {
+  var pill = $("#nav-pill"); if (!pill) return;
+  // still carrying `cold` means it has never been placed, so this call is the placement
+  if (instant === undefined) instant = pill.classList.contains("cold");
+  var b = $("#nav button[aria-current]");
+  // nothing is selected - during sign-out, for instance. hiding it is better than parking it over
+  // a button that is not the open section.
+  if (!b) { pill.style.opacity = "0"; return; }
+  pill.style.opacity = "1";
+
+  if (instant) pill.classList.add("cold");
+  pill.style.width = b.offsetWidth + "px";
+  pill.style.height = b.offsetHeight + "px";
+  pill.style.transform = "translate(" + b.offsetLeft + "px," + b.offsetTop + "px)";
+  if (instant) { void pill.offsetWidth; pill.classList.remove("cold"); }
 }
 
 function enter() {
@@ -819,20 +1125,31 @@ function setView(v) {
   $$("#nav button").forEach(function(b){ if(b.dataset.view===v) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current"); });
   NAV.forEach(function(i){ $("#v-"+i.v).hidden = i.v!==v; });
   var meta = NAV.filter(function(i){ return i.v===v; })[0];
-  $("#pg-title").textContent = meta.title; $("#pg-sub").textContent = meta.sub;
+  $("#page-title").textContent = meta.title;
+  // a panel left open in one of a dozen tabs is found by its tab label, so the section's name goes
+  // there as well as into the header above the work area
+  document.title = "Domix · " + meta.title;
 
-  // the header field is a shortcut into the list on screen, so it only exists where there is one.
-  // on Обзор and Шаблоны it was a search box that searched nothing until it silently navigated
-  // somewhere else.
-  var searchable = v === "users" || v === "shops";
-  $("#q-global").parentNode.hidden = !searchable;
-  if (searchable) $("#q-global").value = v === "users" ? state.q.users : state.q.shops;
+  // **one search field on the page, and it belongs to whichever list is open.** the sections used
+  // to carry their own, which is why a second one in the header was deleted the first time round;
+  // the rule is unchanged and only the survivor is different. Hidden outright where there is no
+  // list to filter - Главная and Шаблоны - rather than left empty and inert.
+  var find = SEARCH[v], box = $("#top-search"), input = $("#q-global");
+  box.hidden = !find;
+  if (find) {
+    input.placeholder = find.placeholder;
+    // re-read from state rather than left as typed: switching to another section and back must
+    // show the field agreeing with the rows under it.
+    input.value = state.q[find.q];
+  }
+
+  moveNavPill();
 
   if (v==="users" && !state.users) loadUsers();
   if (v==="shops" && !state.shops) loadShops();
   if (v==="anomalies" && !state.anomalies) loadAnomalies();
   if (v==="support" && !state.support) loadSupport();
-  if (v==="templates" && !state.templates) loadTemplates();
+  if (v==="templates") { drawStorage(); if (!state.templates) loadTemplates(); }
   if (v==="dash" && state.stats) drawDash();
 
   // opening the inbox must show what is there now, not a list cached before the founder walked away
@@ -1011,7 +1328,9 @@ function kpi(o) {
   c.appendChild(top);
 
   var bot = el("div","k-bot");
-  bot.appendChild(el("div","k-val num",o.value));
+  var main = el("div","k-main");
+  main.appendChild(el("div","k-val num",o.value));
+  bot.appendChild(main);
   var side = el("div","k-side");
   if (o.delta !== undefined && o.delta !== null) {
     side.appendChild(el("div","k-d "+(o.delta>0?"up":"fl"), (o.delta>0?"+":"")+nf(o.delta)));
@@ -1021,240 +1340,573 @@ function kpi(o) {
   }
   bot.appendChild(side);
   c.appendChild(bot);
+
+  // the same subject, one level down: «Магазины» over «16 в сравнении цен». it is not a second
+  // measurement - a tile of its own for that number would invite comparing the two, which is what
+  // the gauge below does properly, with the whole market in the picture.
+  if (o.sub) { var sb = el("div","k-sub",o.sub); sb.title = o.subTitle || o.sub; c.appendChild(sb); }
   return c;
 }
 
 // every panel below answers a question no other panel on the screen answers. that is the whole
-// editing rule for this function, and it is what the previous version broke: `ranked / total` was
-// drawn as a KPI, again as a gauge arc, again as the two boxes under that arc - one of which also
-// restated the Магазины KPI verbatim - and again as the funnel's last bar. four renderings of one
-// ratio read as four findings. the gauge is gone; the KPI states the number and the funnel explains
-// how it got there, which is a different question rather than a second picture of the same one.
+// editing rule for this function, and it is what the first version broke: `ranked / total` was
+// drawn as a KPI, again as a gauge arc, again as the two boxes under that arc, and again as the
+// funnel's last bar - four renderings of one ratio read as four findings.
+//
+// **the layout is three columns of counts with a tall panel beside them, then a wide analytic band,
+// then the working lists.** The order is a priority claim and it runs from what the market *is*
+// (row 1) through what it *says* (rows 2-3) to what to do about it today (rows 4-5).
+//
+// The ratio is stated once, in row one, as «5 в сравнении цен» under the shop count; the gauge in
+// row two is the only place that draws it, and it draws the half of the market the KPI does not
+// mention. Everything else is a different question with a different answer.
 function drawDash() {
   var s = state.stats; if (!s) return;
   var g = $("#dash"); clear(g);
 
-  // ── row 1: four counts, four different things being counted ──
+  // ── row 1: three counts, and the shape of the market beside them ──
   g.appendChild(kpi({ label:"Магазины", value:nf(s.shops.total), delta:s.shops.new_7d,
     icon:ICONS.shops, hi:true }));
-  g.appendChild(kpi({ label:"Пользователи", value:nf(s.users.total), delta:s.users.new_7d,
-    icon:ICONS.users }));
-  g.appendChild(kpi({ label:"В сравнении цен", value:nf(s.shops.ranked),
-    note:"из "+nf(s.shops.total)+" магазинов", icon:ICONS.scale }));
-  g.appendChild(kpi({ label:"VIP-размещений", value:nf(s.shops.vip),
-    note: s.vip.length ? "ближайшее до "+sdate(s.vip[0].until) : "нет активных", icon:ICONS.crown }));
 
-  // ── row 2: how the market grew, and where its catalogues are stuck ──
-  var sc = card("b8 plain","Регистрации за 30 дней","Новые пользователи и новые магазины по дням",
+  g.appendChild(kpi({ label:"Пользователи", value:nf(s.users.total),
+    sub:"покупатели " + nf(s.users.customers) + " · владельцы " + nf(s.users.shop_owners),
+    delta:s.users.new_7d, icon:ICONS.users }));
+
+  // **VIP is inventory, so it is a fraction and not a count.** `vip_slots` comes from the server
+  // (home.go's vipShopsLimit) rather than being written here: the carousel draws that many places
+  // whether or not they are sold, and a panel with its own copy would keep saying «из 5» the day
+  // the carousel grows.
+  var slots = s.shops.vip_slots || 0, sold = s.shops.vip || 0, free = Math.max(slots - sold, 0);
+  g.appendChild(kpi({ label:"VIP-места", value:nf(sold) + " / " + nf(slots),
+    sub: slots === 0 ? "мест нет" : free === 0 ? "все места проданы" : nf(free) + " свободно",
+    note:"в карусели", icon:ICONS.crown }));
+
+  g.appendChild(buildCategories(s));
+
+  // ── row 2: the two things that move day to day, and they are one row ──
+  var sc = card("b6 tall","Регистрации за 30 дней","Новые пользователи и новые магазины по дням",
     legend([{color:C.o,label:"Пользователи"},{color:C.o3,label:"Магазины",dash:true}]));
   var holder = el("div","chart"); holder.id = "ch-signups";
   var tip = el("div","tip"); tip.id = "tip-signups"; holder.appendChild(tip);
   sc.appendChild(holder); g.appendChild(sc);
 
-  g.appendChild(buildFunnel(s.funnel, s.activity));
+  g.appendChild(buildGauge(s.funnel));
 
-  // ── row 3: the same fact as an afternoon of phone calls ──
-  g.appendChild(buildAttention(s.attention));
-
-  // ── row 4: the four markets, one card ──
-  g.appendChild(buildMarkets(s));
+  // ── row 3: what the product actually says, and what it costs ──
+  g.appendChild(buildRace(s));
+  g.appendChild(buildTrend(s));
 
   drawSignups(s.signups);
 }
 
-// ── the catalogue funnel ──
+// ── the shape of the market ──
 //
-// **the one panel that says where the product is losing people rather than how much of it exists.**
-// It matters more here than in most marketplaces because of the all-or-nothing rule: a shop at 99%
-// publishes exactly as much as a shop at 0% — nothing. So «почти готово» is not a progress bar, it
-// is a list of people who did nearly all the work and are getting none of the benefit.
-// the pricing-activity number rides in this card's caption rather than in a fifth KPI tile. it is
-// the rate of change of exactly what the bars below measure, so it belongs to them - and a KPI tile
-// for it was competing with the four counts for the same row.
-function buildFunnel(f, activity) {
-  var c = card("b4 plain","Заполнение каталогов","Магазин попадает в сравнение только когда заполнен целиком");
-
-  var stages = [
-    { key:"Ничего не указано", value:f.empty,    color:"#E4E7EC", ink:"var(--muted)" },
-    { key:"Начали",            value:f.started,  color:RAMP[4] },
-    { key:"Больше половины",   value:f.halfway,  color:RAMP[2] },
-    { key:"Почти готово",      value:f.nearly,   color:RAMP[0], hot:true },
-    { key:"Заполнен целиком",  value:f.complete, color:"#15803D" }
-  ];
-
-  var rowsBox = el("div","prows");
-  stages.forEach(function (st) {
-    var item = el("div","prow");
-    var line = el("div","pl");
-    var name = el("span","pn", st.key);
-    if (st.hot && st.value > 0) {
-      name.appendChild(document.createTextNode(" "));
-      name.appendChild(el("span","tag o","звонить"));
-    }
-    line.appendChild(name);
-    line.appendChild(el("span","pv num", nf(st.value)));
-    item.appendChild(line);
-
-    var t = el("div","pt"); var fill = el("i");
-    fill.style.width = pct(st.value, f.shops) + "%";
-    fill.style.background = st.color;
-    t.appendChild(fill); item.appendChild(t);
-    rowsBox.appendChild(item);
-  });
-  c.appendChild(rowsBox);
-
-  // the rate of change of the bars above, and the reason there is no fifth KPI tile for it: it is
-  // the same subject as this card, and a tile would have been a fifth thing competing for row one.
-  var moved = el("div","foot");
-  moved.textContent = activity && activity.priced_7d > 0
-    ? "За неделю указано " + nf(activity.priced_7d) + " цен · " + nf(activity.shops_active_7d) + " магазинов работали"
-    : "За неделю никто не указал ни одной цены";
-  c.appendChild(moved);
-
-  if (f.stalled > 0) {
-    var w = el("div","warn"); w.style.marginTop = "12px";
-    w.appendChild(ico(ICONS.anom,16));
-    w.appendChild(el("span",null, nf(f.stalled) + " магазинов создано больше двух недель назад и не заполнено ни на одну строку — эти уже не вернутся сами."));
-    c.appendChild(w);
-  }
-  return c;
-}
-
-// ── who to phone ──
+// the reference dashboard's «Top Categories», and the same question here: what is this market made
+// of. The ring and the list are one object - the list is the ring's key, which is why the donut
+// carries none of its own - and the numbers are shops, because a shop is the unit everything else on
+// this panel counts in.
 //
-// a dashboard that reports "the market is 44% complete" and stops leaves you there. this is the same
-// fact turned into an afternoon of phone calls: the owner nearest the line, their number, and how
-// many rows are left.
-function buildAttention(list) {
-  var c = card("b12 plain","Кому позвонить","Ближе всех к тому, чтобы попасть в сравнение цен");
-
-  if (!list || !list.length) {
-    var ok = el("div","flist");
-    var r = el("div","fr"); var i = el("i"); i.style.background = C.green;
-    r.appendChild(i);
-    r.appendChild(el("span","fk", "Все каталоги заполнены целиком"));
-    ok.appendChild(r); c.appendChild(ok);
-    return c;
-  }
-
-  var tbl = el("div","tbl");
-  var sc = el("div","scroll");
-  var t = el("table");
-  var th = el("thead"); var hr = el("tr");
-  ["Магазин","Владелец","Осталось","Готово",""].forEach(function(h){ hr.appendChild(el("th",null,h)); });
-  th.appendChild(hr); t.appendChild(th);
-
-  var body = el("tbody");
-  list.forEach(function (a) {
-    var tr = el("tr");
-
-    var nm = el("td");
-    nm.appendChild(el("div","b", a.name));
-    nm.appendChild(el("div","d", catName(a.category)));
-    tr.appendChild(nm);
-
-    var ow = el("td");
-    ow.appendChild(el("div",null, a.owner_name || "Без имени"));
-    ow.appendChild(el("div","d mono", a.owner_phone));
-    tr.appendChild(ow);
-
-    tr.appendChild(el("td","b num", nf(a.remaining)));
-
-    var pg = el("td"); var w = el("div","prog");
-    var track = el("div","t"); var fill = el("i");
-    var done = pct(a.priced_rows, a.template_rows);
-    fill.style.width = done + "%";
-    track.appendChild(fill); w.appendChild(track);
-    w.appendChild(el("span","p", done + "%"));
-    pg.appendChild(w); tr.appendChild(pg);
-
-    var act = el("td","r");
-    act.appendChild(iconBtn(ICONS.box, "Открыть каталог", null, function () {
-      openShopById(a.id);
-    }));
-    tr.appendChild(act);
-
-    body.appendChild(tr);
-  });
-  t.appendChild(body); sc.appendChild(t); tbl.appendChild(sc); c.appendChild(tbl);
-  return c;
-}
-
-// ── the four markets, one card ──
-//
-// this replaces two panels that were each half of the same subject: a donut whose key rows printed
-// «в сравнении / всего» per category, and a separate «Корзина по рынкам» that printed the shop count
-// per category again beside the basket price. one card now, and each half does the job it is good
-// at — the ring shows the split at a glance, the table carries the numbers, and neither repeats the
-// other.
-//
-// it iterates the *categories* rather than the baskets, because a market with shops and nothing in
-// the comparison is the row most worth seeing and the basket query cannot return it: that query
-// reads the index view, which by design has no row for a shop whose catalogue is incomplete.
-function buildMarkets(s) {
-  var c = card("b12 plain","Рынки","Магазины, охват сравнения и стоимость общей корзины по категориям");
-
-  var byCat = {};
-  (s.baskets || []).forEach(function (b) { byCat[b.category] = b; });
+// It stands beside the KPI row *and* the chart under it (`r2`), which is the only piece of real
+// structure in the layout: three counts and a trend on the left, one tall panel on the right.
+function buildCategories(s) {
+  var c = card("b3 r2","Категории магазинов","Из чего состоит рынок");
 
   var cats = (s.shop_categories || []).slice().sort(function (a, b) { return b.shops - a.shops; });
   if (!cats.length) {
-    c.appendChild(el("div","skel","Магазинов пока нет — сравнивать нечего."));
+    c.appendChild(el("div","skel","Магазинов пока нет."));
     return c;
   }
 
-  var split = el("div","split");
+  c.appendChild(buildDonut(cats.map(function (r) { return r.shops; }), s.shops.total, "магазинов"));
 
-  var ring = el("div","ring");
-  ring.appendChild(buildDonut(cats.map(function (r) { return r.shops; }), s.shops.total, "магазинов"));
-  split.appendChild(ring);
-
-  var tbl = el("div","tbl"); var sc = el("div","scroll"); var t = el("table");
-  var th = el("thead"); var hr = el("tr");
-  ["Категория","Магазинов","В сравнении","Корзина","Разброс"].forEach(function (h, i) {
-    hr.appendChild(el("th", i ? "r" : null, h));
-  });
-  th.appendChild(hr); t.appendChild(th);
-
-  var body = el("tbody");
+  var list = el("div","flist");
+  list.style.marginTop = "20px";
   cats.forEach(function (r, i) {
-    var b = byCat[r.category];
-    var tr = el("tr");
-
-    var nm = el("td");
-    var dot = el("i","swatch"); dot.style.background = shade(i, cats.length);
-    nm.appendChild(dot);
-    nm.appendChild(el("span","b", catName(r.category)));
-    tr.appendChild(nm);
-
-    tr.appendChild(el("td","r num", nf(r.shops)));
-
-    var cov = el("td","r");
-    if (r.ranked > 0) {
-      cov.appendChild(el("span","b num", nf(r.ranked)));
-      cov.appendChild(el("span","d num", " · " + pct(r.ranked, r.shops) + "%"));
-    } else cov.appendChild(el("span","d","никого"));
-    tr.appendChild(cov);
-
-    tr.appendChild(el("td","r num b", b ? money(b.median_basket) : "—"));
-
-    // the spread is what says whether the badge means anything in this market: a category where
-    // every basket lands within 2% of every other is one where «на 4% дешевле» cannot happen.
-    var sp = el("td","r");
-    if (b && b.shops > 1) {
-      var spread = Math.round((b.max_basket - b.min_basket) / Math.max(b.median_basket, 1) * 100);
-      sp.appendChild(el("span","num", spread + "%"));
-      sp.appendChild(el("div","d num", nf(b.min_basket) + " – " + nf(b.max_basket)));
-    } else sp.appendChild(el("span","d", b ? "один магазин" : "—"));
-    tr.appendChild(sp);
-
-    body.appendChild(tr);
+    var row = el("div","fr");
+    // the second number rides on the title rather than in a column: this card answers "what is the
+    // market made of", and «в сравнении» is the gauge's subject one card over.
+    row.title = catName(r.category) + ": " + nf(r.shops) + " магазинов, "
+              + nf(r.ranked) + " в сравнении цен";
+    var dot = el("i"); dot.style.background = shade(i, cats.length);
+    row.appendChild(dot);
+    row.appendChild(el("span","fk", catName(r.category)));
+    row.appendChild(el("span","fv num", nf(r.shops)));
+    list.appendChild(row);
   });
-  t.appendChild(body); sc.appendChild(t); tbl.appendChild(sc);
-  split.appendChild(tbl);
-
-  c.appendChild(split);
+  c.appendChild(list);
   return c;
+}
+
+// ── the completion gauge ──
+//
+// **one ratio, and only two states are worth naming.** A catalogue is finished and the shop is in
+// the price comparison, or it is not: 1% and 99% publish exactly the same thing, which is nothing.
+// The three-segment bar this replaced was honest about *how* the market got here and left the
+// number that matters to be worked out from three counts; who is closest to the line is a list of
+// people to phone, and that list is «Кому позвонить» two rows down, with a name and a number on
+// every row.
+//
+// The arc is one stroked semicircle with a dasharray rather than two wedges: `stroke-linecap:round`
+// gives the end its cap for free, and the whole value is a single number.
+function buildGauge(f) {
+  // **no caption under the title.** «Магазин попадает в сравнение, только когда заполнен целиком» is
+  // the rule the whole card is about, and printing it every time is explaining the same thing to the
+  // same person forever - the two boxes at the bottom say it by being the only two states there are.
+  var c = card("b3 tall","Заполнение каталогов");
+
+  var total = f.shops || 0, done = f.complete || 0, left = Math.max(total - done, 0);
+  var share = pct(done, total);
+
+  var W = 240, H = 136, stroke = 22, r = (W - stroke) / 2, cx = W / 2, cy = W / 2;
+  var len = Math.PI * r;
+  var arc = "M " + (cx - r) + " " + cy + " A " + r + " " + r + " 0 0 1 " + (cx + r) + " " + cy;
+
+  // the arc and the sentence take the slack when this card is stretched to the chart's height
+  var mid = el("div","grow");
+
+  var box = el("div","gauge");
+  var svg = sv("svg",{viewBox:"0 0 " + W + " " + H, width:W, height:H});
+  svg.appendChild(sv("path",{ d:arc, fill:"none", stroke:C.o1, "stroke-width":stroke, "stroke-linecap":"round" }));
+  if (share > 0) {
+    svg.appendChild(sv("path",{ d:arc, fill:"none", stroke:C.o, "stroke-width":stroke,
+      "stroke-linecap":"round", "stroke-dasharray": (len * share / 100) + " " + (len * 2) }));
+  }
+  box.appendChild(svg);
+
+  // inside the arc's own opening, not under it: the arc is a container, and a number below it would
+  // read as the caption of a picture rather than as the picture's subject
+  var readout = el("div","g-mid");
+  readout.appendChild(el("b","num", share + "%"));
+  readout.appendChild(el("span", null, "каталогов заполнено"));
+  box.appendChild(readout);
+  mid.appendChild(box);
+
+  // **the count, always, and never a compliment.** This line used to congratulate a finished market
+  // («Все каталоги заполнены — весь рынок участвует в сравнении цен») and report the shortfall the
+  // rest of the time, so it changed subject depending on the answer. It is the same sentence at 0%
+  // and at 100% now: how many shops a customer can actually be shown a badge for.
+  //
+  // **No plural agreement in it, on purpose** - «21 магазин», «22 магазина» and «25 магазинов» are
+  // three endings, and a panel that gets one wrong looks careless in the one place it is asking to
+  // be trusted with numbers. The count sits after a preposition, where russian does not decline it.
+  var note = el("div","g-note");
+  if (total === 0) {
+    note.textContent = "Магазинов пока нет.";
+  } else {
+    note.appendChild(el("b", null, nf(done) + " из " + nf(total)));
+    note.appendChild(document.createTextNode(" магазинов в сравнении цен"));
+  }
+  mid.appendChild(note);
+  c.appendChild(mid);
+
+  // ── the two states, one block ──
+  //
+  // «Не заполнены» is a button, and it is the only way into the list of who has not finished - the
+  // «Кому позвонить» card that used to carry that list is gone, because it was eight rows of a table
+  // permanently on the front page answering a question that is asked once a week. Behind a number
+  // that is already on screen, it costs nothing until it is wanted.
+  var two = el("div","g-two");
+
+  var doneCell = el("div");
+  doneCell.title = "Каталог заполнен целиком — магазин в сравнении цен";
+  doneCell.appendChild(el("div","gl","Заполнены"));
+  doneCell.appendChild(el("div","gv num", nf(done)));
+  two.appendChild(doneCell);
+
+  var leftCell = el("button"); leftCell.type = "button";
+  leftCell.title = left > 0 ? "Показать, кто ещё не закончил" : "Все каталоги заполнены";
+  leftCell.disabled = left === 0;
+  leftCell.appendChild(el("div","gl","Не заполнены"));
+  leftCell.appendChild(el("div","gv num", nf(left)));
+  leftCell.addEventListener("click", function () { openUnfinished(); });
+  two.appendChild(leftCell);
+
+  c.appendChild(two);
+  return c;
+}
+
+// ── who has not finished ──
+//
+// **the «Кому позвонить» card, turned into a window.** It was `b8` on the front page, eight rows of
+// a table under a heading, permanently answering a question the founder asks about once a week - and
+// the number it hangs off («Не заполнены») was already on screen two cards up. Behind that number it
+// costs nothing until it is wanted, and it can carry every unfinished shop instead of the top eight.
+//
+// It reads `state.stats.attention`, which the dashboard request already carries (capped at 100 rows,
+// see adminAttentionLimit) - no second endpoint, and it is current to within the 45-second stats
+// poll like everything else on this screen.
+function openUnfinished() {
+  var rows = (state.stats && state.stats.attention) || [];
+  var s = shell({ title:"Не заполнили каталог", icon:ICONS.scale, iconClass:"o", size:"lg",
+    sub: rows.length
+      ? "Ближе всех к тому, чтобы попасть в сравнение цен — сверху"
+      : "Все каталоги заполнены целиком" });
+
+  if (rows.length) {
+    var tbl = el("div","tbl"); tbl.style.marginTop = "18px";
+    var sc = el("div","scroll"); var t = el("table");
+    var th = el("thead"); var hr = el("tr");
+    [["Магазин",""],["Создан","Когда владелец завёл магазин"],
+     ["Без цены","Сколько строк шаблона ещё не оценили"],["Телефон",""]
+    ].forEach(function (h, i) {
+      var cell = el("th", i === 2 ? "r" : null, h[0]);
+      if (h[1]) cell.title = h[1];
+      hr.appendChild(cell);
+    });
+    th.appendChild(hr); t.appendChild(th);
+
+    var body = el("tbody");
+    rows.forEach(function (a) {
+      var tr = el("tr");
+      tr.style.cursor = "pointer";
+      tr.title = "Открыть каталог магазина";
+      tr.addEventListener("click", function () { s.close(); openShopById(a.id); });
+
+      var nm = el("td");
+      nm.appendChild(el("div","b", a.name));
+      nm.appendChild(el("div","d", catName(a.category)));
+      tr.appendChild(nm);
+
+      tr.appendChild(el("td","d num", sdate(a.created_at)));
+
+      // the count *and* how far along they are: «осталось 3» means something different in a
+      // catalogue of ten than in one of a hundred
+      var rem = el("td","r");
+      rem.appendChild(el("div","b num", nf(a.remaining)));
+      rem.appendChild(el("div","d num", "из " + nf(a.template_rows)));
+      tr.appendChild(rem);
+
+      var ph = el("td");
+      var tel = el("a","mono", a.contact_phone || a.owner_phone || "—");
+      if (a.contact_phone || a.owner_phone) {
+        tel.href = "tel:" + String(a.contact_phone || a.owner_phone).replace(/[^\d+]/g, "");
+      }
+      ph.appendChild(tel);
+      ph.appendChild(el("div","d", a.owner_name || "Без имени"));
+      tr.appendChild(ph);
+
+      body.appendChild(tr);
+    });
+    t.appendChild(body); sc.appendChild(t); tbl.appendChild(sc);
+    s.modal.appendChild(tbl);
+  }
+
+  var acts = el("div","m-acts");
+  var ok = el("button","btn btn-p","Закрыть");
+  ok.addEventListener("click", s.close);
+  acts.appendChild(ok); s.modal.appendChild(acts);
+  ok.focus();
+}
+
+// ── the race for the cheapest basket ──
+//
+// **the one card here that reports what the product says rather than how much of it exists.**
+// Everything else on this dashboard counts rows; this is the screen a customer sees, per market:
+// who is cheapest, who is second, and by how much.
+//
+// It replaced a card that printed only the winner, which could not answer the question the founder
+// actually has - **is anybody competing?** Three shops at 4.61, 4.63 and 4.65 million are fighting;
+// 4.6, 5.4 and 6.2 is one shop with nothing pressing on it, and a single leader row makes those two
+// markets look identical.
+//
+// One market at a time, chosen by the tabs. Four rankings side by side would be four charts on
+// **four different scales** - an Обои basket is ten lines and a Универсальный one is a hundred - and
+// the eye compares whatever is next to it whether or not the comparison means anything (§5).
+function buildRace(s) {
+  var all = s.rankings || [];
+  var baskets = {};
+  (s.baskets || []).forEach(function (b) { baskets[b.category] = b; });
+
+  // only markets that have somebody in the comparison; ordered by how crowded they are, so the tab
+  // that opens is the one with an actual contest in it
+  var cats = [];
+  all.forEach(function (r) { if (cats.indexOf(r.category) < 0) cats.push(r.category); });
+  cats.sort(function (a, b) {
+    return ((baskets[b] && baskets[b].shops) || 0) - ((baskets[a] && baskets[a].shops) || 0);
+  });
+
+  var tabs = el("div","tabs race-tabs");
+  var c = card("b8","Кто дешевле","Магазины одной категории и их расстояние до средней цены рынка");
+
+  if (!cats.length) {
+    c.appendChild(el("div","skel",
+      "Ни один магазин ещё не заполнил каталог целиком — сравнивать пока нечего."));
+    return c;
+  }
+
+  // the chosen tab survives the 45-second stats poll, and falls back when the category it named
+  // stops having anybody in it
+  if (cats.indexOf(state.raceCat) < 0) state.raceCat = cats[0];
+
+  cats.forEach(function (cat) {
+    var b = el("button", null, catName(cat)); b.type = "button";
+    if (cat === state.raceCat) b.setAttribute("aria-current","true");
+    b.addEventListener("click", function () { state.raceCat = cat; drawDash(); });
+    tabs.appendChild(b);
+  });
+  c.appendChild(tabs);
+
+  var rows = all.filter(function (r) { return r.category === state.raceCat; });
+  var market = baskets[state.raceCat];
+  var avg = market ? market.avg_basket : 0;
+
+  // the widest gap on screen sets the scale, so the leader's bar always reaches the edge and the
+  // card is about *this* market rather than about how far markets are from each other. The floor of
+  // 4 points stops a market where everybody agrees within 1% from drawing that as a landslide.
+  var widest = rows.reduce(function (m, r) {
+    return Math.max(m, Math.abs(100 - r.price_index));
+  }, 0);
+  var scale = Math.max(widest, 4);
+
+  var list = el("div","race");
+  rows.forEach(function (r, i) {
+    var row = el("button","rc" + (i === 0 ? " win" : "")); row.type = "button";
+    row.title = "Открыть каталог: " + r.shop_name;
+    row.addEventListener("click", function () { openShopById(r.shop_id); });
+
+    row.appendChild(el("div","rk", String(i + 1)));
+
+    var nm = el("div","rn", r.shop_name); nm.title = r.shop_name;
+    row.appendChild(nm);
+
+    // cheaper grows left of the centre, dearer grows right of it. Half the track is the whole of
+    // one direction, so the width is a share of 50 rather than of 100.
+    var diff = 100 - r.price_index;
+    var track = el("div","rb");
+    var fill = el("i");
+    fill.style.width = (Math.abs(diff) / scale * 50) + "%";
+    if (diff >= 0) fill.style.right = "50%";
+    else { fill.style.left = "50%"; fill.className = "dear"; }
+    track.appendChild(fill);
+    track.title = diff === 0 ? "Ровно средняя цена по категории"
+      : "На " + Math.abs(diff) + "% " + (diff > 0 ? "дешевле" : "дороже") + " средней по категории";
+    row.appendChild(track);
+
+    row.appendChild(el("div","rp num", nf(r.basket_price)));
+
+    // the index turned into the sentence the customer is shown. the sign follows the map pin's
+    // convention rather than the index's - cheaper is «−», where the index itself goes down (§5).
+    var chip = el("div","rx");
+    chip.appendChild(el("span",
+      "tag " + (diff > 0 ? "gr" : diff < 0 ? "rd" : "am"),
+      (diff > 0 ? "−" : diff < 0 ? "+" : "±") + Math.abs(diff) + "%"));
+    chip.title = "Индекс " + nf(r.price_index) + " — рынок это 100";
+    row.appendChild(chip);
+
+    list.appendChild(row);
+  });
+  c.appendChild(list);
+
+  var foot = el("div","race-foot");
+  foot.appendChild(el("i"));
+  foot.appendChild(el("span", null, market
+    ? "Середина — средняя корзина категории: " + money(avg) + " · магазинов в сравнении: " + nf(market.shops)
+    : "Средняя корзина категории пока не считается"));
+  c.appendChild(foot);
+  return c;
+}
+
+// ── what a basket costs, and whether that is moving ──
+//
+// two questions in one row per market: the figure says what the category is worth today, the
+// sparkline beside it says which way it has gone over thirty days. Neither is enough alone - a
+// founder pricing a VIP placement needs the number, and a founder deciding whether the market is
+// getting cheaper needs the shape.
+//
+// **The history is the only fact here that had to be written down at the time.** `shop_basket_index`
+// is a view over current prices, so yesterday's basket is gone the moment an owner retypes a number;
+// `basket_history` is filled hourly by startBasketHistory in main.go. Days the server was not running
+// have no row, and the line simply joins across them rather than inventing a point.
+function buildTrend(s) {
+  var c = card("b4","Средний чек","Стоимость общей корзины по категориям, 30 дней");
+
+  var baskets = (s.baskets || []).slice().sort(function (a, b) { return b.avg_basket - a.avg_basket; });
+  if (!baskets.length) {
+    c.appendChild(el("div","skel","Ни одна корзина ещё не посчитана."));
+    return c;
+  }
+
+  // history arrives as one flat list of (day, category); group it once rather than filtering it
+  // four times
+  var byCat = {};
+  (s.basket_history || []).forEach(function (d) {
+    (byCat[d.category] = byCat[d.category] || []).push(d.avg_basket);
+  });
+
+  var list = el("div","trend");
+  baskets.forEach(function (b) {
+    var row = el("div","tr");
+
+    var nm = el("div","tn");
+    nm.appendChild(el("b", null, catName(b.category)));
+    nm.appendChild(el("span","num", money(b.avg_basket)));
+    row.appendChild(nm);
+
+    var side = el("div","tg");
+    var series = byCat[b.category] || [];
+    if (series.length >= 2) {
+      side.appendChild(sparkline(series, 78, 26));
+      var first = series[0], last = series[series.length - 1];
+      var move = first > 0 ? Math.round((last - first) / first * 1000) / 10 : 0;
+      // **dearer is red here, and that is not a mistake.** Everywhere else on this panel a rising
+      // number is good news; the thing being measured is what a customer pays, so a market getting
+      // more expensive is the bad direction - the same convention the price badge uses.
+      side.appendChild(el("em", move > 0 ? "up" : move < 0 ? "dn" : "fl",
+        (move > 0 ? "+" : "") + String(move).replace(".", ",") + "%"));
+    } else {
+      var wait = el("em","fl", "с сегодня");
+      wait.title = "История пишется раз в час — график появится через несколько дней";
+      side.appendChild(wait);
+    }
+    row.appendChild(side);
+
+    row.title = catName(b.category) + ": от " + money(b.min_basket) + " до " + money(b.max_basket)
+      + " · магазинов в сравнении: " + nf(b.shops);
+    list.appendChild(row);
+  });
+  c.appendChild(list);
+  return c;
+}
+
+// a chart with no axes, no labels and no tooltip: at this size the only thing it can say is which
+// way the line went, which is exactly what it is being asked. Padded by 2px top and bottom so a
+// flat series does not sit on the edge of its own box.
+function sparkline(values, w, h) {
+  var svg = sv("svg",{width:w,height:h,viewBox:"0 0 "+w+" "+h});
+  var lo = Math.min.apply(null, values), hi = Math.max.apply(null, values);
+  var span = hi - lo;
+  var pts = values.map(function (v, i) {
+    return {
+      x: values.length === 1 ? w / 2 : i / (values.length - 1) * w,
+      // a flat series has no range to scale by, so it draws down the middle rather than dividing
+      // by zero and disappearing
+      y: span === 0 ? h / 2 : 2 + (1 - (v - lo) / span) * (h - 4)
+    };
+  });
+  svg.appendChild(sv("path",{ d:smooth(pts, 0.15), fill:"none", stroke:C.o,
+    "stroke-width":1.8, "stroke-linecap":"round", "stroke-linejoin":"round" }));
+  var end = pts[pts.length - 1];
+  svg.appendChild(sv("circle",{ cx:end.x, cy:end.y, r:2.4, fill:C.o }));
+  return svg;
+}
+
+// ── files with no product behind them ──
+//
+// **The one panel here that is not about the market**, and it earns its place because nothing else
+// can answer this: deleting a shop takes its products with it through the schema's cascade, and
+// their uploaded photos are not in the schema. They stay on disk, or in the bucket, costing money
+// and appearing nowhere.
+//
+// **It moved off the dashboard and under Шаблоны on 2026-08-22.** It was the only card on the front
+// page that could not tell the founder anything until he pressed something, which is the wrong thing
+// to give the best real estate to; this section is the one about what is inside the catalogues, and
+// the strip is deliberately small so it cannot push the template tables off the first screen.
+//
+// **It is the only panel that does not load itself, and that is deliberate.** Answering it means
+// listing every file in the store and reading every image path out of the database - on R2, a paged
+// listing over the network - and `loadStats` runs every 45 seconds for as long as the tab is open.
+// «Проверить» is a button and the result lives in `state.storage` until the page is reloaded.
+function drawStorage() {
+  var host = $("#tpl-storage"); if (!host) return;
+  clear(host);
+
+  var report = state.storage;
+
+  var check = el("button","btn btn-g btn-s");
+  check.appendChild(ico(ICONS.sync,16));
+  check.appendChild(el("span",null, report ? "Ещё раз" : "Проверить"));
+  check.addEventListener("click", function () {
+    check.disabled = true;
+    api("/api/admin/storage/orphans")
+      .then(function (d) { state.storage = d; drawStorage(); })
+      .catch(function (e) { if (!guard(e)) toast("Не удалось проверить хранилище", true); })
+      .then(function () { check.disabled = false; });
+  });
+
+  // **one strip and no card around it.** A `card()` here would put a title and a caption above the
+  // strip and repeat in two lines what the strip already says in two - and this is a maintenance
+  // control sitting on top of the section's real content, so every pixel it takes is one the
+  // template tables lose. The glyph says which of the three cases this is.
+  var kind = !report ? "idle" : report.files === 0 ? "ok" : "hit";
+  var strip = el("div","stor tpl-stor " + kind);
+  var glyph = el("div","si");
+  glyph.appendChild(ico(kind === "ok" ? ICONS.ok : ICONS.broom, 19));
+  strip.appendChild(glyph);
+
+  // the title is the strip's own first line, and the second says which of the three states it is in
+  var text = el("div","sb");
+  text.appendChild(el("b",null,"Файлы без товара"));
+  var held = report && report.too_recent > 0
+    ? " Ещё " + nf(report.too_recent) + " моложе часа — их не трогаем: файл пишется раньше строки в базе."
+    : "";
+  if (!report) {
+    text.appendChild(el("p",null,"Фотографии удалённых магазинов остаются в хранилище. "
+      + "Обход всех файлов слишком дорог для таймера — это кнопка, а не число."));
+  } else if (report.files === 0) {
+    // without the «too_recent» line "12 files, 0 deleted" reads as a broken button rather than as a
+    // rule working
+    text.appendChild(el("p",null, "Лишних файлов нет: " + nf(report.total_files) + " файлов, "
+      + bytes(report.total_bytes) + " — за каждым стоит товар." + held));
+  } else {
+    text.appendChild(el("p",null, nf(report.files) + " файлов без товара, " + bytes(report.bytes)
+      + " — на них не ссылается ни один товар." + held));
+  }
+  strip.appendChild(text);
+
+  var acts = el("div","stor-act");
+  if (report && report.files > 0) {
+    var sweep = el("button","btn btn-d btn-s");
+    sweep.appendChild(ico(ICONS.broom,16));
+    sweep.appendChild(el("span",null,"Удалить " + nf(report.files)));
+    sweep.addEventListener("click", function () { confirmSweep(report); });
+    acts.appendChild(sweep);
+  }
+  acts.appendChild(check);
+  strip.appendChild(acts);
+
+  host.appendChild(strip);
+}
+
+// bytes as something a person reads. binary steps, since that is what `du` and every file manager on
+// the founder's machine report.
+function bytes(n) {
+  n = Number(n || 0);
+  var units = ["Б","КБ","МБ","ГБ"], i = 0;
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+  // one decimal only under 10 of a unit, where it carries information - "1,4 МБ" against "1 МБ"
+  return n.toLocaleString("ru-RU", { maximumFractionDigits: i === 0 || n >= 10 ? 0 : 1 }) + " " + units[i];
+}
+
+// **The confirmation names what disappears, and it also names what does not.** The fear this dialog
+// has to answer is "will this delete a live photo", and the honest answer is the rules - so they are
+// on the dialog rather than only in a comment in admin.go.
+function confirmSweep(report) {
+  confirmDialog({
+    title:"Удалить " + nf(report.files) + " файлов?",
+    body:"Освободится " + bytes(report.bytes) + ". Это фотографии, на которые не ссылается ни один товар "
+       + "и которые лежат дольше часа.",
+    warn:"Фотографии товаров и снимки общего каталога не затрагиваются: удаляется только то, что "
+       + "лежит в uploads/ и старше часа. Список берётся заново в момент удаления, а не тот, что на экране.",
+    confirmLabel:"Удалить",
+    onConfirm:function () {
+      // the server re-derives the list; nothing about which files to delete is sent from here
+      return api("/api/admin/storage/orphans", { method:"DELETE" }).then(function (d) {
+        toast("Удалено " + nf(d.files) + " файлов" + (d.failed ? ", " + nf(d.failed) + " не удалось" : ""));
+        // **re-scan rather than render the delete's own answer.** Its `files` is how many were
+        // removed, not how many are left, so painting it back into the card would leave the panel
+        // reporting the work as if it were still outstanding - and after a capped sweep there
+        // genuinely are more.
+        return api("/api/admin/storage/orphans");
+      }).then(function (scan) {
+        state.storage = scan;
+        drawStorage();
+      }).catch(function (e) {
+        if (guard(e)) return;
+        toast("Не удалось очистить хранилище", true);
+        throw e;
+      });
+    }
+  });
 }
 
 // opens a shop's catalogue from anywhere, loading the shop list first if this tab has not been
@@ -1329,9 +1981,11 @@ function drawSignups(days) {
   var tip = $("#tip-signups");
   $$("#ch-signups svg").forEach(function(n){ n.remove(); });
 
-  // taller than it needs to be for 30 points, because the card next to it is the funnel and grid
-  // rows stretch to the tallest cell - at 264 the chart sat in the top two thirds of a white box.
-  var W = Math.max(host.clientWidth, 320), H = 330;
+  // 280 sets the height of the last row of the dashboard, since the card beside it is the orphan
+  // sweep and that one has three lines in it. it was 330 when this chart sat next to the funnel and
+  // had to fill a taller cell; left there it would have stretched a card of three lines to the
+  // height of a chart nobody scrolls down to read.
+  var W = Math.max(host.clientWidth, 320), H = 300;
   var padL = 38, padR = 12, padT = 12, padB = 30;
   var pw = W-padL-padR, ph = H-padT-padB;
 
@@ -1350,9 +2004,13 @@ function drawSignups(days) {
   grad.appendChild(sv("stop",{offset:"100%","stop-color":C.o,"stop-opacity":"0"}));
   defs.appendChild(grad); svg.appendChild(defs);
 
-  for (var k = 0; k <= 4; k++) {
-    var v = top/4*k, y = Y(v);
-    svg.appendChild(sv("line",{x1:padL,y1:y,x2:W-padR,y2:y,stroke:C.line,"stroke-width":1,"stroke-dasharray":"1 5","stroke-linecap":"round"}));
+  // four gridlines unless the whole chart fits in fewer whole numbers. a quiet fortnight peaks at
+  // one signup, and quarters of 1 rounded for the label printed «1 1 1 0 0» up the axis - which
+  // reads as a broken chart on exactly the install where the founder is looking hardest.
+  var ticks = top <= 4 ? top : 4;
+  for (var k = 0; k <= ticks; k++) {
+    var v = top/ticks*k, y = Y(v);
+    svg.appendChild(sv("line",{x1:padL,y1:y,x2:W-padR,y2:y,stroke:C.line2,"stroke-width":1,"stroke-dasharray":"1 5","stroke-linecap":"round"}));
     var lab = sv("text",{x:padL-9,y:y+4,"text-anchor":"end","font-size":11,fill:C.faint,"font-family":"inherit","font-weight":"600"});
     lab.textContent = Math.round(v); svg.appendChild(lab);
   }
@@ -1548,6 +2206,15 @@ function openThread(thread) {
   who.appendChild(el("b", null, thread.name || "Без имени"));
   who.appendChild(el("span", null, thread.phone + " · " + roleName(thread.role) + " · #" + thread.user_id));
   head.appendChild(who);
+  // **the one way to end a conversation, and it ends it on both phones.** A settled thread that
+  // stays in the list is a thread read again next week; an inbox with a hundred of them is one the
+  // queue gets hunted for inside. It is in the header of the conversation rather than in the row on
+  // the list on purpose - you should have the messages in front of you when you decide.
+  var rm = el("button","x rm"); rm.type = "button"; rm.title = "Очистить переписку";
+  rm.appendChild(ico(ICONS.trash, 17));
+  rm.addEventListener("click", function () { confirmClearThread(thread, s.close); });
+  head.appendChild(rm);
+
   var x = el("button","x"); x.type = "button"; x.title = "Закрыть (Esc)";
   x.appendChild(ico(ICONS.x, 18));
   x.addEventListener("click", s.close);
@@ -1702,6 +2369,44 @@ function openThread(thread) {
   });
 }
 
+// **the dialog says out loud that somebody else's screen changes.** Every other destructive action
+// on this panel removes something belonging to an account - a user, a shop, a file nobody can see.
+// This one reaches into an app on somebody's phone and takes a conversation out of it, which is the
+// one thing a confirm dialog here genuinely has to warn about; the rest of the list is what does
+// *not* happen, because the fear a founder has at this button is that «очистить» means «удалить
+// пользователя».
+function confirmClearThread(thread, closeChat) {
+  confirmDialog({
+    title:"Очистить переписку?",
+    body:(thread.name || "Без имени") + " · " + thread.phone + ". Действие необратимо.",
+    names:[
+      "Все сообщения этого разговора — и его, и ваши ответы",
+      "Переписка исчезнет и в приложении у пользователя",
+      "Аккаунт, магазины и товары остаются на месте"
+    ],
+    warn:"Восстановить нечего: сообщения удаляются из базы, а не прячутся.",
+    confirmLabel:"Очистить",
+    onConfirm:function () {
+      return api("/api/admin/support/threads/" + thread.user_id, { method:"DELETE" })
+        .then(function (d) {
+          toast("Переписка очищена" + (d.deleted ? " · " + nf(d.deleted) + " сообщений" : ""));
+          if (closeChat) closeChat();
+          // the row behind the modal is gone from the inbox now, and the badge counted it - both
+          // are fetched outright rather than left to the loop, for the same reason opening a thread
+          // refreshes them: an action the founder just took should be reflected before they look up
+          live.inboxAt = Date.now(); live.statsAt = Date.now();
+          loadSupport(); loadStats();
+        })
+        .catch(function (e) {
+          if (guard(e)) return;
+          toast(e.code === "user_not_found" ? "Пользователь удалил аккаунт"
+              : "Не удалось очистить переписку", true);
+          throw e;
+        });
+    }
+  });
+}
+
 function bubble(m, sameSideAsPrevious) {
   // textContent, like every other user-supplied string on this page: a message body is the one field
   // in this whole database that a stranger writes and an admin reads with a token in localStorage,
@@ -1752,15 +2457,15 @@ function renderUsers() {
     tr.appendChild(el("td","num", u.shop_count ? nf(u.shop_count) : "—"));
     tr.appendChild(el("td","d num", sdate(u.created_at)));
 
+    // **every row is editable and deletable, administrators included** (2026-08-22). Both buttons
+    // used to be disabled on an admin row, with a tooltip explaining that it was SQL's job; the
+    // founder asked for the power over his own product, so the only refusal left is the server's
+    // last-administrator check, which arrives as a toast rather than as a disabled button - it
+    // depends on how many admins exist, which a row does not know.
     var act = el("td","r"); var wrap = el("div","acts");
-    var isAdmin = u.role === "admin";
-    var edit = iconBtn(ICONS.edit, isAdmin ? "Администратора нельзя редактировать через панель" : "Редактировать", null,
-      isAdmin ? null : function(){ editUser(u); });
-    edit.disabled = isAdmin;
-    var del = iconBtn(ICONS.trash, isAdmin ? "Администратора нельзя удалить через панель" : "Удалить", "dg",
-      isAdmin ? null : function(){ confirmDeleteUser(u); });
-    del.disabled = isAdmin;
-    wrap.appendChild(edit); wrap.appendChild(del); act.appendChild(wrap); tr.appendChild(act);
+    wrap.appendChild(iconBtn(ICONS.edit, "Редактировать", null, function(){ editUser(u); }));
+    wrap.appendChild(iconBtn(ICONS.trash, "Удалить", "dg", function(){ confirmDeleteUser(u); }));
+    act.appendChild(wrap); tr.appendChild(act);
 
     body.appendChild(tr);
   });
@@ -1773,8 +2478,12 @@ function editUser(u) {
     iconClass:"o", icon:ICONS.edit,
     fields:[
       { name:"name", label:"Имя", value:u.name || "" },
+      // `admin` is in this list as of 2026-08-22. It is the only role that grants access to this
+      // panel, and granting it is one dropdown - the note says what that means, because the account
+      // it is given to can then edit and delete every account including this one.
       { name:"role", label:"Роль", type:"select", value:u.role,
-        options:[["customer",ROLES.customer],["shop_owner",ROLES.shop_owner]] },
+        options:[["customer",ROLES.customer],["shop_owner",ROLES.shop_owner],["admin",ROLES.admin]],
+        note:"Администратор получает доступ к этой панели: все пользователи, магазины, цены и переписки." },
       { name:"phone", label:"Телефон", value:u.phone, disabled:true,
         note:"Телефон — это идентификатор аккаунта в Telegram-входе, поэтому он не редактируется." }
     ],
@@ -1786,8 +2495,9 @@ function editUser(u) {
           renderUsers(); loadStats(); toast("Пользователь сохранён");
         }).catch(function (e) {
           if (guard(e)) return;
-          toast(e.code==="name_required" ? "Укажите имя" : e.code==="cannot_edit_admin"
-            ? "Администратора нельзя редактировать через панель" : "Не удалось сохранить", true);
+          toast(e.code==="name_required" ? "Укажите имя"
+            : e.code==="last_admin" ? "Это последний администратор — сначала назначьте другого"
+            : e.code==="invalid_role" ? "Неизвестная роль" : "Не удалось сохранить", true);
           throw e;
         });
     }
@@ -1796,6 +2506,9 @@ function editUser(u) {
 
 function confirmDeleteUser(u) {
   var names = ["Имя и номер телефона"];
+  // an administrator's row says so, because the list is sorted by registration date and the role
+  // tag is three columns to the left of the button being pressed
+  if (u.role === "admin") names.push("Это администратор — он потеряет доступ к панели");
   if (u.shop_count > 0) {
     names.push("Магазинов: " + nf(u.shop_count) + " — вместе со всеми товарами и ценами");
     names.push("Точки этих магазинов исчезнут с карты");
@@ -1814,7 +2527,7 @@ function confirmDeleteUser(u) {
         toast("Пользователь удалён");
       }).catch(function (e) {
         if (guard(e)) return;
-        toast(e.code==="cannot_delete_admin" ? "Администратора нельзя удалить через панель"
+        toast(e.code==="last_admin" ? "Это последний администратор — сначала назначьте другого"
           : e.code==="user_not_found" ? "Этот пользователь уже удалён" : "Не удалось удалить", true);
         throw e;
       });
@@ -2141,6 +2854,32 @@ function loadAnomalies() {
 
 var THRESHOLDS = [[0.3,"от 30%"],[0.5,"от 50%"],[1,"в 2 раза"],[2,"в 3 раза"]];
 
+// **what the two price columns actually are**, because the report used to print «Цена» beside
+// «Медиана рынка» and leave the reader to work out whose price was whose - which is a report that
+// gets scrolled past rather than acted on. The short version stands above the table; this is the
+// whole of it, behind the «i» the way the templates section keeps its rules.
+var ANOMALY_HELP = [
+  "Каждая строка — это один товар в одном магазине, цена которого сильно расходится с ценой на тот же товар у соседей. Сравниваются только шаблонные товары: у всех магазинов одной категории они стоят под одним ключом, поэтому «тот же товар» здесь — это факт, а не совпадение названий.",
+  "«Цена магазина» — сколько за этот товар просит именно этот магазин. «Обычная цена» — медиана: выстройте цены всех магазинов категории на этот товар по возрастанию и возьмите ту, что окажется ровно посередине. Половина магазинов дороже неё, половина дешевле.",
+  "Медиана, а не среднее, и это главное в отчёте. Мы ищем выброс — одну цену с лишним нулём. Среднее такая цена утащит за собой и спрячется за ним; медиану не сдвинет, потому что медиане важен порядок цен, а не их величина. Индекс цен на витрине при этом считается по среднему (так и должно быть — там важна каждая реальная цена), и именно поэтому опечатку нужно ловить здесь.",
+  "Строка попадает в отчёт, только если товар оценили минимум 3 магазина — иначе «рынок» это один продавец. Кнопка слева задаёт порог: насколько сильно цена должна расходиться с обычной, чтобы её показать.",
+  "Что с этим делать: позвонить. В строке есть имя владельца и телефон магазина — обычно это опечатка, реже честная распродажа. Пока цена не исправлена, она тянет индекс всей своей категории."
+];
+
+function anomalyHelp() {
+  var s = shell({ title:"Как читать этот отчёт", icon:ICONS.scale, iconClass:"o", size:"md" });
+  ANOMALY_HELP.forEach(function (text) {
+    var p = el("p","m-sub", text);
+    p.style.marginTop = "12px"; p.style.fontSize = "13.5px"; p.style.lineHeight = "1.6";
+    s.modal.appendChild(p);
+  });
+  var acts = el("div","m-acts");
+  var ok = el("button","btn btn-p","Понятно");
+  ok.addEventListener("click", s.close);
+  acts.appendChild(ok); s.modal.appendChild(acts);
+  ok.focus();
+}
+
 function renderAnomalies() {
   var body = $("#t-anom tbody"), box = $("#s-anom");
   clear(body); clear(box); box.className = "";
@@ -2153,7 +2892,8 @@ function renderAnomalies() {
   var q = state.q.anom.trim().toLowerCase();
   var rows = (state.anomalies||[]).filter(function (a) {
     if (!q) return true;
-    return (a.name||"").toLowerCase().indexOf(q)>=0 || (a.shop_name||"").toLowerCase().indexOf(q)>=0;
+    return (a.name||"").toLowerCase().indexOf(q)>=0 || (a.shop_name||"").toLowerCase().indexOf(q)>=0
+        || (a.owner_name||"").toLowerCase().indexOf(q)>=0 || (a.contact_phone||"").indexOf(q)>=0;
   });
   rows = sortRows(rows, state.sort.anom, function (a, k) {
     return k === "deviation_percent" ? Math.abs(a.deviation_percent) : a[k];
@@ -2161,11 +2901,26 @@ function renderAnomalies() {
   $("#c-anom").textContent = countLabel(q, rows.length, (state.anomalies||[]).length);
   markSort("#t-anom", state.sort.anom);
 
+  // the standing sentence, plus what is in the report right now. counted from the rows on screen
+  // rather than from everything loaded, so it agrees with the table under it while a search is open.
+  var sum = $("#anom-sum"); clear(sum);
+  sum.appendChild(document.createTextNode(
+    "Цена магазина сравнивается с обычной ценой на тот же товар у остальных магазинов той же категории. "));
+  if (rows.length) {
+    var dear = rows.filter(function(a){ return a.deviation_percent > 0; }).length;
+    var shopIds = {}; rows.forEach(function(a){ shopIds[a.shop_id] = 1; });
+    sum.appendChild(el("b", null, nf(rows.length) + " цен"));
+    sum.appendChild(document.createTextNode(" у " + nf(Object.keys(shopIds).length) + " магазинов: "
+      + nf(dear) + " дороже обычной, " + nf(rows.length - dear) + " дешевле."));
+  } else {
+    sum.appendChild(document.createTextNode("Нужно минимум 3 магазина с ценой на строку, иначе «рынок» — это один продавец."));
+  }
+
   if (!rows.length) {
     box.appendChild(emptyBox(
       q ? "Ничего не найдено" : "Подозрительных цен нет",
       q ? "Попробуйте другой запрос."
-        : "Сравнение идёт по медиане цены на тот же товар внутри той же категории магазинов. Нужно минимум 3 магазина с ценой на строку, иначе «рынок» — это один продавец."));
+        : "Ни одна цена не расходится с обычной настолько, чтобы её стоило проверить. Порог можно опустить кнопкой слева."));
     return;
   }
 
@@ -2175,7 +2930,7 @@ function renderAnomalies() {
     var dv = el("td");
     var high = a.deviation_percent > 0;
     dv.appendChild(el("span", high ? "tag rd" : "tag gr", (high?"+":"") + a.deviation_percent + "%"));
-    dv.appendChild(el("div","d", high ? "дороже рынка" : "дешевле рынка"));
+    dv.appendChild(el("div","d", high ? "дороже обычной" : "дешевле обычной"));
     tr.appendChild(dv);
 
     tr.appendChild(el("td","b", a.name));
@@ -2185,19 +2940,43 @@ function renderAnomalies() {
     sh.appendChild(el("div","d", catName(a.shop_category)));
     tr.appendChild(sh);
 
-    tr.appendChild(el("td","num b", money(a.price)));
-    tr.appendChild(el("td","num d", money(a.median_price)));
-    tr.appendChild(el("td","num d", nf(a.market_shops)));
+    // both price columns right-aligned: they are the two numbers the row exists to put side by side,
+    // and a column of сум that does not line up on its last digit cannot be scanned down
+    tr.appendChild(el("td","r num b", money(a.price)));
+
+    // the median and what it was taken over, in one cell: the number is meaningless without the
+    // count, and «Магазинов» as a column of its own was three characters wide and easy to miss
+    var md = el("td","r");
+    md.appendChild(el("div","num", money(a.median_price)));
+    md.appendChild(el("div","d num", "по " + nf(a.market_shops) + " магазинам"));
+    tr.appendChild(md);
+
+    // ── how to ring them ──
+    //
+    // **the row is a phone call, not a fact.** A report that makes the founder open the Магазины tab
+    // and search for the shop to find its number is one that gets read and not acted on, so the
+    // number is in the row - as a `tel:` link, which is what a phone or a desktop softphone dials
+    // and what a right-click copies everywhere else.
+    var ct = el("td");
+    ct.appendChild(el("div", null, a.owner_name || "Без имени"));
+    var tel = el("a","d mono", a.contact_phone || a.owner_phone || "—");
+    if (a.contact_phone || a.owner_phone) {
+      tel.href = "tel:" + String(a.contact_phone || a.owner_phone).replace(/[^\d+]/g, "");
+      tel.title = "Позвонить в магазин";
+    }
+    ct.appendChild(tel);
+    // the owner's own number, only when it is not the one the shop publishes - two identical lines
+    // would say the shop has two numbers
+    if (a.owner_phone && a.contact_phone && a.owner_phone !== a.contact_phone) {
+      var own = el("div","d mono", "владелец: " + a.owner_phone);
+      own.title = "Аккаунт, из которого введена цена";
+      ct.appendChild(own);
+    }
+    tr.appendChild(ct);
 
     var act = el("td","r");
     var open = iconBtn(ICONS.box, "Открыть каталог магазина", null, function () {
-      var shop = (state.shops||[]).filter(function(s){ return s.id===a.shop_id; })[0];
-      if (shop) { openProducts(shop); return; }
-      // the shops tab has not been opened yet, so there is nothing in memory to hand the modal
-      loadShops().then(function () {
-        var found = (state.shops||[]).filter(function(s){ return s.id===a.shop_id; })[0];
-        if (found) openProducts(found); else toast("Магазин не найден", true);
-      });
+      openShopById(a.shop_id);
     });
     act.appendChild(open); tr.appendChild(act);
 
@@ -2218,22 +2997,40 @@ function loadTemplates() {
   });
 }
 
+// **the three facts that used to be a card at the top of this section.** They are the rules a
+// template edit is judged against, they are worth every word, and they are read once - after which
+// they sat above the tables forever, pushing the thing this section is *for* down the screen. They
+// are behind the «i» in the toolbar now, whole: shortening them would have been the other way to
+// win the space back, and the wrong one, since what they explain is the difference between an edit
+// that changes what the next shop gets and one that rewrites thousands of existing rows.
+var TEMPLATE_HELP = [
+  "Шаблон — это список товаров, которым заполняется каталог нового магазина. Здесь его можно менять: добавлять товары, править названия и единицы, удалять лишнее.",
+  "Изменения действуют на магазины, которые будут созданы дальше. Магазины, которые уже существуют, остаются со своим списком — их догоняет кнопка «Применить ко всем»: она добавит новые строки, поправит названия и уберёт удалённые. Цены при этом не трогаются.",
+  "Ключ товара нельзя изменить после создания: именно по нему товар сравнивается между магазинами. Смена ключа не переименовала бы товар, а оторвала бы его от всех магазинов, где он уже стоит."
+];
+
+function templateHelp() {
+  // the page's own modal, not a second mechanism: scrim, Escape and click-outside come with it
+  var s = shell({ title:"Как это работает", icon:ICONS.tpl, iconClass:"o" });
+  TEMPLATE_HELP.forEach(function (text, i) {
+    var p = el("p","m-sub", text);
+    p.style.marginTop = i === 0 ? "12px" : "12px";
+    p.style.fontSize = "13.5px"; p.style.lineHeight = "1.6";
+    s.modal.appendChild(p);
+  });
+  var acts = el("div","m-acts");
+  var ok = el("button","btn btn-p","Понятно");
+  ok.addEventListener("click", s.close);
+  acts.appendChild(ok); s.modal.appendChild(acts);
+  ok.focus();
+}
+
 function renderTemplates() {
   var host = $("#tpl-list"); clear(host);
 
-  var intro = el("div","card plain"); intro.style.marginBottom = "16px";
-  intro.appendChild(el("h2",null,"Как это работает"));
-  [
-    "Шаблон — это список товаров, которым заполняется каталог нового магазина. Здесь его можно менять: добавлять товары, править названия и единицы, удалять лишнее.",
-    "Изменения действуют на магазины, которые будут созданы дальше. Магазины, которые уже существуют, остаются со своим списком — их догоняет кнопка «Применить ко всем»: она добавит новые строки, поправит названия и уберёт удалённые. Цены при этом не трогаются.",
-    "Ключ товара нельзя изменить после создания: именно по нему товар сравнивается между магазинами. Смена ключа не переименовала бы товар, а оторвала бы его от всех магазинов, где он уже стоит."
-  ].forEach(function (text, i) {
-    var p = el("p","cap", text);
-    p.style.marginTop = i === 0 ? "8px" : "10px";
-    p.style.fontSize = "13.5px"; p.style.lineHeight = "1.6";
-    intro.appendChild(p);
-  });
-  host.appendChild(intro);
+  // what the deleted page header's sub-line would have said, as a fact rather than a description
+  var rows = state.templates.reduce(function (n, t) { return n + t.size; }, 0);
+  $("#c-tpl").textContent = "Шаблонов: " + state.templates.length + " · позиций: " + nf(rows);
 
   state.templates.forEach(function (t) {
     var drift = t.missing_rows > 0 || t.stale_rows > 0;
@@ -2253,7 +3050,7 @@ function renderTemplates() {
     sync.addEventListener("click", function(){ confirmSync(t); });
     actions.appendChild(sync);
 
-    var c = card("plain", catName(t.category),
+    var c = card(null, catName(t.category),
       t.size + " позиций · " + nf(t.shops) + " магазинов" + (t.owner_named ? " · названия пишет владелец" : ""),
       actions);
     c.style.marginBottom = "16px";
@@ -2445,6 +3242,12 @@ function confirmSync(t) {
 // than asking "are you sure", cancel sits first, and the confirming button is on the right. two
 // surfaces disagreeing about which side is safe is how somebody's shop gets deleted by muscle memory.
 
+// every open modal's `shut`, innermost last. **Escape must close one modal, not all of them**: the
+// chat window can put a confirm dialog on top of itself, and a keydown listener per modal means one
+// press reaches every one of them - so cancelling the confirm would also close the conversation
+// behind it. The scrim and the × are already per-modal; this is the only key that is not.
+var openModals = [];
+
 function shell(opts) {
   var scrim = el("div","scrim");
   var m = el("div","modal" + (opts.size ? " " + opts.size : "") + (opts.cls ? " " + opts.cls : ""));
@@ -2471,10 +3274,13 @@ function shell(opts) {
     if (closed) return;
     closed = true;
     document.removeEventListener("keydown",onKey);
+    var at = openModals.indexOf(shut);
+    if (at >= 0) openModals.splice(at, 1);
     scrim.remove();
     if (opts.onClose) opts.onClose();
   }
-  function onKey(e){ if(e.key==="Escape") shut(); }
+  function onKey(e){ if(e.key==="Escape" && openModals[openModals.length-1]===shut) shut(); }
+  openModals.push(shut);
   document.addEventListener("keydown", onKey);
   scrim.addEventListener("click", function(e){ if(e.target===scrim) shut(); });
   return { scrim:scrim, modal:m, close:shut };
@@ -2766,7 +3572,9 @@ function modal(o) {
 
     if (f.note) {
       var n = el("div","locked");
-      n.appendChild(ico(ICONS.lock,13));
+      // a padlock means "you cannot change this", so a note under a field you *can* change gets the
+      // «i» instead - the role select is the first such note, and its point is what the choice does
+      n.appendChild(ico(f.disabled ? ICONS.lock : ICONS.info, 13));
       n.appendChild(el("span",null,f.note));
       label.appendChild(n);
     }
@@ -2828,24 +3636,27 @@ function modal(o) {
 $("#l-go").addEventListener("click", startLogin);
 $("#l-out").addEventListener("click", function(){ signOut(); });
 $("#refresh").addEventListener("click", function(){ refresh(); });
+$("#tpl-info").addEventListener("click", templateHelp);
 $("#l-copy").addEventListener("click", function () {
   var url = $("#l-url").textContent;
   var done = function(){ $("#l-copy").textContent="Скопировано"; setTimeout(function(){ $("#l-copy").textContent="Копировать"; },1600); };
   if (navigator.clipboard) navigator.clipboard.writeText(url).then(done, function(){}); else done();
 });
 
-$("#q-users").addEventListener("input", function(e){ state.q.users = e.target.value; renderUsers(); });
-$("#q-shops").addEventListener("input", function(e){ state.q.shops = e.target.value; renderShops(); });
-$("#q-anom").addEventListener("input", function(e){ state.q.anom = e.target.value; renderAnomalies(); });
-$("#q-support").addEventListener("input", function(e){ state.q.support = e.target.value; renderSupport(); });
-
-// the header field is a shortcut into whichever list is open rather than a fifth search: three
-// boxes on screen searching different things is how a user ends up typing into the wrong one.
+// **one field, and it writes into whichever section is open.** There were two at once for a while -
+// a header field mirroring the section's own, one above the other, both searching the same list -
+// and the rule that settled it is unchanged: one action, one control. What changed is which of the
+// two survived, now that the header exists for the session buttons anyway.
+//
+// It searches the list on screen and nothing else. A search that spanned every section would be a
+// different feature and would need results of its own, not a field that quietly retypes into this.
 $("#q-global").addEventListener("input", function (e) {
-  var v = e.target.value;
-  if (state.view === "users") { state.q.users = v; $("#q-users").value = v; renderUsers(); }
-  else if (state.view === "shops") { state.q.shops = v; $("#q-shops").value = v; renderShops(); }
+  var find = SEARCH[state.view];
+  if (!find) return;
+  state.q[find.q] = e.target.value;
+  find.render();
 });
+$("#anom-info").addEventListener("click", anomalyHelp);
 
 $("#an-th").addEventListener("click", function () {
   var i = THRESHOLDS.map(function(t){ return t[0]; }).indexOf(state.threshold);
@@ -2872,6 +3683,9 @@ var rt = null;
 window.addEventListener("resize", function () {
   clearTimeout(rt);
   rt = setTimeout(function () {
+    // instant: the layout changed under the pill, so animating from where it used to be would draw
+    // a slide that no click caused
+    moveNavPill(true);
     if (state.view === "dash" && state.stats) drawSignups(state.stats.signups);
   }, 180);
 });
