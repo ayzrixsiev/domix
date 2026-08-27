@@ -189,78 +189,110 @@
 
 ---
 
-## Сантехника — 58 товаров
-
-Каталог фитингов VERO — то, чем шкаф сантехнического магазина занят на самом деле: муфты, отводы,
-тройники, краны и переходники между ними. Всё — категория `plumbing`, единица **шт**, одна
-фотография на позицию.
+## Сантехника — 100 товаров
 
 | № | Товар | Ед. | Ключ |
 | --- | --- | --- | --- |
-| 001 | VERO Адаптер-муфта комб. В/Р 20х1/2 | шт | `plumbing.adapter_coupling_female_20` |
-| 002 | VERO Адаптер-муфта комб. В/Р 25х1/2 | шт | `plumbing.adapter_coupling_female_25` |
-| 003 | VERO Адаптер-муфта комб. Н/Р 20х1/2 | шт | `plumbing.adapter_coupling_male_20` |
-| 004 | VERO Адаптер-муфта комб. Н/Р 25х1/2 | шт | `plumbing.adapter_coupling_male_25` |
-| 005 | VERO Адаптер с накидной гайкой 25х1/2 (V-2) | шт | `plumbing.adapter_union_nut_25_half` |
-| 006 | VERO Адаптер с накидной гайкой 25х3/4 (V-2) | шт | `plumbing.adapter_union_nut_25_three_quarter` |
-| 007 | VERO Адаптер с накидной гайкой (ниппель) 25х1/2 | шт | `plumbing.adapter_nipple_25_half` |
-| 008 | VERO Двойной отвод с креплением В/Р 20х15 | шт | `plumbing.double_elbow_bracket_female_20` |
-| 009 | VERO Двойной отвод с креплением Н/Р 20х15 | шт | `plumbing.double_elbow_bracket_male_20` |
-| 010 | VERO Заглушка 20 | шт | `plumbing.plug_20` |
-| 011 | VERO Заглушка 25 | шт | `plumbing.plug_25` |
-| 012 | VERO Клипса 20 | шт | `plumbing.clip_20` |
-| 013 | VERO Клипса 25 | шт | `plumbing.clip_25` |
-| 014 | VERO Кран для радиатора прямой 20х1/2 | шт | `plumbing.radiator_valve_straight_20` |
-| 015 | VERO Крестовина 90° 20 | шт | `plumbing.cross_90_20` |
-| 016 | VERO Хомут металлический 20-24 (1/2") | шт | `plumbing.clamp_metal_20_24` |
-| 017 | VERO Хомут металлический 45-52 (1 1/2") | шт | `plumbing.clamp_metal_45_52` |
-| 018 | VERO Муфта 20 | шт | `plumbing.coupling_20` |
-| 019 | VERO Муфта 25 | шт | `plumbing.coupling_25` |
-| 020 | VERO Обвод 20 | шт | `plumbing.bypass_20` |
-| 021 | VERO Обвод 25 | шт | `plumbing.bypass_25` |
-| 022 | VERO Отвод 90° 20 | шт | `plumbing.elbow_90_20` |
-| 023 | VERO Отвод 90° 25 | шт | `plumbing.elbow_90_25` |
-| 024 | VERO Отвод с настенным креплением В/Р 20 | шт | `plumbing.elbow_wall_female_20` |
-| 025 | VERO Отвод с настенным креплением В/Р 25 | шт | `plumbing.elbow_wall_female_25` |
-| 026 | VERO Отвод с настенным креплением Н/Р 20 | шт | `plumbing.elbow_wall_male_20` |
-| 027 | VERO Отвод с настенным креплением Н/Р 25 | шт | `plumbing.elbow_wall_male_25` |
-| 028 | VERO Переходник 25-20 | шт | `plumbing.reducer_25_20` |
-| 029 | VERO Переходник 32-20 | шт | `plumbing.reducer_32_20` |
-| 030 | VERO Полуотвод 20 | шт | `plumbing.elbow_45_20` |
-| 031 | VERO Полуотвод 25 | шт | `plumbing.elbow_45_25` |
-| 032 | VERO Ракор В/Р 20х1/2 | шт | `plumbing.union_female_20_half` |
-| 033 | VERO Ракор В/Р 25х1/2 | шт | `plumbing.union_female_25_half` |
-| 034 | VERO Ракор В/Р 25х3/4 | шт | `plumbing.union_female_25_three_quarter` |
-| 035 | VERO Ракор Н/Р 20х1/2 | шт | `plumbing.union_male_20_half` |
-| 036 | VERO Ракор Н/Р 25х1/2 | шт | `plumbing.union_male_25_half` |
-| 037 | VERO Тройник 20 | шт | `plumbing.tee_20` |
-| 038 | VERO Тройник 25 | шт | `plumbing.tee_25` |
-| 039 | VERO Тройник комб. с В/Р 20х1/2 | шт | `plumbing.tee_female_20_half` |
-| 040 | VERO Тройник комб. с В/Р 25х1/2 | шт | `plumbing.tee_female_25_half` |
-| 041 | VERO Тройник комб. с Н/Р 20х1/2 | шт | `plumbing.tee_male_20_half` |
-| 042 | VERO Тройник комб. с Н/Р 25х1/2 | шт | `plumbing.tee_male_25_half` |
-| 043 | VERO Тройник переходник 25-20-25 | шт | `plumbing.tee_reducing_25_20_25` |
-| 044 | VERO Тройник переходник 32-20-32 | шт | `plumbing.tee_reducing_32_20_32` |
-| 045 | VERO Угловой кран для радиатора 20х1/2 | шт | `plumbing.radiator_valve_angle_20` |
-| 046 | VERO Угловой кран для радиатора 20х1/2 (импорт) | шт | `plumbing.radiator_valve_angle_20_import` |
-| 047 | VERO Угол В/Р 20х1/2 | шт | `plumbing.elbow_female_20_half` |
-| 048 | VERO Угол В/Р 25х1/2 | шт | `plumbing.elbow_female_25_half` |
-| 049 | VERO Угол Н/Р 20х1/2 | шт | `plumbing.elbow_male_20_half` |
-| 050 | VERO Угол Н/Р 25х1/2 | шт | `plumbing.elbow_male_25_half` |
-| 051 | VERO Угол с накидной гайкой (ниппель) 20х1/2 | шт | `plumbing.elbow_nipple_20_half` |
-| 052 | VERO Угол с накидной гайкой (ниппель) 25х3/4 | шт | `plumbing.elbow_nipple_25_three_quarter` |
-| 053 | VERO Фильтр 20 «мама» (латунь) | шт | `plumbing.filter_20_brass` |
-| 054 | VERO Фильтр 25 «мама» (латунь) | шт | `plumbing.filter_25_brass` |
-| 055 | VERO Шаровой кран 20 | шт | `plumbing.ball_valve_20` |
-| 056 | VERO Шаровой кран 25 | шт | `plumbing.ball_valve_25` |
-| 057 | VERO Шаровой кран 20 ECO | шт | `plumbing.ball_valve_20_eco` |
-| 058 | VERO Шаровой кран 25 ECO | шт | `plumbing.ball_valve_25_eco` |
-
-Хомуты и клипсы (016, 017, 012, 013) — тоже `plumbing`, а не `fasteners`: они крепят, но покупатель,
-который жмёт «Крепёж» на главной, ищет дюбели и саморезы, а не клипсу под 20-ю трубу.
-
-Фотографии 001/002 и 012/013 совпадают попиксельно — тот же кадр на два диаметра. Строки при этом
-разные, каждая со своим файлом, так что проверка «два товара не делят одно фото» проходит.
+| 001 | VERO Адаптер-муфта комб. В/Р 25х1/2 | шт | `plumbing.adapter_coupling_female_25` |
+| 002 | VERO Адаптер-муфта комб. Н/Р 25х1/2 | шт | `plumbing.adapter_coupling_male_25` |
+| 003 | VERO Адаптер с накидной гайкой (ниппель) 25х1/2 | шт | `plumbing.adapter_nipple_25_half` |
+| 004 | VERO Двойной отвод с креплением В/Р 20х15 | шт | `plumbing.double_elbow_bracket_female_20` |
+| 005 | VERO Двойной отвод с креплением Н/Р 20х15 | шт | `plumbing.double_elbow_bracket_male_20` |
+| 006 | VERO Заглушка 25 | шт | `plumbing.plug_25` |
+| 007 | VERO Клипса 25 | шт | `plumbing.clip_25` |
+| 008 | VERO Крестовина 90° 20 | шт | `plumbing.cross_90_20` |
+| 009 | VERO Хомут металлический 45-52 (1 1/2") | шт | `plumbing.clamp_metal_45_52` |
+| 010 | VERO Муфта 25 | шт | `plumbing.coupling_25` |
+| 011 | VERO Обвод 25 | шт | `plumbing.bypass_25` |
+| 012 | VERO Отвод 90° 25 | шт | `plumbing.elbow_90_25` |
+| 013 | VERO Отвод с настенным креплением В/Р 20 | шт | `plumbing.elbow_wall_female_20` |
+| 014 | VERO Отвод с настенным креплением Н/Р 20 | шт | `plumbing.elbow_wall_male_20` |
+| 015 | VERO Переходник 32-20 | шт | `plumbing.reducer_32_20` |
+| 016 | VERO Полуотвод 25 | шт | `plumbing.elbow_45_25` |
+| 017 | VERO Ракор В/Р 25х3/4 | шт | `plumbing.union_female_25_three_quarter` |
+| 018 | VERO Ракор Н/Р 25х1/2 | шт | `plumbing.union_male_25_half` |
+| 019 | VERO Тройник 25 | шт | `plumbing.tee_25` |
+| 020 | VERO Тройник комб. с В/Р 20х1/2 | шт | `plumbing.tee_female_20_half` |
+| 021 | VERO Тройник комб. с Н/Р 25х1/2 | шт | `plumbing.tee_male_25_half` |
+| 022 | VERO Тройник переходник 32-20-32 | шт | `plumbing.tee_reducing_32_20_32` |
+| 023 | VERO Угловой кран для радиатора 20х1/2 | шт | `plumbing.radiator_valve_angle_20` |
+| 024 | VERO Угловой кран для радиатора 20х1/2 (импорт) | шт | `plumbing.radiator_valve_angle_20_import` |
+| 025 | VERO Угол В/Р 25х1/2 | шт | `plumbing.elbow_female_25_half` |
+| 026 | VERO Угол Н/Р 25х1/2 | шт | `plumbing.elbow_male_25_half` |
+| 027 | VERO Угол с накидной гайкой (ниппель) 25х3/4 | шт | `plumbing.elbow_nipple_25_three_quarter` |
+| 028 | VERO Фильтр 25 «мама» (латунь) | шт | `plumbing.filter_25_brass` |
+| 029 | VERO Шаровой кран 20 | шт | `plumbing.ball_valve_20` |
+| 030 | VERO Шаровой кран 20 ECO | шт | `plumbing.ball_valve_20_eco` |
+| 031 | Механизм нижний с двухрежимным выпуском | шт | `plumbing.cistern_valve_dual_flush` |
+| 032 | Поплавок боковой (пластмасса) | шт | `plumbing.cistern_float_side` |
+| 033 | Гофра для унитаза | шт | `plumbing.toilet_corrugation` |
+| 034 | Гофра для унитаза угловая | шт | `plumbing.toilet_corrugation_angle` |
+| 035 | Крепление для сиденья унитаза | шт | `plumbing.toilet_seat_fixing` |
+| 036 | Резина для сифона («вонючка») | шт | `plumbing.siphon_rubber_seal` |
+| 037 | Выпуск для сифона (головка) | шт | `plumbing.siphon_outlet_head` |
+| 038 | Сифон с тазиком и круглым переливом | шт | `plumbing.siphon_bowl_round_overflow` |
+| 039 | Сиденье с крышкой для унитаза | шт | `plumbing.toilet_seat_cover` |
+| 040 | Сифон для ванны | шт | `plumbing.siphon_bath` |
+| 041 | Сифон для мойки с выпуском и переливом ЭКО | шт | `plumbing.siphon_sink_eco` |
+| 042 | Трап сливной для душа, боковой (пластик) | шт | `plumbing.drain_shower_side_plastic` |
+| 043 | Трап сливной для душа, прямой (пластик) | шт | `plumbing.drain_shower_straight_plastic` |
+| 044 | Трап AQUA 10х10 SS-28 | шт | `plumbing.drain_aqua_ss28` |
+| 045 | Трап 12 PRO AQUA 10х10 (никель) | шт | `plumbing.drain_aqua_12pro` |
+| 046 | Трап под кафель AQUA 10х10 (никель) | шт | `plumbing.drain_aqua_tile` |
+| 047 | Сливной шланг для стиральной машины 190 мм | шт | `plumbing.washer_drain_hose_190` |
+| 048 | Сливной шланг для стиральной машины 290 мм | шт | `plumbing.washer_drain_hose_290` |
+| 049 | Антивибрационные подставки | шт | `plumbing.anti_vibration_pads` |
+| 050 | Шланг наливной 2,5 м | шт | `plumbing.washer_inlet_hose_25` |
+| 051 | Механизм для джойстика | шт | `plumbing.mixer_cartridge` |
+| 052 | Кран-букса квадрат (латунь), красная | шт | `plumbing.tap_valve_square_brass` |
+| 053 | Барашек крестовой NEW | шт | `plumbing.tap_handle_cross_new` |
+| 054 | Лапка смесителя | шт | `plumbing.mixer_bracket` |
+| 055 | BOOU Фиксатор ZL-115 | шт | `plumbing.boou_fixator_zl115` |
+| 056 | Фильтр для гусака с сальником (н/р) | шт | `plumbing.spout_filter_male` |
+| 057 | Смеситель-микрофон гусак серый AQUA 19808-27 | шт | `plumbing.mixer_mic_aqua_19808` |
+| 058 | Смеситель-микрофон гусак (дешёвый) | шт | `plumbing.mixer_mic_cheap` |
+| 059 | Душевой шланг AQUA 1,5-1,8 м AQ-01 | шт | `plumbing.shower_hose_aqua_aq01` |
+| 060 | Шланг армированный м/м ALFA 80 см | шт | `plumbing.hose_reinforced_mm_alfa_80` |
+| 061 | Шланг армированный м/с ALFA 70 см | шт | `plumbing.hose_reinforced_ms_alfa_70` |
+| 062 | Шланг для воды BOOU м/м 100 см | шт | `plumbing.hose_water_boou_100` |
+| 063 | Шланг для смесителя BOOU «ёлка» 80 см | шт | `plumbing.hose_mixer_boou_80` |
+| 064 | Лейка AQUA AQ-R50 | шт | `plumbing.shower_head_aqua_r50` |
+| 065 | Термофлекс 28х6/2 красный | шт | `plumbing.thermoflex_28x6_red` |
+| 066 | Термофлекс 28х6/2 синий | шт | `plumbing.thermoflex_28x6_blue` |
+| 067 | VERO Канализационная труба 2,2 мм — 100/3 м | шт | `plumbing.sewer_pipe_100_3m` |
+| 068 | VERO Канализационная труба 2,2 мм — 50/3 м | шт | `plumbing.sewer_pipe_50_3m` |
+| 069 | VERO Канализационная труба 2,2 мм — 75/3 м | шт | `plumbing.sewer_pipe_75_3m` |
+| 070 | VERO Канализационная труба 3,2 мм — 150/3 м | шт | `plumbing.sewer_pipe_150_3m` |
+| 071 | VERO (к) Клипса 100 | шт | `plumbing.sewer_clip_100` |
+| 072 | VERO (к) Клипса 50 | шт | `plumbing.sewer_clip_50` |
+| 073 | VERO (к) Муфта 110 | шт | `plumbing.sewer_coupling_110` |
+| 074 | VERO (к) Отвод 100 | шт | `plumbing.sewer_elbow_100` |
+| 075 | VERO (к) Полуотвод 100 | шт | `plumbing.sewer_elbow_45_100` |
+| 076 | VERO (к) Тройник 100/100 90° | шт | `plumbing.sewer_tee_100_100` |
+| 077 | VERO (к) Тройник 100/50 90° | шт | `plumbing.sewer_tee_100_50` |
+| 078 | Бочонок (дешёвый) 15 | шт | `plumbing.barrel_nipple_15_cheap` |
+| 079 | Бочонок латунный (сальник) 15 | шт | `plumbing.barrel_nipple_15_brass` |
+| 080 | Заглушка 20 М (дешёвая) | шт | `plumbing.plug_20_male_cheap` |
+| 081 | Кальсо (дешёвое) 15х20 М-П | шт | `plumbing.calso_15x20_cheap` |
+| 082 | Кальсо нержавейка 15х20 М-П | шт | `plumbing.calso_15x20_steel` |
+| 083 | Муфта нержавейка 20 (304) | шт | `plumbing.coupling_20_steel` |
+| 084 | Отвод 15 М-М (латунный) | шт | `plumbing.elbow_15_brass` |
+| 085 | Отвод нержавейка 15 (304) М-П | шт | `plumbing.elbow_15_steel` |
+| 086 | Переходник нержавейка 20х25 П-П | шт | `plumbing.reducer_20x25_steel` |
+| 087 | Тройник 15 М-М-М (латунный) | шт | `plumbing.tee_15_mmm_brass` |
+| 088 | Тройник 15 М-М-П (латунный) | шт | `plumbing.tee_15_mmf_brass` |
+| 089 | Штуцер 15 н/р (дешёвый) | шт | `plumbing.nipple_15_male_cheap` |
+| 090 | Эксцентрик (латунный) 90 | шт | `plumbing.eccentric_brass_90` |
+| 091 | Удлинитель 1,5 см | шт | `plumbing.extension_15` |
+| 092 | Муфта 16 | шт | `plumbing.coupling_16` |
+| 093 | Отвод (латунный) 16 КТМ | шт | `plumbing.elbow_16_ktm` |
+| 094 | Тройник 16 КТМ | шт | `plumbing.tee_16_ktm` |
+| 095 | BOOU Смеситель для душа B8156-5S (Ж) | шт | `plumbing.boou_mixer_shower_b8156_5s` |
+| 096 | BOOU Смеситель стояк 7195-75 (Ж) | шт | `plumbing.boou_mixer_riser_7195` |
+| 097 | BOOU Смеситель-микрофон BZ9184J-E367 (Ж) | шт | `plumbing.boou_mixer_mic_bz9184j` |
+| 098 | BOOU Смеситель B8156-14A (Ж) | шт | `plumbing.boou_mixer_b8156_14a` |
+| 099 | Электрический смеситель ALFA | шт | `plumbing.mixer_electric_alfa` |
+| 100 | BOOU Смеситель «тахорат» B8246-4AH-F805 (Ж) | шт | `plumbing.boou_mixer_bidet_b8246` |
 
 ---
 

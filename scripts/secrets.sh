@@ -2,7 +2,7 @@
 #
 # Encrypted backup of the two files that cannot be regenerated.
 #
-#   ./scripts/secrets.sh backup    # pack + encrypt into secrets.vault.enc, then commit it
+#   ./scripts/secrets.sh backup    # pack + encrypt into secrets.vault.enc, then copy it OFF this laptop
 #   ./scripts/secrets.sh restore   # decrypt secrets.vault.enc back into place
 #   ./scripts/secrets.sh list      # show what is inside the vault without unpacking it
 #
@@ -22,9 +22,13 @@
 # collaborator, or handing a laptop to a contractor would each expose all of it at once, years after
 # the commit that did it.
 #
-# So the files go into git encrypted with a passphrase that lives only in your head. The vault is
-# useless to anyone who clones the repo, and it is still a real off-laptop backup - which is the
-# whole thing you wanted.
+# So the files are encrypted with a passphrase that lives only in your head. That is what makes an
+# off-laptop copy possible at all: a plain .env cannot go in Drive or a chat, an encrypted vault can
+# go anywhere. The vault is gitignored and stays out of git - encryption is what would make
+# committing it *safe*, not what makes it *desirable*, and only the first question was ever settled.
+#
+# A vault that never leaves this laptop is worth nothing: one dead disk takes the originals and the
+# copy together. Copying it somewhere else is the entire point of running this.
 #
 # AES-256 via openssl, which is already installed everywhere, with PBKDF2 key derivation so the
 # passphrase is not used as a key directly.
@@ -96,14 +100,18 @@ cmd_backup() {
     echo
     echo "wrote $VAULT ($(du -h "$VAULT" | cut -f1))"
     echo
-    echo "Now commit it - the encrypted file is meant to be in git:"
-    echo "  git add secrets.vault.enc && git commit -m 'Update encrypted secrets vault'"
+    echo "Now copy it somewhere that is NOT this laptop and NOT this repo - cloud drive, another"
+    echo "machine, a USB stick. It is encrypted, so anywhere is fine. A vault that stays here is"
+    echo "worth nothing: one dead disk takes the originals and the copy together."
     echo
-    echo "To get the files back later (new laptop, or after losing them):"
-    echo "  git clone <repo> && cd domix && ./scripts/secrets.sh restore"
+    echo "Do NOT commit it. It is gitignored on purpose."
     echo
-    echo "Re-run backup after changing .env or key.properties - the vault is a snapshot, not a"
-    echo "live mirror, so an edit made today is not in yesterday's commit."
+    echo "To get the files back later (new laptop, or after losing them): put secrets.vault.enc in"
+    echo "the repo root and run"
+    echo "  ./scripts/secrets.sh restore"
+    echo
+    echo "Re-run backup after changing .env or key.properties - the vault is a snapshot, not a live"
+    echo "mirror, so an edit made today is not in yesterday's vault."
 }
 
 cmd_restore() {
