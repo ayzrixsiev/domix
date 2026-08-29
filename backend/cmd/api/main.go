@@ -67,18 +67,7 @@ func main() {
 	dbPool := mustConnectDB(dbURL)
 	// and returned an address to it
 	queries := db.New(dbPool)
-
-	// 2b. load the product templates into memory.
-	//
-	// they live in `product_templates` since migration 000014 so the admin panel can edit them, but
-	// nothing reads that table per request: it is read once here and again whenever an admin saves,
-	// which is what keeps catalog.Template() a map lookup inside the shop-creation transaction and
-	// catalog.IsOwnerNamedSlot() a map lookup on every product in every response.
-	//
-	// **an empty result is fatal, not a warning.** an api serving requests with no templates would
-	// create shops with empty catalogues, and an empty catalogue is indistinguishable from one whose
-	// owner has not started - it corrupts data quietly instead of failing loudly. the usual cause is
-	// migration 000014 not having been run.
+	// loading templates from the db into golang map for fast look ups
 	mustLoadTemplates(queries)
 
 
@@ -102,54 +91,31 @@ func main() {
 
 	// 4. initialize session manager
 	sessionMgr := auth.NewSessionManager()
-
-	// 5. wire up http routes - this section's job is just plugging dependencies into each endpoint
-	// the actual handler logic lives in api/endpoints
-	//
-	// two rate limiters, because the two halves of the api are abused differently.
-	//
-	// `loginLimiter` guards the unauthenticated handshake. /api/auth/status is polled by the app
-	// every ~2s (0.5 req/s) for up to two minutes, so the sustained rate has to stay above that -
-	// but a caller trying to guess session ids wants thousands per second, and 1/s ends that. the
-	// burst of 30 covers an app that reconnects and catches up.
-	//
-	// `apiLimiter` is the general ceiling: generous enough that no honest screen ever meets it (the
-	// busiest, the home screen, makes one request), low enough to stop a loop hammering the database.
-	//
-	// idle callers are forgotten after 10 minutes so the limiter's own map cannot grow without bound.
-	//
-	// `uploadLimiter` is per *account* rather than per address (see Products.allowUpload): one photo
-	// costs a decode and a re-encode, which is a different unit of work from a read, and staff on
-	// one office wifi share an IP while one phone changes IP between cells. 1/s with a burst of 20
-	// is far above an owner photographing a catalogue by hand and far below a script.
+	// and rate limiters
 	loginLimiter := ratelimit.New(1, 30, 10*time.Minute)
 	apiLimiter := ratelimit.New(20, 60, 10*time.Minute)
 	uploadLimiter := ratelimit.New(1, 20, 30*time.Minute)
 
-	authEndpoints := &endpoints.Auth{Queries: queries, SessionMgr: sessionMgr, BotUsername: bot.Self.UserName}
-	http.HandleFunc("/api/auth/init", endpoints.WithCORS("POST", loginLimiter.Wrap(authEndpoints.Init)))
-	http.HandleFunc("/api/auth/status", endpoints.WithCORS("GET", loginLimiter.Wrap(authEndpoints.Status)))
-	// the app's own account: GET is "is this session still real, and who am I now", checked on launch
-	// and on every return to the foreground; DELETE destroys it, which Google Play requires every app
-	// with accounts to offer from inside the app. both are the caller acting on their own row, so one
-	// RequireAuth covers the pair and RouteMe splits them by method.
-	//
-	// on the general limiter, not the login one: a signed-in app calls GET routinely, where the login
-	// endpoints are the ones a stranger hammers.
-	http.HandleFunc("/api/me", endpoints.WithCORS("GET, DELETE", apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, authEndpoints.RouteMe))))
 
-	// the /delete-account page's two calls. the same handshake as login - a random session id, a
-	// t.me deep link, a contact shared in the chat - ending in DELETE rather than a token, which is
-	// why they sit on the same limiter: /status is polled every couple of seconds by a browser
-	// exactly as the app polls /api/auth/status, and both are unauthenticated by necessity.
+
+
+
+
+
+	// 5. wire up http routes - this section's job is just plugging dependencies into each endpoint
+	authEndpoints := &endpoints.Auth{Queries: queries, SessionMgr: sessionMgr, BotUsername: bot.Self.UserName}
+	http.HandleFunc("/api/auth/init", endpoints.WithJSON(loginLimiter.Wrap(authEndpoints.Init)))
+	http.HandleFunc("/api/auth/status", endpoints.WithJSON(loginLimiter.Wrap(authEndpoints.Status)))
+	http.HandleFunc("/api/me", endpoints.WithJSON(apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, authEndpoints.RouteMe))))
+
 	deletionEndpoints := &endpoints.AccountDeletion{SessionMgr: sessionMgr, BotUsername: bot.Self.UserName}
-	http.HandleFunc("/api/account-deletion/init", endpoints.WithCORS("POST", loginLimiter.Wrap(deletionEndpoints.Init)))
-	http.HandleFunc("/api/account-deletion/status", endpoints.WithCORS("GET", loginLimiter.Wrap(deletionEndpoints.Status)))
+	http.HandleFunc("/api/account-deletion/init", endpoints.WithJSON(loginLimiter.Wrap(deletionEndpoints.Init)))
+	http.HandleFunc("/api/account-deletion/status", endpoints.WithJSON(loginLimiter.Wrap(deletionEndpoints.Status)))
 
 	shopsEndpoints := &endpoints.Shops{Pool: dbPool, Queries: queries, JWTSecret: jwtSecret}
-	http.HandleFunc("/api/shops", endpoints.WithCORS("GET, POST", apiLimiter.Wrap(shopsEndpoints.Route)))
-	http.HandleFunc("/api/shops/mine", endpoints.WithCORS("GET", apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, shopsEndpoints.ListMine))))
-	http.HandleFunc("/api/shops/{id}", endpoints.WithCORS("GET, PUT, DELETE", apiLimiter.Wrap(shopsEndpoints.RouteByID)))
+	http.HandleFunc("/api/shops", endpoints.WithJSON(apiLimiter.Wrap(shopsEndpoints.Route)))
+	http.HandleFunc("/api/shops/mine", endpoints.WithJSON(apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, shopsEndpoints.ListMine))))
+	http.HandleFunc("/api/shops/{id}", endpoints.WithJSON(apiLimiter.Wrap(shopsEndpoints.RouteByID)))
 
 	// where product photos are written, and where the app is told to fetch them from. two
 	// independent settings, decided together because getting one without the other is a server that
@@ -163,27 +129,26 @@ func main() {
 		URLs:      imageURLs,
 		Uploads:   uploadLimiter,
 	}
-	http.HandleFunc("/api/shops/{id}/products", endpoints.WithCORS("GET, POST", apiLimiter.Wrap(productsEndpoints.RouteByShop)))
-	http.HandleFunc("/api/products/{id}", endpoints.WithCORS("PUT, DELETE", apiLimiter.Wrap(productsEndpoints.RouteByID)))
+	http.HandleFunc("/api/shops/{id}/products", endpoints.WithJSON(apiLimiter.Wrap(productsEndpoints.RouteByShop)))
+	http.HandleFunc("/api/products/{id}", endpoints.WithJSON(apiLimiter.Wrap(productsEndpoints.RouteByID)))
 	// registered as its own pattern rather than folded into RouteByID: go's mux matches the more
 	// specific pattern, and the two carry different bodies (multipart here, json there) and
 	// different limits.
-	http.HandleFunc("/api/products/{id}/image", endpoints.WithCORS("POST, DELETE", apiLimiter.Wrap(productsEndpoints.RouteImage)))
+	http.HandleFunc("/api/products/{id}/image", endpoints.WithJSON(apiLimiter.Wrap(productsEndpoints.RouteImage)))
 
 	homeEndpoints := &endpoints.Home{Queries: queries, URLs: imageURLs}
-	http.HandleFunc("/api/home", endpoints.WithCORS("GET", apiLimiter.Wrap(homeEndpoints.Get)))
-	http.HandleFunc("/api/categories/{code}/products", endpoints.WithCORS("GET", apiLimiter.Wrap(homeEndpoints.ProductsByCategory)))
+	http.HandleFunc("/api/home", endpoints.WithJSON(apiLimiter.Wrap(homeEndpoints.Get)))
+	http.HandleFunc("/api/categories/{code}/products", endpoints.WithJSON(apiLimiter.Wrap(homeEndpoints.ProductsByCategory)))
 	// the home screen's search field. public like the rest of Home, and on the same limiter - a
 	// leading-wildcard ILIKE is the most expensive read in the api, so the 20-per-minute bucket is
 	// doing real work here rather than being a formality.
-	http.HandleFunc("/api/products/search", endpoints.WithCORS("GET", apiLimiter.Wrap(homeEndpoints.SearchProducts)))
+	http.HandleFunc("/api/products/search", endpoints.WithJSON(apiLimiter.Wrap(homeEndpoints.SearchProducts)))
 
 	// the support inbox, the app's half. one path for both verbs because both act on the same thing
 	// - the caller's own conversation - and neither takes an id: the thread is whoever RequireAuth
 	// says is calling, so there is no parameter that could name somebody else's messages.
 	supportEndpoints := &endpoints.Support{Queries: queries}
-	http.HandleFunc("/api/support/messages", endpoints.WithCORS("GET, POST",
-		apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, supportEndpoints.Route))))
+	http.HandleFunc("/api/support/messages", endpoints.WithJSON(apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, supportEndpoints.Route))))
 
 	// the admin panel's api. every route here is the same three-layer chain, so it is built once
 	// rather than typed five times - and building it once is also what stops the fourth route from
@@ -199,51 +164,51 @@ func main() {
 	// and an api that can grant it is an api somebody will eventually ask to have pointed at their
 	// own shop. deleting a user and deleting a shop are moderation, which is what a panel is for.
 	adminEndpoints := &endpoints.Admin{Pool: dbPool, Queries: queries, URLs: imageURLs, Images: productImages}
-	adminRoute := func(methods string, handler http.HandlerFunc) http.HandlerFunc {
-		return endpoints.WithCORS(methods, apiLimiter.Wrap(
+	adminRoute := func(handler http.HandlerFunc) http.HandlerFunc {
+		return endpoints.WithJSON(apiLimiter.Wrap(
 			auth.RequireAuth(jwtSecret, queries, adminEndpoints.RequireAdmin(handler)),
 		))
 	}
-	http.HandleFunc("/api/admin/stats", adminRoute("GET", adminEndpoints.Stats))
-	http.HandleFunc("/api/admin/anomalies", adminRoute("GET", adminEndpoints.Anomalies))
+	http.HandleFunc("/api/admin/stats", adminRoute(adminEndpoints.Stats))
+	http.HandleFunc("/api/admin/anomalies", adminRoute(adminEndpoints.Anomalies))
 
-	http.HandleFunc("/api/admin/users", adminRoute("GET", adminEndpoints.ListUsers))
-	http.HandleFunc("/api/admin/users/{id}", adminRoute("PUT, DELETE", adminEndpoints.RouteUser))
+	http.HandleFunc("/api/admin/users", adminRoute(adminEndpoints.ListUsers))
+	http.HandleFunc("/api/admin/users/{id}", adminRoute(adminEndpoints.RouteUser))
 
-	http.HandleFunc("/api/admin/shops", adminRoute("GET", adminEndpoints.ListShops))
-	http.HandleFunc("/api/admin/shops/{id}", adminRoute("PUT, DELETE", adminEndpoints.RouteShop))
-	http.HandleFunc("/api/admin/shops/{id}/vip", adminRoute("PUT", adminEndpoints.SetVIP))
-	http.HandleFunc("/api/admin/shops/{id}/products", adminRoute("GET", adminEndpoints.ListShopProducts))
-	http.HandleFunc("/api/admin/products/{id}", adminRoute("PUT", adminEndpoints.UpdateProduct))
+	http.HandleFunc("/api/admin/shops", adminRoute(adminEndpoints.ListShops))
+	http.HandleFunc("/api/admin/shops/{id}", adminRoute(adminEndpoints.RouteShop))
+	http.HandleFunc("/api/admin/shops/{id}/vip", adminRoute(adminEndpoints.SetVIP))
+	http.HandleFunc("/api/admin/shops/{id}/products", adminRoute(adminEndpoints.ListShopProducts))
+	http.HandleFunc("/api/admin/products/{id}", adminRoute(adminEndpoints.UpdateProduct))
 
 	// the support inbox, the privileged half. `{id}` is a *user* id and not a thread id - a thread is
 	// exactly one user's messages, so there is no separate row to address.
-	http.HandleFunc("/api/admin/support/threads", adminRoute("GET", adminEndpoints.SupportThreads))
+	http.HandleFunc("/api/admin/support/threads", adminRoute(adminEndpoints.SupportThreads))
 	// DELETE erases the conversation from both sides at once - see Admin.DeleteSupportThread.
-	http.HandleFunc("/api/admin/support/threads/{id}", adminRoute("GET, POST, DELETE", adminEndpoints.RouteSupportThread))
+	http.HandleFunc("/api/admin/support/threads/{id}", adminRoute(adminEndpoints.RouteSupportThread))
 
 	// the templates themselves, editable since migration 000014 moved them out of Go and into
 	// product_templates. every write here reloads internal/catalog's in-memory copy before it
 	// answers, or the process would keep seeding shops from the list it started with.
-	http.HandleFunc("/api/admin/templates", adminRoute("GET", adminEndpoints.Templates))
-	http.HandleFunc("/api/admin/templates/{category}/items", adminRoute("GET, POST", adminEndpoints.RouteTemplateItems))
+	http.HandleFunc("/api/admin/templates", adminRoute(adminEndpoints.Templates))
+	http.HandleFunc("/api/admin/templates/{category}/items", adminRoute(adminEndpoints.RouteTemplateItems))
 	// a separate path rather than /api/admin/templates/items/{id}: go's mux refuses to register that
 	// alongside /templates/{category}/items, because "/templates/items/items" matches both - and it
 	// refuses at startup rather than at request time, which is the right moment to find out.
-	http.HandleFunc("/api/admin/template-items/{id}", adminRoute("PUT, DELETE", adminEndpoints.RouteTemplateItem))
+	http.HandleFunc("/api/admin/template-items/{id}", adminRoute(adminEndpoints.RouteTemplateItem))
 	// the sync is the second, louder half: editing a template above decides what the *next* shop is
 	// created with, this pushes it into the shops that already exist.
-	http.HandleFunc("/api/admin/templates/{category}/sync", adminRoute("POST", adminEndpoints.SyncTemplate))
+	http.HandleFunc("/api/admin/templates/{category}/sync", adminRoute(adminEndpoints.SyncTemplate))
 
 	// uploaded photos whose products row went away with a deleted shop. GET counts and measures,
 	// DELETE sweeps - two verbs on one path because they are one question asked twice, and the
 	// DELETE re-runs the whole scan rather than trusting a list the browser sent back.
-	http.HandleFunc("/api/admin/storage/orphans", adminRoute("GET, DELETE", adminEndpoints.RouteOrphans))
+	http.HandleFunc("/api/admin/storage/orphans", adminRoute(adminEndpoints.RouteOrphans))
 
 	http.Handle("/static/products/", staticFiles("/static/products/", productImagesDir()))
 	http.HandleFunc("/health", healthCheck(dbPool))
 
-	// the two web pages. neither goes through WithCORS - that wrapper sets Content-Type to
+	// the two web pages. neither goes through WithJSON - that wrapper sets Content-Type to
 	// application/json on everything it touches, which would make a browser download these instead
 	// of rendering them.
 	//
