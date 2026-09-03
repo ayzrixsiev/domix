@@ -25,34 +25,25 @@ type Shops struct {
 	JWTSecret string
 }
 
-// the ShopResponse DTO and the mappers that build it from each sqlc row type live in shop_dto.go -
-// there are seven of those row types now, and the mapping was the longest thing in this file.
-
-// every shop endpoint will carry erros, we format them cleanly here.
-//
-// an alias for writeAPIError (authz.go) rather than a second implementation: the two had drifted to
-// the same three lines, and two spellings of "how this api reports an error" is how a shop endpoint
-// ends up with a response shape the product endpoints don't use.
 func writeShopError(w http.ResponseWriter, status int, code, message string) {
 	writeAPIError(w, status, code, message)
 }
 
-// dispatches /api/shops by method, since GET and POST share the same url but need very different handling
-// (list is public, create requires a logged-in shop owner)
+// dispatches /api/shops
+// listing shops for usual users and creating shop for logged in shop owners
 func (s *Shops) Route(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		s.List(w, r)
 	case http.MethodPost:
-		// only shop owners with a valid credentials may create a shop; RequireAuth checks the jwt before we touch the db
 		auth.RequireAuth(s.JWTSecret, s.Queries, s.Create)(w, r)
 	default:
-		w.WriteHeader(http.StatusMethodNotAllowed) // error 405
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
-// dispatches /api/shops/{id} by method. GET is public and PUT/DELETE mutate one specific shop, so
-// only those two go through RequireAuth.
+// dispatches /api/shops/{id}
+// get the shop from product, modify the shop, delete the shop
 func (s *Shops) RouteByID(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -67,8 +58,7 @@ func (s *Shops) RouteByID(w http.ResponseWriter, r *http.Request) {
 }
 
 // the shared gate in front of Update and Delete: pull {id} out of the path, then ask
-// authorizeShopAccess (authz.go) whether this caller may modify that shop.
-// on failure it has already written the response, so callers just return.
+// authorizeShopAccess (authz.go) whether this caller may modify or delete this shop
 func (s *Shops) authorizeShopAccess(w http.ResponseWriter, r *http.Request) (shopID int64, ok bool) {
 	userID, ok := auth.UserIDFromContext(r.Context())
 	if !ok {
@@ -93,13 +83,25 @@ func (s *Shops) authorizeShopAccess(w http.ResponseWriter, r *http.Request) (sho
 	return shopID, true
 }
 
-// public, unauthenticated: one shop, for a card opened from somewhere that only knows its id.
-//
-// **the only entry point into a shop card that fetches.** the map and the home feed both already
-// hold the whole shop when they push the card, so they pass it and it paints on the first frame; a
-// product row carries nothing but shop_id, and putting a shop's fields on all hundred rows of a
-// category response would repeat one address a hundred times to save a round trip nobody makes
-// until they tap.
+
+func validateShopFieldLengths(name, contactPhone, address string) *accessError {
+	const (
+		maxShopNameLen  = 150
+		maxShopPhoneLen = 50
+		maxAddressLen   = 500
+	)
+
+	if utf8.RuneCountInString(name) > maxShopNameLen ||
+		utf8.RuneCountInString(contactPhone) > maxShopPhoneLen ||
+		utf8.RuneCountInString(address) > maxAddressLen {
+		return &accessError{http.StatusBadRequest, "field_too_long", "a field is longer than allowed"}
+	}
+
+	return nil
+}
+
+
+// public, unauthenticated: get the shop from any listed product by id
 func (s *Shops) Get(w http.ResponseWriter, r *http.Request) {
 	shopID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -112,8 +114,7 @@ func (s *Shops) Get(w http.ResponseWriter, r *http.Request) {
 
 	shop, err := s.Queries.GetShop(ctx, shopID)
 	if err != nil {
-		// a shop deleted while its products were still on somebody's screen. a 404 rather than a
-		// 500, because nothing is wrong here - the app renders "this shop is no longer available".
+		// if a shop was deleted while user was inside the shop card, we send 404 instead of 500
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeShopError(w, http.StatusNotFound, "shop_not_found", "shop not found")
 			return
@@ -123,9 +124,6 @@ func (s *Shops) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// the conversion, rather than a seventh mapper: GetShop selects exactly the columns ListShops
-	// does, so the two row structs are identical and the compiler checks that they stay identical -
-	// a column added to one query and not the other stops the build.
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(shopFromList(db.ListShopsRow(shop)))
 }
@@ -142,9 +140,6 @@ func (s *Shops) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// make(..., 0, len) and not `var response []ShopResponse`: a nil slice encodes as `null`, not
-	// `[]`, and the app's `jsonDecode(...) as List` would throw on it. the difference only shows up
-	// when there are no shops at all, which is exactly the state a fresh install is in.
 	response := make([]ShopResponse, 0, len(shops))
 	for _, shop := range shops {
 		response = append(response, shopFromList(shop))
@@ -154,11 +149,7 @@ func (s *Shops) List(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// authenticated: backs the "manage my shops" screen - every shop the caller themselves owns, as
-// opposed to List above which is every shop, for anyone, for the map. no role check needed here:
-// unlike Create and the product mutations this has no side effects, and it's already scoped to the
-// caller's own user_id, so there's nothing a customer account could see here that a shop_owner
-// couldn't (it would just always come back empty for them).
+// authenticated: called by "manage my shops" screen, every shop owner owns
 func (s *Shops) ListMine(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.UserIDFromContext(r.Context())
 	if !ok {
@@ -186,7 +177,7 @@ func (s *Shops) ListMine(w http.ResponseWriter, r *http.Request) {
 }
 
 // authenticated: reads the json body flutter sends from the "add store" screen (name, contact
-// number, picked map location) and creates the shop.
+// number, picked map location) and creates the shop
 func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.UserIDFromContext(r.Context())
 	if !ok {
@@ -197,11 +188,7 @@ func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := dbctx.WithTimeout(r.Context())
 	defer cancel()
 
-	// being logged in only proves who you are (authentication) - this checks what you're allowed to do
-	// (authorization): the "add store" button is already hidden from customers in the app, but that's
-	// just ui; a customer could still call this endpoint directly with their own valid token otherwise.
-	// role isn't carried on the request (see internal/auth/jwt.go) since it can change after login, so
-	// this looks up the user's current role fresh instead of trusting a claim that might be stale.
+	// authorization
 	role, err := s.Queries.GetUserRole(ctx, userID)
 	if err != nil {
 		log.Printf("CRITICAL: failed to look up role for user %d: %v", userID, err)
@@ -235,18 +222,13 @@ func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// mirrors the varchar widths in db/migrations/000001 and 000003. postgres rejects an over-long
-	// value too, but as a constraint violation the handler can only report as a 500 - the owner
-	// would see "не удалось" with no hint that the name is simply too long.
+	// shop name length validation
 	if accessErr := validateShopFieldLengths(name, contactPhone, address); accessErr != nil {
 		accessErr.write(w)
 		return
 	}
 
-	// checked before the insert rather than left to the column's CHECK constraint: postgres would
-	// reject it too, but as a 500 with a constraint violation in the log instead of a 400 naming
-	// the field. it also has to be a category we hold a template for, since the next step copies
-	// that template in.
+	// checking whether shop category is valid
 	if !catalog.IsValidCategory(category) {
 		writeShopError(w, http.StatusBadRequest, "invalid_category", "unknown shop category")
 		return
@@ -267,19 +249,16 @@ func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 		writeShopError(w, http.StatusInternalServerError, "server_error", "failed to create shop")
 		return
 	}
-	defer tx.Rollback(ctx) // no-op once Commit below succeeds
+	defer tx.Rollback(ctx)
 
-	// the same Queries methods, but routed through the transaction instead of straight at the pool
-	// - that is the whole job of db.Queries.WithTx (see db/db.go)
 	qtx := s.Queries.WithTx(tx)
 
 	shop, err := qtx.CreateShop(ctx, db.CreateShopParams{
-		UserID:       userID,
-		Name:         name,
-		ContactPhone: contactPhone,
-		Address:      address,
-		Category:     category,
-		// st_makepoint wants (longitude, latitude) in that order - see the comment in shops.sql
+		UserID:        userID,
+		Name:          name,
+		ContactPhone:  contactPhone,
+		Address:       address,
+		Category:      category,
 		StMakepoint:   req.Longitude,
 		StMakepoint_2: req.Latitude,
 	})
@@ -289,23 +268,16 @@ func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// a plain loop of single-row inserts rather than one bulk COPY: it is at most 100 statements (the
-	// универсальный template), runs once in a shop's lifetime, and reuses the query sqlc already
-	// generated. worth revisiting only if templates ever grow into the thousands.
+	// inserting template products row by row
 	template := catalog.Template(category)
 	for _, item := range template {
 		if err := qtx.SeedTemplateProduct(ctx, db.SeedTemplateProductParams{
-			ShopID: shop.ID,
-			Name:   item.Name,
-			// ProductCategory is a named string type, so the conversion is explicit. it is typed in
-			// the template list precisely so a typo there fails to compile instead of quietly
-			// filing a product under a category the app has no label for.
+			ShopID: 	 shop.ID,
+			Name:   	 item.Name,
 			Category:    string(item.Category),
 			Unit:        item.Unit,
 			TemplateKey: pgtype.Text{String: item.Key, Valid: true},
-			// null rather than "" for a template with no photo set, so the column means the same
-			// thing as products.price does: absent, not empty
-			ImagePath: pgtype.Text{String: item.ImagePath, Valid: item.ImagePath != ""},
+			ImagePath: 	 pgtype.Text{String: item.ImagePath, Valid: item.ImagePath != ""},
 		}); err != nil {
 			log.Printf("CRITICAL: failed to seed template product %q into shop %d: %v", item.Key, shop.ID, err)
 			writeShopError(w, http.StatusInternalServerError, "server_error", "failed to create shop")
@@ -322,15 +294,11 @@ func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Shop %d created for user %d (category %s, %d template products)", shop.ID, userID, category, len(template))
 
 	w.WriteHeader(http.StatusCreated)
-	// the template size is passed in because the app appends this shop straight into its in-memory
-	// list instead of re-fetching - without it the brand-new shop would show "нет товаров" despite
-	// having just been seeded with fifty
-	json.NewEncoder(w).Encode(shopFromCreate(shop, int64(len(template))))
+	json.NewEncoder(w).Encode(shopFromCreate(shop, int64(len(template)))) // sending amount of seeded products for flutter to show them
 }
 
-// PUT /api/shops/{id} - the "edit shop" form. the form always submits all four editable fields, so
-// this is a full replacement, not a per-field patch; whatever is missing from the body would be
-// written as empty and is therefore rejected by the same required-field check Create uses.
+// PUT /api/shops/{id} - the "edit shop" form. the form always submits all four editable fields
+// and whatever row is missing is not affecting the shop
 func (s *Shops) Update(w http.ResponseWriter, r *http.Request) {
 	shopID, ok := s.authorizeShopAccess(w, r)
 	if !ok {
@@ -362,16 +330,11 @@ func (s *Shops) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// the same check Create does. it matters more here, if anything: the edit form is where an owner
-	// drags the map pin, and a location that failed to resolve would silently move the shop to
-	// (0, 0) - off the map, with the row still reporting success.
 	if accessErr := validateCoordinates(req.Latitude, req.Longitude); accessErr != nil {
 		accessErr.write(w)
 		return
 	}
 
-	// a fresh timeout, not the one authorizeShopAccess used: that one's cancel() already fired when
-	// the helper returned, so reusing its context here would hit an already-cancelled deadline
 	ctx, cancel := dbctx.WithTimeout(r.Context())
 	defer cancel()
 
@@ -380,13 +343,10 @@ func (s *Shops) Update(w http.ResponseWriter, r *http.Request) {
 		Name:         name,
 		ContactPhone: contactPhone,
 		Address:      address,
-		// st_makepoint wants (longitude, latitude) in that order - see the comment in shops.sql
 		StMakepoint:   req.Longitude,
 		StMakepoint_2: req.Latitude,
 	})
 	if err != nil {
-		// the row existed a moment ago (authorizeShopAccess read its owner), so no-rows here means it
-		// was deleted in between - a real race, not a client mistake
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeShopError(w, http.StatusNotFound, "shop_not_found", "shop not found")
 			return
@@ -400,32 +360,7 @@ func (s *Shops) Update(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(shopFromUpdate(shop))
 }
 
-// the varchar widths from db/migrations/000001 (name) and 000003 (contact_phone). address is TEXT
-// and so has no database limit at all, which is its own problem - an unbounded column is a place to
-// store a megabyte - so it gets an application limit instead, generous enough for any real address
-// a geocoder would return.
-//
-// rune counts, not len(): these are cyrillic strings where one character is two bytes, and postgres
-// counts varchar limits in characters. this mirrors the same check product_crud.go does on a
-// product's name and unit.
-func validateShopFieldLengths(name, contactPhone, address string) *accessError {
-	const (
-		maxShopNameLen  = 150
-		maxShopPhoneLen = 50
-		maxAddressLen   = 500
-	)
-
-	if utf8.RuneCountInString(name) > maxShopNameLen ||
-		utf8.RuneCountInString(contactPhone) > maxShopPhoneLen ||
-		utf8.RuneCountInString(address) > maxAddressLen {
-		return &accessError{http.StatusBadRequest, "field_too_long", "a field is longer than allowed"}
-	}
-
-	return nil
-}
-
-// DELETE /api/shops/{id}. the shop's products go with it through products.shop_id ON DELETE CASCADE,
-// so this is one statement and not a transaction.
+// DELETE /api/shops/{id}. the shop's products go with it through products.shop_id ON DELETE CASCADE
 func (s *Shops) Delete(w http.ResponseWriter, r *http.Request) {
 	shopID, ok := s.authorizeShopAccess(w, r)
 	if !ok {
@@ -442,9 +377,6 @@ func (s *Shops) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if rows == 0 {
-		// same race as Update above: it was there when we checked its owner and is gone now. the
-		// caller's goal ("this shop should not exist") is satisfied either way, but saying so is
-		// more honest than reporting a deletion we didn't perform.
 		writeShopError(w, http.StatusNotFound, "shop_not_found", "shop not found")
 		return
 	}
