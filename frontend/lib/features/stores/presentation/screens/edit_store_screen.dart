@@ -13,11 +13,9 @@ import 'package:frontend/features/stores/presentation/widgets/store_form_fields.
 import '../controllers/stores_controller.dart';
 import 'package:frontend/core/widgets/circle_back_button.dart';
 
-// the "Данные магазина" section of ShopSettingsScreen: edit name / contact phone / location, and -
-// kept in its own block at the very bottom, below a full-width rule - delete the shop.
-//
-// pops `true` when the shop was deleted, `null` (a plain back) otherwise, so the settings screen
-// above it knows whether the shop it is describing still exists.
+// the "Данные магазина" section of ShopSettingsScreen: name, phone and location, and - in its own
+// block below a full-width rule - delete. pops `true` when the shop was deleted and `null` on a
+// plain back, so the settings screen knows whether the shop it describes still exists.
 class EditStoreScreen extends StatefulWidget {
   const EditStoreScreen({super.key, required this.shop});
 
@@ -31,8 +29,8 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
 
-  // starts as the shop's saved location, and is only replaced if the owner opens the picker. it is
-  // never null here, unlike on the add form - an existing shop always has coordinates.
+  // the shop's saved location until the owner opens the picker. never null here, unlike on the add
+  // form - an existing shop always has coordinates.
   late double _latitude;
   late double _longitude;
   late String _address;
@@ -43,17 +41,16 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
   @override
   void initState() {
     super.initState();
-    // prefilled, not blank: this is an edit form, and making someone retype a phone number they
-    // only wanted to keep is how a "fix the address" trip turns into a data-loss trip
+    // prefilled, not blank: making someone retype a phone number they only wanted to keep is how a
+    // "fix the address" trip turns into a data-loss trip
     _nameController = TextEditingController(text: widget.shop.name);
     _phoneController = TextEditingController(text: widget.shop.contactPhone);
     _latitude = widget.shop.latitude;
     _longitude = widget.shop.longitude;
     _address = widget.shop.address;
 
-    // a failure from a previous visit would otherwise still be on the controller and paint an error
-    // card over a form nothing has been submitted from yet. safe synchronously: nothing has
-    // rendered this state, so no listener needs notifying.
+    // a failure from a previous visit would otherwise paint an error card over a form nothing has been
+    // submitted from. safe synchronously: nothing has rendered this state yet.
     context.read<StoresController>().resetShopMutationState();
   }
 
@@ -95,8 +92,8 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
     });
     if (name.isEmpty || phone.isEmpty) return;
 
-    // a no-op PUT would still bump updated_at server-side and still cost a round trip, and the
-    // "saved!" toast would be a lie about work that didn't happen
+    // a no-op PUT would still bump updated_at server-side and cost a round trip, and the "saved!"
+    // toast would be a lie about work that did not happen
     if (!_hasChanges) {
       _showSnack(_strings.noChangesToSave);
       return;
@@ -122,8 +119,8 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
 
   Future<void> _confirmDelete() async {
     final strings = _strings;
-    // names the shop and counts what disappears with it. a bare "are you sure?" gives the owner
-    // nothing to check their intent against, which is precisely when people confirm the wrong thing.
+    // names the shop and counts what disappears with it: a bare "are you sure?" gives the owner nothing
+    // to check their intent against
     final confirmed = await DestructiveConfirmDialog.show(
       context,
       title: strings.deleteStoreConfirmTitle,
@@ -139,12 +136,11 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
 
     if (!mounted) return;
     if (deleted) {
-      // the shop's products went with it (products.shop_id cascades), so the cached catalogue is
-      // now describing something that doesn't exist - and postgres reuses ids, so leaving it would
-      // eventually serve one shop's products under another shop's name
+      // the shop's products went with it (products.shop_id cascades), and postgres reuses ids - so a
+      // cached catalogue left behind would eventually be served under another shop's name
       productsController.forgetShop(widget.shop.id);
-      // `true` tells ShopSettingsScreen the shop it describes is gone, so it pops itself too and
-      // the owner lands back on the shops list rather than on a page about nothing
+      // `true` tells ShopSettingsScreen the shop it describes is gone, so it pops itself too and the
+      // owner lands back on the shops list rather than on a page about nothing
       Navigator.of(context).pop(true);
       _showSnack(strings.storeDeletedMessage);
     }
@@ -176,8 +172,8 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
         centerTitle: false,
         titleSpacing: 20,
         iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
-        // the disc, not a bare chevron - see CircleBackButton for why every bar in the app needs it.
-        // leadingWidth must move with it or flutter keeps its own 56 and the title sits wrong.
+        // the disc, not a bare chevron. leadingWidth must move with it or flutter keeps its own 56 and
+        // the title sits wrong.
         leading: const CircleBackButton(),
         leadingWidth: CircleBackButton.leadingWidth,
         title: Text(
@@ -242,9 +238,8 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
               onTap: _save,
             ),
 
-            // everything below this rule is destructive. the gap and the full-width divider are
-            // doing real work: they put enough distance between "save" and "delete" that a
-            // mis-tap can't reach the wrong one, without hiding delete somewhere undiscoverable.
+            // everything below this rule is destructive. the gap and the divider put enough distance between
+            // "save" and "delete" that a mis-tap cannot reach the wrong one, without hiding delete.
             const SizedBox(height: 38),
             const SizedBox(height: 1, child: ColoredBox(color: AppColors.hairline)),
             const SizedBox(height: 22),
@@ -298,8 +293,8 @@ class _DangerZone extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        // shared with the edit-product form (see StoreDangerButton in store_form_fields.dart) -
-        // it was private here until a second destructive form needed the identical control
+        // shared with the edit-product form (StoreDangerButton) - it was private here until a second
+        // destructive form needed the identical control
         StoreDangerButton(
           label: strings.deleteStoreButton,
           isBusy: isBusy,

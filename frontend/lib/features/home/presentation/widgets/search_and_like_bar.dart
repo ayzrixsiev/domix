@@ -7,39 +7,16 @@ import 'package:frontend/features/home/presentation/screens/product_search_scree
 
 /// The home feed's search bar: a **button that opens [ProductSearchScreen]**, not a field.
 ///
-/// It has been three things now, and the history is the argument for what it is:
-///
-/// 1. A `Text` widget styled to look like a field - a picture of a search bar that could not be
-///    tapped, focused or typed into.
-/// 2. A real `TextField` whose `onSubmitted` was an empty closure, because there was no product
-///    search endpoint yet: the control behaved like the thing it looked like right up to the moment
-///    it was used.
-/// 3. A real `TextField` that really searched - and which raised a keyboard the user could not put
-///    away. **Nothing on this screen unfocuses on tap**, the system back button pops routes and
-///    there was no route to pop, and the feed just scrolled along underneath. Half the app stayed
-///    covered until the user left the tab.
-///
-/// So it is a button again, but an honest one: it opens a screen whose whole job is searching, and
-/// where the keyboard has a back button above it. **This is not a return to (1)** - the difference
-/// is that this control does exactly what it appears to do when pressed. A field that raises a
-/// keyboard it cannot dismiss is a worse lie than a button that navigates.
-///
-/// It is also where a live search bar would have had to end up anyway: as-you-type results need
-/// somewhere to be drawn, and the home feed is already full.
-///
-/// Stateless now. There is no `TextEditingController` and no `FocusNode` here any more - both moved
-/// to the screen, which is the only place that has anything to type into.
+/// It was a real `TextField` twice, and both times raised a keyboard the user could not put away -
+/// nothing on this screen unfocuses on tap, and there was no route to pop.
 class SearchAndLikeBar extends StatelessWidget {
   const SearchAndLikeBar({super.key});
 
   static const double _height = 48;
 
-  /// **The filter button next to it is gone rather than disabled.** It was a `Container` with
-  /// `onTap: () {}` - the same "picture of a button" this bar itself used to be, and the last one
-  /// left on the screen. There is nothing to filter a product search by yet (price band, category,
-  /// distance all need decisions that have not been made), and a control that looks live and does
-  /// nothing is the specific bug this screen has now been fixed for three times. It comes back when
-  /// it filters something.
+  /// **The filter button next to it is gone rather than disabled.** There is nothing to filter a
+  /// product search by yet, and a control that looks live and does nothing is the specific bug this
+  /// screen has now been fixed for three times. It comes back when it filters something.
   @override
   Widget build(BuildContext context) {
     final strings = Provider.of<LanguageProvider>(context).strings;
@@ -59,17 +36,11 @@ class SearchAndLikeBar extends StatelessWidget {
           child: Ink(
             height: _height,
             padding: const EdgeInsets.symmetric(horizontal: 14),
-            // **A recessed grey field, not a white card.** It was white with a hairline border and a
-            // lift, which is the treatment every *content* card on this feed wears - so the one
-            // control at the top of the screen looked like the first row of the feed rather than
-            // like an input. A search field is a well you type into.
+            // **a recessed grey field, not a white card**: white with a hairline and a lift is what every
+            // *content* card on this feed wears, so the one control at the top read as the first row of it.
             //
-            // `trackGrey` and not `surfaceMuted` or `cardGrey`, for the reason spelled out on the
-            // token: those two are at or *above* the page (#EFF1F5), so a box filled with either
-            // reads as white sitting on grey. trackGrey is the one step below the page, which is
-            // what makes it read as cut into it. No border and no shadow with it - `hairline` is
-            // lighter than the fill, so an outline would ring a darker box in a paler line, and a
-            // shadow under something recessed is a contradiction.
+            // `trackGrey` and not `surfaceMuted` or `cardGrey`, which are at or above the page - a box filled
+            // with either reads as white sitting on grey. no border and no shadow with it.
             decoration: BoxDecoration(
               color: AppColors.trackGrey,
               borderRadius: borderRadius,
@@ -78,15 +49,14 @@ class SearchAndLikeBar extends StatelessWidget {
               children: [
                 const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 19),
                 const SizedBox(width: 10),
-                // the hint text, styled exactly as the real field's hint on the screen this opens,
-                // so pressing it reads as the same control moving up into that app bar
+                // styled exactly as the real field's hint on the screen this opens, so pressing it reads as the
+                // same control moving up into that app bar
                 Expanded(
                   child: Text(
                     strings.searchHint,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    // a step darker than the `textFaint` it was: the fill under it is darker now, and
-                    // a hint that was already pale against white is unreadable against a grey well
+                    // a step darker than the `textFaint` it was: a hint already pale on white is unreadable on a well
                     style: const TextStyle(
                       color: AppColors.textGrey,
                       fontSize: 14.5,

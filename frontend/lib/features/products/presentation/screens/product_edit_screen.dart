@@ -18,22 +18,14 @@ import '../widgets/product_category_field.dart';
 import '../widgets/product_photo_field.dart';
 import 'package:frontend/core/widgets/circle_back_button.dart';
 
-// add or edit one product. one screen for both, because the fields are the same either way - the
-// differences are the title, which endpoint is called, and whether there is anything to delete.
+// add or edit one product - one screen for both, since the fields are the same either way.
 //
-// [product] null means "new product". a new one is always the owner's own and fully editable. an
-// existing one may be from the category template, and then only its price and availability are
-// editable: the template is the shared basket every shop of that category is compared on, and it
-// stops being shared the moment one owner can rename an item or move it to another category. the
-// backend enforces that (UpdateProductPricing has no column for the rest); this screen simply
-// doesn't offer the controls.
+// [product] null means "new", always the owner's own and fully editable. an existing one may come
+// from the category template, and then only price and availability are: the template is the shared
+// basket, and it stops being shared the moment one owner can rename an item.
 //
-// обои are the exception, and the reason there are two flags on Product rather than one. an обои
-// template row is a *slot* - it names a class of wallpaper and a country, not a product, because no
-// two обои shops stock the same rolls. so its name is a text field the owner fills in while its
-// category and unit stay locked and it still cannot be deleted. read [Product.nameEditable] for the
-// name field and [Product.isTemplate] for everything else; conflating them is what would put the
-// name back under lock.
+// обои are the exception and the reason there are two flags on Product: an обои template row is a
+// *slot*, so its name is a text field while its category and unit stay locked.
 class ProductEditScreen extends StatefulWidget {
   const ProductEditScreen({
     super.key,
@@ -46,8 +38,7 @@ class ProductEditScreen extends StatefulWidget {
   final Product? product;
 
   /// preselected in the category dropdown of a *new* product - the category of the last product in
-  /// this shop, which for a seeded shop is a real one from its own template. saves a tap far more
-  /// often than it costs one.
+  /// this shop, which for a seeded shop is a real one from its own template
   final ProductCategory? suggestedCategory;
 
   bool get isNew => product == null;
@@ -63,32 +54,24 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
 
   late ProductAvailability _availability;
 
-  /// The product as it stands *now*, which is not always the one this screen was opened with.
-  ///
-  /// A photo is uploaded on its own request, the moment it is picked, so by the time the owner
-  /// presses «Сохранить» the row may already carry a url that `widget.product` - a snapshot taken
-  /// when the route was pushed - knows nothing about. Reading the widget's copy after an upload is
-  /// how a screen ends up sending a stale product back to the server.
-  ///
-  /// Null for a product being created, which is the same thing it means on `widget.product`.
+  /// The product as it stands *now*, which is not always the one this screen was opened with: a photo
+  /// uploads on its own request the moment it is picked, so `widget.product` - a snapshot taken when
+  /// the route was pushed - can be stale by the time «Сохранить» is pressed.
   Product? _product;
 
-  /// A photo the owner picked that the server has not been told about yet.
-  ///
-  /// It exists because a product being created has no id to upload against - the file waits here
-  /// until the create request comes back with one (see [_save]). It is also kept after a successful
-  /// upload on an existing product: it is the same picture, already decoded on this phone, so
-  /// keeping it avoids downloading back the file we just sent.
+  /// A photo the owner picked that the server has not been told about yet: a product being created
+  /// has no id to upload against, so the file waits here until [_save] returns one. Kept after a
+  /// successful upload too - it is the same picture, already decoded on this phone.
   File? _pickedPhoto;
 
-  /// Set when the picker itself refused - no camera, or access declined. It never reaches the
-  /// network, so it has no server code and cannot live on the controller with the ones that do.
+  /// Set when the picker itself refused - no camera, or access declined. It never reaches the network,
+  /// so it has no server code and cannot live on the controller with the ones that do.
   String? _pickerErrorCode;
 
   final ImagePicker _picker = ImagePicker();
 
-  /// null until picked. no default: a category chosen for the owner is a category they never look
-  /// at, and a wrong one is worse than an empty one now that the value actually groups products.
+  /// null until picked. no default: a category chosen for the owner is one they never look at, and a
+  /// wrong one is worse than an empty one now that the value actually groups products.
   ProductCategory? _pickedCategory;
 
   String? _nameError;
@@ -96,9 +79,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   String? _unitError;
   String? _priceError;
 
-  // the units the category templates actually use, offered as one-tap shortcuts above the field.
-  // the field itself stays free text: these are the russian abbreviations, and an uzbek-speaking
-  // owner typing "dona" must not be blocked by a fixed list.
+  // the units the category templates actually use, as one-tap shortcuts. the field itself stays free
+  // text: these are the russian abbreviations, and an uzbek-speaking owner typing "dona" must not be
+  // blocked by a fixed list.
   static const _unitSuggestions = [
     'шт', 'м', 'м²', 'м³', 'кг', 'л',
     'мешок', 'рулон', 'лист', 'упак', 'компл',
@@ -109,27 +92,25 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     super.initState();
     final product = widget.product;
 
-    // prefilled on an edit, not blank: a template product arrives with its name, category and unit
-    // already right, and the owner is usually here only to type a price
+    // prefilled on an edit: a template product arrives with its name, category and unit already right,
+    // and the owner is usually here only to type a price
     _nameController = TextEditingController(text: product?.name ?? '');
-    // an unpriced product shows an empty field rather than "0" - the field being empty is what
-    // "no price yet" looks like, and it is also how the owner clears one back to unpriced
+    // an unpriced product shows an empty field rather than "0" - empty is what "no price yet" looks
+    // like, and it is also how the owner clears one back to unpriced
     _priceController = TextEditingController(text: product?.price?.toString() ?? '');
     _unitController = TextEditingController(text: product?.unit ?? '');
     _availability = product?.availability ?? ProductAvailability.inStock;
     _product = product;
 
-    // tryFromCode returns null for a category this app has no code for, which happens exactly once:
-    // a product created before the shared vocabulary existed, whose category is free text. the
-    // dropdown then opens empty and the owner has to pick, which is the intended one-time fixup -
-    // guessing on their behalf would file the product somewhere nobody chose.
+    // tryFromCode returns null for a category this app has no code for, which happens exactly once: a
+    // product created before the shared vocabulary existed. the dropdown then opens empty and the owner
+    // picks, which is the intended one-time fixup - guessing would file it somewhere nobody chose.
     _pickedCategory = product == null
         ? widget.suggestedCategory
         : ProductCategory.tryFromCode(product.category);
 
-    // a failure from a previous visit would otherwise still be on the controller and paint an error
-    // card over a form nothing has been submitted from yet. safe synchronously: nothing has
-    // rendered this state, so no listener needs notifying.
+    // a failure from a previous visit would otherwise paint an error card over a form nothing has been
+    // submitted from. safe synchronously: nothing has rendered this state yet.
     context.read<ProductsController>().resetSaveState();
   }
 
@@ -148,18 +129,16 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     final isTemplate = existing?.isTemplate ?? false;
     final nameEditable = existing?.nameEditable ?? true;
 
-    // whatever is rendered as locked text is read straight off the product rather than out of a
-    // form control, because on that path there is no form control. the backend ignores these fields
-    // for a template row anyway, so this is about sending something truthful, not about being
-    // trusted - and the two conditions differ for an обои slot, where the name *is* a control.
+    // whatever is rendered as locked text is read straight off the product rather than out of a form
+    // control, because on that path there is no form control. the two conditions differ for an обои
+    // slot, where the name *is* a control.
     final name = nameEditable ? _nameController.text.trim() : existing!.name;
     final categoryCode = isTemplate ? existing!.category : (_pickedCategory?.code ?? '');
     final unit = isTemplate ? existing!.unit : _unitController.text.trim();
 
     final priceText = _priceController.text.trim();
-    // an empty price field is legal and means "not priced yet". only a field with something
-    // unparseable in it is an error - the input formatter keeps it to digits, so this only fires
-    // on a number too large for an int.
+    // an empty price field is legal and means "not priced yet". the input formatter keeps it to digits,
+    // so this only fires on a number too large for an int.
     final price = priceText.isEmpty ? null : int.tryParse(priceText);
     final priceIsInvalid = priceText.isNotEmpty && price == null;
 
@@ -178,8 +157,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     if (existing == null) {
       saved = await controller.addProduct(
         shopId: widget.shopId,
-        // id 0 is a placeholder the backend ignores and replaces - a create request carries no id,
-        // and inventing a second "draft product" type for one nullable field is not worth it
+        // id 0 is a placeholder the backend ignores and replaces - a create request carries no id, and a
+        // second "draft product" type for one nullable field is not worth it
         draft: Product(
           id: 0,
           shopId: widget.shopId,
@@ -207,16 +186,15 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
 
     if (!mounted) return;
     if (saved != null) {
-      // a new product changes the shop's catalogue size, which is a number StoresController holds
-      // and only /api/shops/mine recomputes - so tell it rather than leaving a stale badge behind
+      // a new product changes the shop's catalogue size, which only /api/shops/mine recomputes - so tell
+      // StoresController rather than leaving a stale badge behind
       if (existing == null) {
         context.read<StoresController>().adjustProductCount(widget.shopId, 1);
       }
 
-      // **the photo is a second request, and it can only be made now.** a product being created has
-      // no id until this point, so a file picked earlier has been waiting on the phone. the two
-      // cannot be one request without either making the whole product form multipart or base64-ing
-      // a jpeg through a json field.
+      // **the photo is a second request, and it can only be made now**: a product being created has no id
+      // until this point. the two cannot be one request without making the whole form multipart or
+      // base64-ing a jpeg through a json field.
       var photoFailed = false;
       if (existing == null && _pickedPhoto != null) {
         final withPhoto = await controller.uploadProductPhoto(
@@ -228,20 +206,16 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
 
       if (!mounted) return;
       Navigator.of(context).pop();
-      // the product is saved either way, so this reports the half-success rather than treating it
-      // as a failure - the owner's work is not lost and the photo is one tap away from a retry
+      // the product is saved either way, so this reports the half-success rather than treating it as a
+      // failure - the owner's work is not lost and the photo is one tap from a retry
       _showSnack(photoFailed ? _strings.productSavedWithoutPhoto : _strings.productSavedMessage);
     }
     // on failure controller.saveError is now set, and build() shows the inline error card
   }
 
-  /// Picks a photo, and - for a product that already exists - uploads it straight away.
-  ///
-  /// **Uploading on pick rather than on save is deliberate.** The file is on the phone the instant
-  /// the picker closes and the row already exists, so waiting would leave the owner looking at a
-  /// picture that is not yet anywhere, with nothing on screen saying so. Saving it immediately also
-  /// means the price field and the photo fail independently, which is what the separate busy flags
-  /// on ProductsController are for.
+  /// Picks a photo, and - for a product that already exists - uploads it straight away. **On pick
+  /// rather than on save**: the row already exists, so waiting would leave the owner looking at a
+  /// picture that is not yet anywhere, and it lets the price and the photo fail independently.
   Future<void> _pickPhoto() async {
     final strings = _strings;
 
@@ -259,11 +233,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     try {
       picked = await _picker.pickImage(
         source: source == PhotoSource.camera ? ImageSource.camera : ImageSource.gallery,
-        // **these three parameters are what make the plugin re-encode on the device, and that is
-        // the point of passing them.** the resize bakes the EXIF rotation into the pixels and turns
-        // an iPhone HEIC into a jpeg, so what leaves the phone is something the server can decode
-        // and is already the right way up. it also cuts a 4 MB camera frame to a few hundred
-        // kilobytes, which on mobile data is the difference between two seconds and twenty.
+        // **these three parameters are what make the plugin re-encode on the device.** the resize bakes the
+        // EXIF rotation into the pixels and turns an iPhone HEIC into a jpeg, so what leaves the phone is
+        // decodable and already the right way up - and a 4 MB camera frame becomes a few hundred kilobytes.
         maxWidth: 1440,
         maxHeight: 1440,
         imageQuality: 85,
@@ -291,8 +263,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     if (!mounted) return;
 
     if (saved == null) {
-      // the upload failed, so the file on screen is not what the server holds. dropping it puts the
-      // real photo back, and the error card under the field says why.
+      // the upload failed, so the file on screen is not what the server holds. dropping it puts the real
+      // photo back, and the error card under the field says why.
       setState(() => _pickedPhoto = null);
       return;
     }
@@ -301,8 +273,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   }
 
   /// Removes the photo. On a row seeded from a category template the server answers with the
-  /// catalogue's own shot rather than with nothing, so this is not always "the picture goes away" -
-  /// which is exactly why the new url is taken from the response instead of being assumed.
+  /// catalogue's own shot rather than with nothing, which is why the new url is taken from the
+  /// response instead of being assumed.
   Future<void> _removePhoto() async {
     final strings = _strings;
     final product = _product;
@@ -345,11 +317,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     }
   }
 
-  /// The photo's error, wherever it came from.
-  ///
-  /// Two sources, because they fail in different places: the picker refuses on the device (no
-  /// camera, access declined) and never reaches the network, while everything else is the server
-  /// answering. The owner is looking at one photo and needs one sentence about it.
+  /// The photo's error, wherever it came from. Two sources, because they fail in different places:
+  /// the picker refuses on the device and never reaches the network, while everything else is the
+  /// server answering. The owner is looking at one photo and needs one sentence about it.
   String? _photoErrorCode(ProductsController controller) =>
       _pickerErrorCode ?? controller.photoError?.code;
 
@@ -372,13 +342,12 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     final product = _product;
     final isTemplate = product?.isTemplate ?? false;
     final nameEditable = product?.nameEditable ?? true;
-    // a template row whose name the owner writes - the обои case, and the only combination where
-    // the two flags disagree
+    // a template row whose name the owner writes - the обои case, and the only combination where the
+    // two flags disagree
     final isSlot = isTemplate && nameEditable;
-    // a *third* independent question, and it does not line up with either of the other two: an обои
-    // slot and a wood row are both photographable, a wood row's name is not editable, and a slot's
-    // is. the server answers it (Product.photoEditable); a product being created has no server row
-    // yet and is always the owner's own.
+    // a *third* independent question, derived from whether the template names a photo for this row.
+    // today no row is left where the two answers differ, but that is a coincidence of current
+    // catalogues - so the server answers it and this screen does not fold it into nameEditable.
     final photoEditable = product?.photoEditable ?? true;
 
     return Scaffold(
@@ -390,8 +359,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
         centerTitle: false,
         titleSpacing: 20,
         iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
-        // the disc, not a bare chevron - see CircleBackButton for why every bar in the app needs it.
-        // leadingWidth must move with it or flutter keeps its own 56 and the title sits wrong.
+        // the disc, not a bare chevron. leadingWidth must move with it or flutter keeps its own 56 and
+        // the title sits wrong.
         leading: const CircleBackButton(),
         leadingWidth: CircleBackButton.leadingWidth,
         title: Text(
@@ -409,13 +378,11 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
           children: [
-            // the rule goes above the fields it explains, not below them: read first, it says why
-            // three of the inputs on this screen are text; read last, it explains a layout the
-            // owner has already decided is broken
+            // the rule goes above the fields it explains: read first it says why three of the inputs are text,
+            // read last it explains a layout the owner has already decided is broken
             if (isTemplate) ...[
-              // a slot's rule is a different rule, so it gets a different sentence. telling an обои
-              // owner "название изменить нельзя" over a name field they can type in is worse than
-              // saying nothing.
+              // a slot's rule is a different rule: telling an обои owner "название изменить нельзя" over a name
+              // field they can type in is worse than saying nothing
               _HintCard(message: isSlot ? strings.slotProductHint : strings.templateProductHint),
               const SizedBox(height: 20),
             ],
@@ -431,8 +398,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
             else
               StoreFormTextField(
                 controller: _nameController,
-                // on a slot the seeded name is the instruction ("Обои премиум (Россия)"), so the
-                // hint says what to type instead of repeating the label
+                // on a slot the seeded name is the instruction ("Обои премиум (Россия)"), so the hint says what to
+                // type instead of repeating the label
                 hint: isSlot ? strings.slotProductNameHint : strings.productNameLabel,
                 errorText: _nameError,
                 icon: CupertinoIcons.cube_box,
@@ -447,9 +414,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
             const SizedBox(height: 8),
             if (isTemplate)
               ProductLockedField(
-                // labelForCode, not _pickedCategory: a template row's category is always a known
-                // code, but going through the same fallback the rest of the app uses keeps one
-                // answer to "how is a stored category displayed"
+                // labelForCode, not _pickedCategory: going through the same fallback the rest of the app uses keeps
+                // one answer to "how is a stored category displayed"
                 value: ProductCategory.labelForCode(product!.category, strings),
                 icon: _pickedCategory?.icon ?? CupertinoIcons.square_grid_2x2,
                 strings: strings,
@@ -466,8 +432,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
               ),
             const SizedBox(height: 18),
 
-            // price and availability are the two fields every product has, template or not - they
-            // are exactly the facts that differ between two shops stocking the same item
+            // price and availability are the two fields every product has, template or not - exactly the facts
+            // that differ between two shops stocking the same item
             StoreFormLabel(strings.productPriceLabel),
             const SizedBox(height: 8),
             StoreFormTextField(
@@ -475,12 +441,12 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
               hint: strings.productPriceHint,
               errorText: _priceError,
               icon: CupertinoIcons.tag,
-              // the currency named inside the field, in the app's language. it used to be a dollar
-              // glyph in the prefix, which is the wrong currency for every shop this app has.
+              // the currency named inside the field, in the app's language. it used to be a dollar glyph, which
+              // is the wrong currency for every shop this app has.
               suffixText: strings.currencySom,
               keyboardType: TextInputType.number,
-              // the field only ever holds a whole number of so'm. filtering at the keyboard is
-              // kinder than validating afterwards: a character that can't be typed can't be wrong.
+              // filtering at the keyboard is kinder than validating afterwards: a character that cannot be typed
+              // cannot be wrong
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               onChanged: (_) {
                 if (_priceError != null) setState(() => _priceError = null);
@@ -507,10 +473,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                 },
               ),
               const SizedBox(height: 10),
-              // listens to the field itself rather than being handed a value from build(). typing
-              // has to move the highlight, and the alternative - setState on every keystroke - would
-              // rebuild this whole form to repaint eleven chips. same reason the home search bar's
-              // clear button uses a ValueListenableBuilder.
+              // listens to the field rather than being handed a value from build(): typing has to move the
+              // highlight, and setState on every keystroke would rebuild the whole form to repaint eleven chips
               ValueListenableBuilder<TextEditingValue>(
                 valueListenable: _unitController,
                 builder: (context, value, _) => _UnitSuggestions(
@@ -534,11 +498,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
             ),
             const SizedBox(height: 18),
 
-            // **the photo sits below the fields rather than above them, and that is a workflow
-            // decision rather than a visual one.** the job this screen is opened for most often, by
-            // a very long way, is typing one price into one seeded row - a hundred times over on a
-            // new shop. a 190px picture at the top pushes the price field under the fold on every
-            // one of those visits to save a scroll on the rarer visit that is about a photo.
+            // **the photo sits below the fields, and that is a workflow decision**: the job this screen is
+            // opened for most often is typing one price into one seeded row, a hundred times over on a new shop,
+            // and a 190px picture at the top would push the price field under the fold every time.
             StoreFormLabel(strings.productPhotoLabel),
             const SizedBox(height: 8),
             ProductPhotoField(
@@ -546,25 +508,20 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
               imageUrl: product?.imageUrl,
               localFile: _pickedPhoto,
               isBusy: controller.isPhotoBusy,
-              // only while a picked file is waiting for a product that does not exist yet. on an
-              // existing product the upload has already gone.
+              // only while a picked file is waiting for a product that does not exist yet
               isPendingUpload: product == null && _pickedPhoto != null,
-              // the catalogue's photograph is not the owner's to change - see Product.photoEditable
-              // for the rule and who decides it. a product being *created* is always the owner's
-              // own, so it is never locked.
+              // the catalogue's photograph is not the owner's to change - see Product.photoEditable. a product
+              // being *created* is always the owner's own, so it is never locked.
               isLocked: !photoEditable,
               onPick: _pickPhoto,
-              // hidden, not disabled, when there is nothing of the owner's to remove: on a seeded
-              // row still showing the catalogue's photo, "удалить" would put back the picture that
-              // is already there. see Product.ownImage.
+              // hidden, not disabled, when there is nothing of the owner's to remove: on a seeded row still
+              // showing the catalogue's photo, "удалить" would put back the picture that is already there
               onRemove: (product?.ownImage ?? false) || _pickedPhoto != null ? _removePhoto : null,
             ),
             if (isTemplate && !photoEditable) ...[
               const SizedBox(height: 10),
-              // the rule spelled out where it is being applied, rather than folded into the hint
-              // card at the top: that card explains the *fields*, and this one explains a picture
-              // 400px further down that the owner has just tried to tap. the same card, because it
-              // is the same kind of statement - a rule, not a problem.
+              // the rule spelled out where it is applied rather than folded into the card at the top: that one
+              // explains the *fields*, this one a picture 400px further down the owner has just tried to tap
               _HintCard(message: strings.cataloguePhotoNote),
             ],
             if (_photoErrorCode(controller) case final code?) ...[
@@ -589,9 +546,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
               onTap: _save,
             ),
 
-            // only the owner's own products can be removed. a template row has no delete button at
-            // all rather than a disabled one - the hint card above already says why, and a control
-            // that is present but never works is worse than one that isn't there.
+            // a template row has no delete button at all rather than a disabled one - the hint card above
+            // already says why, and a control that is present but never works is worse than one that is not
             if (product != null && !product.isTemplate) ...[
               const SizedBox(height: 32),
               const SizedBox(height: 1, child: ColoredBox(color: AppColors.hairline)),
@@ -609,8 +565,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   }
 }
 
-// one-tap shortcuts that fill the unit field. a horizontal Wrap rather than a scrolling row, so
-// every option is visible at once - there are only eleven, and a hidden shortcut is not a shortcut.
+// one-tap shortcuts that fill the unit field. a Wrap rather than a scrolling row, so every option
+// is visible at once - there are only eleven, and a hidden shortcut is not a shortcut.
 class _UnitSuggestions extends StatelessWidget {
   const _UnitSuggestions({
     required this.units,
@@ -666,8 +622,8 @@ class _AvailabilityPicker extends StatelessWidget {
             child: _ChoiceChip(
               label: _label(availability),
               isSelected: availability == value,
-              // a full-height segment rather than a pill, so the three options read as one control
-              // with three states instead of three separate buttons
+              // a full-height segment rather than a pill, so the three options read as one control with three
+              // states instead of three separate buttons
               height: 46,
               onTap: () => onChanged(availability),
             ),
@@ -678,8 +634,8 @@ class _AvailabilityPicker extends StatelessWidget {
   }
 }
 
-// the selected state is a soft orange fill with an orange border, not a saturated block: brand
-// colour marks the active choice without turning a form field into the loudest thing on the page.
+// a soft orange fill with an orange border, not a saturated block: brand colour marks the active
+// choice without turning a form field into the loudest thing on the page
 class _ChoiceChip extends StatelessWidget {
   const _ChoiceChip({
     required this.label,
@@ -774,8 +730,7 @@ class _HintCard extends StatelessWidget {
 }
 
 // names the product being removed, the same reason the delete-shop dialog names the shop: a bare
-// "are you sure?" gives nothing to check an intent against, which is exactly when people confirm
-// the wrong thing.
+// "are you sure?" gives nothing to check an intent against
 class _DeleteProductDialog extends StatelessWidget {
   const _DeleteProductDialog({required this.product, required this.strings});
 
@@ -824,8 +779,8 @@ class _DeleteProductDialog extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 22),
-            // cancel first and visually heavier than confirm: the safe choice should be the one the
-            // thumb lands on and the one the eye reads as the default
+            // cancel first and visually heavier than confirm: the safe choice should be the one the thumb lands
+            // on and the one the eye reads as the default
             Row(
               children: [
                 Expanded(

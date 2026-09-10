@@ -9,14 +9,9 @@ import 'package:frontend/core/network/api_get.dart';
 import 'package:frontend/features/profile/data/auth_service.dart';
 import 'support_message.dart';
 
-/// Talks to the two support endpoints (backend/internal/endpoints/support.go).
-///
-///   GET  /api/support/messages  - the caller's whole conversation
-///   POST /api/support/messages  - the caller writes in
-///
-/// **Neither call carries a thread id, and that is the whole authorization model.** The thread is
-/// whoever the token says is calling, so there is no id here that could be pointed at somebody
-/// else's messages - and nothing for this file to get wrong.
+/// Talks to the two support endpoints (backend/internal/endpoints/support.go). **Neither call
+/// carries a thread id, and that is the whole authorization model**: the thread is whoever the token
+/// says is calling.
 class SupportRepository {
   SupportRepository({AuthService? authService}) : _authService = authService ?? AuthService();
 
@@ -24,17 +19,10 @@ class SupportRepository {
 
   static Uri get _messagesUri => Uri.parse('${ApiConfig.serverRoot}/api/support/messages');
 
-  /// **The read watermark**, kept on the phone.
-  ///
-  /// There is no server-side "the user has read this" - the admin panel has one
-  /// (`support_thread_reads`), but that is a fact about an *admin*, and a second table for the other
-  /// direction would be a write on every chat open to answer a question one device can answer for
-  /// itself. So: the newest message id the reader has had open. Unread is `newest.id > watermark`,
-  /// which stays derived - ids only go up, so a message arriving a second later is unread by
-  /// arithmetic rather than because something remembered to set a bit.
-  ///
-  /// Secure storage rather than `shared_preferences` because it is already a dependency and this is
-  /// one integer; it is not a secret, and nothing here depends on it being encrypted.
+  /// **The read watermark**, kept on the phone: the newest message id the reader has had open. There
+  /// is no server-side "the user has read this", and a second table for this direction would be a
+  /// write on every chat open. Unread stays derived - ids only go up, so `newest.id > watermark` is
+  /// arithmetic rather than a bit somebody remembered to set.
   static const _lastReadKey = 'domix_support_last_read';
 
   final _storage = const FlutterSecureStorage();
@@ -58,8 +46,7 @@ class SupportRepository {
     }
   }
 
-  /// Goes with the thread on logout. A watermark left behind belongs to somebody else's
-  /// conversation, so the next account on this phone would open a thread that is already "read".
+  /// Goes with the thread on logout: a watermark left behind belongs to somebody else's conversation.
   Future<void> clearWatermark() async {
     try {
       await _storage.delete(key: _lastReadKey);
@@ -85,11 +72,8 @@ class SupportRepository {
         .toList();
   }
 
-  /// Sends one message and returns it as the server stored it.
-  ///
-  /// Returning the stored message rather than a bool is what lets the chat append a bubble with the
-  /// server's own id and timestamp instead of inventing a local one that a later refresh would
-  /// replace with a slightly different copy.
+  /// Sends one message and returns it as the server stored it - which is what lets the chat append a
+  /// bubble with the server's own id and timestamp instead of inventing one a refresh would replace.
   Future<SupportMessage> sendMessage(String body) async {
     final token = await _requireToken();
 
@@ -120,8 +104,7 @@ class SupportRepository {
   }
 
   SupportException _exceptionFrom(http.Response response) {
-    // a 401 means the stored token will never work again - deleted account, or an expiry the app
-    // did not notice. signing out here rather than in the controller keeps the rule in the one
+    // a 401 means the stored token will never work again. signing out here keeps the rule in the one
     // place every authenticated request in this file already passes through.
     AuthService.handleUnauthorized(response);
 

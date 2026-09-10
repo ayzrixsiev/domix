@@ -22,8 +22,7 @@ class LocationPickResult {
   final double longitude;
   final String address;
 
-  /// the city containing the picked point, when nominatim could name one. the add-store form
-  /// ignores this and stores the full address; the home header's city pill uses only this.
+  /// the city containing the picked point, when nominatim could name one
   final String? city;
 }
 
@@ -72,8 +71,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     _debounce?.cancel();
     setState(() => _isResolvingAddress = true);
 
-    // read the language synchronously, before the timer: the callback below runs after an await
-    // gap, and reaching for context there could happen once this screen is already gone
+    // read synchronously, before the timer: the callback runs after an await gap, by which time this
+    // screen may already be gone
     final languageCode = context.read<LanguageProvider>().language.code;
 
     _debounce = Timer(const Duration(milliseconds: 700), () async {
@@ -140,10 +139,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             initialLongitude: LocationPickerScreen._defaultLongitude,
             initialZoom: 15,
             onControllerReady: (controller) => _map = controller,
-            // fires only once the camera has come to rest, which is what the old `hasGesture` check
-            // was standing in for. DomixMap does the filtering, so this no longer has to distinguish
-            // a user drag from a programmatic move - both should re-resolve the address, and the
-            // 700ms debounce below still absorbs a burst.
+            // fires only once the camera has come to rest. DomixMap does the filtering, so a user drag and a
+            // programmatic move both re-resolve, and the 700ms debounce absorbs a burst.
             onCenterChanged: (latitude, longitude) {
               _centerLatitude = latitude;
               _centerLongitude = longitude;
@@ -171,8 +168,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 children: [
                   Row(
                     children: [
-                      // floating: this one sits on the map itself, which is the busiest ground in
-                      // the app - it needs the heavier lift to stay a shape over a satellite tile
+                      // floating: this one sits on the map itself, the busiest ground in the app
                       const CircleBackButton(floating: true),
                       const SizedBox(width: 8),
                       Expanded(

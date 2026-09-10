@@ -20,71 +20,26 @@ import 'package:frontend/features/stores/data/stores_repository.dart';
 import 'package:frontend/features/stores/presentation/widgets/shop_category_banner.dart';
 import 'package:frontend/core/widgets/circle_back_button.dart';
 
-/// One shop, in full: whose card this is, what their basket costs, how to reach them, and what they
-/// sell.
-///
-/// **There is one of these and every route into a shop ends here** - a pin on the map, a card in the
-/// VIP carousel, a row in Лучшие предложения. Before this screen existed only the map could open a
-/// shop, as a modal sheet built inside `map_screen.dart`, so the same object was a destination from
-/// one place in the app and unreachable from three others: tapping a VIP card the founder had been
-/// paid to place did nothing at all.
-///
-/// ## It is one screen with two chromes, and that split is the whole design
-///
-/// The *content* is identical everywhere - the same cover, the same details, the same catalogue.
-/// What differs is how it arrives:
-///
-///  * **From the map it is a draggable sheet** ([showShopCardSheet]) sitting over the map rather than
-///    replacing it, and a downward drag puts it away. That is the gesture anyone who has used a phone
-///    maps app already has in their thumb, and it is what fixes the cost this screen was shipped
-///    with: a pushed route meant comparing three nearby shops was three pushes and three pops, each
-///    one throwing the map away and rebuilding it.
-///  * **From anywhere else it is a full-screen route** ([ShopCardScreen]). A list opening a modal
-///    sheet on top of itself is not a pattern this app uses anywhere, and there is no map underneath
-///    worth keeping in view - the home feed is exactly where the reader just was.
-///
-/// Both are a [CustomScrollView], which is what makes the product catalogue a **sliver**. The old
-/// sheet's grid was `shrinkWrap: true`, which lays out every child to measure itself - a hundred
-/// tiles mounted at once, each firing an `Image.network` the moment it mounts. That is the bug in
-/// CLAUDE.md §8 whose symptom is not slow images but a *failed price save*.
-///
-/// ## How it is laid out, and what changed on 2026-08-20
-///
-/// It used to be a cover inset inside the page gutter, with an identity card lapped over it and two
-/// more rounded white cards under that, all floating on the grey page. Three things were wrong with
-/// it and all three came from the same habit - **using a box to say "a new section starts here"**:
-///
-///  * A card is a heavy separator. Three of them stacked, each with its own radius and shadow, made
-///    a page about one shop look like a list of three unrelated things.
-///  * The cover could not be a *picture*. Boxed inside a 16px gutter with its own rounded corners,
-///    it read as an illustration pasted into the layout rather than as the top of the screen.
-///  * The map's sheet already has rounded corners of its own, so a rounded cover inside them was
-///    two radii a few pixels apart.
-///
-/// So: the cover is **full-bleed and runs to the very top**, the details below it sit on one plain
-/// white surface, and the sections inside that surface are separated by **hairline rules inset from
-/// both edges** - a line that stops short of the screen is what a rule is, and it is the lightest
-/// separator that still separates. The catalogue keeps the grey page under it, which is what marks
-/// the one real break on the screen: everything above is *this shop*, everything below is *its
-/// goods*.
+// one shop, in full. every route into a shop ends here - a map pin, a VIP card, a Лучшие
+// предложения row.
+//
+// two chromes over identical content: a draggable sheet over the map (showShopCardSheet), so
+// comparing three nearby shops does not rebuild the map three times, and a full-screen route
+// everywhere else. both are a CustomScrollView, which is what makes the catalogue a sliver.
+//
+// the cover is full-bleed to the very top and the details sit on one white surface separated by
+// inset rules; the catalogue keeps the grey page under it - above is this shop, below is its goods.
 class ShopCardScreen extends StatelessWidget {
   const ShopCardScreen({super.key, required this.shop});
 
-  /// The whole shop, never an id to look up.
-  ///
-  /// Everything on this screen except the catalogue is already in hand at every entry point: the map
-  /// holds the list it drew its pins from, and `GET /api/home` sends full shop rows that
-  /// `HomeShopPreview` simply projects down for the feed. So the card paints complete on its first
-  /// frame, with no spinner and no second round trip for facts the app already had.
+  // the whole shop, never an id to look up: every entry point already holds one, so the card paints
+  // complete on its first frame
   final Shop shop;
 
   @override
   Widget build(BuildContext context) {
-    // **No `SafeArea` at the top, and that is the point of the cover.** The picture runs underneath
-    // the status bar, so the clock and the battery sit on it - which is why the cover's own top is
-    // painted near-white and why the overlay style is asked for explicitly here rather than
-    // inherited from an AppBar this screen does not have. `dark` means *dark glyphs*, for a light
-    // background.
+    // no SafeArea at the top - the cover runs under the status bar, which is why its own top is painted
+    // near-white and the overlay style is asked for here rather than inherited from an absent AppBar
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
@@ -95,19 +50,8 @@ class ShopCardScreen extends StatelessWidget {
   }
 }
 
-/// The same card, opened by something that holds only a shop's id: a product tile in search
-/// results or a category browse.
-///
-/// **Every other entry point already has the whole shop and passes it** - the map holds the list it
-/// drew its pins from, and `GET /api/home` sends full shop rows - so [ShopCardScreen] paints on its
-/// first frame and this is the one route that has to fetch. A product row carries nothing but
-/// `shop_id`, and putting a shop's fields on all hundred rows of a category response would repeat
-/// one address a hundred times to save a round trip nobody makes until they tap.
-///
-/// Three states, and the third is the reason this is not one generic error: a **404 is not a
-/// failure**. The shop was deleted while its cement was on somebody's screen, there is nothing to
-/// retry, and a Повторить button that fails identically every time is worse than a sentence saying
-/// what happened.
+// the same card opened from something holding only a shop id - the one route that has to fetch. a
+// 404 gets its own sentence: the shop was deleted while its cement was on screen.
 class ShopByIdScreen extends StatefulWidget {
   const ShopByIdScreen({super.key, required this.shopId, this.repository});
 
@@ -126,16 +70,8 @@ class _ShopByIdScreenState extends State<ShopByIdScreen> {
   Shop? _shop;
   bool _isLoading = true;
 
-  /// The one outcome worth a *different* sentence: the shop was deleted while its cement was on
-  /// screen, so there is nothing to retry. Everything else that goes wrong is the retryable branch
-  /// below, and it says so **without carrying the exception onto the screen**.
-  ///
-  /// There used to be a `String? _error` here holding `e.toString()`, rendered as the subtitle, so a
-  /// reader who tapped a product on a phone that had been idle was shown
-  /// `ClientException: Connection closed before full header was received, uri=https://…/api/shops/12`.
-  /// None of that is for them, the Повторить button beside it already said the only thing they could
-  /// do, and the exception is worth more in the log than on the screen - see [apiGet], which now
-  /// makes that particular failure fix itself.
+  // the one outcome worth a *different* sentence - nothing to retry. everything else is the retryable
+  // branch, which never carries the exception onto the screen.
   bool _gone = false;
 
   @override
@@ -152,8 +88,7 @@ class _ShopByIdScreenState extends State<ShopByIdScreen> {
 
     try {
       final shop = await _repo.fetchShop(widget.shopId);
-      // the request outlives the screen if the reader backs out mid-flight, and setState on a
-      // disposed State throws - `mounted` has to be checked after every await, not once at the top
+      // the request outlives the screen if the reader backs out, so `mounted` is checked after the await
       if (!mounted) return;
       setState(() {
         _shop = shop;
@@ -214,39 +149,23 @@ class _ShopByIdScreenState extends State<ShopByIdScreen> {
   }
 }
 
-/// Pushes [ShopByIdScreen]. The one call a product tile makes, so no caller has to know that
-/// opening a shop from an id costs a fetch.
+// so no caller has to know that opening a shop from an id costs a fetch
 Future<void> openShopById(BuildContext context, int shopId) {
   return Navigator.of(context).push<void>(
     MaterialPageRoute(builder: (_) => ShopByIdScreen(shopId: shopId)),
   );
 }
 
-/// Opens the shop card as the map's draggable sheet.
-///
-/// **The numbers are the behaviour**, so they are worth reading rather than skipping:
-///
-///  * `initialChildSize`/`maxChildSize` 0.92 - "most of the screen, not all of it". The strip of map
-///    left showing above it is what says the map is still there and is still where Back goes; a
-///    sheet at 1.0 is a full-screen route wearing rounded corners.
-///  * `minChildSize` 0.5 with `shouldCloseOnMinExtent` (the default) - dragging the sheet down to
-///    half its height dismisses it. That is what "drop it like in an iPhone app" is: there is no
-///    close button anywhere on this sheet, and there does not need to be one.
-///  * `snap` - released anywhere between the two, it goes to whichever is nearer. Without it a sheet
-///    left at 70% simply stays at 70%, which reads as a control that did not finish moving.
-///
-/// The `ScrollController` handed to the builder is the link between the two gestures: it is attached
-/// to the card's own `CustomScrollView`, so a drag that starts while the catalogue is scrolled down
-/// scrolls, and the same drag once it is back at the top moves the sheet. Wiring anything else to
-/// that controller - or forgetting to wire this - is how a sheet ends up only draggable by its
-/// grabber.
+// opens the shop card as the map's draggable sheet. the numbers are the behaviour: 0.92 leaves a
+// strip of map showing, 0.5 with shouldCloseOnMinExtent is why there is no close button, and `snap`
+// stops it sitting at 70%. the ScrollController handed to the builder must end up on the card's own
+// scroll view - it is what lets a drag hand itself from the list to the sheet.
 Future<void> showShopCardSheet(BuildContext context, Shop shop) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    // the sheet paints its own surface, corners and all, inside the draggable child - so the route's
-    // own background has to be out of the way or it would draw a second square-cornered one behind
+    // the sheet paints its own surface, so the route's background must not draw a square-cornered one
     backgroundColor: Colors.transparent,
     barrierColor: const Color(0x59000000),
     builder: (_) => DraggableScrollableSheet(
@@ -254,9 +173,8 @@ Future<void> showShopCardSheet(BuildContext context, Shop shop) {
       minChildSize: 0.5,
       maxChildSize: 0.92,
       snap: true,
-      // false, because the modal route sizes itself to this child. `true` would make it fill the
-      // whole viewport with a transparent slab above the sheet, which would swallow every tap meant
-      // for the barrier - so the map would stop being dismissable by tapping it.
+      // false: `true` fills the viewport with a transparent slab that swallows every tap meant for the
+      // barrier, so the map would stop being dismissable by tapping it
       expand: false,
       builder: (context, scrollController) => ShopCardView(
         shop: shop,
@@ -282,37 +200,29 @@ class ShopCardView extends StatefulWidget {
   final Shop shop;
   final ShopCardChrome chrome;
 
-  /// The sheet's own controller, which must end up on the scroll view - it is what lets a drag hand
-  /// itself from the list to the sheet. Null in the pushed route, where the scroll view owns its
-  /// own position.
+  // must end up on the scroll view - it is what lets a drag hand itself from the list to the sheet.
+  // null in the pushed route.
   final ScrollController? scrollController;
 
   @override
   State<ShopCardView> createState() => _ShopCardViewState();
 }
 
-/// The one horizontal inset on the screen. Text, rules, the search field and the product grid all
-/// sit on it, so a rule ends exactly where a line of text does.
+// the one horizontal inset: text, rules, the field and the grid all sit on it, so a rule ends
+// exactly where a line of text does
 const double _gutter = 16;
 
 class _ShopCardViewState extends State<ShopCardView> {
-  /// The catalogue filter. Held here rather than in the sliver so the products heading, the field
-  /// and the grid all read one value.
+  // held here so the heading, the field and the grid all read one value
   final TextEditingController _search = TextEditingController();
 
-  /// **Owned here rather than inside the field, because the field's own `TextField` is not the whole
-  /// control.** Tapping the magnifier or the padding beside it has to focus the input too - see
-  /// [_CatalogueSearchField], which is where the bug that made this necessary is written down.
+  // owned here, because the field's TextField is not the whole control - see _CatalogueSearchField
   final FocusNode _searchFocus = FocusNode();
 
   String _query = '';
 
-  /// Below this many priced products the search field is not drawn at all.
-  ///
-  /// The grid is two per row, so eight products is four rows - about one screenful, and the point at
-  /// which scrolling stops being the obvious way to find something. A shop with three priced items
-  /// does not need a search box; it needs the three items, and a field over them would be a control
-  /// that filters a list already entirely on screen.
+  // below this the search field is not drawn: two per row means eight is about one screenful, and a
+  // field over a list already entirely on screen filters nothing
   static const int _searchThreshold = 8;
 
   bool get _isSheet => widget.chrome == ShopCardChrome.sheet;
@@ -320,9 +230,8 @@ class _ShopCardViewState extends State<ShopCardView> {
   @override
   void initState() {
     super.initState();
-    // deferred past the first frame: loadProducts sets its busy flag and notifies *before* its first
-    // await, and notifying while this element is still being mounted is flutter's "setState() called
-    // during build". the same reason MapScreen and MessagesScreen defer theirs.
+    // deferred past the first frame: loadProducts notifies before its first await, and doing that while
+    // this element is mounting is "setState() called during build"
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<ProductsController>().loadProducts(widget.shop.id);
@@ -336,8 +245,8 @@ class _ShopCardViewState extends State<ShopCardView> {
     super.dispose();
   }
 
-  /// Pull-to-refresh re-reads the catalogue, which is the only thing on this screen that changes
-  /// while it is open - an owner pricing products in another session, most obviously.
+  // the catalogue is the only thing that changes while this screen is open - an owner pricing
+  // products in another session
   Future<void> _refresh() {
     return context.read<ProductsController>().loadProducts(widget.shop.id, force: true);
   }
@@ -346,30 +255,14 @@ class _ShopCardViewState extends State<ShopCardView> {
     if (!await _tryOpen(Uri.parse('tel:${widget.shop.contactPhone}'))) _reportNothingToOpenWith();
   }
 
-  /// Hands the shop's coordinates to **whatever maps app the phone actually has**, and only falls
-  /// back to a web map when there is none.
-  ///
-  /// `geo:` is an Android platform scheme, not one app's: every maps app on the phone registers for
-  /// it, so the system shows a chooser - Yandex, Google, 2GIS, whatever is installed - and the user's
-  /// own default wins. It costs nothing, needs no package and no api key. The previous version went
-  /// straight to a `https://yandex.uz/maps/` url, which opens Yandex Maps *if it is installed* and a
-  /// browser otherwise, so a phone with Google Maps and no Yandex got a web page.
-  ///
-  /// **What the fallback buys, and what `geo:` costs.** `geo:` can express "here is a point" and
-  /// cannot express "route to it from where I am" - there is no route form of the scheme, and the
-  /// per-app ones (`google.navigation:`, `yandexmaps://`) are each a single app again. So the geo
-  /// link drops the pin and the maps app's own «Маршрут» button is one tap away, while the web url
-  /// kept underneath still asks for the route outright. Trying the platform scheme first and the url
-  /// second is what makes both true: the common case opens the app the user already uses, and a
-  /// phone with no maps app at all still gets an answer.
-  ///
-  /// Both need a `<queries>` entry in AndroidManifest.xml, `geo` beside the `https` one - Android 11
-  /// package visibility is why (CLAUDE.md §8).
+  // hands the coordinates to whatever maps app the phone has: `geo:` is a platform scheme, so the
+  // system shows a chooser, where a yandex url opens a browser on a phone with only Google Maps.
+  // `geo:` cannot express "route to it", so the web url underneath covers that and a phone with no
+  // maps app. both need a `<queries>` entry in AndroidManifest.xml - Android 11 package visibility.
   Future<void> _route() async {
     final shop = widget.shop;
     final point = '${shop.latitude},${shop.longitude}';
-    // parentheses delimit the label in a geo: uri, so a shop with one in its name would truncate its
-    // own pin caption. Uri.encodeComponent deliberately leaves them alone, hence the strip.
+    // parentheses delimit the label in a geo: uri, and Uri.encodeComponent leaves them alone
     final label = Uri.encodeComponent(shop.name.replaceAll(RegExp(r'[()]'), ''));
 
     if (await _tryOpen(Uri.parse('geo:$point?q=$point($label)'))) return;
@@ -377,11 +270,9 @@ class _ShopCardViewState extends State<ShopCardView> {
     _reportNothingToOpenWith();
   }
 
-  /// **The return value of `launchUrl` is the signal, not `canLaunchUrl`.** Android 11 package
-  /// visibility makes `canLaunchUrl` answer false for perfectly launchable links unless every scheme
-  /// is declared, which is how the login flow once reported "Telegram is not installed" on a phone
-  /// with Telegram open - see CLAUDE.md §8. It also throws rather than returning false when nothing
-  /// claims the scheme, which is why the catch is part of the answer and not just logging.
+  // **the return value of launchUrl is the signal, not canLaunchUrl**, which answers false for
+  // launchable links unless every scheme is declared - and throws rather than returning false, so the
+  // catch is part of the answer
   Future<bool> _tryOpen(Uri uri) async {
     try {
       return await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -404,20 +295,15 @@ class _ShopCardViewState extends State<ShopCardView> {
     );
   }
 
-  /// The catalogue as the customer sees it: **priced rows only**.
-  ///
-  /// An unpriced row is useful to the *owner*, which is why their own grid shows it, but to a
-  /// customer it is a tile that answers no question - and on a fresh shop there would be a hundred of
-  /// them burying the handful that are priced.
+  // priced rows only: an unpriced row answers no question for a customer, and a fresh shop would bury
+  // the handful that are priced under a hundred that are not
   List<Product> _pricedProducts(ProductsController controller) => [
         for (final product in controller.productsFor(widget.shop.id))
           if (product.hasPrice) product,
       ];
 
-  /// Matched on the name and nothing else. A shop's catalogue is one shop's products, so the seller
-  /// is not a thing to search by, and the unit ("шт") would match most of the list. `contains`
-  /// rather than a prefix match for the same reason the server's search uses a leading wildcard:
-  /// people type «мешок» to find «Цемент в мешках».
+  // name only - the seller is not a thing to search inside one shop, and "шт" would match most of the
+  // list. `contains`, since people type «мешок» to find «Цемент в мешках».
   List<Product> _matching(List<Product> priced) {
     final query = _query.trim().toLowerCase();
     if (query.isEmpty) return priced;
@@ -437,9 +323,8 @@ class _ShopCardViewState extends State<ShopCardView> {
     final matches = _matching(priced);
     final isFirstLoad = controller.isLoadingFor(shop.id) && !controller.hasLoaded(shop.id);
 
-    // the pushed route draws its cover *under* the status bar, so the picture has to be that much
-    // taller for the same 240 of it to be visible below the clock. the sheet is opened with
-    // `useSafeArea`, so its own top edge is already clear of it and the height is the plain one.
+    // the pushed route draws its cover under the status bar, so the picture is that much taller for the
+    // same 240 of it to show. the sheet is opened with useSafeArea and takes the plain height.
     final coverHeight = ShopCategoryBanner.defaultHeight +
         (_isSheet ? 0 : MediaQuery.paddingOf(context).top);
 
@@ -447,14 +332,12 @@ class _ShopCardViewState extends State<ShopCardView> {
 
     final scrollView = CustomScrollView(
       controller: widget.scrollController,
-      // onDrag, because this screen has a text field in the middle of it. dragging the catalogue is
-      // the gesture nearest to hand once the keyboard is up, and on the sheet it is the same drag
-      // that would otherwise be putting the sheet away with the keyboard still on top of it.
+      // onDrag: on the sheet this is the same drag that would otherwise put the sheet away with the
+      // keyboard still on top of it
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
       slivers: [
-        // no padding of any kind around the cover: full width, hard against the top. on the sheet
-        // the surface's own Clip.antiAlias is what rounds its two upper corners.
+        // no padding around the cover: full width, hard against the top
         SliverToBoxAdapter(
           child: ShopCategoryBanner(category: shop.category, height: coverHeight),
         ),
@@ -490,23 +373,15 @@ class _ShopCardViewState extends State<ShopCardView> {
             products: matches,
             strings: strings,
             isFirstLoad: isFirstLoad,
-            // three different empty states, and telling them apart is the point: the request failed,
-            // the shop has priced nothing, or this particular search matched nothing.
+            // three empty states, and telling them apart is the point: the request failed, the shop has priced
+            // nothing, or this search matched nothing
             hasFailed: controller.loadFailedFor(shop.id),
             isFiltered: _query.trim().isNotEmpty,
           ),
         ),
-        // a tail so the last row of tiles is not flush against the bottom of the screen, plus
-        // whatever the gesture bar takes. both chromes are drawn over the shell, so the floating nav
-        // bar is not in the way - only the system inset is.
-        //
-        // **`viewInsets` is in there for the sheet, and it is not padding for its own sake.** The
-        // sheet's Scaffold does not resize for the keyboard (it cannot - the draggable sheet owns its
-        // height), so the bottom of the list stays underneath it, and the catalogue search field sits
-        // low enough on a short shop to be one of the things covered. Adding the keyboard's height to
-        // the scrollable extent is what gives `ensureVisible` somewhere to scroll the focused field
-        // *to*. It is zero in the pushed route, where the Scaffold resizes the body itself and the
-        // inset never reaches this far down the tree.
+        // a tail so the last row is not flush against the bottom, plus the system inset. viewInsets is in
+        // there for the sheet: its Scaffold cannot resize for the keyboard, so this is what gives
+        // ensureVisible somewhere to scroll the focused field to.
         SliverToBoxAdapter(
           child: SizedBox(
             height: 28 +
@@ -518,10 +393,8 @@ class _ShopCardViewState extends State<ShopCardView> {
     );
 
     return switch (widget.chrome) {
-      // **no RefreshIndicator on the sheet.** A pull at the top of the list is the gesture that puts
-      // the sheet away, and a spinner competing for it would mean the sheet sometimes refreshes and
-      // sometimes closes depending on how far the thumb travelled - which is the worst possible
-      // answer. The route keeps it: there is nothing else that gesture could mean there.
+      // **no RefreshIndicator on the sheet**: a pull at the top is the gesture that puts the sheet away,
+      // and a spinner competing for it would refresh or close depending on how far the thumb travelled
       ShopCardChrome.route => Stack(
           children: [
             RefreshIndicator(
@@ -532,10 +405,9 @@ class _ShopCardViewState extends State<ShopCardView> {
             // clear of the status bar the cover now runs under
             Positioned(
               top: MediaQuery.paddingOf(context).top + 8,
-              // 0, because CircleBackButton carries the gutter inset itself - it is the same widget
-              // every app bar uses, so the disc lands on the same 16px line here as it does there
+              // 0, because CircleBackButton carries the gutter inset itself
               left: 0,
-              // floating: it hovers over the cover picture rather than sitting in a bar
+              // floating: it hovers over the cover rather than sitting in a bar
               child: const CircleBackButton(floating: true),
             ),
           ],
@@ -545,21 +417,11 @@ class _ShopCardViewState extends State<ShopCardView> {
   }
 }
 
-/// The sheet's own surface: rounded top, the page's background colour, and a grabber.
-///
-/// **The `Scaffold` is not decoration.** A modal bottom sheet is a route with no Scaffold of its
-/// own, so `ScaffoldMessenger.of(context).showSnackBar` from inside it lands in the *map's* Scaffold
-/// - underneath the sheet, where nobody will ever see it. Registering one here puts the "nothing on
-/// this phone can open that" message inside the sheet, which is the only place it is any use.
-/// `resizeToAvoidBottomInset` is off because the draggable sheet already owns its own height, and
-/// two things resizing for one keyboard fight.
-///
-/// **The grabber floats over the content instead of sitting above it**, which is what lets the cover
-/// reach the sheet's own top edge and be cropped by its corners. It was a row in a `Column` above
-/// the scroll view, and the strip of page it occupied was the one thing stopping the picture from
-/// starting where the sheet does. `IgnorePointer` is what keeps the change free: a drag that lands
-/// on the handle falls through to the scroll view underneath, which is the thing the sheet listens
-/// to, so the handle stays draggable without being a gesture target of its own.
+// the sheet's surface: rounded top, page background, a grabber.
+//
+// the Scaffold is not decoration - a modal sheet is a route with no Scaffold, so a showSnackBar from
+// inside it lands in the map's, underneath the sheet. the grabber floats over the content so the
+// cover can reach the top edge, and IgnorePointer lets a drag on it fall through to the scroll view.
 class _SheetSurface extends StatelessWidget {
   const _SheetSurface({required this.child});
 
@@ -578,8 +440,8 @@ class _SheetSurface extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: Stack(
           children: [
-            // the scroll view, and it must be the *only* scrollable the sheet's controller reaches -
-            // that is what hands a drag between the list and the sheet
+            // must be the *only* scrollable the sheet's controller reaches - that is what hands a drag between
+            // the list and the sheet
             Positioned.fill(child: child),
             const Positioned(
               top: 10,
@@ -594,11 +456,7 @@ class _SheetSurface extends StatelessWidget {
   }
 }
 
-/// The handle: the one piece of chrome that says this thing can be dragged.
-///
-/// Translucent black rather than [AppColors.trackGrey], because it now lies on the cover instead of
-/// on the page - and the cover's top is near-white, where a pale grey handle is not there at all.
-/// An ink of the background lets it darken whatever it happens to be over.
+// translucent black rather than trackGrey: it lies on the cover, whose top is near-white
 class _SheetGrabber extends StatelessWidget {
   const _SheetGrabber();
 
@@ -615,20 +473,11 @@ class _SheetGrabber extends StatelessWidget {
   }
 }
 
-/// Everything the card says about the shop itself, on **one white surface**.
-///
-/// Three white cards used to do this job, one per section, each rounded and shadowed and floating in
-/// the page gutter. What they bought was separation; what they cost was the impression that a card
-/// about one business is three things. A single surface with rules through it says the same and says
-/// it more quietly - and it is what lets the cover above sit flush against it instead of leaving a
-/// strip of grey page between a picture and the name of the thing in it.
-///
-/// **The price section is skipped entirely when there is no basket**, rules and all. A shop is in
-/// the index only once its whole template is priced, so this is common early on, and what used to be
-/// here was a sentence explaining that the shop had not finished pricing. It is gone: a customer is
-/// not the audience for another business's unfinished admin, and reading one on the screen you
-/// opened to compare prices is worse than reading nothing. What is left is a card that simply makes
-/// no claim about this shop's prices, which is exactly the true statement.
+// everything the card says about the shop itself, on one white surface - three rounded cards used to
+// do this and made a card about one business read as three things.
+//
+// **the price section is skipped entirely when there is no basket**: a customer is not the audience
+// for another business's unfinished admin.
 class _DetailsSurface extends StatelessWidget {
   const _DetailsSurface({
     required this.shop,
@@ -654,10 +503,8 @@ class _DetailsSurface extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _Identity(shop: shop, strings: strings),
-          // the two facts are drawn from one condition rather than one each: a shop is in the index
-          // only with its whole template priced, so basketPrice and priceTier are both present or
-          // both absent, and branching on them separately would be writing code for a state the
-          // database cannot produce.
+          // one condition, not two: a shop is in the index only with its whole template priced, so
+          // basketPrice and priceTier are both present or both absent
           if (basket != null && tier != null) ...[
             const _Rule(),
             _BasketPrice(shop: shop, basket: basket, tier: tier, strings: strings),
@@ -675,15 +522,8 @@ class _DetailsSurface extends StatelessWidget {
   }
 }
 
-/// The separator, and the only one on this screen.
-///
-/// **Inset from both edges**, so it reads as a rule under a block of text rather than as the seam
-/// between two panels - a line that runs wall to wall cuts the surface in half, which is the thing
-/// the white cards were doing and the reason they went.
-///
-/// [AppColors.trackGrey] rather than `hairline`: `hairline` is the border token for a white card
-/// standing on the *grey* page, where a shadow is doing most of the separating anyway. On white with
-/// nothing else helping, it is about a 1.08:1 step and simply does not appear.
+// inset from both edges, so it reads as a rule under a block of text rather than a seam between two
+// panels. trackGrey rather than `hairline`, which on white is about a 1.08:1 step and never appears.
 class _Rule extends StatelessWidget {
   const _Rule();
 
@@ -697,17 +537,9 @@ class _Rule extends StatelessWidget {
   }
 }
 
-/// Whose card this is: the kind of shop, its name, where it is.
-///
-/// **The name is here rather than on the cover.** It was laid over the picture while the picture was
-/// a dark gradient; a white-and-orange cover has nowhere on it that white text is safe and nowhere
-/// that dark text is either, and a scrim added to make one work would be a grey band over a cover
-/// that was just redesigned to be clean. Below it the name is a heading, which is what it is.
-///
-/// **The category is an eyebrow above the name, not a chip and not a row with the glyph in it.** The
-/// glyph is already on the cover, forty pixels up, inside the white disc - printing it again under
-/// its own picture is the same mark twice. Small caps over a large name is the shape a listing has
-/// had since before there were phones, and it costs no colour and no box.
+// whose card this is: the kind of shop, its name, where it is. the name is here rather than on the
+// cover, which has nowhere that white text is safe and nowhere that dark text is either - and the
+// category is an eyebrow rather than a chip, since the glyph is already on the cover.
 class _Identity extends StatelessWidget {
   const _Identity({required this.shop, required this.strings});
 
@@ -737,10 +569,8 @@ class _Identity extends StatelessWidget {
                   ),
                 ),
               ),
-              // the placement mark. it was on the cover in white; here it is a star and three
-              // letters in brand orange - a highlight, which is one of the things orange is for,
-              // and small enough not to compete with the name under it. **Not a capsule**: a pill
-              // beside an eyebrow is a chip, and a chip is what this block was rebuilt to be rid of.
+              // the placement mark, small enough not to compete with the name. not a capsule - a pill beside an
+              // eyebrow is a chip, and this block was rebuilt to be rid of chips.
               if (shop.isVip) ...[
                 const SizedBox(width: 10),
                 const Icon(Icons.star_rounded, color: AppColors.primaryOrange, size: 15),
@@ -799,19 +629,9 @@ class _Identity extends StatelessWidget {
   }
 }
 
-/// How this shop compares to its market, and then what the shared basket costs here.
-///
-/// **The comparison is first and the number is second**, which is the reverse of a price tag and is
-/// the point of the whole product: «на 4% дешевле рынка» is the fact a customer came for, and
-/// «4 850 000 сум» is what it is 4% of. A reader who stops after one line has still read the useful
-/// one.
-///
-/// Three lines, no box and no tint behind them. The comparison is the badge at
-/// [PriceTierBadgeSize.headline] - the same widget the pin and the feed use, so the wording and the
-/// three colours stay in one file - then the amount at the largest size on the screen, then the
-/// caption naming what the amount is. **The caption is under the number rather than over it**: the
-/// number is the thing the eye should land on, and a label above it takes that position for a word
-/// nobody is looking for.
+// **the comparison first, the number second** - the reverse of a price tag, and the point of the
+// product: «на 4% дешевле рынка» is what a customer came for and «4 850 000 сум» is what it is 4%
+// of. the caption sits under the number, since the number is what the eye should land on.
 class _BasketPrice extends StatelessWidget {
   const _BasketPrice({
     required this.shop,
@@ -832,8 +652,8 @@ class _BasketPrice extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // the full sentence rather than the compact form: this is where someone who tapped a pin
-          // reading "−4%" finds out what those four characters meant
+          // the full sentence rather than the compact form: this is where somebody who tapped a pin reading
+          // "−4%" finds out what those four characters meant
           PriceTierBadge(
             tier: tier,
             differencePercent: shop.priceDifferencePercent,
@@ -869,23 +689,9 @@ class _BasketPrice extends StatelessWidget {
   }
 }
 
-/// The phone number, and the two things you can do with a shop you have decided to visit.
-///
-/// **The address is not here.** It is in the identity block, under the name, where the card
-/// introduces itself - and printing it twice on one screen made this block look like a form nobody
-/// had finished filling in.
-///
-/// It read as an odd block for two more reasons, both now gone. It carried a section title
-/// («Контакты») *and* a field caption *and* a glyph beside the number, so three different kinds of
-/// label were stacked over one fact; the rule above it now does the section's job, leaving one
-/// caption naming one value. And its secondary button was filled [AppColors.surfaceMuted] with a
-/// `hairline` border - a fill and an edge that are both within about 3% of white, which on this
-/// surface is a button-shaped area of nothing.
-///
-/// The number is drawn large and is **not** a control. The call button directly under it is the
-/// control, and a tappable number six points above a button that does the identical thing is two
-/// answers to one question - the kind of duplicate affordance people press twice and then report as
-/// broken.
+// the phone number and the two things you can do with a shop you have decided to visit. the address
+// is not here - it is under the name. the number is drawn large and is **not** a control: a tappable
+// number above a button that does the identical thing is two answers to one question.
 class _Contacts extends StatelessWidget {
   const _Contacts({
     required this.shop,
@@ -921,9 +727,8 @@ class _Contacts extends StatelessWidget {
             shop.contactPhone,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            // a *positive* letter spacing, where every other heading on this screen is negative: a
-            // phone number is read in groups of digits rather than as a word, and tightening it is
-            // what makes one long number out of four short ones.
+            // positive letter spacing, where every other heading here is negative: a phone number is read in
+            // groups of digits, and tightening it makes one long number out of four short ones
             style: const TextStyle(
               color: AppColors.textDark,
               fontSize: 20,
@@ -959,12 +764,8 @@ class _Contacts extends StatelessWidget {
   }
 }
 
-// the two things somebody who opened a shop wants to do. one filled, one outlined: they are not
-// peers - a phone number is the reason most of these cards are opened at all.
-//
-// the outlined one is white inside a `trackGrey` edge, which is the only outline that is actually
-// visible on a white surface. it was a surfaceMuted fill inside a hairline, and both of those are
-// within 3% of the surface they were drawn on.
+// one filled, one outlined - they are not peers, since a phone number is why most of these cards are
+// opened. the outlined one is white inside a trackGrey edge, the only outline visible on white.
 class _ActionButton extends StatelessWidget {
   const _ActionButton({
     required this.label,
@@ -985,8 +786,7 @@ class _ActionButton extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppRadius.sm),
-        // the coloured glow is the one place brand orange bleeds outside its own shape, and it is
-        // reserved for a primary action - see AppShadows.accent
+        // the coloured glow is reserved for a primary action - see AppShadows.accent
         boxShadow: isPrimary ? AppShadows.accent(AppColors.primaryOrange) : null,
       ),
       child: Material(
@@ -1030,9 +830,8 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
-// "Товары" plus how many, matching the section headings on the home feed. the count is of everything
-// priced, not of what the search left showing - it describes the shop, and a number that fell to 3
-// while a filter was typed would read as the catalogue shrinking.
+// the count is of everything priced, not of what the search left showing: it describes the shop, and
+// a number falling to 3 while a filter was typed would read as the catalogue shrinking
 class _ProductsHeading extends StatelessWidget {
   const _ProductsHeading({required this.count, required this.strings});
 
@@ -1068,24 +867,12 @@ class _ProductsHeading extends StatelessWidget {
   }
 }
 
-/// Filters the catalogue that is already on the phone.
-///
-/// **It searches in memory and sends nothing.** The whole catalogue arrived in the one request this
-/// screen makes - at most a template plus thirty rows - so a keystroke costs a `contains` over a
-/// list, not a round trip. That is the difference between this field and the home feed's, which is a
-/// button that opens a screen precisely because *its* search is a sequential scan on the server
-/// (CLAUDE.md §7): the argument against as-you-type there does not exist here.
-///
-/// **The whole well is the tap target, and that is a bug fix rather than a refinement.** A
-/// `TextField` only takes focus where the `TextField` is, and this one is the `Expanded` in the
-/// middle of a row - so the 14px of padding, the 19px magnifier and the 10px after it were about
-/// 43px of dead surface at the left end of a control that looks exactly like a button. Pressing the
-/// magnifier and having nothing happen is the whole of "the search button does not work". The outer
-/// `GestureDetector` hands focus to the field; a tap that lands *on* the field still resolves to the
-/// field's own recogniser, since the innermost one in the arena wins.
-///
-/// The well is [AppColors.trackGrey] with no border and no shadow - the home feed's search bar
-/// exactly, hint colour and heights included, so the two read as one control across two screens.
+// filters the catalogue already on the phone - it all arrived in one request, so a keystroke costs a
+// `contains`. that is why this is a live field where the home feed's is a button.
+//
+// **the whole well is the tap target**: a TextField only takes focus where the TextField is, so the
+// magnifier and its padding were ~43px of dead surface on something that looks like a button. it is
+// trackGrey with no border and no shadow, the home feed's search bar exactly.
 class _CatalogueSearchField extends StatelessWidget {
   const _CatalogueSearchField({
     required this.controller,
@@ -1140,9 +927,7 @@ class _CatalogueSearchField extends StatelessWidget {
                 ),
               ),
             ),
-            // rebuilt off the field itself rather than from the parent's state, so clearing does not
-            // cost a rebuild of the whole card - the same reason the unit chips on the product form
-            // listen to their controller
+            // rebuilt off the field itself, so clearing does not rebuild the whole card
             ValueListenableBuilder<TextEditingValue>(
               valueListenable: controller,
               builder: (context, value, _) {
@@ -1152,8 +937,7 @@ class _CatalogueSearchField extends StatelessWidget {
                   onTap: () {
                     controller.clear();
                     onChanged('');
-                    // clearing is usually the last thing anyone wants from the field, so it takes the
-                    // keyboard with it rather than leaving it up over the results it just restored
+                    // clearing takes the keyboard with it rather than leaving it over the results it just restored
                     FocusScope.of(context).unfocus();
                   },
                   child: const Padding(
@@ -1171,15 +955,9 @@ class _CatalogueSearchField extends StatelessWidget {
   }
 }
 
-/// The catalogue, as a sliver.
-///
-/// A shop with nothing priced gets a line saying so rather than a hidden section: a missing section
-/// reads as "this app has no products area", which is a different and wrong message. A *search* that
-/// matched nothing gets a different line again - it is the reader's query that is empty, not the
-/// shop.
-///
-/// The line is set plainly on the page rather than inside a bordered box. It is one sentence in the
-/// place a grid would be, and the grid it replaces has no frame either.
+// a shop with nothing priced gets a line saying so rather than a hidden section, which would read as
+// "this app has no products area". a *search* that matched nothing gets a different line: it is the
+// reader's query that is empty, not the shop.
 class _ProductsSliver extends StatelessWidget {
   const _ProductsSliver({
     required this.products,
@@ -1214,9 +992,8 @@ class _ProductsSliver extends StatelessWidget {
 
     if (products.isEmpty) {
       final message = switch ((hasFailed, isFiltered)) {
-        // the failure wins over the filter: a search that found nothing because the catalogue never
-        // arrived is not a search result, and telling the reader to try another word would send them
-        // typing at a screen that has no data behind it
+        // the failure wins over the filter: telling the reader to try another word would send them typing at
+        // a screen with no data behind it
         (true, _) => strings.productsLoadError,
         (false, true) => strings.searchNoResults,
         (false, false) => strings.noPricedProductsYet,
@@ -1238,8 +1015,8 @@ class _ProductsSliver extends StatelessWidget {
       );
     }
 
-    // a sliver grid, so a hundred-product catalogue builds one screenful of tiles and fires one
-    // screenful of image requests - see the class comment on ShopCardScreen
+    // a sliver grid, so a hundred-product catalogue builds one screenful of tiles - see the note at the
+    // top of this file
     return ProductSliverGrid(
       tiles: [
         for (final Product product in products)

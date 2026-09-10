@@ -12,22 +12,11 @@ import 'edit_store_screen.dart';
 import '../controllers/stores_controller.dart';
 import 'package:frontend/core/widgets/circle_back_button.dart';
 
-// the per-shop hub, opened by tapping a shop in MyShopsScreen. it owns no shop functionality itself
-// - it is a menu of sections, each of which opens its own screen:
+// the per-shop hub, opened by tapping a shop in MyShopsScreen: a menu of sections, each opening its
+// own screen - Товары to the catalogue grid, Данные магазина to the edit form and delete.
 //
-//   Товары             -> ShopProductsScreen (the catalogue grid: prices, stock, own products)
-//   Данные магазина     -> EditStoreScreen    (name/phone/address, and delete)
-//
-// stacking those on one page was the alternative and is what this deliberately avoids: managing a
-// catalogue and "rename and possibly destroy this shop" have nothing to do with each other, and a
-// destructive button sharing a scroll view with a routine one is exactly how a shop gets deleted by
-// accident.
-//
-// there was a third row here, "Загрузка из Excel", which bulk-loaded a catalogue from a spreadsheet.
-// it is gone along with the endpoint behind it: it existed so an owner wouldn't have to type fifty
-// products in one at a time, and picking a category at creation already leaves the catalogue
-// stocked. it also wrote rows the own-products cap counted, which is how a shop ended up showing
-// "30 из 20" on its add-product tile.
+// stacking those on one page is what this avoids: a destructive button sharing a scroll view with a
+// routine one is how a shop gets deleted by accident.
 class ShopSettingsScreen extends StatelessWidget {
   const ShopSettingsScreen({super.key, required this.shop});
 
@@ -38,10 +27,9 @@ class ShopSettingsScreen extends StatelessWidget {
     final strings = Provider.of<LanguageProvider>(context).strings;
     final controller = Provider.of<StoresController>(context);
 
-    // read the live row out of the controller rather than trusting the copy this screen was
-    // constructed with: editing the shop replaces that row, and without this the header would keep
-    // showing the old name until the whole screen was popped and reopened. falls back to the
-    // constructor's copy for the one frame between a delete landing and this screen popping.
+    // read the live row out of the controller rather than trusting the copy this screen was constructed
+    // with: editing the shop replaces that row. falls back to the constructor's copy for the one frame
+    // between a delete landing and this screen popping.
     final current = controller.myShops.firstWhere(
       (s) => s.id == shop.id,
       orElse: () => shop,
@@ -56,8 +44,8 @@ class ShopSettingsScreen extends StatelessWidget {
         centerTitle: false,
         titleSpacing: 20,
         iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
-        // the disc, not a bare chevron - see CircleBackButton for why every bar in the app needs it.
-        // leadingWidth must move with it or flutter keeps its own 56 and the title sits wrong.
+        // the disc, not a bare chevron. leadingWidth must move with it or flutter keeps its own 56 and
+        // the title sits wrong.
         leading: const CircleBackButton(),
         leadingWidth: CircleBackButton.leadingWidth,
         title: Text(
@@ -82,9 +70,8 @@ class ShopSettingsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 22),
 
-            // one grouped card holding both rows, ios-settings style, rather than two separate
-            // cards: they are alternatives within the same menu, and separating them with
-            // whitespace would read as two unrelated things that happen to be near each other
+            // one grouped card holding both rows, ios-settings style: they are alternatives within the same
+            // menu, and whitespace between them would read as two unrelated things
             _SectionGroup(
               children: [
                 _SectionRow(
@@ -112,7 +99,7 @@ class ShopSettingsScreen extends StatelessWidget {
   }
 
   // EditStoreScreen pops `true` when it deleted the shop. this screen is *about* that shop, so it
-  // has nothing left to show and follows it back to the list.
+  // follows it back to the list.
   Future<void> _openEdit(BuildContext context, Shop current) async {
     final deleted = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => EditStoreScreen(shop: current)),
@@ -121,8 +108,8 @@ class ShopSettingsScreen extends StatelessWidget {
   }
 }
 
-// the catalogue size, sitting on the identity card: it is the single number that tells an owner
-// whether their last upload actually landed, so it belongs where they land, not one screen deeper.
+// the catalogue size, on the identity card: it is the single number that tells an owner whether
+// their last upload landed, so it belongs where they land rather than one screen deeper
 class _ProductCountBadge extends StatelessWidget {
   const _ProductCountBadge({required this.shop, required this.strings});
 
@@ -151,9 +138,8 @@ class _ProductCountBadge extends StatelessWidget {
   }
 }
 
-// a white card whose children are separated by inset hairlines, the grouped-list shape used across
-// the app. the divider is inset to the text column so it reads as separating two rows of the same
-// list instead of cutting the card in half.
+// a white card whose children are separated by inset hairlines - the grouped-list shape used across
+// the app. inset to the text column, so it reads as separating two rows of one list.
 class _SectionGroup extends StatelessWidget {
   const _SectionGroup({required this.children});
 

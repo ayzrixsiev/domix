@@ -4,25 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 
-/// The "are you sure?" in front of anything that destroys data and cannot be undone.
+/// The "are you sure?" in front of anything that destroys data: cancel is first and heavier, and
+/// the body names what disappears.
 ///
-/// It started life private inside `edit_store_screen.dart` for deleting a shop, and moved here when
-/// account deletion needed the identical thing. Copying it would have been three lines of work and
-/// the wrong three: two dialogs asking the same question is how one of them ends up with the
-/// confirm button on the left, and the one time that matters is the time somebody destroys their
-/// catalogue by muscle memory.
-///
-/// Two rules it encodes, and both are about which way a hurried tap goes wrong:
-///
-///   - **Cancel is first and cancel is heavier.** The safe choice sits where the thumb rests and
-///     reads as the default. Confirm is the red one on the right, which is the side you have to
-///     reach for.
-///   - **The body names what disappears.** A bare "удалить?" gives the reader nothing to check their
-///     intent against, which is precisely the moment people confirm the wrong thing. Callers pass a
-///     sentence naming the shop, or the catalogue, or whatever is actually about to go.
-///
-/// Pops `true` on confirm and `false` on cancel; a tap outside pops nothing, so callers must treat
-/// null as a cancel - `confirmed != true`, never `!confirmed`.
+/// Pops true on confirm and false on cancel; a tap outside pops nothing, so callers must treat null
+/// as a cancel - `confirmed != true`, never `!confirmed`.
 class DestructiveConfirmDialog extends StatelessWidget {
   const DestructiveConfirmDialog({
     super.key,
@@ -39,8 +25,7 @@ class DestructiveConfirmDialog extends StatelessWidget {
   final String cancelLabel;
   final IconData icon;
 
-  /// Shows the dialog and resolves to whether the user confirmed. Null (dismissed by tapping the
-  /// barrier) collapses to false here so callers never have to think about three states.
+  /// Null (the barrier was tapped) collapses to false here, so callers never see three states.
   static Future<bool> show(
     BuildContext context, {
     required String title,

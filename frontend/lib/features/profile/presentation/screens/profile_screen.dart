@@ -5,6 +5,9 @@ import 'package:provider/provider.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/destructive_confirm_dialog.dart';
+import 'package:frontend/core/widgets/role_option_tile.dart';
+import 'package:frontend/features/tickets/data/job_role.dart';
+import 'package:frontend/features/tickets/presentation/controllers/tickets_controller.dart';
 import '../controllers/auth_controller.dart';
 
 const Color _kPrimaryOrange = Color(0xFFFF6F00);
@@ -53,7 +56,6 @@ class ProfileViewState {
   final String phoneNumber;
 
   bool get isGuest => state == ProfileAccountState.guest;
-  bool get isClient => state == ProfileAccountState.client;
   bool get isVendor => state == ProfileAccountState.vendor;
 }
 
@@ -61,28 +63,20 @@ class ProfileViewState {
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
     super.key,
-    this.profile = const ProfileViewState.guest(),
     this.showScaffold = true,
     this.bottomPadding = 36,
-    this.onLoginTap,
     this.onManageShopTap,
     this.onAddStoreTap,
-    this.onBecomeVendorTap,
     this.onFavoritesTap,
     this.onSupportTap,
-    this.onLogoutTap,
   });
 
-  final ProfileViewState profile;
   final bool showScaffold;
   final double bottomPadding;
-  final VoidCallback? onLoginTap;
   final VoidCallback? onManageShopTap;
   final VoidCallback? onAddStoreTap;
-  final VoidCallback? onBecomeVendorTap;
   final VoidCallback? onFavoritesTap;
   final VoidCallback? onSupportTap;
-  final VoidCallback? onLogoutTap;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -91,14 +85,15 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _showShopsSubMenu = false;
 
-  // tracks which error message we already showed a dialog for, so we don't pop it again on every rebuild
+  // which error we already showed a dialog for, so it is not popped again on every rebuild
   String? _lastHandledError;
 
-  AppLocalizations get _strings =>
-      Provider.of<LanguageProvider>(context).strings;
+  /// The current language's copy, read **without subscribing** - see [build] for the subscription.
+  /// **`Provider.of(context)` defaults to `listen: true`, and that is illegal outside a build**: from
+  /// a tap handler it throws *inside* the gesture callback, so «Удалить аккаунт» simply did nothing.
+  AppLocalizations get _strings => context.read<LanguageProvider>().strings;
 
-  AppLanguage get _currentLang =>
-      Provider.of<LanguageProvider>(context).language;
+  AppLanguage get _currentLang => context.read<LanguageProvider>().language;
 
   void _updateLanguage(AppLanguage newLang) {
     Provider.of<LanguageProvider>(context, listen: false)
@@ -161,7 +156,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // open modal sheet to collect user name and role before launching telegram
   void _showLoginBottomSheet(BuildContext context) {
     final nameController = TextEditingController();
-    String selectedRole = 'customer';
+    JobRole selectedRole = JobRole.client;
     // shown under the name field if the user tries to continue without typing a name
     String? nameError;
 
@@ -173,7 +168,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModalState) => Padding(
+        // **scrollable, and the third role is what made it necessary.** the sheet is a min-height Column,
+        // so anything taller than the space left over simply overflows. two role squares were ~90px; three
+        // stacked rows are ~215, and with the keyboard up that crosses 800px on an ordinary phone.
+        builder: (ctx, setModalState) => SingleChildScrollView(
           padding: EdgeInsets.fromLTRB(
             22,
             16,
@@ -184,7 +182,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // top drag handle bar for modern ios feel
+              // top drag handle
               Center(
                 child: Container(
                   width: 44,
@@ -223,7 +221,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ],
               const SizedBox(height: 20),
-              // styled text input with filled background and subtle borders
               TextField(
                 controller: nameController,
                 style: const TextStyle(
@@ -272,29 +269,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               const SizedBox(height: 18),
-              // two interactive selection cards for customer vs vendor
-              Row(
-                children: [
-                  _RoleSelectionCard(
-                    icon: CupertinoIcons.cart_fill,
-                    title: _strings.roleCustomer,
-                    subtitle: _strings.roleCustomerSub,
-                    isSelected: selectedRole == 'customer',
-                    onTap: () => setModalState(() => selectedRole = 'customer'),
-                  ),
-                  const SizedBox(width: 14),
-                  _RoleSelectionCard(
-                    icon: CupertinoIcons.building_2_fill,
-                    title: _strings.roleVendor,
-                    subtitle: _strings.roleVendorSub,
-                    isSelected: selectedRole == 'shop_owner',
-                    onTap: () =>
-                        setModalState(() => selectedRole = 'shop_owner'),
-                  ),
-                ],
+              // the three sides of the marketplace, stacked. **a list rather than a row of squares**: three
+              // squares split this width into thirds, at which point «Владелец магазина» wraps to three lines and
+              // the subtitle that explains the choice has nowhere left to go. see RoleOptionTile.
+              Text(
+                _strings.registerRolePrompt,
+                style: const TextStyle(
+                  color: _kTextMuted,
+                  fontSize: 13,
+                  letterSpacing: 0.1,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
+              const SizedBox(height: 10),
+              for (final role in JobRole.values) ...[
+                RoleOptionTile(
+                  icon: role.icon,
+                  title: role.label(_strings),
+                  subtitle: role.subtitle(_strings),
+                  isSelected: selectedRole == role,
+                  onTap: () => setModalState(() => selectedRole = role),
+                ),
+                if (role != JobRole.values.last) const SizedBox(height: 8),
+              ],
               const SizedBox(height: 26),
-              // elevated primary submit button with icon and subtle shadow
               Container(
                 width: double.infinity,
                 height: 54,
@@ -326,15 +324,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     }
 
                     final scaffoldMessenger = ScaffoldMessenger.of(context);
+                    // read before the pop - after it, `ctx` is deactivated and the lookup asserts
+                    final ticketsController =
+                        Provider.of<TicketsController>(context, listen: false);
                     Navigator.pop(ctx);
 
-                    // trigger backend authorization and switch app to telegram bot
+                    // **the role is remembered on the phone, not only sent to the server.** the backend has no worker
+                    // role yet - `/api/auth/init` maps everything that is not shop_owner down to customer - so this is
+                    // what keeps a worker a worker when `/api/me` answers "customer" on the next foreground.
+                    ticketsController.setRole(selectedRole);
+
+                    // trigger backend authorization and switch to the telegram bot
                     final authController = Provider.of<AuthController>(context, listen: false);
                     authController.startTelegramLogin(
                       name: trimmedName,
-                      role: selectedRole,
+                      // the real intent, normalised server-side: sending `worker` rather than pre-flattening it here
+                      // means the day the backend grows the role, the app already speaks it
+                      role: selectedRole.code,
                       onSuccess: () {
-                        // THIS SNACKBAR IS NOW SAFE FROM CONTEXT-UNMOUNT CRASHES EVEN 2 MINUTES LATER!
+                        // captured before the await, so a snackbar two minutes later cannot touch a dead context
                         scaffoldMessenger.showSnackBar(
                           SnackBar(
                             content: Text(_strings.welcomeMessage),
@@ -357,12 +365,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         size: 20,
                       ),
                       const SizedBox(width: 10),
-                      Text(
-                        _strings.continueTelegram,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 16,
+                      // Flexible, not a bare Text: this Row is centred and min-sized, so a long label sizes past the
+                      // sheet instead of wrapping, and the striped bar is the first anyone hears about it
+                      Flexible(
+                        child: Text(
+                          _strings.continueTelegram,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                          ),
                         ),
                       ),
                     ],
@@ -373,23 +387,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
       ),
-    );
+      // the sheet owns the field, so the sheet closing is what ends the controller's life. one
+      // TextEditingController per opened sheet, never released, is a leak the analyzer cannot see
+      // because the object is a local rather than a field.
+    ).whenComplete(nameController.dispose);
   }
 
   @override
   Widget build(BuildContext context) {
-    // read active profile state directly from provided auth controller
+    // the one place this screen subscribes to the language. every `_strings` below reads without
+    // listening - half of them are inside tap handlers - so without this line switching to uzbek would
+    // leave the profile in russian until something else rebuilt it.
+    context.watch<LanguageProvider>();
+
     final authController = Provider.of<AuthController>(context);
     final currentProfile = authController.profileState;
 
-    // show a centered, dismissible dialog once per new error instead of a raw banner that never goes away
+    // a centred dialog once per new error, rather than a banner that never goes away
     final currentError = authController.loginErrorDetail;
     if (currentError != null && currentError != _lastHandledError) {
       _lastHandledError = currentError;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        // the login path deliberately shows instructions rather than the exception: "Could not open
-        // Telegram" names a cause the user cannot act on, while "check Telegram is installed" is
-        // the same fact turned into something they can do. the raw string goes to the log instead.
+        // the login path shows instructions rather than the exception: "Could not open Telegram" names a
+        // cause the user cannot act on, while "check Telegram is installed" is the same fact turned into
+        // something they can do. the raw string goes to the log.
         if (mounted) {
           _showErrorDialog(
             title: _strings.errorDialogTitle,
@@ -407,7 +428,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         physics: const BouncingScrollPhysics(),
         padding: EdgeInsets.fromLTRB(20, 16, 20, widget.bottomPadding),
         children: [
-          // render guest hero prompt if unauthenticated, otherwise render user account header
+          // guest hero prompt when unauthenticated, otherwise the account header
           if (currentProfile.isGuest) ...[
             _buildGuestLoginHeroCard(),
             const SizedBox(height: 24),
@@ -416,18 +437,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 24),
           ],
 
-          // shop management, as an accordion the owner opens in place. it used to swap this card for
-          // an entirely different one, which is why the entry point vanished on tap and its chevron
-          // could never indicate open/closed.
+          // shop management, as an accordion the owner opens in place. it used to swap this card for an
+          // entirely different one, which is why the entry point vanished on tap and its chevron could never
+          // indicate open or closed.
           if (currentProfile.isVendor) ...[
             _MenuGroupCard(
               rows: const [],
               leading: _ExpandableMenuSection(
                 isExpanded: _showShopsSubMenu,
                 onToggle: () => setState(() => _showShopsSubMenu = !_showShopsSubMenu),
-                // the header doubles as the close control once open, so the group needs no separate
-                // "collapse" row: the chevron already rotated to point down at what it revealed,
-                // which is the state indicator, and the label says what tapping it now does.
+                // the header doubles as the close control once open, so the group needs no separate "collapse"
+                // row: the chevron already rotated to point at what it revealed
                 header: _MenuRowData(
                   icon: CupertinoIcons.bag,
                   title: _showShopsSubMenu ? _strings.closeButton : _strings.manageShops,
@@ -483,14 +503,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
 
-          // account deletion, in a card of its own below the menu rather than as one more row inside
-          // it. the split is the same one MyShopsScreen makes between "manage" and "destroy": a
-          // permanently irreversible action sharing a list with "Язык приложения" is an action
-          // somebody eventually taps on the way to something else.
+          // account deletion, in a card of its own below the menu: an irreversible action sharing a list with
+          // "Язык приложения" is one somebody eventually taps on the way to something else.
           //
-          // **This exists because Google Play requires it.** Any app that lets a user create an
-          // account must let them delete it from inside the app, and a listing without this path is
-          // rejected at review - it is not an optional courtesy.
+          // **This exists because Google Play requires it** - an app that lets a user create an account must
+          // let them delete it from inside the app, or the listing is rejected at review.
           if (!currentProfile.isGuest) ...[
             const SizedBox(height: 16),
             _MenuGroupCard(
@@ -501,9 +518,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   textColor: _kDanger,
                   iconColor: _kDanger,
                   iconBackground: _kDangerSoft,
-                  // a spinner in the trailing slot rather than a disabled row: the request takes a
-                  // round trip and a shop owner with a large catalogue will notice it, and a row that
-                  // simply stops responding reads as the app freezing
+                  // a spinner in the trailing slot rather than a disabled row: the request is a round trip a shop
+                  // owner with a large catalogue will notice, and a row that stops responding reads as a freeze
                   trailing: authController.isDeletingAccount
                       ? const SizedBox(
                           width: 18,
@@ -537,7 +553,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ? Scaffold(backgroundColor: _kSoftSurface, body: body)
         : ColoredBox(color: _kSoftSurface, child: body);
 
-    // stack overlays: loading indicator (errors now show as a centered dialog, scheduled above)
+    // overlays: the loading indicator (errors show as a dialog, scheduled above)
     return Stack(
       children: [
         scaffold,
@@ -559,16 +575,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  /// Asks once, then destroys the account on the server and signs out locally.
+  /// Asks once, then destroys the account on the server and signs out locally. The confirmation lives
+  /// here rather than on the backend, where the sentence can name what is about to disappear.
   ///
-  /// **The confirmation lives here and not on the backend.** `DELETE /api/me` does what it is told;
-  /// "are you sure" belongs on the screen with the button, where the user can still change their
-  /// mind and where the sentence can name what is about to disappear - for a shop owner that is
-  /// their whole catalogue, not just a login.
-  ///
-  /// [AuthController.deleteAccount] does the server call *before* touching local storage, so a
-  /// failure here leaves the session exactly as it was and the user can try again. All this has to
-  /// do is report it.
+  /// [AuthController.deleteAccount] calls the server *before* touching local storage, so a failure
+  /// leaves the session exactly as it was and all this has to do is report it.
   Future<void> _confirmDeleteAccount() async {
     final strings = _strings;
     final controller = context.read<AuthController>();
@@ -591,14 +602,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!mounted) return;
 
     if (!deleted) {
-      // its own headline, not the login one. "Что-то пошло не так" over Telegram instructions is
-      // what this screen used to say here, and it sent the founder looking for a Telegram problem
-      // that did not exist - the account was still there and the button just needed pressing again.
+      // its own headline, not the login one: «Что-то пошло не так» over Telegram instructions sent the
+      // founder looking for a Telegram problem that did not exist
       _showErrorDialog(
         title: strings.deleteAccountFailedTitle,
-        // a code, localized here - the same contract the product and shop endpoints already use.
-        // the controller never holds a russian sentence, so the message follows the app's language
-        // even if it changed while the request was in flight.
+        // a code, localized here - so the message follows the app's language even if it changed while the
+        // request was in flight
         body: strings.deleteAccountErrorFor(controller.deleteAccountErrorCode),
       );
       return;
@@ -607,21 +616,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // itself into the signed-out version - there is nothing left to navigate away from
   }
 
-  /// The app's one modal error: an icon, a headline, a sentence, and an OK the user has to press.
+  /// The app's one modal error: an icon, a headline, a sentence, and an OK.
   ///
-  /// **It takes its wording from the caller, and that is a fix rather than a refactor.** It used to
-  /// take a `message` argument, ignore it, and print `errorDialogTitle` + `errorDialogInstructions`
-  /// - which are the *login* strings: «Что-то пошло не так / Проверьте, что Telegram установлен».
-  /// So a failed account deletion told the user to check their Telegram installation. The argument
-  /// was there, it was even passed the right sentence, and nothing rendered it.
+  /// **It takes its wording from the caller.** It used to take a `message`, ignore it, and print the
+  /// *login* strings - so a failed account deletion told the user to check their Telegram install, and
+  /// nothing could catch it since `message` was used in the `debugPrint`.
   ///
-  /// The shape of the bug is worth recognising: a widget whose text is hardcoded while its API
-  /// pretends otherwise cannot be caught by the analyzer or by a type - `message` was used (in the
-  /// `debugPrint`), so it was not even an unused-parameter warning. The only thing that finds this
-  /// is reading the body, or a user hitting the second caller.
-  ///
-  /// [detail] is the raw technical string. It is logged and never drawn: «Could not delete the
-  /// account (503)» is the line that debugs this, and it is also the line no shop owner can act on.
+  /// [detail] is logged and never drawn: the line that debugs this is the line no shop owner can act on.
   void _showErrorDialog({required String title, required String body, String? detail}) {
     if (detail != null) debugPrint('Auth error: $detail');
 
@@ -684,7 +685,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // guest hero card prompting unauthenticated users to log in
+  // prompts an unauthenticated user to log in
   Widget _buildGuestLoginHeroCard() {
     return _ProfileCard(
       child: Column(
@@ -745,7 +746,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // gradient profile header card showing user initials, name, and phone
   Widget _buildAccountHeaderCard(ProfileViewState profile) {
     return Container(
       width: double.infinity,
@@ -780,9 +780,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // 76, not 68: with the vendor badge stacked above the name and phone the text
-                  // column measures ~71px, so the old avatar was shorter than the text beside it
-                  // and the first and last lines visibly hung past it.
+                  // 76, not 68: with the vendor badge stacked above the name and phone the text column measures
+                  // ~71px, so the old avatar was shorter than the text beside it and the outer lines hung past it
                   _ProfileAvatar(
                     initials: profile.initials,
                     size: 76,
@@ -799,8 +798,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           _buildVendorBadge(),
                           const SizedBox(height: 6),
                         ],
-                        // single line keeps the column's height predictable against the avatar;
-                        // a wrapping name would put the block out of balance again
+                        // single line keeps the column's height predictable against the avatar
                         Text(
                           profile.fullName,
                           maxLines: 1,
@@ -833,7 +831,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // badge indicating the user is an active shop vendor
   Widget _buildVendorBadge() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -865,7 +862,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // visual background circle decoration for header cards
   Widget _decorativeBlob(double size, Color color) {
     return Container(
       width: size,
@@ -1010,10 +1006,9 @@ class _TelegramAuthOverlayState extends State<_TelegramAuthOverlay> {
             ),
             const SizedBox(height: 16),
             Text(
-              // **written copy, never the exception.** this printed `loginErrorDetail` verbatim, so
-              // a failed /init showed the reader `Failed to initialize login session: 502`. the two
-              // states say different things because they *are* different: the countdown running out
-              // means nobody shared a number, while a failure means the attempt never got that far.
+              // **written copy, never the exception**: this printed `loginErrorDetail` verbatim, so a failed /init
+              // showed the reader `Failed to initialize login session: 502`. the two states say different things -
+              // the countdown running out means nobody shared a number, a failure means it never got that far.
               hasFailed ? widget.strings.errorDialogInstructions : widget.strings.timeoutError,
               textAlign: TextAlign.center,
               style: const TextStyle(
@@ -1104,87 +1099,6 @@ class _LanguageOptionTile extends StatelessWidget {
   }
 }
 
-// custom interactive role selection card for the login modal sheet
-class _RoleSelectionCard extends StatelessWidget {
-  const _RoleSelectionCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
-            decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFFFFF0E3) : _kSoftSurface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isSelected ? _kPrimaryOrange : _kCardBorder,
-                width: isSelected ? 1.8 : 1,
-              ),
-              boxShadow: isSelected
-                  ? [
-                      BoxShadow(
-                        color: _kPrimaryOrange.withValues(alpha: 0.12),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  color: isSelected ? _kPrimaryOrangeDark : _kTextMuted,
-                  size: 26,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: _kTextPrimary,
-                    fontSize: 14.5,
-                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: isSelected ? _kPrimaryOrangeDark : _kTextMuted,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _MenuRowData {
   const _MenuRowData({
     required this.icon,
@@ -1203,8 +1117,8 @@ class _MenuRowData {
   final Color? iconColor;
   final Color? iconBackground;
 
-  /// what sits at the far right. left null for the usual "this navigates somewhere" chevron; pass
-  /// a widget to replace it, or [SizedBox.shrink] for a row that doesn't lead anywhere.
+  /// what sits at the far right. null for the usual "this navigates somewhere" chevron; pass a widget
+  /// to replace it, or [SizedBox.shrink] for a row that does not lead anywhere.
   final Widget? trailing;
 }
 
@@ -1213,8 +1127,8 @@ class _MenuGroupCard extends StatelessWidget {
 
   final List<_MenuRowData> rows;
 
-  /// an optional section rendered above [rows] inside the same card - used for the expandable
-  /// shop-management group, which needs to own its own animation rather than be a plain row.
+  /// an optional section rendered above [rows] inside the same card - the expandable shop-management
+  /// group, which owns its own animation rather than being a plain row
   final Widget? leading;
 
   @override
@@ -1232,8 +1146,8 @@ class _MenuGroupCard extends StatelessWidget {
           ),
         ],
       ),
-      // the clip is what lets the expanding section slide out from under the header instead of
-      // spilling past the card's rounded corners mid-animation
+      // the clip is what lets the expanding section slide out from under the header instead of spilling
+      // past the card's rounded corners mid-animation
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
         child: Column(
@@ -1249,11 +1163,8 @@ class _MenuGroupCard extends StatelessWidget {
 }
 
 // an accordion section for a menu card: a header row that stays put and reveals its children in
-// place, instead of the page swapping one card for a different one.
-//
-// keeping the header on screen is the whole point - a control that disappears the moment you use it
-// has no way to tell you what state it put you in, which is why the old chevron never appeared to
-// respond. here it rotates a quarter turn to point at the content it just opened.
+// place. keeping the header on screen is the point - a control that disappears the moment you use it
+// cannot say what state it put you in.
 class _ExpandableMenuSection extends StatelessWidget {
   const _ExpandableMenuSection({
     required this.header,
@@ -1268,7 +1179,7 @@ class _ExpandableMenuSection extends StatelessWidget {
   final VoidCallback onToggle;
 
   static const Duration _duration = Duration(milliseconds: 260);
-  // quick to start, long gentle settle - the same easing family the rest of the redesign uses
+  // quick to start, long gentle settle - the same easing family the rest of the app uses
   static const Curve _curve = Cubic(0.22, 1, 0.36, 1);
 
   @override
@@ -1283,8 +1194,7 @@ class _ExpandableMenuSection extends StatelessWidget {
             textColor: header.textColor,
             iconColor: isExpanded ? _kPrimaryOrangeDark : header.iconColor,
             iconBackground: isExpanded ? const Color(0xFFFFF0E3) : header.iconBackground,
-            // 0.25 turns = 90 degrees, so the forward chevron ends up pointing down at the rows
-            // it revealed. AnimatedRotation tweens that for us on every state change.
+            // 0.25 turns = 90 degrees, so the forward chevron ends up pointing down at the rows it revealed
             trailing: AnimatedRotation(
               turns: isExpanded ? 0.25 : 0,
               duration: _duration,
@@ -1300,9 +1210,8 @@ class _ExpandableMenuSection extends StatelessWidget {
           ),
           isLast: !isExpanded,
         ),
-        // AnimatedSize measures its child each frame and tweens its own height between the two
-        // sizes, so swapping the rows for an empty box animates the reveal without us hand-rolling
-        // an AnimationController. topCenter keeps the growth anchored under the header.
+        // AnimatedSize measures its child each frame and tweens its own height, so swapping the rows for
+        // an empty box animates the reveal without an AnimationController. topCenter anchors the growth.
         AnimatedSize(
           duration: _duration,
           curve: _curve,

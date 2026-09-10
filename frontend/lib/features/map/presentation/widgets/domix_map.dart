@@ -2,9 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
-// three libraries, one prefix. the package splits its public surface across several entrypoints -
-// `mapkit` has the map, camera and map objects, `ui_view` has ViewProvider, `yandex_map` has the
-// widget - and giving them one prefix keeps the SDK visibly separate from our own types below.
+// the package splits its public surface across several entrypoints; one prefix keeps the sdk
+// visibly separate from our own types below
 import 'package:yandex_maps_mapkit_lite/mapkit.dart' as ymk;
 import 'package:yandex_maps_mapkit_lite/mapkit_factory.dart' as ymk;
 import 'package:yandex_maps_mapkit_lite/ui_view.dart' as ymk;
@@ -13,32 +12,13 @@ import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/constants/map_config.dart';
 
-/// The whole surface between Domix and Yandex MapKit.
+/// The whole surface between Domix and Yandex MapKit: **everything that knows MapKit exists lives
+/// in this file**, which is why swapping the provider touched two screens rather than twenty.
 ///
-/// **Everything that knows MapKit exists lives in this file.** The screens above it deal in
-/// latitudes, zoom levels and [MapPin]s and never import the SDK - which is the same shape the map
-/// had when it was `flutter_map`, and the reason swapping the provider touched two screens rather
-/// than twenty. If a third provider ever happens, this is the file that changes.
-///
-/// ---
-///
-/// **Why the pins are still Flutter widgets.** MapKit draws the map natively, so a marker is not a
-/// widget in the tree - it is a bitmap handed to the renderer. The obvious reading of that is that
-/// our `ShopMarker` would have to be redrawn as an image, and the price label with it. It does not:
-/// [ymk.ViewProvider] takes a widget builder, lays the widget out off-screen against a
-/// `RenderRepaintBoundary`, and gives MapKit the resulting raster. So the pin on the map is the same
-/// widget the app has always drawn, and changing it stays a Flutter edit.
-///
-/// Two consequences of it being a *raster* rather than a live widget, and both are handled here:
-///
-/// - **No `InheritedWidget`s reach it.** ViewProvider builds against a bare `MediaQuery` +
-///   `Directionality`; there is no `Theme`, no `Provider`, no `DefaultTextStyle` above the builder.
-///   A pin widget must therefore be self-contained - `ShopMarker` already was, since it reads only
-///   `AppColors` and `AppRadius` constants, but a future pin that calls `Theme.of(context)` would
-///   throw off-screen and nowhere else.
-/// - **A `GestureDetector` inside it does nothing.** A picture cannot be tapped. Taps arrive through
-///   [ymk.MapObjectTapListener] instead, which is why [MapPin.onTap] exists as a field rather than
-///   being wired up inside the widget.
+/// **The pins are still Flutter widgets** - [ymk.ViewProvider] lays one out off-screen and hands
+/// MapKit the raster. Two consequences: **no `InheritedWidget`s reach it**, so a pin must be
+/// self-contained or it throws off-screen and nowhere else; and **a `GestureDetector` inside it does
+/// nothing**, which is why [MapPin.onTap] is a field.
 class DomixMap extends StatefulWidget {
   const DomixMap({
     super.key,
@@ -56,16 +36,14 @@ class DomixMap extends StatefulWidget {
   final double initialLongitude;
   final double initialZoom;
 
-  /// What to draw. Rebuilt wholesale whenever the list stops comparing equal - see
-  /// [_MapPinIdentity] for why that is cheap enough.
+  /// Rebuilt wholesale whenever the list stops comparing equal - see [_MapPinIdentity].
   final List<MapPin> pins;
 
   /// Fires on every camera frame, including programmatic moves. Keep the work inside it trivial.
   final void Function(double zoom)? onZoomChanged;
 
-  /// The camera's centre, reported only once it has come to rest. Separate from [onZoomChanged]
-  /// because the location picker reverse-geocodes off it and must not fire a network request per
-  /// frame of a fling.
+  /// reported only once the camera has come to rest: the location picker reverse-geocodes off it and
+  /// must not fire a network request per frame of a fling
   final void Function(double latitude, double longitude)? onCenterChanged;
 
   /// A tap on the map itself, not on a pin.
@@ -86,9 +64,8 @@ class DomixMapController {
 
   double get zoom => _window.map.cameraPosition.zoom;
 
-  /// Glides the camera to a point. Where `flutter_map` needed an `AnimationController` and a pair of
-  /// tweens driven frame by frame - `MapController.move()` being an instant jump - MapKit animates
-  /// natively, so the whole hand-rolled camera tween the old map screen carried is gone.
+  /// Glides the camera to a point. MapKit animates natively, so the hand-rolled camera tween the
+  /// flutter_map version carried is gone.
   void flyTo(double latitude, double longitude, {double zoom = 16.0}) {
     _window.map.move(
       ymk.CameraPosition(
@@ -123,13 +100,10 @@ class MapPin {
   final double latitude;
   final double longitude;
 
-  /// Everything about how this pin *looks*, as a string.
-  ///
-  /// Doing double duty, which is why it is required rather than derived. It decides when the pin
-  /// list needs rebuilding at all, and it is handed to MapKit as the raster cache key - so forty
-  /// шт of "универсальный, зелёный, −4%" are laid out and rasterized once between them instead of
-  /// forty times. Two pins that draw identically **must** produce the same key, and two that do not
-  /// must not.
+  /// Everything about how this pin *looks*, as a string. Doing double duty: it decides when the pin
+  /// list needs rebuilding, and it is MapKit's raster cache key - so forty identical pins are
+  /// rasterized once. Two pins that draw identically **must** produce the same key, and two that do
+  /// not must not.
   final String visualKey;
 
   /// Built off-screen by MapKit, not mounted in the tree. See the note on [DomixMap].
@@ -137,9 +111,8 @@ class MapPin {
 
   final VoidCallback? onTap;
 
-  /// Which point of the rasterized widget sits on the coordinate, normalized. The default (0.5, 1.0)
-  /// is bottom-centre, which is where a teardrop pin's tip is - anchoring at the centre instead
-  /// would float every shop half a pin north of where it actually is.
+  /// normalized; the default (0.5, 1.0) is bottom-centre, where a teardrop's tip is - anchoring at
+  /// the centre would float every shop half a pin north of where it actually is
   final math.Point<double> anchor;
 }
 
@@ -160,21 +133,13 @@ class _MapPinIdentity {
       a.visualKey == b.visualKey;
 }
 
-/// **MapKit downloads nothing until `mapkit.onStart()` is called, and that is not optional.**
+/// **MapKit downloads nothing until `mapkit.onStart()` is called, and that is not optional.** The
+/// surface renders without it, so the failure looks like a broken API key - the giveaway is the
+/// Yandex dashboard reporting **zero requests**, since a rejected key still counts as one.
 ///
-/// The map surface renders without it - the GL context comes up, the grid and the Yandex logo draw,
-/// every camera call works - so the failure looks like a broken API key rather than a missing call.
-/// It is not: the giveaway is the Yandex dashboard reporting **zero requests**, because a rejected
-/// key still counts as a request and an unstarted MapKit never makes one. That cost a day.
-///
-/// `onStart`/`onStop` are on the global `mapkit` singleton rather than on a map, so they cannot
-/// simply live in one widget's `initState`/`dispose`: `location_picker_screen` can be pushed over
-/// `map_screen`, and the second map disposing would stop the network layer under the first one that
-/// is still on screen. Hence a count of live maps rather than a boolean.
-///
-/// The app's own foreground state is the other half. MapKit keeps sockets and caches warm while
-/// started, which is exactly what should not happen while the phone is in a pocket - and it is what
-/// `onStop` is documented for ("the application pauses and goes to the background").
+/// `onStart`/`onStop` are on the global singleton, so they cannot live in one widget's initState:
+/// the location picker can be pushed over the map screen, and the second map disposing would stop
+/// the network layer under the first. Hence a count of live maps, plus the app's foreground state.
 int _mountedMaps = 0;
 bool _appInForeground = true;
 bool _mapkitStarted = false;
@@ -196,11 +161,9 @@ void _syncMapkitLifecycle() {
 class _DomixMapState extends State<DomixMap> with WidgetsBindingObserver {
   ymk.MapWindow? _window;
 
-  /// **These are fields, not locals, and that is load-bearing.** MapKit holds its listeners by weak
-  /// reference: anything only the native side points at is collected on the next GC and the
-  /// callbacks silently stop arriving. Keeping them alive is the Dart side's job, and the failure
-  /// mode - a map that works for ten seconds and then stops responding to the camera - looks nothing
-  /// like its cause.
+  /// **Fields, not locals, and that is load-bearing.** MapKit holds its listeners weakly: anything
+  /// only the native side points at is collected on the next GC and the callbacks silently stop - a
+  /// map that works for ten seconds and then ignores the camera.
   late final ymk.MapCameraListener _cameraListener = _CameraListener(_onCameraChanged);
   late final ymk.MapInputListener _inputListener = _InputListener(
     onTap: (_, _) => widget.onMapTap?.call(),
@@ -225,9 +188,8 @@ class _DomixMapState extends State<DomixMap> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  /// `resumed` is the only state where the app is actually on screen and interactive. `inactive`
-  /// covers a phone call banner or the app switcher, `paused` and `hidden` mean it is behind
-  /// something - none of those are a reason to keep tiles downloading.
+  /// `resumed` is the only state where the app is actually on screen and interactive; none of the
+  /// others is a reason to keep tiles downloading
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
@@ -248,11 +210,9 @@ class _DomixMapState extends State<DomixMap> with WidgetsBindingObserver {
     final map = window.map;
 
     map
-      // north stays up, permanently. our pins are teardrops with a text label above them, so a
-      // two-finger twist would leave every one of them lying on its side with the price upside
-      // down. flutter_map needed a bitmask and a separate desktop-only opt-out for this; MapKit has
-      // two booleans, and tilt has to go for the same reason - a pin drawn flat on a tilted plane
-      // is unreadable.
+      // north stays up, permanently: the pins are teardrops with a text label above them, so a twist
+      // would leave every one lying on its side with the price upside down. tilt goes for the same
+      // reason - a pin drawn flat on a tilted plane is unreadable.
       ..rotateGesturesEnabled = false
       ..tiltGesturesEnabled = false
       ..move(
@@ -284,14 +244,9 @@ class _DomixMapState extends State<DomixMap> with WidgetsBindingObserver {
     }
   }
 
-  /// Clears the collection and re-adds every pin.
-  ///
-  /// Deliberately not a diff. The shop list is fetched once per session and then changes only when
-  /// an owner adds or deletes a shop, or when the zoom threshold flips the whole list on and off -
-  /// so this runs a handful of times in a session, over at most a few hundred objects. A keyed diff
-  /// would be more code, more state and one more thing that can disagree with the map on screen, to
-  /// optimize something that is not on a hot path. If pins ever start moving continuously (live
-  /// couriers, say), revisit it then.
+  /// Clears the collection and re-adds every pin. Deliberately not a diff: the shop list changes a
+  /// handful of times a session, over at most a few hundred objects, and a keyed diff would be one
+  /// more thing that can disagree with the map on screen. Revisit if pins ever move continuously.
   void _renderPins() {
     final window = _window;
     if (window == null) return;
@@ -329,12 +284,8 @@ class _DomixMapState extends State<DomixMap> with WidgetsBindingObserver {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Listener adapters.
-//
 // MapKit's listeners are abstract classes rather than typedefs, so each one needs a real
 // implementation. These three exist only to turn them back into callbacks.
-// ---------------------------------------------------------------------------
 
 final class _CameraListener implements ymk.MapCameraListener {
   const _CameraListener(this._onChanged);
@@ -376,13 +327,9 @@ final class _PinTapListener implements ymk.MapObjectTapListener {
   }
 }
 
-/// Shown in place of the map when MapKit cannot run.
-///
-/// **Both cases it covers are developer-facing, not user-facing.** A shipped build is Android with a
-/// key compiled in, and `make release` refuses to produce one without the key - so neither branch can
-/// reach a customer. It exists because the alternative on a desktop `flutter run` is a crash on a
-/// missing plugin before the first frame, which would make the whole app untestable on a laptop
-/// rather than just its map.
+/// Shown in place of the map when MapKit cannot run. **Both cases are developer-facing**: a shipped
+/// build is Android with a key compiled in, and `make release` refuses to produce one without it.
+/// It exists so a desktop `flutter run` loses its map rather than crashing before the first frame.
 class MapUnavailablePanel extends StatelessWidget {
   const MapUnavailablePanel({super.key, required this.reason});
 

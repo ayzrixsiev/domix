@@ -11,39 +11,24 @@ import 'package:frontend/features/home/presentation/controllers/home_controller.
 import 'package:frontend/features/home/presentation/widgets/product_results_view.dart';
 import 'package:frontend/core/widgets/circle_back_button.dart';
 
-/// The screen the home screen's search bar opens: a field at the top, and below it every priced
-/// product whose name contains the query, from every shop, cheapest first.
+/// The screen the home search bar opens: a field, and below it every priced product whose name
+/// contains the query.
 ///
-/// **A screen rather than an inline field, and that is the fix as much as the feature.** The search
-/// bar on the home feed used to be a live `TextField` sitting in the middle of a scroll view.
-/// Tapping it raised the keyboard over the feed, and then there was no way to put the keyboard
-/// away again: nothing on the home screen unfocuses on tap, the system back button pops routes and
-/// there was no route to pop, and the feed simply scrolled underneath it. The user was stuck with
-/// a keyboard covering half the app.
+/// **A screen rather than an inline field**: the bar used to be a live `TextField` on the home feed
+/// with no way to put the keyboard away - nothing there unfocuses on tap and there was no route to
+/// pop.
 ///
-/// Giving search its own route fixes that by construction. Back - the button or the system gesture
-/// - pops the route, and popping a route drops the focus with it; dragging the results dismisses
-/// the keyboard on the way; and the home screen no longer owns a focusable control at all.
-///
-/// **The empty state is the point of the screen today.** There is nothing here until something is
-/// searched, and that blank is deliberate: it is where as-you-type results will land. Wiring that
-/// up is one change - call [_run] from `onChanged` behind a debounce instead of from `onSubmitted`
-/// - and it is not made yet on purpose, because every keystroke past two characters would be an
-/// `ILIKE '%q%'` sequential scan (see CLAUDE.md §8) and the shape of that bill is worth knowing
-/// before signing it.
+/// Nothing is searched until the search key is pressed: as-you-type would make every keystroke past
+/// two characters an `ILIKE '%q%'` sequential scan.
 class ProductSearchScreen extends StatefulWidget {
   const ProductSearchScreen({super.key});
 
-  /// The shortest query worth sending.
-  ///
-  /// Mirrors `minSearchQueryLen` in `backend/internal/endpoints/home.go`; the server is the one that
-  /// enforces it and this copy only avoids a doomed round trip. One character matches a large share
-  /// of the catalogue, so the backend answers 400.
+  /// Mirrors `minSearchQueryLen` in `backend/internal/endpoints/home.go`; the server is what enforces
+  /// it and this copy only avoids a doomed round trip.
   static const int minQueryLength = 2;
 
-  /// Whether a query is worth running. Trimmed and counted in *characters* - Dart's `String.length`
-  /// counts UTF-16 code units, which for Cyrillic is one per letter, so this agrees with the
-  /// server's rune count for every alphabet the app ships in.
+  /// Counted in *characters*: Dart's `String.length` is UTF-16 code units, one per letter for every
+  /// alphabet the app ships in, so it agrees with the server's rune count.
   static bool isSearchable(String query) => query.trim().length >= minQueryLength;
 
   @override
@@ -54,11 +39,8 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
 
-  /// The query currently on screen, which is **not** what is in the field.
-  ///
-  /// They differ from the moment the user starts editing a query they have already run: the results
-  /// below stay put until the search key is pressed again, rather than blanking on the first
-  /// keystroke. Null means nothing has been searched yet, which is the prompt state.
+  /// The query currently on screen, which is **not** what is in the field: the results stay put while
+  /// an already-run query is edited, until the search key is pressed again. Null is the prompt state.
   String? _submitted;
 
   @override
@@ -68,25 +50,22 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
     super.dispose();
   }
 
-  /// Runs the query, if it is long enough to be worth running.
-  ///
-  /// A query that is too short leaves the field focused and does nothing - the sentence under the
-  /// magnifier has already said why, and an error over a user who is mid-word would be noise.
+  /// A query too short to run leaves the field focused and does nothing - the sentence under the
+  /// magnifier has already said why, and an error over a user mid-word would be noise.
   void _run(String raw) {
     final trimmed = raw.trim();
     if (!ProductSearchScreen.isSearchable(trimmed)) return;
     if (trimmed == _submitted) return;
 
     // dropped before the results draw, so the first screenful is not half-hidden behind a keyboard
-    // the user then has to dismiss by hand. re-focusing to edit the query is one tap on the field.
     _focusNode.unfocus();
     setState(() => _submitted = trimmed);
   }
 
   void _clear() {
     _controller.clear();
-    // back to the prompt, not to the last results. an empty field showing a list of цемент is the
-    // field and the page disagreeing about what the screen is showing.
+    // back to the prompt, not to the last results: an empty field over a list of цемент is the field
+    // and the page disagreeing about what the screen is showing
     setState(() => _submitted = null);
     _focusNode.requestFocus();
   }
@@ -101,8 +80,7 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
         backgroundColor: AppColors.background,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        // the field wants the whole bar, so the default 16px of title padding beside the leading
-        // button goes; the Row below spaces it itself
+        // the field wants the whole bar, so the default title padding goes and the Row spaces itself
         titleSpacing: 0,
         leading: const CircleBackButton(),
         leadingWidth: CircleBackButton.leadingWidth,
@@ -126,24 +104,22 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
     final query = _submitted;
 
     if (query == null) {
-      // tapping the prompt puts the keyboard away, the same way tapping the map does. it is the
-      // only large surface on this screen while nothing has been searched, so it is where a thumb
-      // lands when somebody changes their mind.
+      // tapping the prompt puts the keyboard away - it is the only large surface while nothing has been
+      // searched, so it is where a thumb lands when somebody changes their mind
       return GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
         behavior: HitTestBehavior.opaque,
         child: Center(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
-            // listens to the field so the hint can change under it without this screen calling
-            // setState on every keystroke - the same reason the clear button does
+            // listens to the field so the hint can change without a setState on every keystroke
             child: ValueListenableBuilder<TextEditingValue>(
               valueListenable: _controller,
               builder: (context, value, _) => EmptyStateView(
                 icon: LucideIcons.search,
                 title: strings.searchPromptTitle,
-                // once a character is in, the reason the search key does nothing is the interesting
-                // sentence; before that, how to use the screen is
+                // once a character is in, the reason the search key does nothing is the interesting sentence;
+                // before that, how to use the screen is
                 subtitle: value.text.trim().isEmpty
                     ? strings.searchPromptHint
                     : strings.searchMinLengthHint,
@@ -155,14 +131,12 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
     }
 
     return ProductResultsView(
-      // a new key per query is what re-runs the load. ProductResultsView fetches once from its own
-      // initState and holds the result, so changing the query means building a fresh State rather
-      // than racing a second request against the first inside the old one.
+      // a new key per query is what re-runs the load: ProductResultsView fetches from its own initState
+      // and holds the result, so a fresh State beats racing a second request inside the old one
       key: ValueKey(query),
       strings: strings,
       load: () => home.searchProducts(query),
-      // a magnifier rather than a category glyph: there is no category here, and the empty state
-      // should look like the thing that failed to find anything
+      // a magnifier rather than a category glyph: the empty state should look like what failed to find
       emptyIcon: LucideIcons.search,
       emptyTitle: strings.searchNoResults,
       emptyHint: strings.searchNoResultsHint,
@@ -170,9 +144,8 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
   }
 }
 
-/// The pill the query is typed into. Deliberately the same white surface, radius and hairline as
-/// [SearchAndLikeBar] on the home feed, so tapping that one and arriving here reads as the control
-/// moving up into the app bar rather than as a different screen with a different field.
+/// The pill the query is typed into. Deliberately the same surface, radius and hairline as
+/// [SearchAndLikeBar], so tapping that one and arriving here reads as one control moving up.
 class _SearchField extends StatelessWidget {
   const _SearchField({
     required this.controller,
@@ -190,16 +163,11 @@ class _SearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // **The same recessed grey well the home feed's bar is**, right down to the 48px height, the
-    // magnifier's colour and the hint's - so pressing that bar reads as one control travelling up
-    // into this app bar. It was white inside a `hairline` border at 42px, which is the *card*
-    // treatment: tapping a grey field and landing on a white one is two controls, and the illusion
-    // the home bar's comment claims was never actually true.
+    // the same recessed grey well the home feed's bar is, down to the 48px height, so pressing that bar
+    // reads as one control travelling up rather than two.
     //
-    // The whole well takes the tap, not only the `TextField` in the middle of it: the magnifier and
-    // the padding either side of it are about 40px of a control that looks like a button, and a
-    // press there did nothing at all once the field had been unfocused. A tap that lands on the
-    // field still goes to the field - the innermost recogniser in the arena wins.
+    // the whole well takes the tap, not only the TextField - the magnifier and its padding are ~40px
+    // that looks like a button. a tap on the field still goes to the field: the innermost wins.
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: focusNode.requestFocus,
@@ -218,11 +186,9 @@ class _SearchField extends StatelessWidget {
               child: TextField(
                 controller: controller,
                 focusNode: focusNode,
-                // the keyboard comes up with the screen. the user tapped a search bar to get here, so
-                // making them tap a second one would be asking twice for the same intent.
+                // the user tapped a search bar to get here; asking them to tap a second one asks twice
                 autofocus: true,
-                // makes the phone's keyboard show a "search" key instead of a newline, which is what
-                // fires onSubmitted. without it there is no way to submit from the keyboard at all.
+                // gives the keyboard a "search" key instead of a newline - without it there is no way to submit
                 textInputAction: TextInputAction.search,
                 textCapitalization: TextCapitalization.sentences,
                 cursorColor: AppColors.primaryOrange,
@@ -232,9 +198,8 @@ class _SearchField extends StatelessWidget {
                   fontWeight: FontWeight.w400,
                 ),
                 decoration: InputDecoration(
-                  // isCollapsed strips the ~48px of default vertical padding a TextField reserves
-                  // for a material label. without it the field cannot fit inside the row and the
-                  // text sits low instead of centred on the magnifier.
+                  // strips the ~48px of vertical padding a TextField reserves for a material label; without it the
+                  // field cannot fit the row and the text sits low instead of centred on the magnifier
                   isCollapsed: true,
                   border: InputBorder.none,
                   hintText: hintText,
@@ -247,9 +212,7 @@ class _SearchField extends StatelessWidget {
                 onSubmitted: onSubmitted,
               ),
             ),
-            // rebuilds only this button as the text changes, rather than calling setState and
-            // rebuilding the whole bar (and the TextField inside it) on every keystroke.
-            // ValueListenableBuilder listens to the controller, which *is* a ValueNotifier.
+            // rebuilds only this button as the text changes, rather than the whole bar and its TextField
             ValueListenableBuilder<TextEditingValue>(
               valueListenable: controller,
               builder: (context, value, _) {

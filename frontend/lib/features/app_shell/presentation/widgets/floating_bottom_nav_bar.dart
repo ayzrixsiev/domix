@@ -22,23 +22,13 @@ class FloatingBottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // the gesture pill or the three navigation buttons at the bottom of the phone.
-    //
-    // Scaffold does not inset a custom bottomNavigationBar - flutter's own BottomNavigationBar adds
-    // this padding itself, and a hand-rolled one has to do the same. without it the bar is laid out
-    // flush with the physical bottom of the screen, so on a phone with three-button navigation its
-    // lowest 48px sit *behind* the back/home/recents buttons: the tab labels are covered and the
-    // bottom half of every touch target is swallowed by the system before it reaches us.
-    //
-    // viewPadding rather than padding, because padding collapses to zero while the keyboard is open
-    // and the bar would drop into the system buttons for as long as somebody is typing.
+    // Scaffold does not inset a custom bottomNavigationBar, so without this the bar's lowest 48px sit
+    // behind a phone's three navigation buttons and half of every touch target is swallowed.
+    // viewPadding rather than padding: padding collapses to zero while the keyboard is open.
     final systemInset = MediaQuery.viewPaddingOf(context).bottom;
 
-    // 22, and it is set against the home feed's own gutter (10) rather than picked on its own. a bar
-    // that floats has to be visibly narrower than the page under it - that gap is the whole effect -
-    // and at 18 against a 16dp gutter the two edges were 2dp apart, which reads as one flush block.
-    // most of the correction was made by widening the content, since this bar is five touch targets
-    // and cannot give up much width; these 4dp are the rest of it.
+    // 22, set against the home feed's 16dp gutter: a floating bar has to read as visibly narrower than
+    // the page under it, and at 18 the two edges were 2dp apart and read as one flush block
     return Padding(
       padding: EdgeInsets.fromLTRB(22, 0, 22, 8 + systemInset),
       child: Container(
@@ -46,19 +36,18 @@ class FloatingBottomNavBar extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(28),
-          // Uniform, single-color border only — safe with borderRadius.
+          // uniform single-colour border - a per-side one is illegal with borderRadius
           border: Border.all(
             color: const Color(0xFFEDEEF1),
             width: 1,
           ),
           boxShadow: [
-            // Wide, soft ambient shadow for elevation.
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.08),
               blurRadius: 24,
               offset: const Offset(0, 10),
             ),
-            // Tight shadow for grounding, so it doesn't look like it's floating too high.
+            // a tight second layer, so the bar does not read as floating too high
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 4,

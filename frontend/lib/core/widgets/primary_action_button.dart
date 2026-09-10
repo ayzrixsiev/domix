@@ -3,11 +3,6 @@ import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 
 /// The filled orange button an [EmptyStateView] offers as its way out.
-///
-/// It was `_PrimaryButton`, private to `my_shops_screen.dart`, until the category drill-down needed
-/// the identical control for its retry action - the same move `store_form_fields.dart` records for
-/// the shared form inputs. Copying it would have been the third orange button in the app with its
-/// own idea of the right radius and shadow.
 class PrimaryActionButton extends StatelessWidget {
   const PrimaryActionButton({
     super.key,
@@ -42,9 +37,7 @@ class PrimaryActionButton extends StatelessWidget {
                   Icon(icon, color: Colors.white, size: 17),
                   const SizedBox(width: 8),
                 ],
-                // Flexible, not a bare Text: "Добавить новый магазин" and its uzbek equivalent are
-                // long enough to overflow a min-sized Row on a narrow screen or at a large text
-                // scale. it stays on one line whenever it fits and wraps rather than clipping.
+                // Flexible, not a bare Text: the longer labels overflow a min-sized Row on a narrow screen
                 Flexible(
                   child: Text(
                     label,

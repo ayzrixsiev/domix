@@ -14,8 +14,8 @@ import 'shop_settings_screen.dart';
 import '../controllers/stores_controller.dart';
 import 'package:frontend/core/widgets/circle_back_button.dart';
 
-// lists the shops the current owner themselves own - opened from Profile > Управление
-// магазинами > Настройка магазинов. tapping a shop opens ShopSettingsScreen for it.
+// the shops the current owner owns, opened from Profile > Управление магазинами. tapping one opens
+// ShopSettingsScreen for it.
 class MyShopsScreen extends StatefulWidget {
   const MyShopsScreen({super.key});
 
@@ -27,10 +27,9 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
   @override
   void initState() {
     super.initState();
-    // deferred past the first frame - loadMyShops() notifies before its first await, and calling
-    // that synchronously from initState trips flutter's "called during build" guard (same fix as
-    // map_screen.dart's initState). unlike MapScreen this screen is push-based (a fresh instance
-    // each time it opens), so it always reloads rather than checking "already loaded" first.
+    // deferred past the first frame: loadMyShops() notifies before its first await, which from
+    // initState trips flutter's "called during build" guard. this screen is push-based, so a fresh
+    // instance always reloads rather than checking "already loaded" first.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<StoresController>().loadMyShops();
@@ -41,8 +40,8 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const AddStoreScreen()),
     );
-    // createShop already inserts into myShops locally, so this is only here to pick up anything
-    // that changed server-side while the form was open
+    // createShop already inserts into myShops locally; this only picks up what changed server-side
+    // while the form was open
     if (mounted) context.read<StoresController>().loadMyShops();
   }
 
@@ -50,9 +49,8 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => ShopSettingsScreen(shop: shop)),
     );
-    // an upload changes the product count shown on this shop's row, and an edit changes its name or
-    // address. both already write through to the controller's list, so this is only re-syncing with
-    // whatever else moved server-side while the owner was in there.
+    // an upload changes this shop's product count and an edit changes its name - both already write
+    // through to the controller, so this is only re-syncing with whatever else moved server-side
     if (mounted) context.read<StoresController>().loadMyShops();
   }
 
@@ -70,8 +68,8 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
         centerTitle: false,
         titleSpacing: 20,
         iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
-        // the disc, not a bare chevron - see CircleBackButton for why every bar in the app needs it.
-        // leadingWidth must move with it or flutter keeps its own 56 and the title sits wrong.
+        // the disc, not a bare chevron. leadingWidth must move with it or flutter keeps its own 56 and
+        // the title sits wrong.
         leading: const CircleBackButton(),
         leadingWidth: CircleBackButton.leadingWidth,
         title: Text(
@@ -84,9 +82,8 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
           ),
         ),
         actions: [
-          // reachable straight from here, so adding a second shop doesn't mean backing out to
-          // profile. a tinted round button rather than a bare oversized icon - it reads as an
-          // affordance without another block of solid orange in the bar.
+          // reachable straight from here, so adding a second shop does not mean backing out to profile. a
+          // tinted round button reads as an affordance without another block of solid orange in the bar.
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: _AppBarActionButton(
@@ -109,8 +106,8 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
     if (controller.myShopsFailed && controller.myShops.isEmpty) {
       return EmptyStateView(
         icon: CupertinoIcons.wifi_exclamationmark,
-        // the only place this state is coloured differently: the layout is the same designed empty
-        // state, but a failure should not look like a friendly "nothing here yet"
+        // the only place this state is coloured differently: same layout as the designed empty state, but
+        // a failure should not look like a friendly "nothing here yet"
         iconColor: AppColors.danger,
         iconBackground: AppColors.dangerSoft,
         title: strings.myShopsLoadError,
@@ -230,8 +227,8 @@ class _ShopCard extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // flat tint instead of the previous gradient - a 44px avatar is too small for a
-                    // gradient to read as anything but noise
+                    // flat tint instead of a gradient - a 44px avatar is too small for a gradient to read as anything
+                    // but noise
                     Container(
                       width: 44,
                       height: 44,
@@ -301,9 +298,8 @@ class _ShopCard extends StatelessWidget {
   }
 }
 
-// the two colour-filled pills this replaced were carrying no meaning that the numbers didn't
-// already carry - so they're quiet text now, and colour is reserved for the one case that is
-// actually actionable: a shop with an empty catalogue, which is exactly what this screen fixes.
+// quiet text rather than colour-filled pills, which carried no meaning the numbers did not already
+// carry. colour is reserved for the one actionable case: a shop with an empty catalogue.
 class _ShopStatsRow extends StatelessWidget {
   const _ShopStatsRow({required this.shop, required this.strings});
 
@@ -356,15 +352,10 @@ class _ShopStatsRow extends StatelessWidget {
         ],
         const SizedBox(width: 12),
         const Spacer(),
-        // the owner's own view of what a customer sees. worth showing even though it is a
-        // customer-facing comparison: "your basket is 6% above the market" is the single most
-        // actionable thing this screen can tell a shop owner.
-        //
-        // nothing at all when the shop has no index, which since migration 000013 means it has not
-        // priced its whole template. there is no half-state to render here: a basket price without a
-        // tier used to mean "priced, but no market to compare within" and the view can no longer
-        // produce that combination. the reason, and the count of what is left, live one tap away on
-        // ShopProductsScreen, where the prices themselves are.
+        // the owner's own view of what a customer sees - "your basket is 6% above the market" is the single
+        // most actionable thing this screen can tell them. nothing at all when the shop has no index, which
+        // since migration 000013 means it has not priced its whole template; the count of what is left
+        // lives on ShopProductsScreen, with the prices.
         if (shop.priceTier case final tier?)
           Flexible(
             child: PriceTierBadge(
@@ -380,4 +371,4 @@ class _ShopStatsRow extends StatelessWidget {
 }
 
 // sized to its label instead of stretching edge to edge: a full-width slab of orange under a short
-// piece of centred text was the heaviest thing on an otherwise empty screen.
+// piece of centred text was the heaviest thing on an otherwise empty screen

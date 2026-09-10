@@ -16,17 +16,9 @@ import 'package:frontend/core/widgets/circle_back_button.dart';
 
 /// The conversation with Domix support, one row deep in the Сообщения tab.
 ///
-/// **It is a pushed route now, opened from [ChatsScreen]** - the tab used to be this screen, and
-/// that stopped being right the moment a second kind of conversation became a plan rather than an
-/// idea. Nothing in [SupportController] changed for the move, which was the argument for making it
-/// early.
-///
-/// [showScaffold] is what distinguishes the two ways it is drawn: false inside a shell that owns
-/// the Scaffold, true as its own route - which is also when it draws a back button, since a route
-/// with no way back but the system gesture is a screen people report as stuck.
-///
-/// A guest sees why they cannot write rather than a disabled field: the answer has to arrive
-/// somewhere, and without an account there is nowhere to put it.
+/// [showScaffold] distinguishes the two ways it is drawn: false inside a shell that owns the
+/// Scaffold, true as its own route - which is also when it draws a back button. A guest sees why
+/// they cannot write rather than a disabled field.
 class MessagesScreen extends StatefulWidget {
   const MessagesScreen({
     super.key,
@@ -41,17 +33,12 @@ class MessagesScreen extends StatefulWidget {
   /// Room left under the composer for the shell's floating nav bar.
   final double bottomPadding;
 
-  /// Whether this is the tab being looked at.
-  ///
-  /// **The shell's `IndexedStack` builds every tab and paints one**, so `build()` running says
-  /// nothing about visibility and `initState` runs once for the life of the app. Without this
-  /// signal a reply sent while the app was open would never appear - the thread was fetched at
-  /// launch and nothing would ever ask again. The false→true edge is what
-  /// [SupportController.refreshIfStale] hangs off.
+  /// Whether this is the tab being looked at. **The shell's `IndexedStack` builds every tab and paints
+  /// one**, so `build()` says nothing about visibility and `initState` runs once for the life of the
+  /// app - without this signal a reply sent while the app was open would never appear.
   final bool isActive;
 
-  /// Sends a guest to the profile tab, where logging in actually happens. Null in a standalone
-  /// route, which simply hides the button rather than offering one that goes nowhere.
+  /// Null in a standalone route, which hides the button rather than offering one that goes nowhere.
   final VoidCallback? onSignInTap;
 
   @override
@@ -62,28 +49,22 @@ class _MessagesScreenState extends State<MessagesScreen> with WidgetsBindingObse
   final TextEditingController _input = TextEditingController();
   final FocusNode _inputFocus = FocusNode();
 
-  /// Whether the composer currently holds anything, mirrored into state so the send button can grey
-  /// out. A listener rather than `onChanged`, so it stays right when the field is cleared in code.
+  /// mirrored into state so the send button can grey out. a listener rather than `onChanged`, so it
+  /// stays right when the field is cleared in code.
   bool _canSend = false;
 
-  /// Whether the keyboard is up because of *this* screen's composer.
-  ///
-  /// Mirrored into state rather than read off the node at build time, because it drives [PopScope]'s
-  /// `canPop` - and that has to be re-evaluated when focus changes, which is not a rebuild the
-  /// framework would otherwise do.
+  /// Whether the keyboard is up because of *this* screen's composer. Mirrored into state rather than
+  /// read off the node at build time, because it drives [PopScope]'s `canPop` - which has to be
+  /// re-evaluated on a focus change, and that is not a rebuild the framework would otherwise do.
   bool _composerFocused = false;
 
-  /// Whether the app itself is in the foreground. Half of the answer to "is anybody looking at this
-  /// conversation", the other half being [MessagesScreen.isActive].
+  /// Half of the answer to "is anybody looking at this conversation", the other half being
+  /// [MessagesScreen.isActive].
   bool _appResumed = true;
 
-  /// Held rather than looked up in [dispose].
-  ///
-  /// The poll has to be stopped exactly when this screen goes away - pushed as a standalone route
-  /// and popped, it would otherwise keep asking the server for a conversation nobody is reading -
-  /// and `context.read` during teardown asserts, because the element's ancestors are already being
-  /// deactivated. Captured in [didChangeDependencies], which is the one callback guaranteed to run
-  /// before dispose and after the providers are reachable.
+  /// Held rather than looked up in [dispose], where `context.read` asserts. Captured in
+  /// [didChangeDependencies], the one callback guaranteed to run before dispose and after the
+  /// providers are reachable - the poll has to stop exactly when this screen goes away.
   SupportController? _support;
 
   @override
@@ -91,13 +72,11 @@ class _MessagesScreenState extends State<MessagesScreen> with WidgetsBindingObse
     super.initState();
     _input.addListener(_syncCanSend);
     _inputFocus.addListener(_syncFocus);
-    // for AppLifecycleState - the poll must stop when the phone goes in a pocket, or a tab left on
-    // Сообщения would go on asking the server for a thread nobody can see.
+    // for AppLifecycleState - the poll must stop when the phone goes in a pocket
     WidgetsBinding.instance.addObserver(this);
 
-    // **not called straight from initState.** `load()` sets its busy flag and notifies *before* its
-    // first await, and initState runs inside the build phase - notifying a ChangeNotifier there is
-    // the "setState() called during build" crash the map screen documents.
+    // **not called straight from initState**: `load()` notifies *before* its first await, and initState
+    // runs inside the build phase - that is the "setState() called during build" crash
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadIfSignedIn());
   }
 
@@ -116,9 +95,9 @@ class _MessagesScreenState extends State<MessagesScreen> with WidgetsBindingObse
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadIfSignedIn());
     }
 
-    // **and the moment it stopped being it.** the shell's IndexedStack keeps this State alive and
-    // its focus with it, so a composer left focused kept the keyboard up over the map, the home feed
-    // and the profile - which is most of what "the keyboard cannot be dismissed" was.
+    // **and the moment it stopped being it.** the shell's IndexedStack keeps this State alive and its
+    // focus with it, so a composer left focused kept the keyboard up over the map, the feed and the
+    // profile - which is most of what "the keyboard cannot be dismissed" was.
     if (!widget.isActive && oldWidget.isActive) _inputFocus.unfocus();
   }
 
@@ -127,8 +106,8 @@ class _MessagesScreenState extends State<MessagesScreen> with WidgetsBindingObse
     super.didChangeAppLifecycleState(state);
     _appResumed = state == AppLifecycleState.resumed;
     // going to the background stops the poll immediately; coming back re-arms it *and* re-fetches
-    // through refreshIfStale, so a reply that landed while the phone was asleep is there on the
-    // first frame rather than up to ten seconds later.
+    // through refreshIfStale, so a reply that landed while the phone was asleep is there on the first
+    // frame rather than up to ten seconds later
     if (_appResumed) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadIfSignedIn());
     } else {
@@ -138,11 +117,11 @@ class _MessagesScreenState extends State<MessagesScreen> with WidgetsBindingObse
 
   @override
   void dispose() {
-    // first: nothing is looking at this conversation any more, and a timer that outlives its screen
-    // is a request nobody asked for - and, in a widget test, a pending timer the framework fails on.
+    // first: a timer that outlives its screen is a request nobody asked for - and, in a widget test, a
+    // pending timer the framework fails on
     _support?.setWatching(false);
-    // and again on the way out, so a reply that landed while somebody was reading does not light
-    // the badge on the list they are about to be looking at
+    // and again on the way out, so a reply that landed while somebody was reading does not light the
+    // badge on the list they are about to be looking at
     _support?.markThreadRead();
     WidgetsBinding.instance.removeObserver(this);
     _input.removeListener(_syncCanSend);
@@ -156,8 +135,7 @@ class _MessagesScreenState extends State<MessagesScreen> with WidgetsBindingObse
     final canSend = _input.text.trim().isNotEmpty;
     if (canSend != _canSend) setState(() => _canSend = canSend);
 
-    // a failure message that outlives the thing it was about is noise; typing is the user acting on
-    // it, so it goes then rather than on the next send
+    // a failure message that outlives the thing it was about is noise; typing is the user acting on it
     context.read<SupportController>().clearSendError();
   }
 
@@ -175,26 +153,20 @@ class _MessagesScreenState extends State<MessagesScreen> with WidgetsBindingObse
 
   void _loadIfSignedIn() {
     if (!mounted) return;
-    // listen: false - this runs from a callback, and `Provider.of` with the default listen: true
-    // *asserts* outside a build. that is a crash, not a performance note.
+    // listen: false - this runs from a callback, and the default listen: true *asserts* outside a
+    // build. that is a crash, not a performance note.
     if (Provider.of<AuthController>(context, listen: false).profileState.isGuest) return;
 
     final support = Provider.of<SupportController>(context, listen: false);
     support.refreshIfStale();
-    // **having the thread on screen is what "read" means**, so the watermark moves here rather than
-    // on a button nobody would press. it only moves forward and only notifies when it moved, so
-    // calling it on every visibility edge costs a comparison.
+    // **having the thread on screen is what "read" means**, so the watermark moves here rather than on
+    // a button nobody would press. it only moves forward and only notifies when it moved.
     support.markThreadRead();
   }
 
-  /// Reconciles the live poll with what is actually on screen.
-  ///
-  /// Three independent inputs decide it - the tab is the visible one, the app is in the foreground,
-  /// and there is an account to have a thread at all - and each changes at a different moment
-  /// ([didUpdateWidget], [didChangeAppLifecycleState], and a rebuild when AuthController notifies).
-  /// Reconciling all three in one place after the frame is what keeps them from needing three
-  /// separate call sites that can disagree; [SupportController.setWatching] is idempotent, so being
-  /// called on every frame of this screen costs a comparison.
+  /// Reconciles the live poll with what is on screen. Three independent inputs decide it - the tab is
+  /// visible, the app is in the foreground, there is an account - and each changes at a different
+  /// moment, so reconciling all three in one place keeps them from needing call sites that disagree.
   void _syncWatching(bool isGuest) {
     if (!mounted) return;
     _support?.setWatching(widget.isActive && _appResumed && !isGuest);
@@ -229,8 +201,8 @@ class _MessagesScreenState extends State<MessagesScreen> with WidgetsBindingObse
           _ChatHeader(
             title: strings.supportChatTitle,
             subtitle: strings.supportChatSubtitle,
-            // only as a route: inside the shell there is nothing to pop, and a back arrow that does
-            // nothing is worse than none
+            // only as a route: inside the shell there is nothing to pop, and a back arrow that does nothing is
+            // worse than none
             onBack: widget.showScaffold ? () => Navigator.of(context).maybePop() : null,
           ),
           Expanded(
@@ -241,17 +213,12 @@ class _MessagesScreenState extends State<MessagesScreen> with WidgetsBindingObse
       ),
     );
 
-    // **the back gesture closes the keyboard, and it has to be said explicitly here.**
+    // **the back gesture closes the keyboard, and it has to be said explicitly here.** Inside the shell
+    // this screen is one child of an IndexedStack on the *root* route, so a back press found no route
+    // and did nothing at all - and on this screen the IME did not swallow BACK first.
     //
-    // Inside the shell this screen is one child of an IndexedStack on the *root* route, so there is
-    // nothing to pop - a back press went to the framework, found no route, and did nothing at all.
-    // On most screens the IME swallows BACK before Flutter ever sees it; here it did not, which
-    // together with a conversation that ignored taps left the composer with no way out but killing
-    // the app.
-    //
-    // `canPop` is false only while this screen's own composer holds focus, so the ordinary
-    // behaviour - back exits the app from the home tab - is untouched, and a second press after the
-    // keyboard has gone does exactly what it always did.
+    // `canPop` is false only while this screen's own composer holds focus, so back still exits the app
+    // from the home tab.
     final guarded = PopScope(
       canPop: !_composerFocused,
       onPopInvokedWithResult: (didPop, _) {
@@ -283,14 +250,9 @@ class _MessagesScreenState extends State<MessagesScreen> with WidgetsBindingObse
     );
   }
 
-  /// The conversation, wrapped in the two gestures that put the keyboard away.
-  ///
-  /// **A tap anywhere on the conversation dismisses it**, which is the gesture people already make -
-  /// and `HitTestBehavior.opaque` is what makes it work over the gaps between bubbles rather than
-  /// only on a bubble itself. It cannot swallow anything: nothing inside the thread is tappable.
-  ///
-  /// The drag half is on the `ListView` itself (`keyboardDismissBehavior`), because a scrollable
-  /// claims the drag before any ancestor sees it - the same pairing `ProductResultsView` uses.
+  /// The conversation, wrapped in the two gestures that put the keyboard away: a tap anywhere on it
+  /// (`HitTestBehavior.opaque` is what makes that work over the gaps between bubbles), and a drag,
+  /// which has to live on the `ListView` because a scrollable claims it before any ancestor sees it.
   Widget _thread(AppLocalizations strings) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -335,16 +297,15 @@ class _MessagesScreenState extends State<MessagesScreen> with WidgetsBindingObse
       );
     }
 
-    // reverse: true is what makes the list open at its newest message and stay there as the
-    // keyboard opens - the alternative is a ScrollController jumping to an offset that is only
-    // known after layout. the item list is reversed to match, so index 0 is the bottom.
+    // reverse: true is what makes the list open at its newest message and stay there as the keyboard
+    // opens - the alternative is a ScrollController jumping to an offset only known after layout. the
+    // item list is reversed to match, so index 0 is the bottom.
     final items = _buildThread(controller.messages, strings).reversed.toList();
 
     return ListView.builder(
       reverse: true,
-      // dragging the conversation puts the keyboard away. the other half of the pair above, and it
-      // has to live on the scrollable: a `ListView` claims the vertical drag before any ancestor
-      // gesture detector is offered it, so no wrapper could implement this.
+      // the other half of the pair above, and it has to live on the scrollable: a `ListView` claims the
+      // vertical drag before any ancestor gesture detector is offered it
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       itemCount: items.length,
@@ -392,9 +353,8 @@ class _MessagesScreenState extends State<MessagesScreen> with WidgetsBindingObse
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // inline rather than a SnackBar: the shell's nav bar floats over the bottom of the screen,
-          // which is exactly where a SnackBar lands, and a failure the user has to read from under
-          // a nav bar is a failure they will not read
+          // inline rather than a SnackBar: the shell's nav bar floats over exactly where a SnackBar lands,
+          // and a failure the user has to read from under a nav bar is one they will not read
           if (errorCode != null) ...[
             Container(
               width: double.infinity,
@@ -439,16 +399,13 @@ class _MessagesScreenState extends State<MessagesScreen> with WidgetsBindingObse
                     controller: _input,
                     focusNode: _inputFocus,
                     minLines: 1,
-                    // grows to five lines and then scrolls. a composer that keeps growing eats the
-                    // conversation it is about.
+                    // grows to five lines and then scrolls: a composer that keeps growing eats the conversation
                     maxLines: 5,
-                    // the same 2000 the server enforces, counted the same way: Dart's String length
-                    // is UTF-16 units, so this is a *little* stricter than the server's rune count
-                    // on the rarest characters and never looser - the field can never produce a
-                    // message the server will refuse for length.
+                    // the same 2000 the server enforces, counted in UTF-16 units - a *little* stricter than the
+                    // server's rune count on the rarest characters and never looser, so the field can never produce a
+                    // message the server will refuse for length
                     maxLength: 2000,
-                    // hides the "0/2000" counter the maxLength above would otherwise draw under
-                    // every keystroke
+                    // hides the "0/2000" counter the maxLength above would otherwise draw under every keystroke
                     buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                     textCapitalization: TextCapitalization.sentences,
                     keyboardType: TextInputType.multiline,
@@ -479,9 +436,8 @@ class _MessagesScreenState extends State<MessagesScreen> with WidgetsBindingObse
   }
 }
 
-/// The tab's own title block. Not an `AppBar`: inside the shell this screen is one child of an
-/// `IndexedStack` and has no Scaffold of its own to hang one on, and a header drawn here is the
-/// same header in both modes.
+/// The tab's own title block. Not an `AppBar`: inside the shell this screen has no Scaffold of its
+/// own to hang one on, and a header drawn here is the same header in both modes.
 class _ChatHeader extends StatelessWidget {
   const _ChatHeader({required this.title, required this.subtitle, this.onBack});
 
@@ -494,8 +450,8 @@ class _ChatHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      // 0 on the left when there is a back button, because CircleBackButton carries the gutter
-      // inset itself and lands the disc on the same 16px line the tab header's title starts on
+      // 0 on the left when there is a back button, because CircleBackButton carries the gutter inset
+      // itself and lands the disc on the same 16px line the title starts on
       padding: EdgeInsets.fromLTRB(onBack == null ? 20 : 0, 14, 20, 14),
       child: Row(
         children: [
@@ -568,8 +524,8 @@ class _SendButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: enabled ? AppColors.primaryOrange : AppColors.trackGrey,
           borderRadius: BorderRadius.circular(AppRadius.md),
-          // the glow only under a button that can actually be pressed - on a disabled one it reads
-          // as a control that is merely slow
+          // the glow only under a button that can actually be pressed - on a disabled one it reads as a
+          // control that is merely slow
           boxShadow: enabled ? AppShadows.accent(AppColors.primaryOrange) : null,
         ),
         child: Material(

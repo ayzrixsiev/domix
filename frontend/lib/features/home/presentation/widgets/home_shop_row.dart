@@ -6,15 +6,8 @@ import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/widgets/price_tier_badge.dart';
 import 'package:frontend/features/home/data/home_content.dart';
 
-/// One shop as a full-width row: placeholder photo, name, rating, address, price comparison.
-///
-/// Lifted out of `best_offers.dart`, where it was a private `_BestOfferRow`, once the category
-/// drill-down needed the identical thing. A shop should carry the same weight wherever it appears,
-/// and two copies of a card is how one of them quietly grows a different shadow.
-///
-/// A vertical row rather than a grid cell, which is what this used to be: each cell had to fit a
-/// name, a rating, a street and a price into half the screen's width, which forced all of it down
-/// to 11px with nothing emphasised.
+/// One shop as a full-width row. A row rather than a grid cell: half the screen's width forced the
+/// name, rating, street and price all down to 11px with nothing emphasised.
 class HomeShopRow extends StatelessWidget {
   const HomeShopRow({
     super.key,
@@ -26,8 +19,7 @@ class HomeShopRow extends StatelessWidget {
   final HomeShopPreview shop;
   final AppLocalizations strings;
 
-  /// Opens the shop card. Nullable only so a caller that has nowhere to navigate to - a widget test,
-  /// or a future read-only surface - can leave it out; every row on the home screen has one.
+  /// nullable only so a caller with nowhere to navigate can leave it out; every home row has one
   final VoidCallback? onTap;
 
   @override
@@ -43,15 +35,15 @@ class HomeShopRow extends StatelessWidget {
             color: AppColors.surfaceWhite,
             borderRadius: BorderRadius.circular(AppRadius.md),
             border: Border.all(color: AppColors.hairline),
-            // matches the VIP cards: six of these stacked down the page is the section that most
-            // needed separating from the background
+            // matches the VIP cards: six of these stacked down the page is the section that most needed
+            // separating from the background
             boxShadow: AppShadows.raised,
           ),
           padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
           child: Row(
             children: [
-              // the same placeholder treatment the shop card uses for a photoless shop, so a shop
-              // looks like the same object wherever it appears in the app
+              // the same placeholder the shop card uses for a photoless shop, so a shop looks like the same
+              // object wherever it appears
               Container(
                 width: 44,
                 height: 44,
@@ -90,9 +82,8 @@ class HomeShopRow extends StatelessWidget {
                     const SizedBox(height: 3),
                     Row(
                       children: [
-                        // the star block only exists when there is something to put in it. with no
-                        // reviews table every shop reads 0.0, and "⭐ 0.0" says the opposite of what
-                        // is true - see Shop.hasRating. the address slides left into the space.
+                        // the star block only exists when there is something to put in it: with no reviews table every
+                        // shop reads 0.0, and "⭐ 0.0" says the opposite of what is true. the address slides left.
                         if (shop.hasRating) ...[
                           const Icon(
                             CupertinoIcons.star_fill,
@@ -125,9 +116,8 @@ class HomeShopRow extends StatelessWidget {
                         ),
                       ],
                     ),
-                    // the badge goes under the address rather than beside the price, because it is a
-                    // sentence and the trailing column is a number - putting words where a figure is
-                    // expected is what made the first attempt at this row unscannable
+                    // under the address rather than beside the price: it is a sentence and the trailing column is a
+                    // number, and words where a figure is expected is what made this row unscannable
                     if (shop.priceTier case final tier?) ...[
                       const SizedBox(height: 5),
                       PriceTierBadge(
@@ -140,12 +130,9 @@ class HomeShopRow extends StatelessWidget {
                   ],
                 ),
               ),
-              // the basket total sits at the trailing edge, where it lines up down the column and can
-              // be read shop against shop at a glance - the whole point of the number.
-              //
-              // omitted entirely when the shop has none, rather than shown as a zero. an owner who has
-              // priced almost nothing has no basket, and printing 0 would make the emptiest shop look
-              // like the cheapest.
+              // the basket total sits at the trailing edge, where it lines up down the column and can be read
+              // shop against shop at a glance. omitted entirely when there is none rather than shown as a zero,
+              // which would make the emptiest shop look like the cheapest.
               if (shop.basketPrice case final basket?) ...[
                 const SizedBox(width: 10),
                 _TrailingAmount(
@@ -161,28 +148,12 @@ class HomeShopRow extends StatelessWidget {
   }
 }
 
-/// An open place in a category's ranking: [HomeShopRow]'s layout with the field names where its
-/// values would be.
+/// An open place in a category's ranking: [HomeShopRow]'s layout with field names where its values
+/// would be. What an owner reads off thirteen open rows is "finishing my prices puts me in it".
 ///
-/// **Same idea as the carousel's empty card and a different audience.** There the empty slot is
-/// inventory being sold; here it is the ranking having room in it. What an owner reads off a tab with
-/// two shops and thirteen open rows is "this category is not full, and finishing my prices puts me in
-/// it" - which is the one message that reaches somebody stuck halfway through their catalogue, in the
-/// place they are most likely to see it.
-///
-/// **No invented shop anywhere in it**: no name, no street, no price, no percentage. The rating is
-/// the single exception and it is a fixed 5 ([kSlotRating]), describing the row rather than claiming
-/// anything.
-///
-/// **Drawn at full strength, not faded.** A recessed treatment was tried - page-coloured fill, a
-/// `trackGrey` outline, no shadow - and rejected for the same reason the carousel's was: a tab is
-/// mostly open places at launch, and fifteen washed-out frames under one real shop read as a section
-/// that failed to load rather than as one with room in it. The surface is identical to
-/// [HomeShopRow]'s and the *words* are what differ.
-///
-/// The cost, accepted: a real row and an open one are alike at a glance, so what tells them apart is
-/// reading «Название магазина». Built to the same height either way, so the section does not change
-/// height as shops qualify.
+/// **No invented shop anywhere in it** - no name, street, price or percentage; the rating is the one
+/// exception, a fixed 5 ([kSlotRating]). **Drawn at full strength, not faded**: washed-out frames
+/// under one real shop read as a section that failed to load.
 class EmptyShopRow extends StatelessWidget {
   const EmptyShopRow({super.key, required this.strings});
 
@@ -191,9 +162,9 @@ class EmptyShopRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      // **the same surface a real row wears**, for the reason the carousel's empty card wears one:
-      // an open place is a thing being advertised, and fifteen faded frames under one real shop made
-      // the section look broken rather than look available. What says "open" is the text.
+      // the same surface a real row wears: an open place is a thing being advertised, and fifteen faded
+      // frames under one real shop made the section look broken rather than available. the text is what
+      // says "open".
       decoration: BoxDecoration(
         color: AppColors.surfaceWhite,
         borderRadius: BorderRadius.circular(AppRadius.md),
@@ -242,8 +213,8 @@ class EmptyShopRow extends StatelessWidget {
                 const SizedBox(height: 3),
                 Row(
                   children: [
-                    // drawn in full, unlike on a real row where the star is hidden until there are
-                    // reviews (Shop.hasRating). here the star *is* part of what is being described.
+                    // drawn in full, unlike a real row where the star waits for reviews: here the star *is* part of
+                    // what is being described
                     const Icon(CupertinoIcons.star_fill, color: AppColors.starYellow, size: 11),
                     const SizedBox(width: 3),
                     const Text(
@@ -287,8 +258,7 @@ class EmptyShopRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          // the trailing column keeps its caption and loses its figure, so the number's column still
-          // lines up down the section and the eye is not thrown by rows of different widths
+          // the caption stays and the figure goes, so the number's column still lines up down the section
           _TrailingAmount(label: strings.slotBasketLabel, amount: null),
         ],
       ),
@@ -296,19 +266,16 @@ class EmptyShopRow extends StatelessWidget {
   }
 }
 
-/// A small caption over a bold figure, right-aligned at the row's trailing edge.
-///
-/// A separate widget rather than an inline Column because the entire value of putting a number at
-/// the trailing edge is that the eye can run down it, which only holds while every row builds it
-/// identically.
+/// A small caption over a bold figure, right-aligned at the row's trailing edge. Its own widget
+/// because the value of a number at the trailing edge is that the eye can run down it, which only
+/// holds while every row builds it identically.
 class _TrailingAmount extends StatelessWidget {
   const _TrailingAmount({required this.label, required this.amount});
 
   final String label;
 
   /// Null on an open place, which draws the caption alone. Not an empty string: `Text('')` still
-  /// takes a line box, so the two rows would be the same height by accident rather than by
-  /// construction, and a stray space in a translation would break it.
+  /// takes a line box, so equal heights would be an accident rather than a construction.
   final String? amount;
 
   @override

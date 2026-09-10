@@ -7,20 +7,11 @@ import 'package:frontend/features/home/data/category_product.dart';
 import 'package:frontend/features/home/presentation/widgets/product_results_view.dart';
 import 'package:frontend/core/widgets/circle_back_button.dart';
 
-/// A titled page of products drawn from across every shop, cheapest first: what a category tile
-/// opens.
+/// A titled page of products from across every shop - what a category tile opens: an app bar and
+/// [ProductResultsView], and that split is the whole of it.
 ///
-/// It is an app bar and [ProductResultsView], and that split is the whole of it. Search used to be
-/// the second caller of this screen; it now has [ProductSearchScreen], which needs a text field
-/// where this has a title and so cannot share the app bar - but shares every state below it.
-///
-/// It takes a `load` callback rather than a category, which is what lets it stay ignorant of what
-/// it is showing. The caller supplies the heading, the empty state and how to fetch; the view owns
-/// the three states that fetch can be in.
-///
-/// Loading and error state live in that view rather than on [HomeController] because this is a
-/// screen someone opens, reads and leaves - a failure here must not paint an error over the home
-/// screen behind it.
+/// It takes a `load` callback rather than a category, which keeps it ignorant of what it is showing.
+/// Loading and error state live in the view, so a failure cannot reach the home screen behind it.
 class ProductResultsScreen extends StatefulWidget {
   const ProductResultsScreen({
     super.key,
@@ -35,9 +26,8 @@ class ProductResultsScreen extends StatefulWidget {
   /// The heading. A category's name.
   final String title;
 
-  /// Shown under the heading until the first load finishes, after which the result count replaces
-  /// it - a number that appears out of nowhere a beat after the screen opens reads as a glitch, so
-  /// there has to be something in its place from the first frame.
+  /// shown under the heading until the first load finishes, after which the result count replaces it
+  /// - a number appearing out of nowhere a beat after the screen opens reads as a glitch
   final String? subtitle;
 
   final Future<List<CategoryProduct>> Function() load;
@@ -51,8 +41,7 @@ class ProductResultsScreen extends StatefulWidget {
 }
 
 class _ProductResultsScreenState extends State<ProductResultsScreen> {
-  /// Null until a load lands, and null again if one fails. The app bar shows [widget.subtitle]
-  /// while it is null.
+  /// Null until a load lands, and null again if one fails; the app bar shows [widget.subtitle] then.
   int? _count;
 
   @override
@@ -103,9 +92,7 @@ class _ProductResultsScreenState extends State<ProductResultsScreen> {
           emptyIcon: widget.emptyIcon,
           emptyTitle: widget.emptyTitle,
           emptyHint: widget.emptyHint,
-          // setState from a child's callback, which fires after that child's own setState has
-          // already scheduled a frame. safe: it lands during the same build phase's callback, not
-          // inside build itself.
+          // safe: this lands during the child's own post-setState callback, not inside build itself
           onCountChanged: (count) {
             if (mounted) setState(() => _count = count);
           },

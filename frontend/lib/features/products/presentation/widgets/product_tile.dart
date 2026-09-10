@@ -5,13 +5,9 @@ import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import '../../data/product_model.dart';
 
-// one product, as a square card in a two-per-row grid - the layout every marketplace uses for a
-// catalogue, and the one a shop owner will recognise without being taught it.
-//
-// the card is a fixed height (see [height]) rather than a fixed aspect ratio. aspect ratio derives
-// height from width, so the same tile grows on a wide phone and shrinks on a narrow one, and the
-// text block underneath - which needs the same room everywhere - is what breaks first. this is the
-// same reason PopularCategoriesGrid sizes with mainAxisExtent.
+// one product as a square card in a two-per-row grid. a fixed height (see [height]) rather than an
+// aspect ratio, which derives height from *width* - so the same tile grows on a wide phone and the
+// text block underneath, which needs the same room everywhere, is what breaks first.
 class ProductTile extends StatelessWidget {
   const ProductTile({
     super.key,
@@ -25,22 +21,16 @@ class ProductTile extends StatelessWidget {
   final Product product;
   final AppLocalizations strings;
 
-  /// A second line under the name - the selling shop, on the cross-shop category browse.
-  ///
-  /// Only that screen sets it. On a shop's own catalogue the shop is the page, so naming it on
-  /// every one of fifty tiles would be noise; browsing "Сантехника" across the market it is the
-  /// difference between a price and an actionable price.
-  ///
-  /// When present the product name is capped to one line, so the tile keeps its fixed [height]
-  /// instead of growing a variant nobody would keep aligned with this one.
+  /// A second line under the name - the selling shop, on the cross-shop browse, where it is the
+  /// difference between a price and an actionable price. When present the product name is capped to
+  /// one line, so the tile keeps its fixed [height].
   final String? subtitle;
 
-  /// null on the customer-facing grid: a shop's card is for looking, and a tile that lights up
-  /// under a finger but does nothing when released reads as broken
+  /// null on the customer-facing grid: a tile that lights up under a finger but does nothing when
+  /// released reads as broken
   final VoidCallback? onTap;
 
-  /// only the owner's own grid distinguishes their products from the template's - to a customer
-  /// the distinction means nothing
+  /// only the owner's own grid distinguishes their products from the template's
   final bool showOwnBadge;
 
   /// banner 118 + text block 90. hand-tuned to fit a two-line name plus a price row at the smallest
@@ -57,8 +47,8 @@ class ProductTile extends StatelessWidget {
         border: Border.all(color: AppColors.hairline),
         boxShadow: AppShadows.card,
       ),
-      // the ink splash of a tapped tile must not paint over the card's rounded corners, and the
-      // banner has to be clipped to them too
+      // the ink splash of a tapped tile must not paint over the card's rounded corners, and the banner
+      // has to be clipped to them too
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -109,8 +99,8 @@ class ProductTile extends StatelessWidget {
                       ],
                     ),
                   ],
-                  // pushes the price to the bottom edge, so prices line up across a row no matter
-                  // whether a name wrapped onto one line or two
+                  // pushes the price to the bottom edge, so prices line up across a row whether a name wrapped onto
+                  // one line or two
                   const Spacer(),
                   _PriceLine(product: product, strings: strings),
                 ],
@@ -153,19 +143,16 @@ class _ProductBanner extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // always painted, and always *under* the photo rather than instead of it: it is what
-          // shows while the image is still downloading and what is left if it fails, so the tile
-          // never flashes a bare white rectangle mid-scroll
+          // always painted, and always *under* the photo rather than instead of it: it is what shows while
+          // the image downloads and what is left if it fails, so the tile never flashes a bare white rectangle
           const _BannerPlaceholder(),
-          // **the thumbnail, not the photo.** a shop card is up to a hundred of these tiles, and
-          // at 1000px apiece that is ~15 MB down a mobile connection for a band 118px tall. the
-          // 400px copy is ~2.5 MB for the same screen. `thumbUrl` already falls back to the
-          // full-size url when the backend did not send one (Product.fromJson).
+          // **the thumbnail, not the photo.** a shop card is up to a hundred tiles, and at 1000px apiece that
+          // is ~15 MB down a mobile connection for a band 118px tall. `thumbUrl` already falls back to the
+          // full-size url when the backend did not send one.
           if (product.thumbUrl case final url?)
             _BannerPhoto(url: url, fallbackUrl: product.imageUrl),
 
-          // in stock is the normal case and the one nobody needs told, so only the two exceptions
-          // get a chip - otherwise every tile in the grid would carry the same green label
+          // in stock is the normal case and the one nobody needs told, so only the two exceptions get a chip
           if (product.availability != ProductAvailability.inStock)
             Positioned(
               top: 8,
@@ -192,19 +179,11 @@ class _ProductBanner extends StatelessWidget {
   }
 }
 
-// **Plain white, and that is about the photos rather than about the empty state.**
-//
-// This is painted *under* every tile, and the photo on top of it is `contain` - so on a portrait
-// shot it is the two bars either side of the picture and on a landscape one the two above and
-// below. It used to be a peach-to-grey gradient (`primarySoft` → `surfaceMuted`), which meant a
-// catalogue shot cut out on white sat in a frame that was warm on one side and grey on the other:
-// the photo read as pasted onto the tile instead of being the tile. White is the same white the
-// photos are shot and flattened onto (`imagestore` composites alpha onto white), so the seam
-// disappears entirely.
-//
-// The cost is that a product with no photo is now a white band with one glyph in it, where the tint
-// used to fill it. That is the right way round - a tile with a picture is the normal case and a
-// tile without one is the exception, so the exception is what should look plainer.
+// **Plain white, and that is about the photos rather than the empty state.** This is painted *under*
+// every tile and the photo on top is `contain`, so it is the bars either side of the picture. A
+// peach-to-grey gradient made a shot cut out on white read as pasted onto the tile; white is the
+// white the photos are flattened onto, so the seam disappears. The cost - a photoless product is a
+// white band with one glyph - is the right way round, since that is the exception.
 class _BannerPlaceholder extends StatelessWidget {
   const _BannerPlaceholder();
 
@@ -219,24 +198,12 @@ class _BannerPlaceholder extends StatelessWidget {
   }
 }
 
-// the product photo.
+// the product photo. `contain`, not `cover`: these are catalogue shots of a single object on white,
+// and cropping one to a 118px band cuts the head off a hammer.
 //
-// `contain`, not `cover`: these are catalogue shots of a single object on white, and cropping one
-// to fill a 118px band cuts the ends off a roll of cable or the head off a hammer. letterboxing
-// against the placeholder underneath is the lesser cost, and the photos are already trimmed to the
-// product.
-//
-// [cacheWidth] is the one line that keeps a 99-tile grid from running out of memory: without it
-// flutter decodes each jpeg at full size and holds the raw bitmap, so a 1000x1000 photo costs 4 MB
-// of RAM whatever size it is drawn at. this decodes them at roughly the width they are painted,
-// times three for a high-density screen. it stays a ceiling now that the url is usually a 400px
-// thumbnail - it is what still protects the tile on a backend that sends none.
-//
-// [fallbackUrl] is loaded if [url] fails, and it exists for exactly one shape of failure: a photo
-// whose thumbnail is missing. generating the curated catalogue's thumbnails is a `magick` command
-// somebody runs by hand when a category is shot (see CLAUDE.md §7), so it is precisely the step
-// that gets forgotten - and forgetting it without this would blank every tile in the market rather
-// than costing a few extra kilobytes on some of them.
+// [cacheWidth] is the one line that keeps a 99-tile grid from running out of memory - without it a
+// 1000x1000 jpeg costs 4 MB of raw bitmap however small it is drawn. [fallbackUrl] covers exactly
+// one failure: a missing thumbnail, generated by a `magick` command somebody runs by hand.
 class _BannerPhoto extends StatelessWidget {
   const _BannerPhoto({required this.url, this.fallbackUrl});
 
@@ -249,15 +216,14 @@ class _BannerPhoto extends StatelessWidget {
       url,
       fit: BoxFit.contain,
       cacheWidth: 540,
-      // an unreachable server or a photo the founder hasn't added yet leaves the placeholder
-      // showing, rather than flutter's default grey box with a broken-image glyph. a missing
-      // *thumbnail* is different: the full-size photo is right there, so try it once - the nested
-      // widget passes no fallback of its own, which is what stops this recursing.
+      // an unreachable server or a photo nobody has added yet leaves the placeholder showing rather than
+      // flutter's broken-image glyph. a missing *thumbnail* is different: the full-size photo is right
+      // there, so try it once - the nested widget passes no fallback, which stops this recursing.
       errorBuilder: (_, _, _) => fallbackUrl == null || fallbackUrl == url
           ? const SizedBox.shrink()
           : _BannerPhoto(url: fallbackUrl!),
-      // fades in once decoded instead of popping, and shows nothing at all before then - the
-      // placeholder underneath is already the loading state
+      // fades in once decoded instead of popping, and shows nothing before then - the placeholder
+      // underneath is already the loading state
       frameBuilder: (_, child, frame, wasSynchronouslyLoaded) {
         if (wasSynchronouslyLoaded) return child;
         return AnimatedOpacity(
@@ -272,7 +238,7 @@ class _BannerPhoto extends StatelessWidget {
 }
 
 // a solid white pill rather than a translucent one: it sits over a gradient, and a tint that reads
-// correctly against the light end of it washes out against the dark end
+// correctly against the light end washes out against the dark end
 class _TileChip extends StatelessWidget {
   const _TileChip({required this.label, required this.color});
 
@@ -296,9 +262,9 @@ class _TileChip extends StatelessWidget {
   }
 }
 
-// price, or the prompt that replaces it. a freshly created shop has this prompt on every single
-// tile - it is the owner's to-do list - which is why it is the one place on the card allowed to
-// use brand orange: it is an action to take, not information.
+// price, or the prompt that replaces it. a freshly created shop has this prompt on every tile - the
+// owner's to-do list - which is why it is the one place on the card allowed brand orange: it is an
+// action to take, not information.
 class _PriceLine extends StatelessWidget {
   const _PriceLine({required this.product, required this.strings});
 
@@ -353,10 +319,9 @@ class _PriceLine extends StatelessWidget {
   }
 }
 
-// the last cell of the owner's grid: a slot shaped like a product card but obviously empty, so
-// "add one of your own" sits where the eye already is instead of on a button somewhere else.
-// disabled once the allowance is spent, with the reason on the tile rather than in a snackbar the
-// owner would only see after a wasted round trip.
+// the last cell of the owner's grid: a slot shaped like a product card but obviously empty, so "add
+// one of your own" sits where the eye already is. disabled once the allowance is spent, with the
+// reason on the tile rather than in a snackbar seen after a wasted round trip.
 class AddProductTile extends StatelessWidget {
   const AddProductTile({
     super.key,

@@ -14,23 +14,17 @@ import '../widgets/product_tile.dart';
 import 'product_edit_screen.dart';
 import 'package:frontend/core/widgets/circle_back_button.dart';
 
-/// how many products of their own an owner may add on top of the category template. mirrors
-/// maxCustomProducts in backend/internal/endpoints/product_crud.go, which is the one that actually
-/// enforces it - this copy only greys the add tile out before a doomed round trip.
+/// mirrors maxCustomProducts in backend/internal/endpoints/product_crud.go, which is what actually
+/// enforces it - this copy only greys the add tile out before a doomed round trip
 const int kMaxCustomProducts = 30;
 
-// the "Товары" section of ShopSettingsScreen: the shop's whole catalogue as a grid, in exactly the
-// layout a customer sees it on the shop's card. tap any tile to edit it, tap the last cell to add
-// one of your own.
+// the "Товары" section of ShopSettingsScreen: the shop's whole catalogue as a grid, in the layout a
+// customer sees on the shop's card. it arrives already full, because creating the shop copied its
+// category's template in.
 //
-// the grid arrives already full, because creating the shop copied its category's template in. that
-// is the design: an owner's first job is filling in prices on products that are already there, not
-// typing a catalogue from nothing - which is what the excel upload existed to avoid, and why that
-// upload has been removed rather than kept alongside this.
-//
-// two kinds of tile live in the same grid. the template rows are the shared basket: tappable, but
-// only their price and availability can change. the owner's own rows, up to kMaxCustomProducts of
-// them, are fully theirs. only the second kind counts against the allowance shown on the last cell.
+// two kinds of tile share the grid: template rows are the shared basket (only price and availability
+// change), and the owner's own rows are fully theirs. only the second kind counts against the
+// allowance on the last cell.
 class ShopProductsScreen extends StatefulWidget {
   const ShopProductsScreen({super.key, required this.shop});
 
@@ -44,10 +38,9 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
   @override
   void initState() {
     super.initState();
-    // deferred to after the first frame: loadProducts calls notifyListeners() before its first
-    // await, and calling that synchronously from initState - while the tree is still building -
-    // trips flutter's "setState() called during build" guard. same reason MapScreen defers its own
-    // load. cached per shop, so revisiting this screen doesn't re-fetch.
+    // deferred past the first frame: loadProducts notifies before its first await, which from initState
+    // trips flutter's "setState() called during build" guard. cached per shop, so revisiting does not
+    // re-fetch.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<ProductsController>().loadProducts(widget.shop.id);
@@ -61,9 +54,9 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
         builder: (_) => ProductEditScreen(
           shopId: widget.shop.id,
           product: product,
-          // a new product opens with the category of the last one in the list, which for a seeded
-          // shop is a real category from its own template. it is only a starting point - the
-          // dropdown is right there - but it is right more often than an empty field is.
+          // a new product opens with the category of the last one in the list, which for a seeded shop is a
+          // real category from its own template. only a starting point, but right more often than an empty
+          // field is.
           suggestedCategory: product == null ? _lastCategory(controller) : null,
         ),
       ),
@@ -73,8 +66,8 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
   ProductCategory? _lastCategory(ProductsController controller) {
     final products = controller.productsFor(widget.shop.id);
     if (products.isEmpty) return null;
-    // tryFromCode, so a legacy free-text category simply doesn't preselect anything rather than
-    // being carried forward into a new product
+    // tryFromCode, so a legacy free-text category simply does not preselect anything rather than being
+    // carried forward into a new product
     return ProductCategory.tryFromCode(products.last.category);
   }
 
@@ -97,8 +90,8 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
         centerTitle: false,
         titleSpacing: 20,
         iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
-        // the disc, not a bare chevron - see CircleBackButton for why every bar in the app needs it.
-        // leadingWidth must move with it or flutter keeps its own 56 and the title sits wrong.
+        // the disc, not a bare chevron. leadingWidth must move with it or flutter keeps its own 56 and
+        // the title sits wrong.
         leading: const CircleBackButton(),
         leadingWidth: CircleBackButton.leadingWidth,
         title: Text(
@@ -114,8 +107,8 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
       body: SafeArea(
         child: RefreshIndicator(
           color: AppColors.primaryOrange,
-          // the catalogue is the one thing on this screen a second device could have changed, so
-          // pull-to-refresh forces past the session cache rather than reading it back
+          // the catalogue is the one thing a second device could have changed, so pull-to-refresh forces
+          // past the session cache
           onRefresh: () => controller.loadProducts(shopId, force: true),
           child: _body(context, strings, controller, products, isLoading, loadFailed),
         ),
@@ -131,8 +124,7 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
     bool isLoading,
     bool loadFailed,
   ) {
-    // a spinner only on the very first load. once there are tiles to show, a refresh happens
-    // underneath them rather than replacing the screen with nothing.
+    // a spinner only on the very first load: once there are tiles, a refresh happens underneath them
     if (isLoading && products.isEmpty) {
       return const _FullPageState(
         child: CircularProgressIndicator(color: AppColors.primaryOrange),
@@ -154,16 +146,10 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
     final customCount = controller.customCountFor(widget.shop.id);
     final (priced, total) = controller.templatePricingProgressFor(widget.shop.id);
 
-    // **A CustomScrollView, not a ListView, and the grid below is a sliver rather than a
-    // shrink-wrapped GridView.** The difference is not cosmetic. A shrink-wrapped grid has to
-    // measure its own height, so it lays out every child - all 100 tiles of a Универсальный
-    // catalogue mount at once and each one's Image.network fires immediately. The visible symptom
-    // was not slow images: it was that **saving a price failed** for the ~30 seconds they took to
-    // arrive, because the PUT queued behind them and tripped its own timeout without ever reaching
-    // the server. See ProductSliverGrid.
-    //
-    // Everything above the grid stays in one SliverToBoxAdapter because it is a fixed handful of
-    // widgets that are always on screen; only the grid is worth making lazy.
+    // **A CustomScrollView, and the grid below is a sliver rather than a shrink-wrapped GridView.** A
+    // shrink-wrapped grid lays out every child to measure itself, so all 100 tiles mount at once and
+    // each Image.network fires immediately - and the symptom was not slow images but a **failed price
+    // save**, the PUT queueing behind them until its own timeout. See ProductSliverGrid.
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
       slivers: [
@@ -205,8 +191,8 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
                   showOwnBadge: true,
                   onTap: () => _openEditor(product: product),
                 ),
-              // last cell, in the flow of the grid rather than on a button below it - "add one of
-              // your own" belongs where the eye already is
+              // last cell, in the flow of the grid rather than on a button below it - "add one of your own"
+              // belongs where the eye already is
               AddProductTile(
                 strings: strings,
                 used: customCount,
@@ -239,20 +225,10 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
   }
 }
 
-// A single centred message occupying the whole viewport - the loading spinner and the load-error
-// state both go through this.
-//
-// It exists because of two bugs that share one cause. RefreshIndicator builds a Stack whose child
-// gets *loose* constraints and `AlignmentDirectional.topStart`, so anything that shrink-wraps -
-// which _CenteredMessage does, being a Column with mainAxisSize.min - was laid out in the top-left
-// corner instead of the middle of the screen. (The spinner escaped it only by accident: Center
-// expands to fill a bounded box, so it happened to look right.)
-//
-// The second bug is the one that mattered more: RefreshIndicator only drives a *scrollable* child,
-// so in the error state pull-to-refresh silently did nothing - on the one screen where retrying is
-// the entire point. Making the state a scroll view that is forced to at least viewport height fixes
-// both properly: the content is genuinely centred, and the gesture works everywhere the screen can
-// appear rather than only when it happens to have content.
+// a single centred message occupying the whole viewport - the spinner and the load error both go
+// through it. RefreshIndicator gives its child loose constraints at `topStart`, so anything that
+// shrink-wraps lands in the corner, and it only drives a *scrollable*, so pull-to-refresh did
+// nothing in the error state. a scroll view forced to at least viewport height fixes both.
 class _FullPageState extends StatelessWidget {
   const _FullPageState({required this.child});
 
@@ -260,12 +236,12 @@ class _FullPageState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // LayoutBuilder to learn the viewport height, since a scroll view's child is unbounded and
-    // therefore cannot ask for "as tall as the screen" on its own
+    // LayoutBuilder to learn the viewport height, since a scroll view's child is unbounded and cannot
+    // ask for "as tall as the screen" on its own
     return LayoutBuilder(
       builder: (context, constraints) => SingleChildScrollView(
-        // AlwaysScrollable, or a child that fits exactly has nothing to overscroll and the pull
-        // gesture is never recognised - which is precisely the error state
+        // AlwaysScrollable, or a child that fits exactly has nothing to overscroll and the pull gesture is
+        // never recognised - which is precisely the error state
         physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
         child: ConstrainedBox(
           constraints: BoxConstraints(minHeight: constraints.maxHeight),
@@ -276,15 +252,9 @@ class _FullPageState extends StatelessWidget {
   }
 }
 
-// the header strip: which template stocked this shop, how far through pricing it the owner is, and
-// what reaching the end of it buys them.
-//
-// the progress line is the point of the screen - a freshly created shop has 99 products and 0
-// prices, and that number going up is the whole task. since migration 000013 it is also a threshold
-// rather than just a tally: at 99 of 99 the shop enters the price comparison, and at 98 it is not in
-// it at all. the line under the bar is the only place in the app that says so, which is why the bar
-// counts template rows and not the owner's own added products - those are not in the shared basket,
-// so they cannot be what the bar is measuring.
+// the header strip: which template stocked this shop and how far through pricing it the owner is.
+// since migration 000013 the bar is a threshold rather than a tally - at 99 of 99 the shop enters
+// the price comparison, at 98 it is not in it at all - which is why it counts template rows only.
 class _CatalogueSummary extends StatelessWidget {
   const _CatalogueSummary({
     required this.shop,
@@ -375,9 +345,8 @@ class _CatalogueSummary extends StatelessWidget {
             ),
           ),
 
-          // hidden only for a shop with no template at all, which no real shop has - all four
-          // categories seed one. a "0 left" line under an empty bar would be a promise about a
-          // catalogue that isn't there.
+          // hidden only for a shop with no template at all, which no real shop has - a "0 left" line under an
+          // empty bar would be a promise about a catalogue that is not there
           if (total > 0) ...[
             const SizedBox(height: 10),
             Text(
@@ -398,8 +367,7 @@ class _CatalogueSummary extends StatelessWidget {
   }
 }
 
-// the same nested-layer empty state the tickets tab, notifications and my-shops list use, rather
-// than a fourth invention
+// the same nested-layer empty state the tickets tab, notifications and my-shops list use
 class _CenteredMessage extends StatelessWidget {
   const _CenteredMessage({
     required this.icon,

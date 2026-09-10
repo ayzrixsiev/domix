@@ -4,13 +4,9 @@ import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/features/messages/data/support_message.dart';
 
-/// One message in the support conversation.
-///
-/// **The user's own messages sit on the right in brand orange, support's on the left in white.**
-/// Side is the primary signal and colour the second, because side survives everything - a
-/// screenshot, a colourblind reader, a bright day outdoors - and the two together mean the author
-/// never has to be read to be known. The admin panel draws the same conversation mirrored, since
-/// "mine on the right" is a fact about the reader, not about the message.
+/// One message in the support conversation. **The user's own sit on the right in brand orange,
+/// support's on the left in white**: side is the primary signal and colour the second, because side
+/// survives a screenshot, a colourblind reader and bright sun.
 class MessageBubble extends StatelessWidget {
   const MessageBubble({
     super.key,
@@ -20,8 +16,7 @@ class MessageBubble extends StatelessWidget {
 
   final SupportMessage message;
 
-  /// «Поддержка Domix», drawn above an incoming message. Absent on the user's own: nobody needs to
-  /// be told which of these they wrote.
+  /// drawn above an incoming message only: nobody needs to be told which of these they wrote
   final String senderLabel;
 
   @override
@@ -33,8 +28,8 @@ class MessageBubble extends StatelessWidget {
       child: Row(
         mainAxisAlignment: mine ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
-          // capped rather than left to fill the row: a bubble that runs the full width stops
-          // reading as a bubble, and the ragged right edge is what makes a thread scannable
+          // capped rather than left to fill the row: a bubble that runs the full width stops reading as a
+          // bubble, and the ragged right edge is what makes a thread scannable
           ConstrainedBox(
             constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
             child: Container(
@@ -78,8 +73,8 @@ class MessageBubble extends StatelessWidget {
                   Text(
                     _clock(message.sentAt),
                     style: TextStyle(
-                      // white at 78% rather than a lighter grey: on orange, any grey either
-                      // disappears or reads as a different colour of text
+                      // white at 78% rather than a lighter grey: on orange, any grey either disappears or reads as a
+                      // different colour of text
                       color: mine
                           ? AppColors.textLight.withValues(alpha: 0.78)
                           : AppColors.textFaint,
@@ -100,10 +95,8 @@ class MessageBubble extends StatelessWidget {
       '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
 }
 
-/// The «Сегодня» / «Вчера» / «12.08.2026» chip between two days of conversation.
-///
-/// A support thread is answered over days, so without it two messages a week apart sit against each
-/// other as though they were one exchange.
+/// The «Сегодня» / «Вчера» / «12.08.2026» chip between two days of conversation - a support thread
+/// is answered over days, so without it two messages a week apart read as one exchange.
 class MessageDaySeparator extends StatelessWidget {
   const MessageDaySeparator({super.key, required this.label});
 

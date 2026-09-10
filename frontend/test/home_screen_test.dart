@@ -197,6 +197,52 @@ void main() {
     );
   });
 
+  // **The strip moves with nobody touching it**, which is the only thing that makes the four
+  // placements outside the centre worth selling. Two things can move it - the clock and a finger -
+  // and the finger wins: a tick that fired mid-drag would animate the page away from the person
+  // holding it, and that is the half of this worth a test.
+  testWidgets('the carousel advances on its own, and a finger on it stops the clock', (tester) async {
+    await _pumpHome(
+      tester,
+      _FakeHomeRepository(
+        content: _content(vip: [_shop(id: 1, name: 'Настоящий VIP', isVip: true)]),
+      ),
+    );
+
+    // the sold card opens in the centre - vipSlotRing put it there - so its own position is what
+    // says whether the strip moved
+    final card = find.text('Настоящий VIP');
+    final opened = tester.getRect(card);
+
+    // one dwell, then the glide it starts
+    await tester.pump(VipShopsCarousel.autoAdvanceEvery);
+    await tester.pumpAndSettle();
+
+    final advanced = tester.getRect(card);
+    expect(
+      advanced.left,
+      lessThan(opened.left - 100),
+      reason: 'the centre card is still where it started - the strip never advanced by itself',
+    );
+
+    // and now a finger, held still: the clock is stopped for as long as it is down, so a whole dwell
+    // and a second more must leave the page exactly where the person put it
+    final gesture = await tester.startGesture(tester.getCenter(find.byType(VipShopsCarousel)));
+    final held = tester.getRect(card);
+    await tester.pump(VipShopsCarousel.autoAdvanceEvery + const Duration(seconds: 1));
+    // and a settle, because a tick that did fire would only show up on the frames after it
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getRect(card),
+      held,
+      reason: 'the carousel advanced out from under a finger that was holding it',
+    );
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('an unreachable backend says so and offers a retry', (tester) async {
     final strings = AppLocalizations(AppLanguage.ru);
     final controller = await _pumpHome(

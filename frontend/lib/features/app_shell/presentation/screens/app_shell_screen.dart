@@ -25,40 +25,33 @@ class _AppShellScreenState extends State<AppShellScreen> {
 
   List<ShellNavItem> _buildNavItems(AppLocalizations strings) => [
     ShellNavItem(icon: LucideIcons.house, label: strings.homeTab),
-    // the job-ticket marketplace takes the slot search used to hold: search now lives on the map
-    // and the home header, and a hard hat says "workers" faster than any other glyph here
+    // the job-ticket marketplace took the slot search used to hold; search lives on the map and home
     ShellNavItem(icon: LucideIcons.hard_hat, label: strings.ticketsTab),
     ShellNavItem(icon: LucideIcons.map_pin, label: strings.mapTab),
     ShellNavItem(icon: LucideIcons.message_square, label: strings.messagesTab),
     ShellNavItem(icon: LucideIcons.user, label: strings.profileTab),
   ];
 
-  /// Where [MapScreen] sits in [_buildPages]. Named rather than written as a bare 2 in two places,
-  /// since the two would have to be changed together and only one of them would fail loudly.
+  /// Named rather than a bare 2 in two places that would have to be changed together.
   static const _mapTabIndex = 2;
 
-  /// Same, for the two tabs that talk to each other: Сообщения needs an account, and the only place
-  /// to get one is Профиль.
+  /// Сообщения needs an account, and the only place to get one is Профиль.
   static const _messagesTabIndex = 3;
   static const _profileTabIndex = 4;
 
-  // built per-frame (like _buildNavItems below) rather than as a static field, since ProfileScreen
-  // needs a BuildContext to navigate to AddStoreScreen when its "add store" row is tapped
+  // built per-frame rather than as a static field: ProfileScreen needs a BuildContext to push
   List<Widget> _buildPages(BuildContext context) => [
     const HomeScreen(showScaffold: false, bottomPadding: _bottomPadding),
     const TicketsScreen(showScaffold: false, bottomPadding: _bottomPadding),
-    // **IndexedStack builds every child and paints one**, so the map has no way of its own to know
-    // it has come back into view - and it needs to, since its shop list is a snapshot that can go
-    // stale (a shop added, or an account deleted with its shops). this bool is that signal.
+    // IndexedStack builds every child and paints one, so the map cannot tell it is back in view -
+    // and it needs to, since its shop list is a snapshot that goes stale. this bool is that signal.
     MapScreen(
       showScaffold: false,
       bottomPadding: _bottomPadding,
       isActive: _currentIndex == _mapTabIndex,
     ),
-    // the list of conversations, not a conversation: today it holds one row (Domix support) and the
-    // chat itself is a pushed route. it needs the same visibility signal the map does, since a
-    // reply arriving while the app sits open is only picked up when something asks - nothing
-    // pushes to the phone.
+    // the list of conversations, not a conversation - the chat itself is a pushed route. it needs the
+    // same visibility signal the map does, since nothing pushes a reply to the phone.
     ChatsScreen(
       showScaffold: false,
       bottomPadding: _bottomPadding,

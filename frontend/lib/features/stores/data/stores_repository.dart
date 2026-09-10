@@ -30,12 +30,9 @@ class StoresRepository {
         .toList();
   }
 
-  /// One shop, by id - what a product tile has to work with when it is tapped from search or a
-  /// category browse.
-  ///
-  /// **Returns null for a 404 rather than throwing**, because "this shop was deleted while you were
-  /// reading about its cement" is not a failure the reader can retry out of, and the screen says a
-  /// different sentence for it. Everything else throws, and that one *is* worth a Повторить button.
+  /// One shop by id - what a product tile has to work with when it is tapped. **Returns null for a 404
+  /// rather than throwing**: "this shop was deleted while you were reading about its cement" is not a
+  /// failure the reader can retry out of, and the screen says a different sentence for it.
   Future<Shop?> fetchShop(int shopId) async {
     final response = await apiGet(_shopUri(shopId));
 
@@ -58,7 +55,9 @@ class StoresRepository {
     final response = await apiGet(_myShopsUri, headers: {'Authorization': 'Bearer $token'});
 
     if (response.statusCode != 200) {
-      AuthService.handleUnauthorized(response);
+      // a 401 has already signed the user out and SessionExpiryGuard is taking them off this
+      // screen, so there is nothing left to report. everything else is a real failure.
+      if (AuthService.handleUnauthorized(response)) return const [];
       throw Exception('Failed to load your shops (${response.statusCode})');
     }
 
@@ -68,15 +67,10 @@ class StoresRepository {
         .toList();
   }
 
-  // create a new shop for the currently logged-in owner.
-  //
-  // [category] is the one field here with a side effect beyond the shop row: the backend copies
-  // that category's product template into the new shop's catalogue in the same transaction, so the
-  // owner lands on a screen of ready-made products needing only prices rather than an empty one.
-  //
-  // no photo yet - the backend leaves image_url null and the app shows a default banner instead
-  // (see ShopBanner in map_screen.dart); real photo upload is a later feature.
-  Future<Shop> createShop({
+  // create a new shop for the logged-in owner. the backend copies the category's product template
+  // into the catalogue in the same transaction, so the owner lands on ready-made products needing
+  // only prices. null means the session died mid-save - the 401 already signed the user out.
+  Future<Shop?> createShop({
     required String name,
     required String contactPhone,
     required String address,
@@ -108,12 +102,13 @@ class StoresRepository {
         .timeout(const Duration(seconds: 10));
 
     if (response.statusCode != 201) {
-      AuthService.handleUnauthorized(response);
+      if (AuthService.handleUnauthorized(response)) return null;
+
       String message = 'Failed to create shop';
       try {
         message = (jsonDecode(response.body) as Map<String, dynamic>)['error'] as String? ?? message;
       } catch (_) {
-        // response body wasn't the json shape we expected; keep the generic message
+        // body wasn't the json shape we expected; keep the generic message
       }
       throw Exception(message);
     }
@@ -121,9 +116,8 @@ class StoresRepository {
     return Shop.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  // edit a shop the caller owns. a full replacement, not a patch: the edit form always submits all
-  // four fields, and the backend rejects a blank name/phone/address rather than treating it as
-  // "leave this one alone". image_url is untouched - photos aren't uploadable yet.
+  // edit a shop the caller owns. a full replacement, not a patch: the form always submits all four
+  // fields, and the backend rejects a blank one rather than reading it as "leave this alone".
   Future<Shop> updateShop({
     required int shopId,
     required String name,
@@ -178,15 +172,14 @@ class StoresRepository {
     }
   }
 
-  // built per call rather than kept as a static field like the three above, since the id varies
+  // built per call rather than kept as a static field, since the id varies
   static Uri _shopUri(int shopId) => Uri.parse('${ApiConfig.serverRoot}/api/shops/$shopId');
 
-  // a failed edit/delete should never surface as a raw decode crash, so anything unparseable
+  // a failed edit or delete should never surface as a raw decode crash, so anything unparseable
   // collapses into the same generic code the ui already knows how to render
   ShopMutationException _mutationExceptionFrom(http.Response response) {
-    // a 401 means the stored token will never work again - the account was deleted, or the
-    // signature expired. sign out here rather than in each caller: every failed authenticated
-    // request in this file already funnels through this one function.
+    // a 401 means the stored token will never work again. signing out here keeps the rule in the one
+    // place every failed authenticated request in this file already funnels through.
     AuthService.handleUnauthorized(response);
 
     try {

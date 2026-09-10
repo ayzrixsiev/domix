@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -12,93 +14,54 @@ import 'package:frontend/features/stores/data/shop_model.dart';
 
 /// The five VIP slots, as a page-snapping carousel that loops endlessly in both directions.
 ///
-/// **Five cards, always, whether or not anybody has bought one.** VIP placement is a product with a
-/// fixed number of units, and an unsold slot is not a gap to hide - it is what tells a shop owner
-/// scrolling past that a place is still available. So the empty card is drawn as the real card with
-/// its values missing rather than as a skeleton or a "coming soon" tile: an owner sees the shape of
-/// what they would be buying. See [_EmptySlotCard].
+/// **Five cards, always, sold or not** - an unsold slot is what tells an owner scrolling past that a
+/// place is available, so it is drawn as the real card with its values missing.
 ///
-/// **How the loop works.** `PageView.builder` with a null `itemCount` is unbounded *forwards* only:
-/// the underlying `SliverChildBuilderDelegate` has no concept of a negative index, so there is no
-/// built-in way to scroll backwards forever. The standard solution, and the one every carousel
-/// package uses, is to start deep inside a very large virtual range instead: the item index is
-/// mapped onto the real list with a modulo, so page 25 000 and page 25 005 both render slot 0.
-/// Swiping forward never ends, and backwards there are [_loopOrigin] × [slotCount] pages to burn
-/// through before index 0 is reachable - about twenty-five thousand swipes.
+/// **The loop**: `PageView.builder` is unbounded *forwards* only, so it starts deep inside a virtual
+/// range and maps the index onto the real list with a modulo. The starting page is a multiple of the
+/// slot count **plus the centre offset**, and Dart's `%` is Euclidean.
 ///
-/// Two details make that safe rather than a trick:
-///  * The starting page is an exact multiple of the slot count **plus the centre offset**, so the
-///    carousel opens parked on the middle slot - which is where [vipSlotRing] puts the first shop.
-///  * Dart's `%` is Euclidean - `-1 % 5` is `4`, not `-1` - so the mapping stays correct even if an
-///    index below the origin is ever built.
-///
-/// **The old `initialPage` trap is designed out rather than worked around.** A `PageController`'s
-/// `initialPage` cannot change once it is built, and the opening page used to depend on how many VIP
-/// shops had arrived - a number that lands *after* the first frame - so the home screen had to key
-/// this widget on that count to force a fresh `State`. The slot count is a constant, so the opening
-/// page is one too; the key stays (on `slots.length`) only for the case where a future backend sends
-/// more placements than this build expects and the ring grows to hold them.
+/// **It advances on its own**, forwards, into that unbounded range - see [autoAdvanceEvery]. Every
+/// placement in the section gets shown to somebody who never touches the strip, and a finger on it
+/// always outranks the clock.
 class VipShopsCarousel extends StatefulWidget {
   const VipShopsCarousel({super.key, required this.slots, this.onShopTap});
 
-  /// How many placements exist. **Mirrors `vipShopsLimit` in the Go handler**, which is the number of
-  /// units of a thing that is sold rather than a page size - see the note on that constant. The app
-  /// draws whichever is larger, this or what actually arrived, so the two disagreeing can never hide
-  /// a placement somebody paid for.
+  /// **Mirrors `vipShopsLimit` in the Go handler** - units of a thing that is sold, not a page size.
+  /// The app draws whichever is larger, this or what actually arrived, so the two disagreeing can
+  /// never hide a placement somebody paid for.
   static const int slotCount = 5;
 
-  /// The ring, from [vipSlotRing]: a real shop or `null` per position, arranged centre-outwards so
-  /// the first sold placement is the card on screen when the section scrolls into view.
-  ///
-  /// May be empty only if a caller builds it that way - the guard at the top of [build] is real, not
-  /// defensive padding: `index % 0` below is a division by zero, not an empty carousel.
+  /// The ring from [vipSlotRing], arranged centre-outwards. The empty guard at the top of [build] is
+  /// real, not defensive padding: `index % 0` below is a division by zero.
   final List<HomeShopPreview?> slots;
 
-  /// Card + peek. The page is this fraction of the screen; the leftover is split between the two
-  /// neighbours, so an edge of the previous and next slot is always visible and the strip reads as
-  /// continuous rather than as a single card.
+  /// Card + peek: the page is this fraction of the screen and the leftover is split between the two
+  /// neighbours, so an edge of the previous and next slot is always visible.
   ///
-  /// **0.87, widened from 0.84, and the sliver of the neighbours was held constant while doing it.**
-  /// The two are one dial pulled in opposite directions, so the arithmetic is worth writing down.
-  /// How much of the next card a reader actually sees is
+  /// **The peek and the card width are one dial pulled in opposite directions** - what a reader sees is
   ///
   ///     W × (1 − viewportFraction) / 2   −   cardGap   −   (viewportFraction × W × scaleDrop) / 2
-  ///     └─ the page's own overhang ─┘        └ padding ┘   └─ what the off-centre shrink eats ─┘
   ///
-  /// On a 360dp phone that was `28.8 − 5 − 10.6 ≈ 13px` at 0.84 with a 0.07 drop. Widening alone
-  /// would have taken it to ~8px, which is where the strip stops reading as "there are more of
-  /// these" and starts looking like one card alone on the page. Paying for the width out of
-  /// [_offCentreScaleDrop] (0.07 → 0.04) and the gap (5 → 4) gives `23.4 − 4 − 6.3 ≈ 13px` - the
-  /// same peek on a card 13dp wider.
-  ///
-  /// **Widening further means finding those pixels somewhere**, and there is nowhere left except the
-  /// recede, which is already soft.
+  /// ~13px on a 360dp phone. Widening further means finding those pixels in the recede.
   static const double viewportFraction = 0.87;
 
-  /// The gap between one card and the next, applied as horizontal padding inside each page. Part of
-  /// the peek arithmetic above rather than free spacing - every point of it comes off the sliver of
-  /// the neighbour that is visible.
+  /// part of the peek arithmetic above rather than free spacing - every point of it comes off the
+  /// sliver of the neighbour that is visible
   static const double cardGap = 4;
 
-  /// Fixed, because a `PageView` needs a bounded height and a carousel whose cards changed height
-  /// per shop would jolt as it snapped.
-  ///
-  /// **232. It was raised to 252 on 2026-08-19 and put back the next day** - taller read as heavy
-  /// rather than as important, and it pushed Популярные категории off the first screenful. The width
-  /// gained in the same pass ([viewportFraction], [cardGap]) was kept: the card was too narrow and is
-  /// not too tall, and those two are independent dials.
-  ///
-  /// **A `Column` inside a fixed-height card fails by overflowing, not by scrolling** - silent in
-  /// release, a 12px striped bar in debug - so adding a line here means raising this number. Growing
-  /// it is always safe; shrinking it is what needs checking. **The empty card is built to exactly the
-  /// same height**, or the section would change height as placements were sold.
+  /// Fixed, because a `PageView` needs a bounded height. **A `Column` inside a fixed-height card
+  /// fails by overflowing, not by scrolling** - silent in release - so adding a line means raising
+  /// this number. **The empty card is built to exactly the same height.**
   static const double cardHeight = 232;
 
-  /// Opens the shop card. **A paid placement that does nothing when it is tapped is the worst card
-  /// on the screen to have that bug**, which is what this carousel had until the shop card became a
-  /// route: only the map could open a shop.
-  ///
-  /// An empty slot is not tappable - there is nothing behind it - which is why the handler is wired
+  /// How long a card holds the centre before the strip moves on by itself. **The section is an advert
+  /// and it has five slots, so a strip that only ever shows its first card is four fifths unsold** -
+  /// this is what puts the other placements in front of a customer who never swipes.
+  static const Duration autoAdvanceEvery = Duration(seconds: 3);
+
+  /// Opens the shop card. **A paid placement that does nothing when it is tapped is the worst card on
+  /// the screen to have that bug.** An empty slot is not tappable, which is why the handler is wired
   /// per card rather than around the whole strip.
   final ValueChanged<Shop>? onShopTap;
 
@@ -110,49 +73,65 @@ class _VipShopsCarouselState extends State<VipShopsCarousel> {
   /// how many full cycles sit behind the opening page
   static const int _loopOrigin = 5000;
 
-  /// How far an off-centre card recedes, as a fraction of its size. Scale and nothing else.
-  ///
-  /// **This is the same dial as [VipShopsCarousel.viewportFraction], pulled the other way.** A card
-  /// scales about its own centre, so every point of shrink slides its inner edge *away* from the
-  /// screen and eats directly into the neighbour's visible sliver - see the arithmetic on that
-  /// constant.
-  ///
-  /// 0.12 plus a 28% fade was tried on 2026-08-18 and reverted the same day: the recede was very
-  /// visible and the neighbours had all but vanished, which is the wrong trade - the peek is what
-  /// says "there are more of these".
-  ///
-  /// **0.04 now, down from 0.07, and that reduction is what paid for the wider card.** The recede is
-  /// subtle at this value, which is the accepted cost: asked to choose, the founder wanted a bigger
-  /// card with the neighbours still showing. Wanting the recede back means narrowing the card again.
+  /// How far an off-centre card recedes. **The same dial as [VipShopsCarousel.viewportFraction],
+  /// pulled the other way**: shrink about the centre eats into the neighbour's visible sliver, so 0.04
+  /// is what paid for the wider card, and wanting the recede back means narrowing it again.
   static const double _offCentreScaleDrop = 0.04;
+
+  /// Slower than a flung swipe, deliberately: nobody asked for this movement, so it has to read as
+  /// the strip drifting rather than as the screen changing under the finger.
+  static const Duration _autoAdvanceGlide = Duration(milliseconds: 480);
 
   late final PageController _controller;
   late final int _initialPage;
 
+  /// Runs for the life of the widget; the pointer handlers in [build] are the only thing that stops
+  /// it. **Null means a finger is on the strip** - or that this is disposed.
+  Timer? _autoAdvance;
+
   @override
   void initState() {
     super.initState();
-    // an exact multiple of the ring size, offset to the middle position. `vipSlotRing` fills from
-    // that position outwards, so this is what makes the first sold placement the card the customer
-    // is looking at rather than something two swipes away past empty ones.
-    //
-    // the `max(1, ...)` only covers a caller passing an empty list, where build returns early anyway.
+    // an exact multiple of the ring size, offset to the middle position: `vipSlotRing` fills from there
+    // outwards, so this is what makes the first sold placement the card the customer is looking at -
+    // and ListVipShops orders on basket price, so that card is the cheapest of the placements.
+    // the max(1, ...) only covers a caller passing an empty list, where build returns early anyway.
     final size = widget.slots.isEmpty ? 1 : widget.slots.length;
     _initialPage = _loopOrigin * size + size ~/ 2;
     _controller = PageController(
       viewportFraction: VipShopsCarousel.viewportFraction,
       initialPage: _initialPage,
     );
+    _startAutoAdvance();
   }
 
   @override
   void dispose() {
+    // before the controller, not after: a tick that fired against a disposed PageController would
+    // throw from a timer callback, where nothing on screen would say which widget it came from
+    _stopAutoAdvance();
     _controller.dispose();
     super.dispose();
   }
 
-  /// The page the viewport is centred on, as a fraction. Reading `.page` before the first layout
-  /// throws, so this falls back to the starting page until the controller is attached.
+  /// (Re)starts the dwell clock, which is why it cancels first: a swipe that ends 2.9s into a tick
+  /// leaves the card it landed on a whole dwell rather than the 100ms that were left of the last one.
+  void _startAutoAdvance() {
+    _autoAdvance?.cancel();
+    _autoAdvance = Timer.periodic(VipShopsCarousel.autoAdvanceEvery, (_) {
+      // there is no page to advance from until the first layout, and `nextPage` asserts on that
+      if (!_controller.hasClients || !_controller.position.hasContentDimensions) return;
+      // forwards forever - the virtual range is unbounded in exactly this direction
+      _controller.nextPage(duration: _autoAdvanceGlide, curve: Curves.easeInOut);
+    });
+  }
+
+  void _stopAutoAdvance() {
+    _autoAdvance?.cancel();
+    _autoAdvance = null;
+  }
+
+  /// Reading `.page` before the first layout throws, so this falls back to the starting page.
   double get _currentPage {
     if (_controller.hasClients && _controller.position.hasContentDimensions) {
       return _controller.page ?? _initialPage.toDouble();
@@ -160,8 +139,7 @@ class _VipShopsCarouselState extends State<VipShopsCarousel> {
     return _initialPage.toDouble();
   }
 
-  /// Null when there is nothing to open - an unsold slot, or no handler - which is what leaves the
-  /// card inert rather than animating a press that leads nowhere.
+  /// Null when there is nothing to open - an unsold slot, or no handler - which leaves the card inert
   VoidCallback? _tapHandlerFor(HomeShopPreview? preview) {
     final onShopTap = widget.onShopTap;
     if (preview == null || onShopTap == null) return null;
@@ -170,115 +148,96 @@ class _VipShopsCarouselState extends State<VipShopsCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    // nothing to loop over: `index % 0` below is a division by zero. unreachable from the home
-    // screen, which always passes a full ring.
+    // nothing to loop over: `index % 0` below is a division by zero
     if (widget.slots.isEmpty) return const SizedBox.shrink();
 
     final strings = Provider.of<LanguageProvider>(context).strings;
 
     return SizedBox(
       height: VipShopsCarousel.cardHeight,
-      child: PageView.builder(
-        controller: _controller,
-        // unbounded: the builder is asked for whatever page the user swipes to, forever
-        itemCount: null,
-        padEnds: true,
-        // **the viewport is exactly [cardHeight] tall, so its default hard edge cuts the shadow
-        // off at the card's own bottom edge** - which turns `AppShadows.floating` back into no
-        // shadow at all, the thing it was changed *from*. Clip.none lets the 30px ambient blur
-        // spill into the whitespace above and below the strip, which is where a lift lives. The
-        // pages either side already extend past the screen and are clipped by the screen itself.
-        clipBehavior: Clip.none,
-        itemBuilder: (context, index) {
-          final slot = widget.slots[index % widget.slots.length];
+      // **a Listener, not a GestureDetector**: this only wants to know that a finger is down, and
+      // claiming the gesture would take the swipe away from the PageView underneath it. touching
+      // pauses the clock and letting go restarts it, so a tick can never fire mid-drag and animate
+      // the page out from under the finger holding it. a touch that lands *during* a glide needs
+      // nothing here - a Scrollable holds its own driven animation the moment a pointer arrives.
+      child: Listener(
+        onPointerDown: (_) => _stopAutoAdvance(),
+        onPointerUp: (_) => _startAutoAdvance(),
+        onPointerCancel: (_) => _startAutoAdvance(),
+        child: PageView.builder(
+          controller: _controller,
+          // unbounded: the builder is asked for whatever page the user swipes to, forever
+          itemCount: null,
+          padEnds: true,
+          // the viewport is exactly [cardHeight] tall, so its default hard edge would cut the shadow off at
+          // the card's own bottom edge. Clip.none lets the 30px ambient blur spill into the whitespace above
+          // and below the strip, which is where a lift lives.
+          clipBehavior: Clip.none,
+          itemBuilder: (context, index) {
+            final slot = widget.slots[index % widget.slots.length];
 
-          // rebuilds on every scroll tick so the off-centre cards can settle back. it is what
-          // makes the swipe feel like cards moving through a viewport rather than a filmstrip
-          // sliding sideways.
-          return AnimatedBuilder(
-            animation: _controller,
-            builder: (context, child) {
-              // 0 for the card the viewport is centred on, 1 for anything a full page away or
-              // further, and everything between while a drag is in flight
-              final distance = (_currentPage - index).abs().clamp(0.0, 1.0);
+            // rebuilds on every scroll tick, so the off-centre cards settle back as the swipe moves
+            return AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) {
+                // 0 for the card the viewport is centred on, 1 for anything a full page away, fractional mid-drag
+                final distance = (_currentPage - index).abs().clamp(0.0, 1.0);
 
-              return Transform.scale(
-                scale: 1 - distance * _offCentreScaleDrop,
-                child: child,
-              );
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: VipShopsCarousel.cardGap,
+                return Transform.scale(
+                  scale: 1 - distance * _offCentreScaleDrop,
+                  child: child,
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: VipShopsCarousel.cardGap,
+                ),
+                child: PressableScale(
+                  // PressableScale rather than an ink ripple: a ripple is a faint wash inside a 232px card that never
+                  // moves. its onTapCancel matters here - the PageView claims the gesture the moment a swipe starts,
+                  // and without it the card would stay shrunk after every failed tap.
+                  onTap: _tapHandlerFor(slot),
+                  child: slot == null
+                      ? _EmptySlotCard(strings: strings)
+                      : _VipShopCard(shop: slot, strings: strings),
+                ),
               ),
-              child: PressableScale(
-                // PressableScale rather than an ink ripple, for the reason it exists: a ripple
-                // spreads *inside* the shape, so on a 232px bordered card it is a faint grey wash
-                // in a box that never moves. its onTapCancel also matters here specifically - the
-                // PageView claims the gesture the moment a swipe starts, and without that the card
-                // would stay shrunk after every failed tap.
-                onTap: _tapHandlerFor(slot),
-                child: slot == null
-                    ? _EmptySlotCard(strings: strings)
-                    : _VipShopCard(shop: slot, strings: strings),
-              ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
 }
 
 
-// ─────────────────────────────── the cards ───────────────────────────────
-//
-// A sold slot and an unsold one are **the same card**, and only their text differs.
-//
-// The unsold one was drawn recessed for a while - page-coloured, outlined, no shadow - on the
-// reasoning that a well cut into the page reads as "empty" before a word of it is read. That was
-// rejected on sight: this is the section the eye lands on first, and four faded frames around one
-// real card made the whole strip look broken rather than look available. **An unsold slot is a
-// product being advertised, and an advertisement has to be as handsome as the thing it is selling.**
-//
-// So the surface, the border, the shadow and the branded banner are shared literally - the same
-// `_cardSurface` object and the same `_Banner` widget - and what says "unsold" is that the fields
-// carry their own names instead of a shop's values, in muted type. See [_EmptySlotCard].
+// ── the cards: a sold slot and an unsold one are **the same card**, and only their text differs.
+// the unsold one was drawn recessed for a while and rejected on sight - four faded frames around one
+// real card made the strip look broken rather than available. ──
 
-/// The chrome every card in this carousel wears, sold or not.
-///
-/// One `const` rather than two identical `BoxDecoration`s, because the moment they are two, one of
-/// them grows a different shadow.
-///
-/// **`floating`, and the border went with the change.** It was `raised` inside a hairline outline,
-/// which is the recipe for a card lying *on* the page - and this is the one strip on the home screen
-/// that is meant to look picked up off it, because these five places are the thing Domix sells. The
-/// two changes are one decision: `floating` is a wide 30px ambient blur plus a tight contact
-/// shadow, and an outline drawn round a shape that is already lifted flattens it again by redrawing
-/// the edge the shadow was busy softening. The shadow is the edge now.
+/// The chrome every card wears, sold or not. One `const` rather than two identical `BoxDecoration`s,
+/// because the moment they are two, one of them grows a different shadow. `floating` with no border:
+/// an outline round an already-lifted shape flattens it again.
 const BoxDecoration _cardSurface = BoxDecoration(
   color: AppColors.surfaceWhite,
   borderRadius: BorderRadius.all(Radius.circular(AppRadius.md)),
   boxShadow: AppShadows.floating,
 );
 
-/// The padding around a card's content block. 14 all round, and 16 at the bottom: the badge is the
-/// last thing on the card and needs to sit clear of the edge rather than tucked against it.
+/// 14 all round, 16 at the bottom: the badge is the last thing on the card and has to sit clear of
+/// the edge rather than tucked against it.
 const EdgeInsets _cardContentPadding = EdgeInsets.fromLTRB(14, 12, 14, 16);
 
-// these cards were a near-black gradient, which put the single darkest object in the app right at
-// the top of its brightest screen. they are white now, with the shop's identity carried by a soft
-// branded banner instead of by an inverted colour scheme - and that banner is where a real shop
-// photo will go once photo upload exists, so the layout will not need rethinking then.
+// white, with the shop's identity carried by a soft branded banner rather than by an inverted
+// colour scheme - and that banner is where a real shop photo will go once upload exists
 class _VipShopCard extends StatelessWidget {
   const _VipShopCard({required this.shop, required this.strings});
 
   final HomeShopPreview shop;
   final AppLocalizations strings;
 
-  /// 120, and it moves with [VipShopsCarousel.cardHeight] rather than independently - the cover is
-  /// the largest single element on the card, so a height change that left it alone would show up as
-  /// the card's proportions shifting rather than as the card resizing.
+  /// moves with [VipShopsCarousel.cardHeight] rather than independently - it is the largest element
+  /// on the card, so leaving it alone would read as the proportions shifting
   static const double bannerHeight = 120;
 
   @override
@@ -288,15 +247,12 @@ class _VipShopCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // the shop's name lives on the banner, opposite its rating. it used to head the content
-          // block below, which meant the tallest, boldest thing on the card sat *under* a large
-          // empty image - the eye landed on the placeholder first and the identity second. moving
-          // it up pairs the two facts that identify a shop on one line and leaves the content block
-          // to do one job: what it costs.
+          // the shop's name lives on the banner, opposite its rating. it used to head the content block, so
+          // the tallest, boldest thing on the card sat *under* a large empty image - this pairs the two facts
+          // that identify a shop and leaves the block one job: what it costs.
           _Banner(
             name: shop.name,
-            // hidden entirely until there are reviews - with no reviews table every shop reads 0.0,
-            // and "⭐ 0.0" says the opposite of what is true. See Shop.hasRating.
+            // hidden entirely until there are reviews - with no reviews table every shop reads 0.0
             ratingLabel: shop.hasRating ? shop.rating.toStringAsFixed(1) : null,
           ),
           Expanded(
@@ -310,20 +266,13 @@ class _VipShopCard extends StatelessWidget {
                     color: AppColors.textGrey,
                   ),
 
-                  // the three below are separated by real gaps rather than by `spaceBetween`. the
-                  // old card distributed its slack, so the spacing changed with the content and the
-                  // block read as compressed at the top and stranded at the bottom; fixed gaps make
-                  // the rhythm the same on every card, and the Spacer takes the leftover.
+                  // real gaps rather than `spaceBetween`: distributed slack changed the spacing with the content, so
+                  // the block read as compressed at the top and stranded at the bottom
                   const SizedBox(height: 12),
 
-                  // **a card here can now legitimately have no price.** ListVipShops used to inner-
-                  // join the basket index, so a placement did not appear at all until its owner had
-                  // priced every template row - which meant somebody paid and saw nothing. it left-
-                  // joins now (§5), so a shop that has not finished shows its name, its address and
-                  // no comparison, which is the truth about it.
-                  //
-                  // the price is the largest thing in the content block on purpose: it is what the
-                  // section is for, and the address above it is context, not the point.
+                  // **a card here can legitimately have no price**: ListVipShops left-joins the basket index, so a
+                  // shop that has not finished pricing shows its name, its address and no comparison. it used to
+                  // inner-join, which meant somebody paid for a placement and saw nothing.
                   if (shop.basketPrice case final basket?)
                     Text(
                       strings.somAmount(basket),
@@ -341,8 +290,7 @@ class _VipShopCard extends StatelessWidget {
                     ),
                   ],
 
-                  // soaks up whatever is left, so the block stays top-aligned and the bottom
-                  // padding above is the real distance to the card's edge
+                  // soaks up the leftover, so the block stays top-aligned and the bottom padding is the real distance
                   const Spacer(),
                 ],
               ),
@@ -354,19 +302,11 @@ class _VipShopCard extends StatelessWidget {
   }
 }
 
-/// An unsold placement: the real card, with the field names where its values would be.
+/// An unsold placement: the real card, with field names where its values would be.
 ///
-/// **This is a piece of the product, not a loading state**, and the difference decides how it looks.
-/// A skeleton says "wait"; a faded frame says "broken". What this has to say is "this space is for
-/// sale and here is exactly what you would get", to a shop owner scrolling the home screen of their
-/// own app - which is the cheapest advertising channel Domix has. So it is drawn at full strength:
-/// the same white surface, the same shadow, the same branded banner.
-///
-/// What separates it from a sold slot is the *text*. Every field carries its own name in muted type
-/// instead of a shop's value, and **no invented shop is written anywhere in it** - not a name, not a
-/// street, not a price, not a percentage. A plausible-looking fake in the one section that is sold is
-/// how a demo turns into a complaint. The rating is the single exception ([kSlotRating], a fixed 5),
-/// and it describes the field rather than claiming anything about anybody.
+/// **A piece of the product, not a loading state** - a skeleton says "wait", a faded frame says
+/// "broken", and this has to say "this space is for sale". **No invented shop anywhere in it**; the
+/// rating is the one exception ([kSlotRating], a fixed 5) and describes the field.
 class _EmptySlotCard extends StatelessWidget {
   const _EmptySlotCard({required this.strings});
 
@@ -381,9 +321,8 @@ class _EmptySlotCard extends StatelessWidget {
         children: [
           _Banner(
             name: strings.slotShopNameLabel,
-            // shown in full here, unlike on a real card where the pill is hidden until there are
-            // reviews: on this card the pill is part of what is being described, and a gap where it
-            // goes would leave the layout half-explained.
+            // shown in full here, unlike a real card: on this one the pill is part of what is being described,
+            // and a gap where it goes would leave the layout half-explained
             ratingLabel: kSlotRating,
             isPlaceholder: true,
           ),
@@ -398,9 +337,8 @@ class _EmptySlotCard extends StatelessWidget {
                     color: AppColors.textFaint,
                   ),
                   const SizedBox(height: 12),
-                  // sits where the basket total does, at the same size and weight - that is the
-                  // point being made. `textGrey` rather than `textDark` is the only difference, so
-                  // it reads as the name of a figure rather than as a figure.
+                  // sits where the basket total does, at the same size and weight - that is the point being made.
+                  // `textGrey` is the only difference, so it reads as the name of a figure rather than as a figure.
                   Text(
                     strings.slotBasketLabel,
                     maxLines: 1,
@@ -430,8 +368,7 @@ class _EmptySlotCard extends StatelessWidget {
   }
 }
 
-/// The basket total's type, shared so the empty card's caption sits on exactly the same baseline as
-/// the figure it stands in for.
+/// shared, so the empty card's caption sits on exactly the same baseline as the figure it replaces
 const TextStyle _priceStyle = TextStyle(
   color: AppColors.textDark,
   fontSize: 17,
@@ -440,8 +377,7 @@ const TextStyle _priceStyle = TextStyle(
   fontWeight: FontWeight.w700,
 );
 
-/// A pin glyph and one line of text - the address on a sold card, the word «Адрес» on an unsold one.
-/// Shared so the two cannot end up with different gaps or a different icon size.
+/// shared, so the two cards cannot end up with different gaps or a different icon size
 class _AddressLine extends StatelessWidget {
   const _AddressLine({required this.text, required this.color});
 
@@ -472,22 +408,12 @@ class _AddressLine extends StatelessWidget {
   }
 }
 
-/// The card's cover area: a placeholder where a shop photo will go, with the shop's name at the
-/// top-left and its rating at the top-right, on one line.
+/// The card's cover: a placeholder where a shop photo will go, the name at top-left and the rating
+/// at top-right. **Sold and unsold slots share this widget outright**, which is what makes the two
+/// line up pixel for pixel as the carousel snaps.
 ///
-/// **Sold and unsold slots share this widget outright**, which is what guarantees the two line up
-/// pixel for pixel as the carousel snaps between them. [isPlaceholder] changes the name's colour and
-/// weight and nothing else.
-///
-/// **The name is brand orange on the bare placeholder, with no scrim behind it.** A dark gradient
-/// across the top was tried and removed: over a pale peach placeholder there is nothing to protect
-/// text from, so all it did was put a grey smear across the top third of every card.
-///
-/// That leaves a real problem for the day photo upload lands - orange text on an arbitrary
-/// photograph will not always be legible. The fix then is the treatment already on this card: a
-/// white pill, the same as the rating badge on the right, which works over any image and keeps the
-/// two ends of the line symmetrical. Adding it now would be solving a problem that does not exist
-/// yet against a placeholder that will be deleted.
+/// The name is brand orange with no scrim - over a pale peach placeholder there is nothing to
+/// protect text from. When photo upload lands, the fix is the white pill the rating badge uses.
 class _Banner extends StatelessWidget {
   const _Banner({
     required this.name,
@@ -497,17 +423,12 @@ class _Banner extends StatelessWidget {
 
   final String name;
 
-  /// Already formatted by the caller - `"4.8"` for a rated shop, [kSlotRating] on an unsold slot, and
-  /// **null when there is nothing to show**, which drops the whole pill rather than just its number.
-  /// An empty white badge beside the name would read as a card that failed to load something.
-  ///
-  /// A `String?` rather than a `double?` so the two callers can differ without this widget having to
-  /// know which of them it is drawing for.
+  /// Already formatted by the caller, and **null when there is nothing to show** - which drops the
+  /// whole pill rather than just its number, since an empty white badge reads as a failed load.
   final String? ratingLabel;
 
-  /// Draws the name as a field label rather than as an identity: `textGrey` and one weight down, so
-  /// «Название магазина» cannot be mistaken for a shop actually called that. Brand orange is
-  /// reserved for a real name.
+  /// Draws the name as a field label rather than as an identity, so «Название магазина» cannot be
+  /// mistaken for a shop actually called that. Brand orange is reserved for a real name.
   final bool isPlaceholder;
 
   @override
@@ -534,8 +455,7 @@ class _Banner extends StatelessWidget {
               ),
             ),
 
-            // name and rating on one line: identity on the left, quality on the right, the way a
-            // listing card is read.
+            // identity on the left, quality on the right, the way a listing card is read
             Positioned(
               top: 10,
               left: 12,

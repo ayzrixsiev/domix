@@ -7,17 +7,9 @@ import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/widgets/pressable_scale.dart';
 
-/// The photo control on [ProductEditScreen]: one picture, tap to choose it, a second row to replace
-/// or remove it.
-///
-/// **It draws two sources of truth as one thing, and that is its whole job.** A product being edited
-/// already exists, so the photo it shows comes back from the server as a url. A product being
-/// *created* has no id yet - there is nothing to attach a file to - so its photo is a file sitting
-/// in the app's cache until the create request returns an id. Both are "the photo of this product"
-/// to the owner, and the difference is a fact about our api, not about their shop.
-///
-/// [localFile] therefore wins over [imageUrl] when both are set: the local one is what the owner
-/// just picked, and the remote one is what is still on the server until the upload lands.
+/// The photo control on [ProductEditScreen]. **It draws two sources of truth as one thing**: a
+/// product being edited has its photo as a url, while one being *created* has no id to attach a file
+/// to, so its photo is a file in the app's cache. [localFile] wins over [imageUrl] when both are set.
 class ProductPhotoField extends StatelessWidget {
   const ProductPhotoField({
     super.key,
@@ -39,24 +31,17 @@ class ProductPhotoField extends StatelessWidget {
   /// What the owner picked a moment ago and the server has not been told about yet.
   final File? localFile;
 
-  /// An upload or a removal is in flight. The controls go inert and a scrim covers the picture,
-  /// rather than the picture disappearing - a photo that vanishes while it is being *saved* is the
-  /// one thing guaranteed to be read as "it deleted my photo".
+  /// An upload or a removal is in flight. The controls go inert and a scrim covers the picture rather
+  /// than the picture disappearing - a photo that vanishes while it is being *saved* reads as deleted.
   final bool isBusy;
 
-  /// True while a picked file is waiting for a product that does not exist yet. Draws the caption
-  /// that stops the wait reading as a failed upload.
+  /// True while a picked file waits for a product that does not exist yet. Draws the caption that
+  /// stops the wait reading as a failed upload.
   final bool isPendingUpload;
 
   /// This row's photograph is the catalogue's and not the owner's to change - see
-  /// `Product.photoEditable`.
-  ///
-  /// **The picture still shows, with a lock chip on it.** It is deliberately not hidden and
-  /// deliberately not a disabled-looking frame: this is the same treatment [ProductLockedField]
-  /// gives a template row's name, unit and category one screen-length above, and it is chosen for
-  /// the same reason. The owner is entitled to see what a customer sees on their own tile; what they
-  /// are not offered is a control. A greyed-out «Заменить» would still look like a button that ought
-  /// to work, and the owner finds out by pressing it.
+  /// `Product.photoEditable`. **The picture still shows, with a lock chip on it**: the owner is
+  /// entitled to see what a customer sees on their own tile; what they are not offered is a control.
   final bool isLocked;
 
   final VoidCallback onPick;
@@ -64,9 +49,8 @@ class ProductPhotoField extends StatelessWidget {
   /// null when there is nothing to remove, which is what hides the button rather than disabling it.
   final VoidCallback? onRemove;
 
-  /// Tall enough that a product is recognisable and short enough that the fields under it stay on
-  /// screen with the keyboard up. `contain` inside it, for the same reason the grid tile uses it:
-  /// these are catalogue shots of one object, and filling a band crops the head off a hammer.
+  /// Tall enough that a product is recognisable, short enough that the fields under it stay on screen
+  /// with the keyboard up. `contain` inside it: filling a band crops the head off a hammer.
   static const double _height = 190;
 
   bool get _hasPhoto => localFile != null || (imageUrl != null && imageUrl!.isNotEmpty);
@@ -77,10 +61,9 @@ class ProductPhotoField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         PressableScale(
-          // a tap anywhere on the frame opens the picker, which is what the empty state promises -
-          // and disabled outright while a request is in flight, so a second pick cannot race the
-          // first upload. null on a locked row leaves the frame inert *and* unanimated, which is
-          // what stops it reading as a control that swallowed the tap.
+          // a tap anywhere on the frame opens the picker, and it is disabled outright while a request is in
+          // flight so a second pick cannot race the first upload. null on a locked row leaves the frame inert
+          // *and* unanimated, which stops it reading as a control that swallowed the tap.
           onTap: isBusy || isLocked ? null : onPick,
           child: Container(
             height: _height,
@@ -90,9 +73,8 @@ class ProductPhotoField extends StatelessWidget {
               borderRadius: BorderRadius.circular(AppRadius.md),
               border: Border.all(
                 color: _hasPhoto || isLocked ? AppColors.hairline : AppColors.primaryTint,
-                // the empty state is an invitation, so its edge is heavier - the same weight the
-                // add-product tile uses at the end of the catalogue grid. a locked row is not an
-                // invitation, so it keeps the plain hairline even with nothing in it.
+                // the empty state is an invitation, so its edge is heavier - the same weight the add-product tile
+                // uses. a locked row is not an invitation, so it keeps the plain hairline even when empty.
                 width: _hasPhoto || isLocked ? 1 : 1.4,
               ),
             ),
@@ -151,8 +133,8 @@ class ProductPhotoField extends StatelessWidget {
   }
 }
 
-// the picture itself. a local file takes precedence: it is what the owner just chose, and the url
-// beside it is still the previous photo until the upload finishes.
+// a local file takes precedence: it is what the owner just chose, and the url beside it is still
+// the previous photo until the upload finishes
 class _Photo extends StatelessWidget {
   const _Photo({required this.localFile, required this.imageUrl});
 
@@ -167,8 +149,8 @@ class _Photo extends StatelessWidget {
     return Image.network(
       imageUrl!,
       fit: BoxFit.contain,
-      // decoded at roughly the width it is painted rather than at full size, the same budget the
-      // catalogue grid keeps - a 1000px jpeg held as a raw bitmap is 4 MB whatever it is drawn at
+      // decoded at roughly the width it is painted rather than at full size - a 1000px jpeg held as a raw
+      // bitmap is 4 MB whatever it is drawn at
       cacheWidth: 900,
       errorBuilder: (_, _, _) => const _PhotoUnavailable(),
     );
@@ -254,15 +236,15 @@ class _BusyScrim extends StatelessWidget {
   }
 }
 
-// a solid white pill over the picture, for the same reason the grid tile's chips are solid: a
-// translucent one that reads correctly over a pale photo disappears over a dark one
+// a solid white pill: a translucent one that reads correctly over a pale photo disappears over a
+// dark one
 class _Caption extends StatelessWidget {
   const _Caption({required this.label, this.icon = CupertinoIcons.clock});
 
   final String label;
 
-  /// A clock while a pick waits for a product that does not exist yet, a padlock on a row whose
-  /// photo is the catalogue's. Same pill, and the glyph is what says which of the two it is.
+  /// A clock while a pick waits for a product that does not exist yet, a padlock on a row whose photo
+  /// is the catalogue's. Same pill, and the glyph is what says which of the two it is.
   final IconData icon;
 
   @override
@@ -293,8 +275,8 @@ class _Caption extends StatelessWidget {
   }
 }
 
-// the two controls under the picture. flat, bordered and equal in weight - neither is the primary
-// action on this screen, which is the save button at the bottom.
+// flat, bordered and equal in weight - neither is the primary action on this screen, which is the
+// save button at the bottom
 class _PhotoAction extends StatelessWidget {
   const _PhotoAction({
     required this.label,
@@ -348,11 +330,8 @@ class _PhotoAction extends StatelessWidget {
   }
 }
 
-/// The "camera or gallery" sheet.
-///
-/// A sheet rather than two buttons on the form, because it is a question with two answers that is
-/// only asked at the moment of tapping - putting both on the screen permanently would spend the
-/// space every time to save one tap occasionally. Returns the picked source, or null if dismissed.
+/// The "camera or gallery" sheet - a question with two answers asked only at the moment of tapping,
+/// so both do not sit on the form permanently. Returns the picked source, or null if dismissed.
 class PhotoSourceSheet extends StatelessWidget {
   const PhotoSourceSheet({super.key, required this.strings});
 
@@ -409,8 +388,8 @@ class PhotoSourceSheet extends StatelessWidget {
   }
 }
 
-/// Which way the owner wants to supply a photo. The app's own enum rather than image_picker's
-/// `ImageSource`, so nothing outside the one method that calls the plugin imports it.
+/// The app's own enum rather than image_picker's `ImageSource`, so nothing outside the one method
+/// that calls the plugin imports it.
 enum PhotoSource { camera, gallery }
 
 class _SourceRow extends StatelessWidget {

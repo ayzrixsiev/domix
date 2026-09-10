@@ -7,24 +7,13 @@ import 'package:frontend/core/widgets/price_tier_badge.dart';
 import 'package:frontend/features/stores/data/price_tier.dart';
 import 'package:frontend/features/stores/data/shop_category.dart';
 
-// teardrop pin shape in brand orange, pointing down at its bottom tip. shared between ShopMarker
-// (a tappable pin plotted on the map) and the location picker's fixed center pin, so both look
-// consistent.
+// teardrop pin in brand orange, shared between ShopMarker and the location picker's centre pin.
 //
 // [category] decides what sits inside the circle, and the two answers are different *kinds* of
-// thing rather than two glyphs:
-//
-//   * a plotted shop shows what it sells - store / bath / fence / scroll (see ShopCategory.icon)
-//   * the location picker passes null and gets a **plain капля**: the teardrop with a white hole
-//     punched through it, the mark every map app in the world uses for "this exact point"
-//
-// it used to draw `building_2` for the null case, and that was wrong in a way worth recording. the
-// picker is not pointing at a building - it is pointing at wherever the user has dragged the map
-// to, which may be a yard, a corner or a stretch of road. a building glyph makes a claim about the
-// place, and it also makes the picker's pin look like a fifth shop category. a hole makes no claim
-// at all, which is exactly the right amount for a point the user is still choosing.
-//
-// that is the whole reason [category] is nullable rather than defaulting to универсальный.
+// thing: a plotted shop shows what it sells, while the picker passes null and gets a plain капля -
+// the mark every map app uses for "this exact point". that is why it is nullable rather than
+// defaulting to универсальный: the picker points at a yard or a stretch of road, and a building
+// glyph would make a claim about the place and look like a fifth shop category.
 class MapPinIcon extends StatelessWidget {
   const MapPinIcon({super.key, this.size = 40, this.category});
 
@@ -42,9 +31,8 @@ class MapPinIcon extends StatelessWidget {
           padding: EdgeInsets.only(bottom: size * 0.25),
           child: Center(
             child: category == null
-                // the hole. a filled white circle rather than a stroked ring: at 48px a ring would
-                // be three concentric outlines deep once the pin's own white rim is counted, and
-                // the solid dot is what reads as "punched through" instead of "drawn on".
+                // a filled white circle rather than a stroked ring: at 48px a ring is three concentric outlines
+                // deep once the pin's own rim is counted, and the solid dot reads as "punched through"
                 ? Container(
                     width: size * 0.30,
                     height: size * 0.30,
@@ -56,10 +44,8 @@ class MapPinIcon extends StatelessWidget {
                 : Icon(
                     category!.icon,
                     color: Colors.white,
-                    // half the pin's width, where the filled cupertino glyph this replaced sat at
-                    // 0.45. lucide is a stroke font: at the same nominal size it covers less area
-                    // and reads lighter against the orange, so it has to be drawn bigger to carry
-                    // the same weight.
+                    // half the pin's width, where the filled cupertino glyph this replaced sat at 0.45: lucide is a
+                    // stroke font and covers less area at the same nominal size
                     size: size * 0.5,
                   ),
           ),
@@ -69,17 +55,12 @@ class MapPinIcon extends StatelessWidget {
   }
 }
 
-// a MapPinIcon that reacts to taps, used inside the map's MarkerLayer. two independent things about
-// one shop, in two channels: the pin says what kind of shop it is, the label above it says how its
-// basket compares to that market - a coloured dot plus "−4%" - or nothing at all for a shop with no
-// published comparison, which since migration 000013 means any shop that has not priced its whole
-// catalogue.
+// a MapPinIcon that reacts to taps. two channels about one shop: the pin says what kind of shop it
+// is, the label says how its basket compares - or nothing, which since migration 000013 means any
+// shop that has not priced its whole catalogue.
 //
-// it takes the tier and the percentage rather than a preformatted string, which is a change from
-// when this showed an average check in сум: the colour is *derived* from the tier, so handing this
-// widget a string would mean handing it a colour too, and two callers could then disagree about
-// which number is green. the сум figure did not move to a smaller font - it moved off the map
-// entirely, into the shop's own card, where there is room to label it.
+// it takes the tier and the percentage rather than a formatted string: the colour is derived from
+// the tier, so two callers could otherwise disagree about which number is green.
 class ShopMarker extends StatelessWidget {
   const ShopMarker({
     super.key,
@@ -89,30 +70,23 @@ class ShopMarker extends StatelessWidget {
     this.priceDifferencePercent,
   });
 
-  /// Optional, and on the map it is **always** null.
-  ///
-  /// MapKit rasterizes this widget off-screen and draws the bitmap, so a `GestureDetector` inside it
-  /// can never fire - taps arrive through the placemark's own listener instead (see `DomixMap`).
-  /// The field stays because the widget is still a plain widget anywhere else it is mounted for
-  /// real, and because a required callback that silently does nothing is worse than an absent one.
+  /// Optional, and on the map it is **always** null: MapKit rasterizes this widget, so a
+  /// `GestureDetector` inside it can never fire - taps arrive through the placemark's own listener.
+  /// The field stays because the widget is still a plain widget anywhere else it is mounted for real.
   final VoidCallback? onTap;
   final ShopCategory category;
   final PriceTier? priceTier;
   final int? priceDifferencePercent;
 
-  // the pin itself is unchanged from before this label was added (44x50, matching the Marker size
-  // map_screen.dart already used) - kept as an explicit SizedBox here so wrapping it in a Column
-  // below can't accidentally shrink it back down to MapPinIcon's own smaller intrinsic size.
+  // an explicit SizedBox, so wrapping the pin in a Column below cannot shrink it back down to
+  // MapPinIcon's own smaller intrinsic size
   static const double pinWidth = 44;
   static const double pinHeight = 50;
   static const double labelGap = 4;
-  // approximate; only needs to be in the right ballpark since the Column below bottom-aligns its
-  // children, so any slack from an imprecise estimate just adds empty space above the label
+  // approximate: the Column below bottom-aligns its children, so slack just adds space above
   static const double labelHeight = 26;
-  // wide enough for the dot, the gap and "−20%" without the pill clipping. no longer a hard crop -
-  // MapKit rasterizes this widget at whatever size it lays out to, where flutter_map cropped a
-  // marker to the box it was given - but the number stays as the width the label was designed
-  // against, and the pin's anchor assumes the raster is symmetric about its centre.
+  // wide enough for the dot, the gap and "−20%" without the pill clipping. the pin's anchor assumes
+  // the raster is symmetric about its centre.
   static const double labeledMarkerWidth = 96;
 
   @override
@@ -146,10 +120,8 @@ class _PriceComparisonLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // neutral hairline rather than the old orange outline: the pin below is already orange, so
-    // outlining the label too made the pair read as one solid orange blob against the map. a soft
-    // shadow does the separation work instead - a map is a busy backdrop, so the pill needs some
-    // lift, just not a hard 15%-black edge.
+    // a neutral hairline rather than the old orange outline: the pin below is already orange, so
+    // outlining the label too made the pair read as one solid blob. a soft shadow separates instead.
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -160,10 +132,9 @@ class _PriceComparisonLabel extends StatelessWidget {
           BoxShadow(color: Color(0x1F101828), blurRadius: 8, offset: Offset(0, 2)),
         ],
       ),
-      // white, not tinted with the tier's soft colour: a tinted pill inside a white card would be
-      // two rounded boxes deep for four characters, and those tints are close to invisible over map
-      // tiles anyway. the saturated dot inside carries the colour instead, which is the one form of
-      // it that survives at this size.
+      // white, not tinted with the tier's soft colour: a tinted pill inside a white card is two rounded
+      // boxes deep for four characters, and those tints are near-invisible over map tiles anyway. the
+      // saturated dot inside carries the colour instead.
       child: PriceTierPinLabel(tier: tier, differencePercent: differencePercent),
     );
   }
@@ -171,21 +142,12 @@ class _PriceComparisonLabel extends StatelessWidget {
 
 // draws the teardrop: one circle, one triangle, and a white outline around the pair.
 //
-// **the triangle's corners are the circle's tangent points, not two guessed offsets**, which is
-// what makes this a teardrop rather than a ball with a spike under it. it used to put the base at a
-// fixed fraction of the width, so the sides met the circle at an angle and the join pinched to
-// almost nothing - at the size the location picker draws it (48px, and no glyph inside to look at)
-// the tip read as a separate little triangle floating below the circle.
-//
-// the geometry is the standard tangent-from-an-external-point construction. with the tip at
-// distance d below the centre of a circle of radius r, the two points where a line from the tip
-// grazes the circle are:
+// **the triangle's corners are the circle's tangent points, not two guessed offsets** - with the tip
+// at distance d below the centre of a circle of radius r, the grazing points are
 //
 //     x = cx ± r·√(1 − r²/d²)      y = cy + r²/d
 //
-// (in the right triangle centre-tangent-tip the angle at the centre has cos = r/d, because the
-// radius meets a tangent at ninety degrees.) drawing the triangle to *those* points means its sides
-// leave the circle along the circle's own direction, so the union has no corner in it.
+// so the sides leave the circle along its own direction and the union has no corner in it.
 class _PinPainter extends CustomPainter {
   static const double _strokeWidth = 2;
 

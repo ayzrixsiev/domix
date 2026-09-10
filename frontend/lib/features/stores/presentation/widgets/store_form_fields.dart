@@ -7,9 +7,8 @@ import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/widgets/pressable_scale.dart';
 import 'package:frontend/features/stores/data/shop_category.dart';
 
-// the field widgets the forms in this app share: add-store, edit-store, and the single-product
-// add/edit form under features/products. they started life private inside add_store_screen.dart;
-// once a second form needed the exact same inputs, the choice was copy them or share them, and two
+// the field widgets every form in this app shares: add-store, edit-store, and the product form.
+// they were private inside add_store_screen.dart until a second form needed the same inputs - two
 // copies of a text field drift apart the first time one of them gets a padding tweak.
 
 class StoreFormLabel extends StatelessWidget {
@@ -50,14 +49,13 @@ class StoreFormTextField extends StatelessWidget {
   final String? errorText;
   final TextInputType? keyboardType;
 
-  /// filters what can be typed at all, e.g. digits-only for a price. rejecting a character at the
-  /// keyboard is kinder than validating it after the fact - what can't be typed can't be wrong.
+  /// rejecting a character at the keyboard is kinder than validating after the fact - what cannot be
+  /// typed cannot be wrong
   final List<TextInputFormatter>? inputFormatters;
 
-  /// unit shown inside the right edge of the field - currently only "сум"/"so'm" on the price
-  /// input. it follows the app language, which is the whole reason it is a string here instead of a
-  /// currency glyph in the prefix: there is no som symbol in the icon sets we use, and the dollar
-  /// sign that used to sit there named the wrong currency in a shop in Tashkent.
+  /// unit shown inside the right edge of the field - currently only "сум"/"so'm" on the price input.
+  /// a string rather than a glyph in the prefix: there is no som symbol in the icon sets we use, and
+  /// the dollar sign that used to sit there named the wrong currency in a shop in Tashkent.
   final String? suffixText;
 
   final ValueChanged<String>? onChanged;
@@ -85,8 +83,8 @@ class StoreFormTextField extends StatelessWidget {
           fontWeight: FontWeight.w600,
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        // an unfocused field is a plain hairline, not a heavy outline - the border only gains
-        // weight and colour once the field is actually the one being edited
+        // an unfocused field is a plain hairline: the border only gains weight and colour once the field
+        // is actually the one being edited
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
           borderSide: const BorderSide(color: AppColors.hairline),
@@ -142,16 +140,15 @@ class StoreLocationTile extends StatelessWidget {
           isAccented: hasLocation || errorText != null,
           child: Row(
             children: [
-              // the icon swaps from a map pin to a filled tick the moment a location exists, and
-              // AnimatedSwitcher cross-fades between the two rather than cutting. it is the one
-              // moment this control has something to say, so it is worth a beat of motion.
+              // the icon swaps from a map pin to a filled tick the moment a location exists - the one moment
+              // this control has something to say, so it is worth a beat of motion
               AnimatedSwitcher(
                 duration: AppMotion.base,
                 switchInCurve: AppMotion.easing,
                 child: Icon(
                   hasLocation ? CupertinoIcons.checkmark_circle_fill : CupertinoIcons.map_pin_ellipse,
-                  // a key, or AnimatedSwitcher sees "an Icon" both times and never animates - the
-                  // widget type is unchanged, only its properties are
+                  // a key, or AnimatedSwitcher sees "an Icon" both times and never animates - the widget type is
+                  // unchanged, only its properties are
                   key: ValueKey(hasLocation),
                   color: hasLocation ? AppColors.primaryOrange : AppColors.textFaint,
                   size: 18,
@@ -207,13 +204,10 @@ class StoreLocationTile extends StatelessWidget {
   }
 }
 
-// the shop-category picker on the add-store form. shaped like StoreLocationTile above rather than
-// as a material DropdownButton: both fields are "tap to choose from a list that needs explaining",
-// a dropdown menu has no room for the per-category description, and one picker pattern on a form
-// beats two that look unrelated.
-//
-// there is no edit-form counterpart on purpose - the category decided which product template seeded
-// the shop's catalogue, so it is fixed once the shop exists.
+// the shop-category picker on the add-store form, shaped like StoreLocationTile rather than a
+// material DropdownButton: both are "tap to choose from a list that needs explaining", and a
+// dropdown has no room for the per-category description. no edit-form counterpart on purpose - the
+// category decided which template seeded the catalogue, so it is fixed once the shop exists.
 class StoreCategoryTile extends StatelessWidget {
   const StoreCategoryTile({
     super.key,
@@ -272,8 +266,8 @@ class StoreCategoryTile extends StatelessWidget {
                         fontWeight: category != null ? FontWeight.w600 : FontWeight.w400,
                       ),
                     ),
-                    // the catalogue size is the concrete thing the owner gets out of the
-                    // choice, so it stays visible after picking rather than only in the sheet
+                    // the catalogue size is the concrete thing the owner gets out of the choice, so it stays visible
+                    // after picking rather than only in the sheet
                     if (category != null) ...[
                       const SizedBox(height: 2),
                       Text(
@@ -315,8 +309,7 @@ class StoreCategoryTile extends StatelessWidget {
 }
 
 // the sheet StoreCategoryTile opens. a bottom sheet rather than a dialog because each row carries
-// two lines of explanation plus the catalogue size, and four of those don't fit an alert box.
-//
+// two lines of explanation plus the catalogue size, and four of those do not fit an alert box.
 // returns the picked ShopCategory through Navigator.pop, or null if dismissed.
 class ShopCategorySheet extends StatelessWidget {
   const ShopCategorySheet({super.key, required this.selected, required this.strings});
@@ -544,11 +537,9 @@ class StoreInlineErrorCard extends StatelessWidget {
   }
 }
 
-// matches the call cta on the shop card: fixed comfortable height, radius from the scale,
-// and a soft colour-matched glow instead of material's default grey elevation.
-//
-// [color] exists so the destructive variant on the edit screen is the same button in red rather
-// than a second button class that would drift from this one.
+// matches the call cta on the shop card: fixed height, radius from the scale, and a soft
+// colour-matched glow instead of material's grey elevation. [color] exists so the destructive
+// variant is the same button in red rather than a second class that would drift from this one.
 class StoreSubmitButton extends StatelessWidget {
   const StoreSubmitButton({
     super.key,
@@ -570,7 +561,7 @@ class StoreSubmitButton extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppRadius.sm),
-        // the glow is dropped while busy so the disabled state reads as genuinely inert
+        // the glow is dropped while busy, so the disabled state reads as genuinely inert
         boxShadow: isBusy ? const [] : AppShadows.accent(color),
       ),
       child: Material(
@@ -619,10 +610,9 @@ class StoreSubmitButton extends StatelessWidget {
   }
 }
 
-// the destructive counterpart to StoreSubmitButton, used at the bottom of the edit-shop and
-// edit-product forms. outlined, not a filled red slab: the strongest-looking control on a page
-// should be the one you most likely came to press, and that is "save" - this action gets its weight
-// from the confirmation dialog behind it instead.
+// the destructive counterpart to StoreSubmitButton. outlined, not a filled red slab: the
+// strongest-looking control on a page should be the one you most likely came to press, and that is
+// "save" - this gets its weight from the confirmation dialog behind it instead.
 class StoreDangerButton extends StatelessWidget {
   const StoreDangerButton({
     super.key,
@@ -682,9 +672,8 @@ class StoreDangerButton extends StatelessWidget {
   }
 }
 
-// the shop identity strip both the settings hub and the upload screen open with: those screens are
-// reached from a list where every row looks alike, and doing the wrong shop's paperwork is annoying
-// to undo. [trailing] lets the hub hang a chevron-free stat line off the same block.
+// the shop identity strip the settings hub and the upload screen open with: they are reached from a
+// list where every row looks alike, and doing the wrong shop's paperwork is annoying to undo
 class ShopIdentityCard extends StatelessWidget {
   const ShopIdentityCard({
     super.key,
@@ -760,13 +749,9 @@ class ShopIdentityCard extends StatelessWidget {
 }
 
 
-// The pressable surface behind StoreLocationTile and StoreCategoryTile.
-//
-// Both are "tap to choose something on another screen", both looked identical, and both used to be
-// a Material + InkWell that gave a faint grey ripple somewhere in the middle of a 15px-padded box.
-// On a control this large that reads as nothing happening at all - which is exactly the complaint
-// these two got. PressableScale moves the whole tile instead, and the fill deepens for the duration
-// of the press, so the feedback is the shape you touched rather than a wash inside it.
+// the pressable surface behind StoreLocationTile and StoreCategoryTile. both used to be a Material
+// + InkWell whose faint ripple in the middle of a 15px-padded box read as nothing happening at all;
+// PressableScale moves the whole tile, so the feedback is the shape you touched.
 class _FormTileSurface extends StatefulWidget {
   const _FormTileSurface({
     required this.child,
@@ -781,8 +766,8 @@ class _FormTileSurface extends StatefulWidget {
   /// hairline normally, brand orange once a value is chosen, danger while the field is in error
   final Color borderColor;
 
-  /// whether that border is the emphasised 1.5px one - true once chosen or once wrong, since both
-  /// are states the eye should be pulled to
+  /// whether that border is the emphasised 1.5px one - true once chosen or once wrong, since both are
+  /// states the eye should be pulled to
   final bool isAccented;
 
   @override
@@ -795,9 +780,9 @@ class _FormTileSurfaceState extends State<_FormTileSurface> {
   @override
   Widget build(BuildContext context) {
     return Listener(
-      // Listener rather than another GestureDetector: PressableScale below already owns the tap
-      // gesture, and two competing recognisers on the same subtree is how a tap starts getting
-      // eaten. this only observes the raw pointer to tint the fill, and never claims anything.
+      // Listener rather than another GestureDetector: PressableScale below already owns the tap gesture,
+      // and two competing recognisers on one subtree is how a tap starts getting eaten. this only
+      // observes the raw pointer to tint the fill.
       onPointerDown: (_) => setState(() => _isPressed = true),
       onPointerUp: (_) => setState(() => _isPressed = false),
       onPointerCancel: (_) => setState(() => _isPressed = false),
@@ -809,8 +794,8 @@ class _FormTileSurfaceState extends State<_FormTileSurface> {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
           decoration: BoxDecoration(
-            // primaryTint under the finger: a step towards the brand colour rather than a grey
-            // overlay, so the press looks like part of the same design as the orange border
+            // primaryTint under the finger: a step towards the brand colour rather than a grey overlay, so the
+            // press looks like part of the same design as the orange border
             color: _isPressed ? AppColors.primaryTint : AppColors.surfaceMuted,
             borderRadius: BorderRadius.circular(AppRadius.sm),
             border: Border.all(

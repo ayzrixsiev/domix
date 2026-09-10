@@ -11,10 +11,8 @@ import 'package:frontend/features/stores/presentation/widgets/store_form_fields.
 import '../controllers/stores_controller.dart';
 import 'package:frontend/core/widgets/circle_back_button.dart';
 
-// the "add store" page: shop name, contact number, and a location picked on the map.
-// no photo yet - shops get a default banner (see ShopBanner in map_screen.dart) until photo
-// upload comes back as a later feature. on success the new shop is added to StoresController's
-// list, so it shows up on the map immediately, and this screen closes back to wherever it opened from.
+// the "add store" page: shop name, contact number, and a location picked on the map. on success
+// the new shop goes into StoresController's list, so it appears on the map immediately.
 class AddStoreScreen extends StatefulWidget {
   const AddStoreScreen({super.key});
 
@@ -28,7 +26,7 @@ class _AddStoreScreenState extends State<AddStoreScreen> {
 
   LocationPickResult? _pickedLocation;
 
-  // no default: the category decides which product catalogue the new shop is seeded with and can't
+  // no default: the category decides which product catalogue the new shop is seeded with and cannot
   // be changed afterwards, so pre-selecting one would let an owner tap straight past the single
   // choice on this form with lasting consequences
   ShopCategory? _pickedCategory;
@@ -38,19 +36,16 @@ class _AddStoreScreenState extends State<AddStoreScreen> {
   String? _categoryError;
   String? _locationError;
 
-  // listen: false, and that is not a micro-optimisation - it is what makes this getter callable at
-  // all. Provider.of with listen:true asserts unless it is read during a build, so every read from a
-  // tap handler threw and the handler died before it did anything. that is exactly why the category
-  // tile "did nothing" when pressed while the location tile worked: _pickLocation never touches
-  // _strings, _pickCategory reads it on its first line.
+  // listen: false, and that is not a micro-optimisation - `Provider.of` with listen:true asserts
+  // unless it is read during a build, so every read from a tap handler threw and the handler died
+  // before doing anything. that is why the category tile "did nothing" while the location tile worked.
   AppLocalizations get _strings => Provider.of<LanguageProvider>(context, listen: false).strings;
 
   @override
   void initState() {
     super.initState();
-    // a failure from a previous visit would otherwise still be on the controller and paint an error
-    // card over a form the user hasn't even submitted yet. safe to do synchronously here: nothing
-    // has rendered this state yet, so no listener needs notifying.
+    // a failure from a previous visit would otherwise paint an error card over a form the user has not
+    // submitted. safe synchronously: nothing has rendered this state yet.
     context.read<StoresController>().resetSaveState();
   }
 
@@ -124,7 +119,7 @@ class _AddStoreScreenState extends State<AddStoreScreen> {
         ),
       );
     }
-    // on failure controller.saveFailed is now true, and build() below shows the inline error card
+    // on failure controller.saveFailed is now true, and build() shows the inline error card
   }
 
   @override
@@ -140,8 +135,8 @@ class _AddStoreScreenState extends State<AddStoreScreen> {
         centerTitle: false,
         titleSpacing: 20,
         iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
-        // the disc, not a bare chevron - see CircleBackButton for why every bar in the app needs it.
-        // leadingWidth must move with it or flutter keeps its own 56 and the title sits wrong.
+        // the disc, not a bare chevron. leadingWidth must move with it or flutter keeps its own 56 and
+        // the title sits wrong.
         leading: const CircleBackButton(),
         leadingWidth: CircleBackButton.leadingWidth,
         title: Text(

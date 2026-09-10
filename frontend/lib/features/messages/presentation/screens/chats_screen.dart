@@ -12,23 +12,13 @@ import 'package:frontend/features/messages/presentation/controllers/support_cont
 import 'package:frontend/features/messages/presentation/screens/messages_screen.dart';
 import 'package:frontend/features/profile/presentation/controllers/auth_controller.dart';
 
-/// The Сообщения tab: a **list of conversations**, one row per thread, and the conversation itself
-/// on a pushed route.
+/// The Сообщения tab: a **list of conversations**, one row per thread, with the conversation itself
+/// on a pushed route. Today the list has exactly one row - Domix support - and it is built now
+/// because the second kind of conversation would otherwise move the chat out from under a habit.
 ///
-/// **Today the list has exactly one row - Domix support - and that is the point of building it
-/// now.** The tab used to *be* the support chat, on the sound reasoning that a list of one row is a
-/// screen whose only job is to be tapped through. What that reasoning does not survive is the
-/// second kind of conversation: shop ↔ customer, and later worker ↔ client. By then the tab is a
-/// destination people have learned, and moving the chat out from under them is a change to a habit
-/// rather than to a layout - so it is worth making before either ships, not after.
-///
-/// **Nothing here fetches a list.** The row is drawn from the thread [SupportController] already
-/// holds: its last message, that message's time, and how many have arrived since the reader last
-/// had it open. A `GET /api/chats` would be a round trip to learn what the app knows. When a shop
-/// can write to a customer that stops being true, and *that* is when the endpoint earns its place.
-///
-/// It owns the same three-input poll reconciliation [MessagesScreen] does, because the preview and
-/// the unread count go stale exactly as fast as the thread does.
+/// **Nothing here fetches a list**: the row is drawn from the thread [SupportController] already
+/// holds. It owns the same three-input poll reconciliation [MessagesScreen] does, because the
+/// preview and the unread count go stale exactly as fast as the thread does.
 class ChatsScreen extends StatefulWidget {
   const ChatsScreen({
     super.key,
@@ -44,8 +34,7 @@ class ChatsScreen extends StatefulWidget {
   final double bottomPadding;
 
   /// Whether this is the tab being looked at. **`build()` running is not a visibility signal under
-  /// the shell's `IndexedStack`** (root CLAUDE.md §8), so the shell passes the edge down and this
-  /// screen hangs the poll off it.
+  /// the shell's `IndexedStack`**, so the shell passes the edge down and the poll hangs off it.
   final bool isActive;
 
   /// Sends a guest to the profile tab, where logging in actually happens.
@@ -59,9 +48,8 @@ class _ChatsScreenState extends State<ChatsScreen> with WidgetsBindingObserver {
   /// Whether the app itself is in the foreground - half of "is anybody looking at this list".
   bool _appResumed = true;
 
-  /// Whether the conversation is currently pushed on top of this screen. While it is, *it* owns the
-  /// poll and this screen must not fight it for the flag - and, more to the point, must not be
-  /// tricked by the pop into thinking nobody is watching.
+  /// Whether the conversation is pushed on top of this screen. While it is, *it* owns the poll - and
+  /// this screen must not be tricked by the pop into thinking nobody is watching.
   bool _chatIsOpen = false;
 
   /// Held rather than looked up in [dispose], where `context.read` asserts: the element's ancestors
@@ -72,8 +60,8 @@ class _ChatsScreenState extends State<ChatsScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // not straight from initState: load() notifies before its first await, and initState runs
-    // inside the build phase - that is the "setState() called during build" crash.
+    // not straight from initState: load() notifies before its first await, and initState runs inside
+    // the build phase - that is the "setState() called during build" crash
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadIfSignedIn());
   }
 
@@ -111,8 +99,7 @@ class _ChatsScreenState extends State<ChatsScreen> with WidgetsBindingObserver {
 
   void _loadIfSignedIn() {
     if (!mounted) return;
-    // listen: false - this runs from a callback, and the default listen: true *asserts* outside a
-    // build (root CLAUDE.md §8).
+    // listen: false - this runs from a callback, and the default listen: true *asserts* outside a build
     if (Provider.of<AuthController>(context, listen: false).profileState.isGuest) return;
     Provider.of<SupportController>(context, listen: false).refreshIfStale();
   }
@@ -125,12 +112,8 @@ class _ChatsScreenState extends State<ChatsScreen> with WidgetsBindingObserver {
     _support?.setWatching(widget.isActive && _appResumed && !isGuest && !_chatIsOpen);
   }
 
-  /// Opens the conversation, and re-arms this screen's poll on the way back.
-  ///
-  /// **The explicit re-arm is not belt and braces.** [MessagesScreen.dispose] stops the poll, which
-  /// is right when it was pushed as a route - but this list is still on screen underneath and still
-  /// wants a live preview, and popping a route does not rebuild the one below it. Without this the
-  /// row would freeze the moment somebody backed out of the chat.
+  /// Opens the conversation, and re-arms this screen's poll on the way back - not belt and braces:
+  /// [MessagesScreen.dispose] stops the poll, and popping a route does not rebuild the one below it.
   Future<void> _openSupportChat() async {
     _chatIsOpen = true;
     await Navigator.of(context).push<void>(
@@ -149,8 +132,8 @@ class _ChatsScreenState extends State<ChatsScreen> with WidgetsBindingObserver {
     final strings = Provider.of<LanguageProvider>(context).strings;
     final isGuest = context.watch<AuthController>().profileState.isGuest;
 
-    // after the frame, never during it: this starts and stops a timer. `context.watch` above is
-    // what makes a login or a logout reach it at all - the rebuild is the signal.
+    // after the frame, never during it: this starts and stops a timer. `context.watch` above is what
+    // makes a login or a logout reach it at all - the rebuild is the signal.
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncWatching(isGuest));
 
     final body = SafeArea(
@@ -186,9 +169,8 @@ class _ChatsScreenState extends State<ChatsScreen> with WidgetsBindingObserver {
     );
   }
 
-  /// The list. A `ListView` rather than a `Column` for one row, because the second and third rows
-  /// are the whole reason this screen exists and a list that only scrolls once it has to is not a
-  /// cost worth avoiding.
+  /// A `ListView` rather than a `Column` for one row, because the second and third rows are the whole
+  /// reason this screen exists.
   Widget _threads(AppLocalizations strings) {
     final controller = context.watch<SupportController>();
     final last = controller.lastMessage;
@@ -199,9 +181,8 @@ class _ChatsScreenState extends State<ChatsScreen> with WidgetsBindingObserver {
         ChatListRow(
           icon: LucideIcons.life_buoy,
           title: strings.supportSenderLabel,
-          // the thread's own last line, prefixed when it was the reader's - without it a row shows
-          // your own question back to you as though it had been answered. before there is anything
-          // to preview, the chat's subtitle says what this conversation is for.
+          // the thread's own last line, prefixed when it was the reader's - without it a row shows your own
+          // question back to you as though it had been answered
           preview: last == null
               ? strings.supportChatSubtitle
               : '${last.fromSupport ? '' : strings.chatPreviewYou}${last.body}',
@@ -213,8 +194,7 @@ class _ChatsScreenState extends State<ChatsScreen> with WidgetsBindingObserver {
     );
   }
 
-  /// Time for today, «Вчера» for yesterday, a date before that - what a chat list shows, and the
-  /// reason a row can carry a timestamp at all in the width it has.
+  /// Time for today, «Вчера» for yesterday, a date before that - what fits in the width a row has.
   String _timeLabel(DateTime at, AppLocalizations strings) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -230,8 +210,7 @@ class _ChatsScreenState extends State<ChatsScreen> with WidgetsBindingObserver {
 }
 
 /// The tab's title block. Not an `AppBar`: inside the shell this screen is one child of an
-/// `IndexedStack` with no Scaffold of its own, and a header drawn here is the same header in both
-/// modes.
+/// `IndexedStack` with no Scaffold of its own, and a header drawn here is the same in both modes.
 class _ListHeader extends StatelessWidget {
   const _ListHeader({required this.title, required this.subtitle});
 
@@ -263,13 +242,9 @@ class _ListHeader extends StatelessWidget {
   }
 }
 
-/// One conversation in the list: avatar, name, the last line, when it was, and how much of it is
-/// new.
-///
-/// **Written as a public widget with no idea what a support thread is**, because the second and
-/// third callers are a shop and a worker, and the difference between those rows is a glyph, a name
-/// and a tap target. What must not differ is the layout - a chat list where one row is taller than
-/// another is a list that looks broken before it is read.
+/// One conversation in the list. **Written with no idea what a support thread is**, because the
+/// second and third callers are a shop and a worker - what must not differ is the layout, since a
+/// chat list where one row is taller than another looks broken before it is read.
 class ChatListRow extends StatelessWidget {
   const ChatListRow({
     super.key,
@@ -345,9 +320,8 @@ class ChatListRow extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        // an unread row is darker and heavier, which is the second channel beside
-                        // the badge - a count alone is a small orange dot in the corner of a row
-                        // that otherwise looks read
+                        // an unread row is darker and heavier - the second channel beside the badge, since a count alone
+                        // is a small orange dot in the corner of a row that otherwise looks read
                         color: _hasUnread ? AppColors.textDark : AppColors.textGrey,
                         fontSize: 12.5,
                         height: 1.35,
@@ -371,9 +345,8 @@ class ChatListRow extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 7),
-                  // the badge disappears entirely at zero rather than drawing a "0" - the same rule
-                  // the admin panel's sidebar follows, and for the same reason: a badge that is
-                  // always there is a badge nobody reads
+                  // the badge disappears entirely at zero rather than drawing a "0": a badge that is always there is
+                  // a badge nobody reads
                   if (_hasUnread)
                     Container(
                       constraints: const BoxConstraints(minWidth: 20),

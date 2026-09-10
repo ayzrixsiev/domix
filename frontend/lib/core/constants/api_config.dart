@@ -1,6 +1,5 @@
-// the go backend's address root, e.g. "http://localhost:8080" or an ngrok url during local testing.
-// AuthService reads the same API_BASE_URL env value but expects the "/api/auth" suffix baked in already,
-// so here we strip that suffix back off to get a plain server root other features (shops, images) can build on
+// the go backend's address root. AuthService reads the same API_BASE_URL but expects "/api/auth"
+// baked in, so that suffix is stripped back off here.
 class ApiConfig {
   static const String _authBaseUrl = String.fromEnvironment(
     'API_BASE_URL',

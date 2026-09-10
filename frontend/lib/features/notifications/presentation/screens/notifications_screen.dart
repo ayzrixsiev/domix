@@ -6,12 +6,9 @@ import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
 import 'package:frontend/core/widgets/circle_back_button.dart';
 
-// The destination behind the home header's bell.
-//
-// Nothing in the app produces a notification yet, so this is permanently empty - but an icon that
-// does nothing when tapped reads as broken, whereas an empty list reads as "nothing yet". It uses
-// EmptyStateView, the same widget the tickets, messages and my-shops "nothing here" screens use, so
-// all four look like the same app. The glyph matches the header bell that opens this screen.
+// The destination behind the home header's bell. Nothing produces a notification yet, so this is
+// permanently empty - but an icon that does nothing when tapped reads as broken, whereas an empty
+// list reads as "nothing yet".
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
 
@@ -28,8 +25,8 @@ class NotificationsScreen extends StatelessWidget {
         centerTitle: false,
         titleSpacing: 20,
         iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
-        // the disc, not a bare chevron - see CircleBackButton for why every bar in the app needs it.
-        // leadingWidth must move with it or flutter keeps its own 56 and the title sits wrong.
+        // the disc, not a bare chevron. leadingWidth must move with it or flutter keeps its own 56 and
+        // the title sits wrong.
         leading: const CircleBackButton(),
         leadingWidth: CircleBackButton.leadingWidth,
         title: Text(

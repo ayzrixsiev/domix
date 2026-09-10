@@ -4,23 +4,21 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../data/auth_service.dart';
 import '../screens/profile_screen.dart';
 
-// auth manager that decides when to init handshake, process incoming data and notify ui components to change
+// decides when to start the telegram handshake, processes what comes back, and tells the ui
 class AuthController extends ChangeNotifier {
 
-  // private, once assigned to the object unchangeable controller which is created once at the app start
+  // one controller for the app's life; the factory hands back the same instance every time
   static final AuthController _instance = AuthController._internal();
 
-  // factory returns the same controller every time it is called like this AuthController(), no copies made
   factory AuthController() => _instance;
 
   AuthController._internal() {
-    // the backend has no way to reach the app, so "your account is gone" arrives as a 401 on the
-    // next request a repository happens to make. this is where that turns into a logout.
+    // the backend cannot reach the app, so "your account is gone" arrives as a 401 on whatever
+    // request a repository happens to make next. this is where that turns into a logout.
     AuthService.onSessionInvalidated = _onSessionInvalidated;
 
-    // and this is the other half: re-check whenever the app comes back to the foreground, so a user
-    // deleted while their phone was in a pocket finds a guest screen when they take it out, instead
-    // of a profile that stops working the first time they press something.
+    // the other half: re-check on every return to the foreground, so an account deleted while the
+    // phone was in a pocket is already signed out when it comes back out.
     _lifecycle = _AppLifecycleWatcher(onResumed: verifySession);
     WidgetsBinding.instance.addObserver(_lifecycle);
   }
@@ -32,62 +30,56 @@ class AuthController extends ChangeNotifier {
   bool _isPolling = false;
   bool _isLoading = false;
 
-  // deliberately *not* _isLoading. that flag draws the "open telegram and share your number"
-  // overlay, which is the wrong thing to show somebody who just asked to be deleted.
+  // deliberately *not* _isLoading: that flag draws the "open telegram and share your number" overlay,
+  // which is the wrong thing to show somebody who just asked to be deleted
   bool _isDeletingAccount = false;
   String? _loginErrorDetail;
 
-  // holds current ui state for the profilescreen
+  // a session died under a request the user made themselves, and nobody has told them yet.
+  // SessionExpiryGuard watches this: it shows the dialog and then pops back to the shell.
+  bool _sessionExpiredUnseen = false;
+
+  // current ui state for ProfileScreen
   ProfileViewState _profileState = const ProfileViewState.guest();
 
-  /// Why the last [deleteAccount] failed, as a machine-readable code the screen localizes:
-  /// `timeout` when the server never answered, `server_error` for anything else. Null when the last
-  /// attempt succeeded, or when none has been made.
-  ///
-  /// A code rather than a sentence, matching the contract the shop and product endpoints already
-  /// use: this controller must not hold russian text, or the message would be frozen in whichever
-  /// language happened to be selected when the request was made.
+  /// Why the last [deleteAccount] failed, as a machine-readable code the screen localizes. A code
+  /// rather than a sentence: russian text held here would be frozen in whichever language happened to
+  /// be selected when the request was made.
   String? _deleteAccountErrorCode;
 
   bool get isLoading => _isLoading;
   bool get isDeletingAccount => _isDeletingAccount;
-  /// The raw reason a login attempt failed - **for the log and for nothing else.**
-  ///
-  /// It is deliberately not called `errorMessage`: it is an English exception string
-  /// (`Failed to initialize login session: 502`, `Could not open Telegram`), assembled for whoever
-  /// debugs it. `ProfileScreen` printed it verbatim in the waiting overlay for a while, which is the
-  /// same class of bug as `_showErrorDialog` rendering the login copy for a failed deletion
-  /// (CLAUDE.md §8): **a field whose name promises a sentence the user can read, holding one they
-  /// cannot.** The screen shows written copy and passes this to `debugPrint`.
-  ///
-  /// Non-null is still the *signal* that the attempt failed, which is what the overlay reads it for.
+  /// The raw reason a login attempt failed - **for the log and for nothing else**: it is an English
+  /// exception string assembled for whoever debugs it, and it ended up drawn in the waiting overlay
+  /// once. Non-null is still the *signal* that the attempt failed.
   String? get loginErrorDetail => _loginErrorDetail;
   String? get deleteAccountErrorCode => _deleteAccountErrorCode;
   ProfileViewState get profileState => _profileState;
+  bool get sessionExpiredUnseen => _sessionExpiredUnseen;
+
+  // the guard calls this once the dialog has been read, so it is announced exactly once
+  void acknowledgeSessionExpiry() {
+    if (!_sessionExpiredUnseen) return;
+    _sessionExpiredUnseen = false;
+    notifyListeners();
+  }
 
   /// Called once the session has ended, with whether the account itself was destroyed.
   ///
-  /// **A callback, not an import.** `StoresController` holds a snapshot of every shop on the map,
-  /// and deleting an account destroys that user's shops server-side - so those pins are wrong the
-  /// instant this fires, and nothing else would ever tell the map so. Wiring it as a field rather
-  /// than importing the stores feature keeps `profile/` from depending on `stores/`, the same way
-  /// [AuthService.onSessionInvalidated] keeps `data/` from depending on `presentation/`. `main()`
-  /// connects the two ends.
-  ///
-  /// The flag matters: a plain logout leaves every shop standing and ends only *our* right to
-  /// manage them, while a deletion takes them off the map for everybody.
+  /// **A callback, not an import**, which keeps `profile/` from depending on `stores/`; `main()`
+  /// connects the two ends. The flag matters: a plain logout leaves every shop standing, while a
+  /// deletion takes them off the map for everybody.
   void Function(bool accountDeleted)? onSessionEnded;
 
-  // cold boot check: read hardware storage on startup to instantly restore user state without network or backend interaction
+  // cold boot: read hardware storage to restore user state with no network round trip
   Future<void> checkExistingLogin() async {
     try {
       final token = await _authService.getToken();
       if (token == null || token.isEmpty) return;
 
-      // **expiry is checked before anything is drawn, and without asking the server.** the `exp`
-      // claim is plain readable JSON inside the token, so four-months-later is knowable offline -
-      // and a user whose token ran out must not see their own profile for the half second it takes
-      // a network call to fail.
+      // **expiry is checked before anything is drawn, and without asking the server.** the `exp` claim is
+      // readable offline, and a user whose token ran out must not see their own profile for the half
+      // second it takes a network call to fail.
       if (AuthService.isTokenExpired(token)) {
         await logout();
         return;
@@ -97,34 +89,29 @@ class AuthController extends ChangeNotifier {
       final name = await _authService.getName() ?? 'Domix User';
       final phone = await _authService.getPhone() ?? '';
 
-      // instantly hydrate profile state from local cache
+      // hydrate profile state from the local cache
       _applyAccount(role: role, name: name, phone: phone);
     } catch (_) {
-      // if storage read fails or is corrupted, safely remain in guest state
+      // storage read failed or is corrupted: stay in the guest state
     }
   }
 
-  /// Asks the server whether this session is still real, and updates what it says about us.
+  /// Asks the server whether this session is still real, on launch and on every return to the
+  /// foreground - which is what makes a deleted account land on the guest screen by itself. The cached
+  /// hydration happens first on purpose, so a cold start does not wait on a check that almost always
+  /// passes.
   ///
-  /// **Called after [checkExistingLogin] on launch and again on every return to the foreground**,
-  /// which is what makes a deleted account land on the guest screen by itself rather than on the
-  /// next thing the user taps. The cached hydration above happens first on purpose: this is a
-  /// network round trip, and blocking the first frame on it would give every cold start a spinner
-  /// to pay for a check that almost always passes.
-  ///
-  /// **Only [SessionExpiredException] signs anyone out.** A timeout, a 500, a tunnel - none of those
-  /// are evidence about the token, and treating them as such would log people out of a working
-  /// account every time the server hiccuped.
+  /// **Only [SessionExpiredException] signs anyone out** - a timeout, a 500 or a tunnel is not
+  /// evidence about the token.
   Future<void> verifySession() async {
     if (_profileState.isGuest) return;
 
     try {
       final me = await _authService.fetchMe();
 
-      // the server's answer wins over the cache. this is also how a role change reaches an app that
-      // has been installed since before it: a customer who registered a shop becomes a shop_owner
-      // during the telegram flow, and until this existed the owner screens stayed hidden until they
-      // signed out and back in.
+      // the server's answer wins over the cache. this is also how a role change reaches an installed app:
+      // a customer who registers a shop becomes a shop_owner during the telegram flow, and the owner
+      // screens used to stay hidden until they signed out and back in.
       await _authService.saveSession(
         token: (await _authService.getToken())!,
         role: me.role,
@@ -133,16 +120,22 @@ class AuthController extends ChangeNotifier {
       );
       _applyAccount(role: me.role, name: me.name, phone: me.phone);
     } on SessionExpiredException {
-      // fetchMe already fired onSessionInvalidated; logging out twice is harmless and this keeps the
-      // guarantee local to the caller that can see it
+      // fetchMe already fired onSessionInvalidated; logging out twice is harmless and keeps the guarantee
+      // local to the caller that can see it
       await logout();
     } catch (_) {
-      // network trouble. keep the cached session exactly as it was.
+      // network trouble: keep the cached session exactly as it was
     }
   }
 
+  /// Whether a server role may own and edit shops: `shop_owner`, **and `admin` too**. The backend
+  /// authorizes the two identically, and the Telegram handler never demotes an admin - so an admin who
+  /// signed up as «Владелец магазина» stays one, and comparing against the single literal `shop_owner`
+  /// drew them the customer profile with no way in to shops they already own.
+  static bool canManageShops(String role) => role == 'shop_owner' || role == 'admin';
+
   void _applyAccount({required String role, required String name, required String phone}) {
-    _profileState = role == 'shop_owner'
+    _profileState = canManageShops(role)
         ? ProfileViewState.vendor(
             initials: _getInitials(name),
             fullName: name,
@@ -156,7 +149,7 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // handshake orchestration, start login pipeline by sending name and role to golang and open telegram app
+  // start the login pipeline: send name and role to the backend, then open telegram
   Future<void> startTelegramLogin({
     required String name, 
     required String role,
@@ -167,21 +160,13 @@ class AuthController extends ChangeNotifier {
       _loginErrorDetail = null;
       notifyListeners();
 
-      // step 1: hit go backend /init
+      // step 1: hit /init
       final initResult = await _authService.initSession(name: name, role: role);
 
-      // step 2: open telegram app
-      //
-      // launched directly rather than behind a canLaunchUrl gate, and the gate is what broke login
-      // on every real phone. two things were wrong with it. **canLaunchUrl asks "can anything on
-      // this device open an https URL", which is not the question** - and on Android 11+ it answers
-      // false unless the manifest declares a <queries> intent for VIEW+https, which ours did not, so
-      // it failed with Telegram installed and a browser sitting right there. And the message it
-      // threw named the wrong cause: the t.me link is an ordinary https URL, so a phone *without*
-      // Telegram opens Telegram's own web preview rather than failing, which is exactly why the
-      // documented deep-link format is used instead of the tg:// scheme.
-      //
-      // launchUrl returns false (or throws) when nothing handled it, which is the real signal.
+      // step 2: open telegram, launched directly rather than behind a canLaunchUrl gate - on Android 11+
+      // that answers false unless the manifest declares a <queries> intent for VIEW+https, which broke
+      // login on every real phone. the t.me link is an ordinary https url (a phone without telegram opens
+      // its web preview), and launchUrl returning false or throwing is the real signal.
       final uri = Uri.parse(initResult.telegramUrl);
       final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!opened) {
@@ -198,13 +183,13 @@ class AuthController extends ChangeNotifier {
     }
   }
 
-  // ask backend whether login was successful every 2 seconds 60 times at max
+  // ask the backend whether the login completed, every 2 seconds, 60 times at most
   void _startPolling(String sessionId, String userName, VoidCallback onSuccess) {
     _cancelPolling(); // kill any polling loops before starting new
 
     _isPolling = true;
 
-    // it runs polling in a separate async background thread to avoid overlapping requests
+    // a separate async loop, so requests cannot overlap
     () async {
       const maxAttempts = 60;
       int attempts = 0;
@@ -215,14 +200,12 @@ class AuthController extends ChangeNotifier {
           final result = await _authService.checkStatus(sessionId);
 
           if (result.isSuccess && result.token != null) {
-            // stop polling
             _isPolling = false;
 
             final displayName = result.name ?? userName;
             final displayPhone = result.phone ?? '';
             final displayRole = result.role ?? 'customer';
 
-            // persist session securely
             await _authService.saveSession(
               token: result.token!,
               role: displayRole,
@@ -230,31 +213,18 @@ class AuthController extends ChangeNotifier {
               phone: displayPhone,
             );
 
-            // update state
-            if (displayRole == 'shop_owner') {
-              _profileState = ProfileViewState.vendor(
-                initials: _getInitials(displayName),
-                fullName: displayName,
-                phoneNumber: displayPhone,
-              );
-            } else {
-              _profileState = ProfileViewState.client(
-                initials: _getInitials(displayName),
-                fullName: displayName,
-                phoneNumber: displayPhone,
-              );
-            }
-
             _isLoading = false;
-            notifyListeners();
+            // the same mapping the cached and /api/me paths use, rather than a second copy of the role
+            // comparison - it was a second copy, and only one of the two learned about `admin`.
+            _applyAccount(role: displayRole, name: displayName, phone: displayPhone);
             onSuccess();
             return;
           }
         } catch (_) {
-          // ignore temporary errors; continue polling
+          // ignore temporary errors and keep polling
         }
 
-        // wait between attempts; check cancellation flag while waiting
+        // wait between attempts, checking the cancellation flag while waiting
         for (int i = 0; i < 20; i++) {
           if (!_isPolling) break;
           await Future.delayed(const Duration(milliseconds: 100));
@@ -262,7 +232,7 @@ class AuthController extends ChangeNotifier {
       }
 
       if (_isPolling) {
-        // max attempts reached or was not successful
+        // max attempts reached, or it never succeeded
         _isPolling = false;
         _isLoading = false;
         notifyListeners();
@@ -274,48 +244,39 @@ class AuthController extends ChangeNotifier {
     _isPolling = false;
   }
 
-  // dismiss the current error once the user has read it and pressed ok, so it doesn't linger forever
+  // dismiss the current error once the user has read it, so it doesn't linger forever
   void clearError() {
     _loginErrorDetail = null;
     notifyListeners();
   }
 
-  /// The server told us this token is dead - wipe it and drop to the guest state.
-  ///
-  /// Separate from [logout] only in how it is reached: this one is not a button, it fires from
-  /// whichever repository happened to make the request that came back 401. Guarded against firing
-  /// twice, because several repositories can be in flight at once and each of them will report the
-  /// same 401 - without the guard the profile screen would rebuild once per request.
-  void _onSessionInvalidated() {
+  // the server told us this token is dead. not a button - it fires from whichever repository made the
+  // request that came back 401, and the guest check keeps several in-flight 401s to one logout.
+  // silent is the launch/resume check: nobody asked for it, so it signs out without a word.
+  void _onSessionInvalidated({required bool silent}) {
     if (_profileState.isGuest) return;
+    if (!silent) _sessionExpiredUnseen = true;
     unawaited(logout());
   }
 
-  // wipe local storage and reset interface back to guest state
+  // wipe local storage and reset the interface back to guest
   Future<void> logout({bool accountDeleted = false}) async {
     _cancelPolling();
     _isLoading = false;
     _loginErrorDetail = null;
     await _authService.logout();
     _profileState = const ProfileViewState.guest();
-    // fired before notifyListeners, so whatever rebuilds on the line below already sees the cleared
-    // shop lists. the other order paints one frame of the old owner's shops onto the guest screen -
-    // brief, but it is exactly the frame somebody screenshots.
+    // fired before notifyListeners, so whatever rebuilds below already sees the cleared shop lists -
+    // the other order paints one frame of the old owner's shops onto the guest screen
     onSessionEnded?.call(accountDeleted);
     notifyListeners();
   }
 
   /// Destroys the account on the server, then does everything [logout] does.
   ///
-  /// **Server first, phone second, and the order is the whole design.** Wiping local storage before
-  /// the request would throw away the token the request needs; wiping it after a *failed* request
-  /// would leave the user signed out of an account that still exists, with their shops still on the
-  /// map and no session to try again with. So nothing local is touched until the server has
-  /// confirmed, and a failure leaves the app exactly as it was.
-  ///
-  /// Returns true when the account is gone. The caller shows the error itself rather than reading
-  /// [loginErrorDetail], because this is a modal flow with its own dialog - routing it through the
-  /// shared error field would paint it over the profile screen after the sheet has closed.
+  /// **Server first, phone second, and the order is the whole design**: wiping storage first throws
+  /// away the token the request needs, and wiping it after a *failed* request signs the user out of an
+  /// account that still exists. Returns true when the account is gone; the caller shows the error.
   Future<bool> deleteAccount() async {
     if (_isDeletingAccount) return false;
 
@@ -325,28 +286,25 @@ class AuthController extends ChangeNotifier {
 
     try {
       await _authService.deleteAccount();
-      // `accountDeleted: true` is what takes this owner's pins off the map. a plain logout must not
-      // do that - the shops are still there, they are simply no longer ours to edit.
+      // `accountDeleted: true` is what takes this owner's pins off the map. a plain logout must not do
+      // that - the shops are still there, they are simply no longer ours to edit.
       await logout(accountDeleted: true);
       return true;
     } on TimeoutException catch (e) {
-      // its own code, because it is its own instruction: the request may well have reached the
-      // server, so "press Удалить again" is the right advice and "check your connection" is not.
-      // the same distinction ProductsController draws for a save that ran out of time.
+      // its own code, because it is its own instruction: the request may well have reached the server, so
+      // "press Удалить again" is the right advice and "check your connection" is not
       debugPrint('deleteAccount timed out: $e');
       _deleteAccountErrorCode = 'timeout';
       return false;
     } catch (e) {
-      // logged, not swallowed. this used to catch into `_` and return false, so the one string that
-      // explains a failed deletion existed for a microsecond inside a catch block and no human ever
-      // saw it - the same bug ProductsController._mutate was fixed for.
+      // logged, not swallowed: this used to catch into `_`, so the one string explaining a failed deletion
+      // existed for a microsecond inside a catch block and no human ever saw it
       debugPrint('deleteAccount failed: $e');
       _deleteAccountErrorCode = 'server_error';
       return false;
     } finally {
-      // in the success case logout() has already notified; this runs after it and is what clears the
-      // spinner. `finally` rather than a line in each branch, so an exception type nobody predicted
-      // cannot leave the button disabled forever.
+      // `finally` rather than a line in each branch, so an exception type nobody predicted cannot leave
+      // the button disabled forever
       _isDeletingAccount = false;
       notifyListeners();
     }
@@ -361,7 +319,7 @@ class AuthController extends ChangeNotifier {
     return name.substring(0, name.length > 1 ? 2 : 1).toUpperCase();
   }
 
- // right before removing auth controller, turn off polling
+ // stop polling before the controller goes away
   @override
   void dispose() {
     _cancelPolling();
@@ -370,11 +328,8 @@ class AuthController extends ChangeNotifier {
   }
 }
 
-/// Turns "the app came back to the foreground" into a callback.
-///
-/// A separate object rather than making AuthController itself a WidgetsBindingObserver: the observer
-/// mixin would drag fifteen lifecycle methods the controller has no opinion about into a class whose
-/// job is the login state machine.
+/// Turns "the app came back to the foreground" into a callback. A separate object, so the observer
+/// mixin's fifteen lifecycle methods do not land on a class whose job is the login state machine.
 class _AppLifecycleWatcher extends WidgetsBindingObserver {
   _AppLifecycleWatcher({required this.onResumed});
 

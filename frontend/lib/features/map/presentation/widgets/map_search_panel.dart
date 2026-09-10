@@ -8,19 +8,12 @@ import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/features/map/data/geocoding_service.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 
-// The map's search field and its results panel.
+// The map's search field and its results panel, searching two sources at once: **shops** are
+// already in memory, so they match synchronously on every keystroke, while **addresses** come from
+// Nominatim over HTTP and are debounced to fit their ~1 request/second free tier.
 //
-// It searches two sources at once, because they behave very differently:
-//
-//   * **Shops** are already in memory (StoresController loaded them for the pins), so they are
-//     matched synchronously on every keystroke. Instant, free, and works with no network.
-//   * **Addresses** come from Nominatim over HTTP, so the query is debounced and only sent once
-//     it is long enough to be worth a request - their free tier asks for roughly one request per
-//     second, and firing on every keystroke would blow straight through that.
-//
-// The widget owns the text state and reports only *selections* upward. That keeps MapScreen
-// concerned with moving the camera and opening sheets, rather than with text editing - and it means
-// this panel can later be reused (e.g. on the Search tab) without dragging map logic along with it.
+// It owns the text state and reports only *selections* upward, which keeps MapScreen concerned with
+// the camera and the sheets rather than with text editing.
 class MapSearchPanel extends StatefulWidget {
   const MapSearchPanel({
     super.key,
@@ -366,9 +359,8 @@ class _ResultsCard extends StatelessWidget {
     );
   }
 
-  // nominatim returns the whole administrative chain ("Amir Temur ko'chasi, Yunusobod, Toshkent,
-  // 100000, O'zbekiston"). the first segment is the part a person actually recognises, so it becomes
-  // the title and the full string stays underneath as context.
+  // nominatim returns the whole administrative chain; the first segment is the part a person actually
+  // recognises, so it becomes the title and the full string stays underneath as context
   static String _shortPlaceName(String displayName) {
     final head = displayName.split(',').first.trim();
     return head.isEmpty ? displayName : head;

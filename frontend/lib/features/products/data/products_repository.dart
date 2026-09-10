@@ -5,24 +5,16 @@ import 'package:frontend/core/network/api_get.dart';
 import 'package:frontend/features/profile/data/auth_service.dart';
 import 'product_model.dart';
 
-// talks to the go backend's single-product endpoints (backend/internal/endpoints/product_crud.go).
-// this file used to be a hardcoded stub returning one "Demo Product"; if anything elsewhere still
-// describes it that way, that note is stale.
-//
-//   GET    /api/shops/{id}/products  - public, no token: a customer browsing the map has no account
-//   POST   /api/shops/{id}/products  - owner adds one of their own products
-//   PUT    /api/products/{id}        - owner edits one product
-//   DELETE /api/products/{id}        - owner removes one of their own
-//   POST   /api/products/{id}/image  - owner uploads or replaces the product's photo (multipart)
-//   DELETE /api/products/{id}/image  - owner removes it
+// the go backend's single-product endpoints (backend/internal/endpoints/product_crud.go). the shop
+// catalogue GET is public - a customer browsing the map has no account - and the five writes are
+// the owner's: create, update, delete, and upload/remove one product photo (multipart).
 class ProductsRepository {
   final AuthService _authService;
 
   ProductsRepository({AuthService? authService})
       : _authService = authService ?? AuthService();
 
-  // built per call rather than kept as static fields like StoresRepository's, since every one of
-  // these urls carries an id
+  // built per call rather than kept as static fields, since every one of these urls carries an id
   static Uri _shopProductsUri(int shopId) =>
       Uri.parse('${ApiConfig.serverRoot}/api/shops/$shopId/products');
   static Uri _productUri(int productId) =>
@@ -30,13 +22,9 @@ class ProductsRepository {
   static Uri _productImageUri(int productId) =>
       Uri.parse('${ApiConfig.serverRoot}/api/products/$productId/image');
 
-  /// How long a photo upload may take.
-  ///
-  /// **Three times the other calls here, and that is the point of writing it out.** The rest of this
-  /// file sends a few hundred bytes of json; this pushes a few hundred *kilobytes* up a connection
-  /// whose upstream is the slow direction - a phone on a weak 3G cell can spend twenty seconds on it
-  /// honestly. Ten seconds would report a working upload as a failure, and the owner would retry,
-  /// which sends the same photo again over the same tired link.
+  /// Three times the other calls here: the rest of this file sends a few hundred bytes of json, and
+  /// this pushes a few hundred *kilobytes* up the slow direction of a connection. Ten seconds would
+  /// report a working upload as a failure, and the retry sends the same photo over the same link.
   static const Duration _uploadTimeout = Duration(seconds: 30);
 
   /// every product in one shop. public - this is what fills the grid on a shop's card, which any
@@ -116,13 +104,10 @@ class ProductsRepository {
 
   /// Uploads one photo and returns the product the server saved it against.
   ///
-  /// Multipart rather than a base64 field on [updateProduct], because that is what the endpoint
-  /// takes and because a photo is saved the moment it is picked while the rest of the form waits for
-  /// «Сохранить» - see backend/internal/endpoints/product_image.go.
-  ///
-  /// The response is the whole product, not just a url, so the caller replaces its cached copy the
-  /// same way it does after any other mutation and cannot end up with a photo attached to a stale
-  /// price.
+  /// Multipart rather than a base64 field on [updateProduct], because that is what the endpoint takes
+  /// and because a photo is saved the moment it is picked while the rest of the form waits for
+  /// «Сохранить». The response is the whole product, so the caller cannot end up with a photo attached
+  /// to a stale price.
   Future<Product> uploadProductImage({required int productId, required String filePath}) async {
     final token = await _requireToken();
 
@@ -142,11 +127,9 @@ class ProductsRepository {
     return Product.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  /// Takes the owner's photo off a product.
-  ///
-  /// The product comes back with whatever photo it should have *now*, which for a row seeded from a
-  /// category template is the catalogue's own shot rather than nothing - the server decides that,
-  /// so the app never has to know which products have a default to fall back to.
+  /// Takes the owner's photo off a product. The product comes back with whatever photo it should have
+  /// *now*, which for a seeded row is the catalogue's own shot - the server decides that, so the app
+  /// never has to know which products have a default to fall back to.
   Future<Product> removeProductImage(int productId) async {
     final token = await _requireToken();
 
@@ -171,9 +154,8 @@ class ProductsRepository {
   // a failed request should never surface as a raw decode crash, so anything unparseable collapses
   // into the same generic code the ui already knows how to render
   ProductMutationException _exceptionFrom(http.Response response) {
-    // a 401 means the stored token will never work again - the account was deleted, or the
-    // signature expired. sign out here rather than in each caller: every failed authenticated
-    // request in this file already funnels through this one function.
+    // a 401 means the stored token will never work again. signing out here keeps the rule in the one
+    // place every failed authenticated request in this file already funnels through.
     AuthService.handleUnauthorized(response);
 
     try {

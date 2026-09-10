@@ -5,22 +5,9 @@ import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import '../../data/product_category.dart';
 
-/// The category picker on the product form: the twelve shared categories, revealed **in place**.
-///
-/// Three shapes have been tried here and the reasons matter.
-///
-/// It began as a free-text field, which is what made the column useless as data - two spellings of
-/// "Крепёж" were two groups, and no home-screen tile could ever match either.
-///
-/// It then became a Material `DropdownButtonFormField`, which fixed the data but not the feel: a
-/// Material dropdown opens as a menu overlay sized to its longest item, and with twelve rows that is
-/// a slab covering most of the screen, floating over the form with no visible relationship to the
-/// field that opened it.
-///
-/// It now expands downward inside the form, the same way the "Управление магазинами" accordion on the
-/// profile screen does - a chevron that rotates a quarter turn to point at what it revealed, and an
-/// `AnimatedSize` that grows the panel out from under the header. The options push the rest of the
-/// form down rather than covering it, so the field you are editing never leaves the page.
+/// The category picker on the product form: the twelve shared categories, revealed **in place**. A
+/// Material `DropdownButtonFormField` opens as an overlay sized to its longest item, which with
+/// twelve rows is a slab over most of the screen; this expands downward inside the form instead.
 class ProductCategoryPicker extends StatefulWidget {
   const ProductCategoryPicker({
     super.key,
@@ -42,23 +29,23 @@ class ProductCategoryPicker extends StatefulWidget {
 class _ProductCategoryPickerState extends State<ProductCategoryPicker> {
   bool _isExpanded = false;
 
-  /// anchors the scroll-into-view below. the panel can be taller than what is left of the screen
-  /// under the header, so opening it without this would unfurl the list mostly below the fold.
+  /// anchors the scroll-into-view below: the panel can be taller than what is left of the screen, so
+  /// opening it without this would unfurl the list mostly below the fold
   final _fieldKey = GlobalKey();
 
   void _toggle() {
     setState(() => _isExpanded = !_isExpanded);
 
     if (!_isExpanded) return;
-    // after the frame that starts the expansion, not before it: ensureVisible measures the widget,
-    // and at the moment of the tap it is still collapsed to nothing
+    // after the frame that starts the expansion, not before it: ensureVisible measures the widget, and
+    // at the moment of the tap it is still collapsed to nothing
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final context = _fieldKey.currentContext;
       if (context == null) return;
       Scrollable.ensureVisible(
         context,
-        // 0 = bring the field's top edge to the top of the viewport, so the list unfurls into the
-        // space below it rather than off the bottom of the screen
+        // 0 = bring the field's top edge to the top of the viewport, so the list unfurls into the space
+        // below it rather than off the bottom of the screen
         alignment: 0,
         duration: AppMotion.base,
         curve: AppMotion.easing,
@@ -76,8 +63,7 @@ class _ProductCategoryPickerState extends State<ProductCategoryPicker> {
     final selected = widget.value;
     final hasError = widget.errorText != null;
 
-    // orange while open or once chosen: both are states worth pulling the eye to, and it matches
-    // what StoreCategoryTile does on the add-store form
+    // orange while open or once chosen: both are states worth pulling the eye to
     final borderColor = hasError
         ? AppColors.danger
         : (_isExpanded || selected != null ? AppColors.primaryOrange : AppColors.hairline);
@@ -86,8 +72,8 @@ class _ProductCategoryPickerState extends State<ProductCategoryPicker> {
       key: _fieldKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // header and options share one bordered box, so the revealed list reads as part of the
-        // field rather than as a separate card that happens to sit underneath it
+        // header and options share one bordered box, so the revealed list reads as part of the field
+        // rather than as a separate card underneath it
         AnimatedContainer(
           duration: AppMotion.fast,
           curve: AppMotion.easing,
@@ -109,9 +95,8 @@ class _ProductCategoryPickerState extends State<ProductCategoryPicker> {
                 isExpanded: _isExpanded,
                 onTap: _toggle,
               ),
-              // AnimatedSize measures its child every frame and tweens its own height between the
-              // two, so swapping the list for an empty box animates the reveal without hand-rolling
-              // an AnimationController. topCenter keeps the growth anchored under the header.
+              // AnimatedSize measures its child every frame and tweens its own height, so swapping the list for
+              // an empty box animates the reveal without an AnimationController. topCenter anchors the growth.
               AnimatedSize(
                 duration: AppMotion.base,
                 curve: AppMotion.easing,
@@ -153,13 +138,9 @@ class _ProductCategoryPickerState extends State<ProductCategoryPicker> {
   }
 }
 
-/// The always-visible row: what is currently chosen, and the chevron that opens the list.
-///
-/// It shows the chosen category's glyph and its name **once**. The Material dropdown this replaced
-/// showed the icon twice - the field had a `prefixIcon`, and the collapsed value was rendered by
-/// re-using the selected menu row, which carried its own icon - so a picked category read as two
-/// identical glyphs side by side. Here the option rows and this header are separate widgets, so
-/// there is nothing to double up.
+/// The always-visible row: what is chosen, and the chevron that opens the list. It shows the glyph
+/// and name **once** - the Material dropdown this replaced drew the icon twice, since the collapsed
+/// value re-used the selected menu row.
 class _PickerHeader extends StatefulWidget {
   const _PickerHeader({
     required this.selected,
@@ -190,8 +171,8 @@ class _PickerHeaderState extends State<_PickerHeader> {
       onTapUp: (_) => setState(() => _isPressed = false),
       onTapCancel: () => setState(() => _isPressed = false),
       onTap: widget.onTap,
-      // a background tint rather than PressableScale here, unlike the add-store tiles: this control
-      // is about to change height, and a shrink competing with an expansion reads as a glitch
+      // a background tint rather than PressableScale here: this control is about to change height, and
+      // a shrink competing with an expansion reads as a glitch
       child: AnimatedContainer(
         duration: AppMotion.fast,
         curve: AppMotion.easing,
@@ -218,8 +199,7 @@ class _PickerHeaderState extends State<_PickerHeader> {
               ),
             ),
             const SizedBox(width: 10),
-            // a quarter turn, so the forward chevron ends up pointing down at the rows it revealed -
-            // the same indicator the profile screen's shop-management accordion uses
+            // a quarter turn, so the forward chevron ends up pointing down at the rows it revealed
             AnimatedRotation(
               turns: widget.isExpanded ? 0.25 : 0,
               duration: AppMotion.base,
@@ -309,16 +289,13 @@ class _CategoryOptionState extends State<_CategoryOption> {
   }
 }
 
-/// One field of a template product, shown as text instead of an input.
+/// One field of a template product, shown as text instead of an input: its name, category and unit
+/// are the same in every shop of the category, which is what makes two shops comparable. They are
+/// still *shown*, or an edit screen saying only "Цена" gives no way to check the right product is
+/// open.
 ///
-/// A template row's name, category and unit are the same in every shop of the category - that is
-/// what makes two shops comparable on the same basket - so they are not the owner's to change. They
-/// are still *shown*, because an edit screen that only says "Цена" gives no way to check you opened
-/// the right product.
-///
-/// Rendered as plain text with a lock chip rather than as a greyed-out disabled TextField: a
-/// disabled input still looks like something that ought to accept typing, and the owner discovers
-/// it doesn't by trying. This never invites the tap in the first place.
+/// Plain text with a lock chip rather than a disabled TextField, which still looks like something
+/// that ought to accept typing.
 class ProductLockedField extends StatelessWidget {
   const ProductLockedField({
     super.key,
