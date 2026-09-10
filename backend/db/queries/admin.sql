@@ -74,6 +74,7 @@ LIMIT $1 OFFSET $2;
 -- name: AdminListShops :many
 SELECT
     s.id, s.name, s.category, s.address, s.contact_phone, s.created_at, s.vip_until,
+    s.excluded_from_index,
     COALESCE(s.vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip,
     u.id    AS owner_id,
     u.name  AS owner_name,
@@ -90,6 +91,13 @@ JOIN users u ON u.id = s.user_id
 LEFT JOIN shop_basket_index bi ON bi.shop_id = s.id
 ORDER BY s.created_at DESC, s.id DESC
 LIMIT $1 OFFSET $2;
+
+-- name: AdminSetShopExcluded :one
+UPDATE shops
+SET excluded_from_index = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, name, excluded_from_index;
 
 -- name: AdminDeleteUser :execrows
 DELETE FROM users WHERE id = $1;

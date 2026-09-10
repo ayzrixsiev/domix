@@ -850,7 +850,7 @@ function shade(i, n) {
   return "rgb(" + ch(A.slice(0,2),B.slice(0,2)) + "," + ch(A.slice(2,4),B.slice(2,4)) + "," + ch(A.slice(4,6),B.slice(4,6)) + ")";
 }
 
-var SHOP_CATS = { universal:"Универсальный", plumbing:"Сантехника", wood:"Древесные материалы", wallpaper:"Обои" };
+var SHOP_CATS = { universal:"Универсальный", plumbing:"Сантехника", wood:"Пиломатериалы", wallpaper:"Обои" };
 var PRODUCT_CATS = { mixes:"Смеси", blocks:"Блоки", lumber:"Пиломатериалы", metal:"Металл", fasteners:"Крепёж",
   roofing:"Кровля", insulation:"Изоляция", electrical:"Электрика", plumbing:"Сантехника",
   paints:"Краски", finishing:"Отделка", tools:"Инструменты" };
@@ -2599,7 +2599,8 @@ function renderShops() {
 
     // the raw index, shown here and nowhere else in the product. 100 is the market price.
     var ix = el("td");
-    if (s.price_index===null || s.price_index===undefined) ix.appendChild(el("span","tag g","нет"));
+    if (s.excluded_from_index) ix.appendChild(el("span","tag rd","Исключён"));
+    else if (s.price_index===null || s.price_index===undefined) ix.appendChild(el("span","tag g","нет"));
     else {
       ix.appendChild(el("span", s.price_index<98?"tag gr":s.price_index>102?"tag rd":"tag am", String(s.price_index)));
       if (s.basket_price) ix.appendChild(el("div","d num", money(s.basket_price)));
@@ -2613,6 +2614,7 @@ function renderShops() {
 
     var act = el("td","r"); var wrap = el("div","acts");
     wrap.appendChild(iconBtn(ICONS.crown, s.is_vip?"Изменить размещение":"Сделать VIP", null, function(){ editVIP(s); }));
+    wrap.appendChild(iconBtn(ICONS.lock, s.excluded_from_index?"Вернуть в индекс":"Исключить из индекса", s.excluded_from_index?null:"dg", function(){ toggleExcluded(s); }));
     wrap.appendChild(iconBtn(ICONS.box, "Товары", null, function(){ openProducts(s); }));
     wrap.appendChild(iconBtn(ICONS.edit, "Редактировать", null, function(){ editShop(s); }));
     wrap.appendChild(iconBtn(ICONS.trash, "Удалить", "dg", function(){ confirmDeleteShop(s); }));
@@ -2682,6 +2684,32 @@ function editVIP(s) {
           renderShops(); loadStats();
           toast(days > 0 ? "Размещение выдано на " + days + " дн." : "Размещение снято");
         }).catch(function (e) { if (guard(e)) return; toast("Не удалось изменить размещение", true); throw e; });
+    }
+  });
+}
+
+// an admin's own suspension, separate from catalogue completeness - shop_basket_index already
+// answers "is every template product priced", and this flag has to win even when it does.
+function toggleExcluded(s) {
+  var excluding = !s.excluded_from_index;
+  confirmDialog({
+    title: excluding ? "Исключить магазин из индекса?" : "Вернуть магазин в индекс?",
+    body: excluding
+      ? s.name + " перестанет участвовать в сравнении цен и не будет учитываться в среднем по рынку — даже если каталог заполнен целиком."
+      : s.name + " снова начнёт участвовать в сравнении цен, как только каталог будет заполнен целиком.",
+    confirmLabel: excluding ? "Исключить" : "Вернуть",
+    danger: excluding,
+    onConfirm:function () {
+      return api("/api/admin/shops/"+s.id+"/exclude", { method:"PUT", body: JSON.stringify({ excluded: excluding }) })
+        .then(function (r) {
+          s.excluded_from_index = r.excluded_from_index;
+          renderShops(); loadStats();
+          toast(excluding ? "Магазин исключён из индекса" : "Магазин возвращён в индекс");
+        }).catch(function (e) {
+          if (guard(e)) return;
+          toast(e.code==="shop_not_found" ? "Этот магазин уже удалён" : "Не удалось изменить статус", true);
+          throw e;
+        });
     }
   });
 }

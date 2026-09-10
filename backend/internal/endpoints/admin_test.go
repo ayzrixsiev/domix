@@ -32,12 +32,24 @@ import (
 // would pass or fail depending on whose laptop ran them.
 //
 // deleting users is enough to clear all three tables - shops and products cascade off it.
+//
+// `basket_history` is the one table that cascade does not reach: it holds aggregates keyed by
+// (day, category) with no foreign key to anything, so a developer who has run `cmd/api` locally has
+// real committed rows here - startBasketHistory writes one per market at every boot. Those rows are
+// invisible to the delete above and outlive it, which is what made the history assertions count the
+// laptop's own days alongside the one the test wrote.
+//
+// both statements are undone by the rollback in homeUnderTest, so this empties the table for the
+// duration of one test without touching what is actually stored.
 func adminUnderTest(t *testing.T) (*Admin, context.Context, pgx.Tx, *db.Queries) {
 	t.Helper()
 
 	_, ctx, tx, q := homeUnderTest(t)
 	if _, err := tx.Exec(ctx, "DELETE FROM users"); err != nil {
 		t.Fatalf("clearing users: %v", err)
+	}
+	if _, err := tx.Exec(ctx, "DELETE FROM basket_history"); err != nil {
+		t.Fatalf("clearing basket history: %v", err)
 	}
 	return &Admin{Queries: q}, ctx, tx, q
 }
@@ -423,6 +435,102 @@ func TestVIPIsGrantedAndRevokedThroughOneEndpoint(t *testing.T) {
 		`{"days":99999}`, adminEndpoints.SetVIP)
 	if tooLong.Code != http.StatusBadRequest {
 		t.Errorf("days:99999 = %d, want 400", tooLong.Code)
+	}
+}
+
+// ─────────────────────────── exclusion ───────────────────────────
+
+// **wins over catalogue completeness by design.** shop_basket_index answers "is every template
+// product priced", derived from products.price and unable to disagree with it - excluded_from_index
+// is an admin's own decision and has to override that even when every price is filled in. Migration
+// 000007's trigger recomputes the category on every flip, so this reads the same list endpoint the
+// panel does rather than poking shop_basket_index directly.
+func TestExcludedShopLeavesTheIndexEvenWithACompleteCatalogue(t *testing.T) {
+	adminEndpoints, ctx, tx, q := adminUnderTest(t)
+
+	adminID := makeUser(t, ctx, q, "ExcludeBoss", "admin")
+	a := makeSeededShop(t, ctx, tx, q, "ExclA", catalog.CategoryWallpaper, false)
+	b := makeSeededShop(t, ctx, tx, q, "ExclB", catalog.CategoryWallpaper, false)
+	priceAll(t, ctx, tx, a, 100_000)
+	priceAll(t, ctx, tx, b, 200_000)
+
+	shopByName := func(t *testing.T) map[string]adminShopResponse {
+		t.Helper()
+		rec := requestAdmin(t, ctx, adminEndpoints, http.MethodGet, "/api/admin/shops", adminID, adminEndpoints.ListShops)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("shops = %d (%s)", rec.Code, rec.Body.String())
+		}
+		var body struct {
+			Shops []adminShopResponse `json:"shops"`
+		}
+		decodeBody(t, rec, &body)
+		byName := make(map[string]adminShopResponse, len(body.Shops))
+		for _, s := range body.Shops {
+			byName[s.Name] = s
+		}
+		return byName
+	}
+
+	before := shopByName(t)
+	if before["ExclA"].PriceIndex == nil || before["ExclB"].PriceIndex == nil {
+		t.Fatalf("both shops are fully priced and should carry an index before exclusion: %+v", before)
+	}
+
+	exclude := requestAdminBody(t, ctx, adminEndpoints, http.MethodPut,
+		"/api/admin/shops/"+strconv.FormatInt(a, 10)+"/exclude", adminID,
+		`{"excluded":true}`, adminEndpoints.SetExcluded)
+	if exclude.Code != http.StatusOK {
+		t.Fatalf("exclude = %d (%s)", exclude.Code, exclude.Body.String())
+	}
+	var excluded struct {
+		ExcludedFromIndex bool `json:"excluded_from_index"`
+	}
+	decodeBody(t, exclude, &excluded)
+	if !excluded.ExcludedFromIndex {
+		t.Fatal("the response says the shop is not excluded after excluded:true")
+	}
+
+	after := shopByName(t)
+	if !after["ExclA"].ExcludedFromIndex {
+		t.Error("ExclA does not carry excluded_from_index after being excluded")
+	}
+	// fully priced and still excluded - the flag has to win over completeness
+	if after["ExclA"].PriceIndex != nil {
+		t.Errorf("ExclA still carries an index (%d) after exclusion", *after["ExclA"].PriceIndex)
+	}
+	// the excluded shop no longer moves the average, so the one shop left is the whole market
+	if after["ExclB"].PriceIndex == nil || *after["ExclB"].PriceIndex != 100 {
+		got := "nil"
+		if after["ExclB"].PriceIndex != nil {
+			got = strconv.FormatInt(*after["ExclB"].PriceIndex, 10)
+		}
+		t.Errorf("ExclB index = %s, want 100 - it is the only shop left in the market", got)
+	}
+
+	restore := requestAdminBody(t, ctx, adminEndpoints, http.MethodPut,
+		"/api/admin/shops/"+strconv.FormatInt(a, 10)+"/exclude", adminID,
+		`{"excluded":false}`, adminEndpoints.SetExcluded)
+	if restore.Code != http.StatusOK {
+		t.Fatalf("restore = %d (%s)", restore.Code, restore.Body.String())
+	}
+
+	final := shopByName(t)
+	if final["ExclA"].ExcludedFromIndex {
+		t.Error("ExclA still marked excluded after excluded:false")
+	}
+	if final["ExclA"].PriceIndex == nil {
+		t.Error("ExclA has no index after being returned to a market it is fully priced in")
+	}
+}
+
+func TestExcludingAMissingShopIs404(t *testing.T) {
+	adminEndpoints, ctx, _, q := adminUnderTest(t)
+	adminID := makeUser(t, ctx, q, "ExcludeGhost", "admin")
+
+	rec := requestAdminBody(t, ctx, adminEndpoints, http.MethodPut,
+		"/api/admin/shops/999999999/exclude", adminID, `{"excluded":true}`, adminEndpoints.SetExcluded)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("excluding a missing shop = %d, want 404", rec.Code)
 	}
 }
 

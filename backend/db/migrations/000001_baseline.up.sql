@@ -22,6 +22,15 @@ CREATE TABLE shops (
     rating NUMERIC(2, 1) NOT NULL DEFAULT 0.0,
     vip_until TIMESTAMP WITH TIME ZONE,
     location GEOMETRY(Point, 4326),
+
+    -- an admin lever separate from the shop's own catalogue: a shop can be pulled out of its
+    -- market's price comparison without touching a single price, and put back the same way. Not
+    -- the same fact as "does this shop have a row in shop_basket_index" - that row's existence
+    -- already answers "is every template product priced", and is derived from products. This
+    -- column is for a market being suspended for a reason products.price knows nothing about: a
+    -- rules violation under review, a seller asked to pause while a dispute is resolved.
+    excluded_from_index BOOLEAN NOT NULL DEFAULT FALSE,
+
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -62,39 +71,10 @@ CREATE TABLE product_templates (
 
 CREATE INDEX idx_product_templates_category ON product_templates (shop_category, id);
 
-CREATE TABLE support_messages (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    from_support BOOLEAN NOT NULL DEFAULT FALSE,
-    body TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_support_messages_thread ON support_messages (user_id, id);
-
-CREATE VIEW shop_basket_index AS
-WITH basket AS (
-    SELECT p.shop_id,
-           s.category   AS shop_category,
-           SUM(p.price) AS basket_price
-    FROM products p
-    JOIN shops s ON s.id = p.shop_id
-    WHERE p.template_key IS NOT NULL
-    GROUP BY p.shop_id, s.category
-    HAVING COUNT(p.price) = COUNT(*)
-),
-market AS (
-    SELECT shop_category,
-           AVG(basket_price) AS market_basket
-    FROM basket
-    GROUP BY shop_category
-)
-SELECT b.shop_id,
-       b.basket_price::bigint                                AS basket_price,
-       ROUND(b.basket_price / m.market_basket * 100)::bigint AS price_index
-FROM basket b
-JOIN market m ON m.shop_category = b.shop_category
-WHERE m.market_basket > 0;
+-- Seed data below is the current, final catalogue for each of the four shop categories. Order
+-- matters: a shop's catalogue is sorted by template id, so insertion order here is the order an
+-- owner prices things in, and (for plumbing/wood) matches the numbering of the photos in
+-- photos/<category>/.
 
 INSERT INTO product_templates (shop_category, template_key, name, category, unit, image_path) VALUES
   ('universal', 'universal.tape_45x50', 'Скотч упаковочный 4,5х50', 'tools', 'шт', 'universal/001.jpg'),
@@ -199,76 +179,119 @@ INSERT INTO product_templates (shop_category, template_key, name, category, unit
   ('universal', 'universal.film_white_06', 'Плёнка полиэтиленовая 0,6, белая', 'insulation', 'м', 'universal/093.jpg');
 
 INSERT INTO product_templates (shop_category, template_key, name, category, unit, image_path) VALUES
-  ('plumbing', 'plumbing.adapter_coupling_female_20', 'VERO Адаптер-муфта комб. В/Р 20х1/2', 'plumbing', 'шт', 'plumbing/001.jpg'),
-  ('plumbing', 'plumbing.adapter_coupling_female_25', 'VERO Адаптер-муфта комб. В/Р 25х1/2', 'plumbing', 'шт', 'plumbing/002.jpg'),
-  ('plumbing', 'plumbing.adapter_coupling_male_20', 'VERO Адаптер-муфта комб. Н/Р 20х1/2', 'plumbing', 'шт', 'plumbing/003.jpg'),
-  ('plumbing', 'plumbing.adapter_coupling_male_25', 'VERO Адаптер-муфта комб. Н/Р 25х1/2', 'plumbing', 'шт', 'plumbing/004.jpg'),
-  ('plumbing', 'plumbing.adapter_union_nut_25_half', 'VERO Адаптер с накидной гайкой 25х1/2 (V-2)', 'plumbing', 'шт', 'plumbing/005.jpg'),
-  ('plumbing', 'plumbing.adapter_union_nut_25_three_quarter', 'VERO Адаптер с накидной гайкой 25х3/4 (V-2)', 'plumbing', 'шт', 'plumbing/006.jpg'),
-  ('plumbing', 'plumbing.adapter_nipple_25_half', 'VERO Адаптер с накидной гайкой (ниппель) 25х1/2', 'plumbing', 'шт', 'plumbing/007.jpg'),
-  ('plumbing', 'plumbing.double_elbow_bracket_female_20', 'VERO Двойной отвод с креплением В/Р 20х15', 'plumbing', 'шт', 'plumbing/008.jpg'),
-  ('plumbing', 'plumbing.double_elbow_bracket_male_20', 'VERO Двойной отвод с креплением Н/Р 20х15', 'plumbing', 'шт', 'plumbing/009.jpg'),
-  ('plumbing', 'plumbing.plug_20', 'VERO Заглушка 20', 'plumbing', 'шт', 'plumbing/010.jpg'),
-  ('plumbing', 'plumbing.plug_25', 'VERO Заглушка 25', 'plumbing', 'шт', 'plumbing/011.jpg'),
-  ('plumbing', 'plumbing.clip_20', 'VERO Клипса 20', 'plumbing', 'шт', 'plumbing/012.jpg'),
-  ('plumbing', 'plumbing.clip_25', 'VERO Клипса 25', 'plumbing', 'шт', 'plumbing/013.jpg'),
-  ('plumbing', 'plumbing.radiator_valve_straight_20', 'VERO Кран для радиатора прямой 20х1/2', 'plumbing', 'шт', 'plumbing/014.jpg'),
-  ('plumbing', 'plumbing.cross_90_20', 'VERO Крестовина 90° 20', 'plumbing', 'шт', 'plumbing/015.jpg'),
-  ('plumbing', 'plumbing.clamp_metal_20_24', 'VERO Хомут металлический 20-24 (1/2")', 'plumbing', 'шт', 'plumbing/016.jpg'),
-  ('plumbing', 'plumbing.clamp_metal_45_52', 'VERO Хомут металлический 45-52 (1 1/2")', 'plumbing', 'шт', 'plumbing/017.jpg'),
-  ('plumbing', 'plumbing.coupling_20', 'VERO Муфта 20', 'plumbing', 'шт', 'plumbing/018.jpg'),
-  ('plumbing', 'plumbing.coupling_25', 'VERO Муфта 25', 'plumbing', 'шт', 'plumbing/019.jpg'),
-  ('plumbing', 'plumbing.bypass_20', 'VERO Обвод 20', 'plumbing', 'шт', 'plumbing/020.jpg'),
-  ('plumbing', 'plumbing.bypass_25', 'VERO Обвод 25', 'plumbing', 'шт', 'plumbing/021.jpg'),
-  ('plumbing', 'plumbing.elbow_90_20', 'VERO Отвод 90° 20', 'plumbing', 'шт', 'plumbing/022.jpg'),
-  ('plumbing', 'plumbing.elbow_90_25', 'VERO Отвод 90° 25', 'plumbing', 'шт', 'plumbing/023.jpg'),
-  ('plumbing', 'plumbing.elbow_wall_female_20', 'VERO Отвод с настенным креплением В/Р 20', 'plumbing', 'шт', 'plumbing/024.jpg'),
-  ('plumbing', 'plumbing.elbow_wall_female_25', 'VERO Отвод с настенным креплением В/Р 25', 'plumbing', 'шт', 'plumbing/025.jpg'),
-  ('plumbing', 'plumbing.elbow_wall_male_20', 'VERO Отвод с настенным креплением Н/Р 20', 'plumbing', 'шт', 'plumbing/026.jpg'),
-  ('plumbing', 'plumbing.elbow_wall_male_25', 'VERO Отвод с настенным креплением Н/Р 25', 'plumbing', 'шт', 'plumbing/027.jpg'),
-  ('plumbing', 'plumbing.reducer_25_20', 'VERO Переходник 25-20', 'plumbing', 'шт', 'plumbing/028.jpg'),
-  ('plumbing', 'plumbing.reducer_32_20', 'VERO Переходник 32-20', 'plumbing', 'шт', 'plumbing/029.jpg'),
-  ('plumbing', 'plumbing.elbow_45_20', 'VERO Полуотвод 20', 'plumbing', 'шт', 'plumbing/030.jpg'),
-  ('plumbing', 'plumbing.elbow_45_25', 'VERO Полуотвод 25', 'plumbing', 'шт', 'plumbing/031.jpg'),
-  ('plumbing', 'plumbing.union_female_20_half', 'VERO Ракор В/Р 20х1/2', 'plumbing', 'шт', 'plumbing/032.jpg'),
-  ('plumbing', 'plumbing.union_female_25_half', 'VERO Ракор В/Р 25х1/2', 'plumbing', 'шт', 'plumbing/033.jpg'),
-  ('plumbing', 'plumbing.union_female_25_three_quarter', 'VERO Ракор В/Р 25х3/4', 'plumbing', 'шт', 'plumbing/034.jpg'),
-  ('plumbing', 'plumbing.union_male_20_half', 'VERO Ракор Н/Р 20х1/2', 'plumbing', 'шт', 'plumbing/035.jpg'),
-  ('plumbing', 'plumbing.union_male_25_half', 'VERO Ракор Н/Р 25х1/2', 'plumbing', 'шт', 'plumbing/036.jpg'),
-  ('plumbing', 'plumbing.tee_20', 'VERO Тройник 20', 'plumbing', 'шт', 'plumbing/037.jpg'),
-  ('plumbing', 'plumbing.tee_25', 'VERO Тройник 25', 'plumbing', 'шт', 'plumbing/038.jpg'),
-  ('plumbing', 'plumbing.tee_female_20_half', 'VERO Тройник комб. с В/Р 20х1/2', 'plumbing', 'шт', 'plumbing/039.jpg'),
-  ('plumbing', 'plumbing.tee_female_25_half', 'VERO Тройник комб. с В/Р 25х1/2', 'plumbing', 'шт', 'plumbing/040.jpg'),
-  ('plumbing', 'plumbing.tee_male_20_half', 'VERO Тройник комб. с Н/Р 20х1/2', 'plumbing', 'шт', 'plumbing/041.jpg'),
-  ('plumbing', 'plumbing.tee_male_25_half', 'VERO Тройник комб. с Н/Р 25х1/2', 'plumbing', 'шт', 'plumbing/042.jpg'),
-  ('plumbing', 'plumbing.tee_reducing_25_20_25', 'VERO Тройник переходник 25-20-25', 'plumbing', 'шт', 'plumbing/043.jpg'),
-  ('plumbing', 'plumbing.tee_reducing_32_20_32', 'VERO Тройник переходник 32-20-32', 'plumbing', 'шт', 'plumbing/044.jpg'),
-  ('plumbing', 'plumbing.radiator_valve_angle_20', 'VERO Угловой кран для радиатора 20х1/2', 'plumbing', 'шт', 'plumbing/045.jpg'),
-  ('plumbing', 'plumbing.radiator_valve_angle_20_import', 'VERO Угловой кран для радиатора 20х1/2 (импорт)', 'plumbing', 'шт', 'plumbing/046.jpg'),
-  ('plumbing', 'plumbing.elbow_female_20_half', 'VERO Угол В/Р 20х1/2', 'plumbing', 'шт', 'plumbing/047.jpg'),
-  ('plumbing', 'plumbing.elbow_female_25_half', 'VERO Угол В/Р 25х1/2', 'plumbing', 'шт', 'plumbing/048.jpg'),
-  ('plumbing', 'plumbing.elbow_male_20_half', 'VERO Угол Н/Р 20х1/2', 'plumbing', 'шт', 'plumbing/049.jpg'),
-  ('plumbing', 'plumbing.elbow_male_25_half', 'VERO Угол Н/Р 25х1/2', 'plumbing', 'шт', 'plumbing/050.jpg'),
-  ('plumbing', 'plumbing.elbow_nipple_20_half', 'VERO Угол с накидной гайкой (ниппель) 20х1/2', 'plumbing', 'шт', 'plumbing/051.jpg'),
-  ('plumbing', 'plumbing.elbow_nipple_25_three_quarter', 'VERO Угол с накидной гайкой (ниппель) 25х3/4', 'plumbing', 'шт', 'plumbing/052.jpg'),
-  ('plumbing', 'plumbing.filter_20_brass', 'VERO Фильтр 20 «мама» (латунь)', 'plumbing', 'шт', 'plumbing/053.jpg'),
-  ('plumbing', 'plumbing.filter_25_brass', 'VERO Фильтр 25 «мама» (латунь)', 'plumbing', 'шт', 'plumbing/054.jpg'),
-  ('plumbing', 'plumbing.ball_valve_20', 'VERO Шаровой кран 20', 'plumbing', 'шт', 'plumbing/055.jpg'),
-  ('plumbing', 'plumbing.ball_valve_25', 'VERO Шаровой кран 25', 'plumbing', 'шт', 'plumbing/056.jpg'),
-  ('plumbing', 'plumbing.ball_valve_20_eco', 'VERO Шаровой кран 20 ECO', 'plumbing', 'шт', 'plumbing/057.jpg'),
-  ('plumbing', 'plumbing.ball_valve_25_eco', 'VERO Шаровой кран 25 ECO', 'plumbing', 'шт', 'plumbing/058.jpg');
+  ('plumbing', 'plumbing.adapter_coupling_female_25', 'VERO Адаптер-муфта комб. В/Р 25х1/2', 'plumbing', 'шт', 'plumbing/001.jpg'),
+  ('plumbing', 'plumbing.adapter_coupling_male_25', 'VERO Адаптер-муфта комб. Н/Р 25х1/2', 'plumbing', 'шт', 'plumbing/002.jpg'),
+  ('plumbing', 'plumbing.adapter_nipple_25_half', 'VERO Адаптер с накидной гайкой (ниппель) 25х1/2', 'plumbing', 'шт', 'plumbing/003.jpg'),
+  ('plumbing', 'plumbing.double_elbow_bracket_female_20', 'VERO Двойной отвод с креплением В/Р 20х15', 'plumbing', 'шт', 'plumbing/004.jpg'),
+  ('plumbing', 'plumbing.double_elbow_bracket_male_20', 'VERO Двойной отвод с креплением Н/Р 20х15', 'plumbing', 'шт', 'plumbing/005.jpg'),
+  ('plumbing', 'plumbing.plug_25', 'VERO Заглушка 25', 'plumbing', 'шт', 'plumbing/006.jpg'),
+  ('plumbing', 'plumbing.clip_25', 'VERO Клипса 25', 'plumbing', 'шт', 'plumbing/007.jpg'),
+  ('plumbing', 'plumbing.cross_90_20', 'VERO Крестовина 90° 20', 'plumbing', 'шт', 'plumbing/008.jpg'),
+  ('plumbing', 'plumbing.clamp_metal_45_52', 'VERO Хомут металлический 45-52 (1 1/2")', 'plumbing', 'шт', 'plumbing/009.jpg'),
+  ('plumbing', 'plumbing.coupling_25', 'VERO Муфта 25', 'plumbing', 'шт', 'plumbing/010.jpg'),
+  ('plumbing', 'plumbing.bypass_25', 'VERO Обвод 25', 'plumbing', 'шт', 'plumbing/011.jpg'),
+  ('plumbing', 'plumbing.elbow_90_25', 'VERO Отвод 90° 25', 'plumbing', 'шт', 'plumbing/012.jpg'),
+  ('plumbing', 'plumbing.elbow_wall_female_20', 'VERO Отвод с настенным креплением В/Р 20', 'plumbing', 'шт', 'plumbing/013.jpg'),
+  ('plumbing', 'plumbing.elbow_wall_male_20', 'VERO Отвод с настенным креплением Н/Р 20', 'plumbing', 'шт', 'plumbing/014.jpg'),
+  ('plumbing', 'plumbing.reducer_32_20', 'VERO Переходник 32-20', 'plumbing', 'шт', 'plumbing/015.jpg'),
+  ('plumbing', 'plumbing.elbow_45_25', 'VERO Полуотвод 25', 'plumbing', 'шт', 'plumbing/016.jpg'),
+  ('plumbing', 'plumbing.union_female_25_three_quarter', 'VERO Ракор В/Р 25х3/4', 'plumbing', 'шт', 'plumbing/017.jpg'),
+  ('plumbing', 'plumbing.union_male_25_half', 'VERO Ракор Н/Р 25х1/2', 'plumbing', 'шт', 'plumbing/018.jpg'),
+  ('plumbing', 'plumbing.tee_25', 'VERO Тройник 25', 'plumbing', 'шт', 'plumbing/019.jpg'),
+  ('plumbing', 'plumbing.tee_female_20_half', 'VERO Тройник комб. с В/Р 20х1/2', 'plumbing', 'шт', 'plumbing/020.jpg'),
+  ('plumbing', 'plumbing.tee_male_25_half', 'VERO Тройник комб. с Н/Р 25х1/2', 'plumbing', 'шт', 'plumbing/021.jpg'),
+  ('plumbing', 'plumbing.tee_reducing_32_20_32', 'VERO Тройник переходник 32-20-32', 'plumbing', 'шт', 'plumbing/022.jpg'),
+  ('plumbing', 'plumbing.radiator_valve_angle_20', 'VERO Угловой кран для радиатора 20х1/2', 'plumbing', 'шт', 'plumbing/023.jpg'),
+  ('plumbing', 'plumbing.radiator_valve_angle_20_import', 'VERO Угловой кран для радиатора 20х1/2 (импорт)', 'plumbing', 'шт', 'plumbing/024.jpg'),
+  ('plumbing', 'plumbing.elbow_female_25_half', 'VERO Угол В/Р 25х1/2', 'plumbing', 'шт', 'plumbing/025.jpg'),
+  ('plumbing', 'plumbing.elbow_male_25_half', 'VERO Угол Н/Р 25х1/2', 'plumbing', 'шт', 'plumbing/026.jpg'),
+  ('plumbing', 'plumbing.elbow_nipple_25_three_quarter', 'VERO Угол с накидной гайкой (ниппель) 25х3/4', 'plumbing', 'шт', 'plumbing/027.jpg'),
+  ('plumbing', 'plumbing.filter_25_brass', 'VERO Фильтр 25 «мама» (латунь)', 'plumbing', 'шт', 'plumbing/028.jpg'),
+  ('plumbing', 'plumbing.ball_valve_20', 'VERO Шаровой кран 20', 'plumbing', 'шт', 'plumbing/029.jpg'),
+  ('plumbing', 'plumbing.ball_valve_20_eco', 'VERO Шаровой кран 20 ECO', 'plumbing', 'шт', 'plumbing/030.jpg'),
+  ('plumbing', 'plumbing.cistern_valve_dual_flush', 'Механизм нижний с двухрежимным выпуском', 'plumbing', 'шт', 'plumbing/031.jpg'),
+  ('plumbing', 'plumbing.cistern_float_side', 'Поплавок боковой (пластмасса)', 'plumbing', 'шт', 'plumbing/032.jpg'),
+  ('plumbing', 'plumbing.toilet_corrugation', 'Гофра для унитаза', 'plumbing', 'шт', 'plumbing/033.jpg'),
+  ('plumbing', 'plumbing.toilet_corrugation_angle', 'Гофра для унитаза угловая', 'plumbing', 'шт', 'plumbing/034.jpg'),
+  ('plumbing', 'plumbing.toilet_seat_fixing', 'Крепление для сиденья унитаза', 'plumbing', 'шт', 'plumbing/035.jpg'),
+  ('plumbing', 'plumbing.siphon_rubber_seal', 'Резина для сифона («вонючка»)', 'plumbing', 'шт', 'plumbing/036.jpg'),
+  ('plumbing', 'plumbing.siphon_outlet_head', 'Выпуск для сифона (головка)', 'plumbing', 'шт', 'plumbing/037.jpg'),
+  ('plumbing', 'plumbing.siphon_bowl_round_overflow', 'Сифон с тазиком и круглым переливом', 'plumbing', 'шт', 'plumbing/038.jpg'),
+  ('plumbing', 'plumbing.toilet_seat_cover', 'Сиденье с крышкой для унитаза', 'plumbing', 'шт', 'plumbing/039.jpg'),
+  ('plumbing', 'plumbing.siphon_bath', 'Сифон для ванны', 'plumbing', 'шт', 'plumbing/040.jpg'),
+  ('plumbing', 'plumbing.siphon_sink_eco', 'Сифон для мойки с выпуском и переливом ЭКО', 'plumbing', 'шт', 'plumbing/041.jpg'),
+  ('plumbing', 'plumbing.drain_shower_side_plastic', 'Трап сливной для душа, боковой (пластик)', 'plumbing', 'шт', 'plumbing/042.jpg'),
+  ('plumbing', 'plumbing.drain_shower_straight_plastic', 'Трап сливной для душа, прямой (пластик)', 'plumbing', 'шт', 'plumbing/043.jpg'),
+  ('plumbing', 'plumbing.drain_aqua_ss28', 'Трап AQUA 10х10 SS-28', 'plumbing', 'шт', 'plumbing/044.jpg'),
+  ('plumbing', 'plumbing.drain_aqua_12pro', 'Трап 12 PRO AQUA 10х10 (никель)', 'plumbing', 'шт', 'plumbing/045.jpg'),
+  ('plumbing', 'plumbing.drain_aqua_tile', 'Трап под кафель AQUA 10х10 (никель)', 'plumbing', 'шт', 'plumbing/046.jpg'),
+  ('plumbing', 'plumbing.washer_drain_hose_190', 'Сливной шланг для стиральной машины 190 мм', 'plumbing', 'шт', 'plumbing/047.jpg'),
+  ('plumbing', 'plumbing.washer_drain_hose_290', 'Сливной шланг для стиральной машины 290 мм', 'plumbing', 'шт', 'plumbing/048.jpg'),
+  ('plumbing', 'plumbing.anti_vibration_pads', 'Антивибрационные подставки', 'plumbing', 'шт', 'plumbing/049.jpg'),
+  ('plumbing', 'plumbing.washer_inlet_hose_25', 'Шланг наливной 2,5 м', 'plumbing', 'шт', 'plumbing/050.jpg'),
+  ('plumbing', 'plumbing.mixer_cartridge', 'Механизм для джойстика', 'plumbing', 'шт', 'plumbing/051.jpg'),
+  ('plumbing', 'plumbing.tap_valve_square_brass', 'Кран-букса квадрат (латунь), красная', 'plumbing', 'шт', 'plumbing/052.jpg'),
+  ('plumbing', 'plumbing.tap_handle_cross_new', 'Барашек крестовой NEW', 'plumbing', 'шт', 'plumbing/053.jpg'),
+  ('plumbing', 'plumbing.mixer_bracket', 'Лапка смесителя', 'plumbing', 'шт', 'plumbing/054.jpg'),
+  ('plumbing', 'plumbing.boou_fixator_zl115', 'BOOU Фиксатор ZL-115', 'plumbing', 'шт', 'plumbing/055.jpg'),
+  ('plumbing', 'plumbing.spout_filter_male', 'Фильтр для гусака с сальником (н/р)', 'plumbing', 'шт', 'plumbing/056.jpg'),
+  ('plumbing', 'plumbing.mixer_mic_aqua_19808', 'Смеситель-микрофон гусак серый AQUA 19808-27', 'plumbing', 'шт', 'plumbing/057.jpg'),
+  ('plumbing', 'plumbing.mixer_mic_cheap', 'Смеситель-микрофон гусак (дешёвый)', 'plumbing', 'шт', 'plumbing/058.jpg'),
+  ('plumbing', 'plumbing.shower_hose_aqua_aq01', 'Душевой шланг AQUA 1,5-1,8 м AQ-01', 'plumbing', 'шт', 'plumbing/059.jpg'),
+  ('plumbing', 'plumbing.hose_reinforced_mm_alfa_80', 'Шланг армированный м/м ALFA 80 см', 'plumbing', 'шт', 'plumbing/060.jpg'),
+  ('plumbing', 'plumbing.hose_reinforced_ms_alfa_70', 'Шланг армированный м/с ALFA 70 см', 'plumbing', 'шт', 'plumbing/061.jpg'),
+  ('plumbing', 'plumbing.hose_water_boou_100', 'Шланг для воды BOOU м/м 100 см', 'plumbing', 'шт', 'plumbing/062.jpg'),
+  ('plumbing', 'plumbing.hose_mixer_boou_80', 'Шланг для смесителя BOOU «ёлка» 80 см', 'plumbing', 'шт', 'plumbing/063.jpg'),
+  ('plumbing', 'plumbing.shower_head_aqua_r50', 'Лейка AQUA AQ-R50', 'plumbing', 'шт', 'plumbing/064.jpg'),
+  ('plumbing', 'plumbing.thermoflex_28x6_red', 'Термофлекс 28х6/2 красный', 'plumbing', 'шт', 'plumbing/065.jpg'),
+  ('plumbing', 'plumbing.thermoflex_28x6_blue', 'Термофлекс 28х6/2 синий', 'plumbing', 'шт', 'plumbing/066.jpg'),
+  ('plumbing', 'plumbing.sewer_pipe_100_3m', 'VERO Канализационная труба 2,2 мм — 100/3 м', 'plumbing', 'шт', 'plumbing/067.jpg'),
+  ('plumbing', 'plumbing.sewer_pipe_50_3m', 'VERO Канализационная труба 2,2 мм — 50/3 м', 'plumbing', 'шт', 'plumbing/068.jpg'),
+  ('plumbing', 'plumbing.sewer_pipe_75_3m', 'VERO Канализационная труба 2,2 мм — 75/3 м', 'plumbing', 'шт', 'plumbing/069.jpg'),
+  ('plumbing', 'plumbing.sewer_pipe_150_3m', 'VERO Канализационная труба 3,2 мм — 150/3 м', 'plumbing', 'шт', 'plumbing/070.jpg'),
+  ('plumbing', 'plumbing.sewer_clip_100', 'VERO (к) Клипса 100', 'plumbing', 'шт', 'plumbing/071.jpg'),
+  ('plumbing', 'plumbing.sewer_clip_50', 'VERO (к) Клипса 50', 'plumbing', 'шт', 'plumbing/072.jpg'),
+  ('plumbing', 'plumbing.sewer_coupling_110', 'VERO (к) Муфта 110', 'plumbing', 'шт', 'plumbing/073.jpg'),
+  ('plumbing', 'plumbing.sewer_elbow_100', 'VERO (к) Отвод 100', 'plumbing', 'шт', 'plumbing/074.jpg'),
+  ('plumbing', 'plumbing.sewer_elbow_45_100', 'VERO (к) Полуотвод 100', 'plumbing', 'шт', 'plumbing/075.jpg'),
+  ('plumbing', 'plumbing.sewer_tee_100_100', 'VERO (к) Тройник 100/100 90°', 'plumbing', 'шт', 'plumbing/076.jpg'),
+  ('plumbing', 'plumbing.sewer_tee_100_50', 'VERO (к) Тройник 100/50 90°', 'plumbing', 'шт', 'plumbing/077.jpg'),
+  ('plumbing', 'plumbing.barrel_nipple_15_cheap', 'Бочонок (дешёвый) 15', 'plumbing', 'шт', 'plumbing/078.jpg'),
+  ('plumbing', 'plumbing.barrel_nipple_15_brass', 'Бочонок латунный (сальник) 15', 'plumbing', 'шт', 'plumbing/079.jpg'),
+  ('plumbing', 'plumbing.plug_20_male_cheap', 'Заглушка 20 М (дешёвая)', 'plumbing', 'шт', 'plumbing/080.jpg'),
+  ('plumbing', 'plumbing.calso_15x20_cheap', 'Кальсо (дешёвое) 15х20 М-П', 'plumbing', 'шт', 'plumbing/081.jpg'),
+  ('plumbing', 'plumbing.calso_15x20_steel', 'Кальсо нержавейка 15х20 М-П', 'plumbing', 'шт', 'plumbing/082.jpg'),
+  ('plumbing', 'plumbing.coupling_20_steel', 'Муфта нержавейка 20 (304)', 'plumbing', 'шт', 'plumbing/083.jpg'),
+  ('plumbing', 'plumbing.elbow_15_brass', 'Отвод 15 М-М (латунный)', 'plumbing', 'шт', 'plumbing/084.jpg'),
+  ('plumbing', 'plumbing.elbow_15_steel', 'Отвод нержавейка 15 (304) М-П', 'plumbing', 'шт', 'plumbing/085.jpg'),
+  ('plumbing', 'plumbing.reducer_20x25_steel', 'Переходник нержавейка 20х25 П-П', 'plumbing', 'шт', 'plumbing/086.jpg'),
+  ('plumbing', 'plumbing.tee_15_mmm_brass', 'Тройник 15 М-М-М (латунный)', 'plumbing', 'шт', 'plumbing/087.jpg'),
+  ('plumbing', 'plumbing.tee_15_mmf_brass', 'Тройник 15 М-М-П (латунный)', 'plumbing', 'шт', 'plumbing/088.jpg'),
+  ('plumbing', 'plumbing.nipple_15_male_cheap', 'Штуцер 15 н/р (дешёвый)', 'plumbing', 'шт', 'plumbing/089.jpg'),
+  ('plumbing', 'plumbing.eccentric_brass_90', 'Эксцентрик (латунный) 90', 'plumbing', 'шт', 'plumbing/090.jpg'),
+  ('plumbing', 'plumbing.extension_15', 'Удлинитель 1,5 см', 'plumbing', 'шт', 'plumbing/091.jpg'),
+  ('plumbing', 'plumbing.coupling_16', 'Муфта 16', 'plumbing', 'шт', 'plumbing/092.jpg'),
+  ('plumbing', 'plumbing.elbow_16_ktm', 'Отвод (латунный) 16 КТМ', 'plumbing', 'шт', 'plumbing/093.jpg'),
+  ('plumbing', 'plumbing.tee_16_ktm', 'Тройник 16 КТМ', 'plumbing', 'шт', 'plumbing/094.jpg'),
+  ('plumbing', 'plumbing.boou_mixer_shower_b8156_5s', 'BOOU Смеситель для душа B8156-5S (Ж)', 'plumbing', 'шт', 'plumbing/095.jpg'),
+  ('plumbing', 'plumbing.boou_mixer_riser_7195', 'BOOU Смеситель стояк 7195-75 (Ж)', 'plumbing', 'шт', 'plumbing/096.jpg'),
+  ('plumbing', 'plumbing.boou_mixer_mic_bz9184j', 'BOOU Смеситель-микрофон BZ9184J-E367 (Ж)', 'plumbing', 'шт', 'plumbing/097.jpg'),
+  ('plumbing', 'plumbing.boou_mixer_b8156_14a', 'BOOU Смеситель B8156-14A (Ж)', 'plumbing', 'шт', 'plumbing/098.jpg'),
+  ('plumbing', 'plumbing.mixer_electric_alfa', 'Электрический смеситель ALFA', 'plumbing', 'шт', 'plumbing/099.jpg'),
+  ('plumbing', 'plumbing.boou_mixer_bidet_b8246', 'BOOU Смеситель «тахорат» B8246-4AH-F805 (Ж)', 'plumbing', 'шт', 'plumbing/100.jpg');
 
+-- Only five slots, deliberately: an owner must price EVERY row in a category's template to be
+-- ranked at all (see refresh_basket_index below), so a template with items a shop doesn't stock
+-- would guarantee that shop never appears. Five items every wood shop actually carries produces a
+-- ranking that fills in; ten "textbook" items would not have. batten_30x40 is priced per metre
+-- rather than per piece because its name carries no length, unlike plywood_18 where the sheet
+-- format is in the name and a per-sheet price is already comparable.
 INSERT INTO product_templates (shop_category, template_key, name, category, unit, image_path) VALUES
-  ('wood', 'wood.board_25x150', 'Доска обрезная 25х150х6000', 'lumber', 'шт', NULL),
-  ('wood', 'wood.beam_100x100', 'Брус 100х100х6000', 'lumber', 'шт', NULL),
-  ('wood', 'wood.beam_50x50', 'Брус 50х50х3000', 'lumber', 'шт', NULL),
-  ('wood', 'wood.batten_20x40', 'Рейка монтажная 20х40', 'lumber', 'м', NULL),
-  ('wood', 'wood.lining_conifer', 'Вагонка хвойная', 'lumber', 'м²', NULL),
-  ('wood', 'wood.floorboard_36', 'Доска половая, 36 мм', 'lumber', 'м²', NULL),
-  ('wood', 'wood.plywood_fk_10', 'Фанера ФК 10 мм, 1525х1525', 'lumber', 'лист', NULL),
-  ('wood', 'wood.osb3_9', 'Плита ОСБ-3 9 мм, 1250х2500', 'lumber', 'лист', NULL),
-  ('wood', 'wood.chipboard_16', 'ДСП ламинированная, 16 мм', 'lumber', 'лист', NULL),
-  ('wood', 'wood.mdf_panel', 'МДФ панель 2600х200', 'lumber', 'шт', NULL);
+  ('wood', 'wood.beam_50x100', 'Брус 50х100х6000', 'lumber', 'шт', 'wood/001.jpg'),
+  ('wood', 'wood.board_25x150', 'Доска 25х150х6000', 'lumber', 'шт', 'wood/002.jpg'),
+  ('wood', 'wood.batten_30x40', 'Таб-рейка 30х40', 'lumber', 'м', 'wood/003.jpg'),
+  ('wood', 'wood.plywood_18', 'Фанера 18 мм, 1525х1525', 'lumber', 'лист', 'wood/004.jpg'),
+  ('wood', 'wood.rafter_50x150', 'Стропила 50х150х6000', 'lumber', 'шт', 'wood/005.jpg');
 
 INSERT INTO product_templates (shop_category, template_key, name, category, unit, image_path) VALUES
   ('wallpaper', 'wallpaper.premium_ru', 'Обои премиум (Россия)', 'finishing', 'рулон', NULL),
@@ -281,3 +304,326 @@ INSERT INTO product_templates (shop_category, template_key, name, category, unit
   ('wallpaper', 'wallpaper.econom_uz', 'Обои эконом (Узбекистан)', 'finishing', 'рулон', NULL),
   ('wallpaper', 'wallpaper.econom_cn_1', 'Обои эконом (Китай) №1', 'finishing', 'рулон', NULL),
   ('wallpaper', 'wallpaper.econom_cn_2', 'Обои эконом (Китай) №2', 'finishing', 'рулон', NULL);
+
+CREATE TABLE support_messages (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    from_support BOOLEAN NOT NULL DEFAULT FALSE,
+    body TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_support_messages_thread ON support_messages (user_id, id);
+
+-- Which support conversations an admin has already looked at.
+--
+-- `unanswered` (messages from a user newer than the last thing support said) is derived in SQL and
+-- has nothing to do with this table - a thread that was opened and read but not answered still
+-- shows as waiting, which is the whole reason that number exists. This table answers the *other*
+-- question: has anybody here seen the new message yet. Opening a thread clears it; opening a
+-- thread does not answer anybody.
+--
+-- It stores a **watermark, not a flag**: `last_read_id` is the id of the newest message that had
+-- been written when the thread was opened. Message ids only ever go up, so "unread" stays derived
+-- - `COUNT(*) WHERE id > last_read_id` - and a message arriving one second later is unread by
+-- arithmetic rather than by something remembering to set a bit.
+--
+-- Keyed per admin because "seen" is a fact about a person, not about the conversation.
+CREATE TABLE IF NOT EXISTS support_thread_reads (
+    -- who did the reading
+    admin_id       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+
+    -- whose thread was read. a thread *is* one user's messages, so it is addressed by user id here
+    -- exactly as it is in the api - there is no thread row to point at.
+    thread_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+
+    last_read_id   BIGINT      NOT NULL,
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (admin_id, thread_user_id)
+);
+
+-- the inbox reads every row belonging to one admin on each load, and the primary key's leading
+-- column already serves that, so there is no second index here on purpose.
+
+-- What a category's basket cost, one row per market per day.
+--
+-- **The only fact in this product that cannot be recomputed.** `shop_basket_index` (below) always
+-- answers about *now*: the moment an owner retypes a price, what the basket cost yesterday is
+-- gone, and no column anywhere remembers it. "Средний чек по категории за месяц" is the one
+-- question that needs something to have been written down at the time.
+--
+-- **Keyed by (day, category) so writing it is idempotent.** The job behind it (startBasketHistory
+-- in cmd/api/main.go) upserts every hour rather than once at midnight: a server restarted daily at
+-- the wrong moment would otherwise skip whole days. `day` is a DATE and not a timestamp for the
+-- same reason - the row *is* the day, and a time component would let two rows exist for one.
+--
+-- **A day with no row is a day the server was not running**, and the chart draws the gap rather
+-- than interpolating it. That is also why nothing here is NOT NULL DEFAULT 0: a zero would be a
+-- claim that the market was free.
+CREATE TABLE IF NOT EXISTS basket_history (
+    day        DATE   NOT NULL,
+    category   TEXT   NOT NULL,
+
+    -- how many shops were in the comparison that day. it is what makes an average readable later:
+    -- a jump from 3 shops to 9 explains a move that would otherwise look like a price change.
+    shops      INT    NOT NULL,
+
+    avg_basket BIGINT NOT NULL,
+    min_basket BIGINT NOT NULL,
+    max_basket BIGINT NOT NULL,
+
+    PRIMARY KEY (day, category)
+);
+
+-- the dashboard reads the last 30 days across every category at once, and the primary key's
+-- leading column already serves a range scan on `day`, so there is no second index here on
+-- purpose.
+
+-- One row per shop that has priced its entire category template - the Basket Price Index.
+--
+-- **A table kept current by triggers, not a view recomputed on every read.** The read side is
+-- `GET /api/home` and friends, which is every customer opening the map; the write side is an owner
+-- retyping a price, which is orders of magnitude rarer. Recomputing the whole comparison (sum each
+-- shop's template rows, average per market, divide) on every read means paying a write-shaped cost
+-- on the far more common path. So the arithmetic moves to the write, and the read becomes what it
+-- always wanted to be: a primary-key lookup of a number somebody already worked out.
+--
+-- Triggers rather than a materialized view or Go-side recomputation: the write paths that can
+-- change this table's answer are spread across shop creation, product update/delete, admin
+-- product edits, three template-sync statements, and two ON DELETE CASCADE chains that no Go code
+-- runs at all. An invariant that many call sites have to remember to maintain is one that breaks
+-- the first time a new call site is added. Triggers put the rule where the data is, so it holds
+-- for anything that writes - including psql.
+CREATE TABLE shop_basket_index (
+    shop_id       BIGINT PRIMARY KEY REFERENCES shops(id) ON DELETE CASCADE,
+
+    -- copied from shops.category rather than joined for it. This is what lets a refresh find its
+    -- own stale rows: when a shop moves markets, the row to delete is the one filed under the
+    -- category the shop *used* to be in, and a join to shops would only ever report the new one.
+    shop_category VARCHAR(30) NOT NULL,
+
+    basket_price  BIGINT NOT NULL,
+    price_index   BIGINT NOT NULL,
+
+    -- not read by any query. it is here so that a stale index is diagnosable from psql - "when was
+    -- this last agreed with products?" has no answer otherwise, and a cache whose staleness cannot
+    -- be observed is a cache you end up not trusting.
+    updated_at    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- a refresh works one market at a time and touches only that market's rows; without this it would
+-- scan the whole table to find them.
+CREATE INDEX idx_shop_basket_index_category ON shop_basket_index (shop_category);
+
+-- A row exists only for a shop that has priced its entire template (HAVING COUNT(p.price) =
+-- COUNT(*) below), and is not excluded by an admin. That is why every read joins this LEFT (a shop
+-- with an unpriced row still has to open, it just opens without a badge) except
+-- ListBestOffersInCategory and AdminCategoryBaskets, which are rankings and have nothing to say
+-- about a shop that is not in the comparison.
+--
+-- Recomputes one market from products, which stay the only source of truth. Whole-market and not
+-- per-shop, because the index is a *comparison*: `price_index` divides a shop's basket by the
+-- average basket of its market, so one owner retyping one price moves the divisor and therefore
+-- every other shop's index in that market. There is no such thing as refreshing one row.
+--
+-- **The advisory lock is not decoration.** Two owners pricing at the same moment would otherwise
+-- both compute an average from a snapshot taken before the other committed, and the second writer
+-- would overwrite the first's contribution with a number that no longer included it - a wrong
+-- index that survives until the next unrelated write. Taking the lock first means the second
+-- transaction waits, then takes a fresh snapshot and sees the first one's price. It also removes
+-- the deadlock the two upserts would otherwise race into.
+--
+-- `NOT s.excluded_from_index` keeps an admin-suspended shop's basket out of the market average too
+-- - excluding a shop is supposed to mean it stops moving everyone else's index, not just that its
+-- own badge disappears.
+CREATE OR REPLACE FUNCTION refresh_basket_index(p_category text) RETURNS void
+LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM pg_advisory_xact_lock(hashtext('shop_basket_index'), hashtext(p_category));
+
+    -- one statement, so the aggregate is computed once and the delete and the upsert cannot
+    -- disagree about it. The two write sets are disjoint by construction - `dropped` is precisely
+    -- the rows *not* in `ranked` - which is what makes it safe to write the same table from a CTE
+    -- and from the main statement.
+    WITH basket AS (
+        SELECT p.shop_id,
+               SUM(p.price) AS basket_price
+        FROM products p
+        JOIN shops s ON s.id = p.shop_id
+        WHERE p.template_key IS NOT NULL
+          AND s.category = p_category
+          AND NOT s.excluded_from_index
+        GROUP BY p.shop_id
+        HAVING COUNT(p.price) = COUNT(*)
+    ),
+    market AS (
+        SELECT AVG(basket_price) AS market_basket FROM basket
+    ),
+    ranked AS (
+        SELECT b.shop_id,
+               b.basket_price::bigint                                AS basket_price,
+               ROUND(b.basket_price / m.market_basket * 100)::bigint AS price_index
+        FROM basket b
+        CROSS JOIN market m
+        WHERE m.market_basket > 0
+    ),
+    dropped AS (
+        DELETE FROM shop_basket_index bi
+        WHERE bi.shop_category = p_category
+          AND NOT EXISTS (SELECT 1 FROM ranked r WHERE r.shop_id = bi.shop_id)
+    )
+    INSERT INTO shop_basket_index (shop_id, shop_category, basket_price, price_index, updated_at)
+    SELECT r.shop_id, p_category, r.basket_price, r.price_index, CURRENT_TIMESTAMP
+    FROM ranked r
+    ON CONFLICT (shop_id) DO UPDATE
+        SET shop_category = EXCLUDED.shop_category,
+            basket_price  = EXCLUDED.basket_price,
+            price_index   = EXCLUDED.price_index,
+            updated_at    = EXCLUDED.updated_at
+        -- an unchanged row is not rewritten: no new tuple, no WAL, no work for autovacuum later.
+        -- This is what makes a busy market cheap rather than expensive - the bigger it gets, the
+        -- less one price moves the average, so the more rows round to the index they already had.
+        WHERE shop_basket_index.basket_price  IS DISTINCT FROM EXCLUDED.basket_price
+           OR shop_basket_index.price_index   IS DISTINCT FROM EXCLUDED.price_index
+           OR shop_basket_index.shop_category IS DISTINCT FROM EXCLUDED.shop_category;
+END;
+$$;
+
+-- rows appeared or disappeared in products.
+--
+-- **Statement-level with a transition table, not FOR EACH ROW.** Seeding a shop writes a hundred
+-- template rows and a template sync writes them into every shop of a market at once; a row trigger
+-- would recompute the market once per row. This fires once per statement and asks the whole batch
+-- which markets it touched.
+--
+-- `template_key IS NOT NULL` is the filter that makes this affordable at all: a shop's own custom
+-- products are not in the comparison, so writing one must cost nothing.
+--
+-- **The `EXISTS` guard is what keeps shop creation cheap.** Inserting an *unpriced* template row
+-- can only ever take a shop out of the comparison or leave it out - it can never put one in. So if
+-- the shop has no row here yet, there is nothing to recompute, and Shops.Create's hundred seeding
+-- inserts do a hundred index probes instead of a hundred market recomputes inside one transaction.
+-- The guard is only sound for INSERT: *deleting* an unpriced row is exactly how a basket becomes
+-- complete, so a delete always recomputes.
+CREATE OR REPLACE FUNCTION basket_index_after_products() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+    cat text;
+BEGIN
+    FOR cat IN
+        SELECT DISTINCT s.category
+        FROM changed c
+        JOIN shops s ON s.id = c.shop_id
+        WHERE c.template_key IS NOT NULL
+          AND (TG_OP = 'DELETE'
+               OR c.price IS NOT NULL
+               OR EXISTS (SELECT 1 FROM shop_basket_index bi WHERE bi.shop_id = c.shop_id))
+        -- so that a statement spanning two markets always locks them in the same order as any other
+        ORDER BY 1
+    LOOP
+        PERFORM refresh_basket_index(cat);
+    END LOOP;
+
+    RETURN NULL;
+END;
+$$;
+
+-- an existing product row changed.
+--
+-- Separate from the function above because it needs *both* transition tables, and the answer to
+-- "does this update matter" is only in the pair. The index is a function of exactly three columns
+-- - shop_id, template_key, price - so an update that leaves all three alone cannot move it. That
+-- is not a hypothetical saving: AdminSyncTemplateUpdate rewrites names, units and photos across
+-- every shop in a market at once, and an owner photographing an обои slot writes `image_path` on a
+-- template row. Neither is a price, and neither should cost a market recomputation.
+--
+-- shop_id is compared for completeness even though nothing updates it - no statement in db/queries
+-- moves a product between shops, and if one ever does, this line is already right.
+CREATE OR REPLACE FUNCTION basket_index_after_product_update() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+    cat text;
+BEGIN
+    FOR cat IN
+        SELECT DISTINCT s.category
+        FROM changed_new n
+        JOIN changed_old o ON o.id = n.id
+        JOIN shops s ON s.id = n.shop_id
+        WHERE (n.template_key IS NOT NULL OR o.template_key IS NOT NULL)
+          AND (n.price       IS DISTINCT FROM o.price
+            OR n.template_key IS DISTINCT FROM o.template_key
+            OR n.shop_id      IS DISTINCT FROM o.shop_id)
+        ORDER BY 1
+    LOOP
+        PERFORM refresh_basket_index(cat);
+    END LOOP;
+
+    RETURN NULL;
+END;
+$$;
+
+-- a shop left a market, or an admin flipped excluded_from_index.
+--
+-- Deleting a shop deletes its own row here by cascade, but that is the easy half: the shop was one
+-- of the numbers in its market's average, so every *remaining* shop's index moved when it left.
+-- Reused for the excluded_from_index toggle too, rather than a dedicated function for it: toggling
+-- it is rare, four categories is nothing to recompute, and working out which one category a shop
+-- belongs to right now is not worth a function of its own for this.
+--
+-- It refreshes every market rather than working out which one, and that is deliberate: there are
+-- four categories, both events are rare, and the alternative needs a different transition table
+-- for a delete than for an update - two more functions to keep in step for no measurable gain.
+-- Reading the current list of categories also means the market a shop just vacated entirely is
+-- skipped, and correctly so: with no shops left in it there is nothing to compare and nothing left
+-- to update.
+CREATE OR REPLACE FUNCTION basket_index_refresh_all() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+    cat text;
+BEGIN
+    FOR cat IN SELECT DISTINCT category FROM shops ORDER BY 1 LOOP
+        PERFORM refresh_basket_index(cat);
+    END LOOP;
+
+    RETURN NULL;
+END;
+$$;
+
+-- three separate triggers on products because postgres allows a trigger with transition tables to
+-- name exactly one event.
+CREATE TRIGGER products_basket_index_insert
+    AFTER INSERT ON products
+    REFERENCING NEW TABLE AS changed
+    FOR EACH STATEMENT EXECUTE FUNCTION basket_index_after_products();
+
+CREATE TRIGGER products_basket_index_delete
+    AFTER DELETE ON products
+    REFERENCING OLD TABLE AS changed
+    FOR EACH STATEMENT EXECUTE FUNCTION basket_index_after_products();
+
+CREATE TRIGGER products_basket_index_update
+    AFTER UPDATE ON products
+    REFERENCING OLD TABLE AS changed_old NEW TABLE AS changed_new
+    FOR EACH STATEMENT EXECUTE FUNCTION basket_index_after_product_update();
+
+-- after, not before, so that the products these cascade into are already gone when the markets are
+-- recomputed. Statement triggers fire after every row trigger of the same statement, and a foreign
+-- key cascade *is* a row trigger, so the ordering is guaranteed rather than hoped for.
+CREATE TRIGGER shops_basket_index_delete
+    AFTER DELETE ON shops
+    FOR EACH STATEMENT EXECUTE FUNCTION basket_index_refresh_all();
+
+-- an admin flipped the exclusion flag (see the shops.excluded_from_index column above).
+CREATE TRIGGER shops_basket_index_excluded
+    AFTER UPDATE OF excluded_from_index ON shops
+    FOR EACH STATEMENT EXECUTE FUNCTION basket_index_refresh_all();
+
+-- TRUNCATE is not a DELETE and fires none of the triggers above, so without this one line
+-- `TRUNCATE products` would leave a full index describing baskets that no longer exist. Nothing in
+-- the app truncates anything; it is here because the entire argument for putting this rule in the
+-- database rather than in Go is that it holds for every writer, and a hole that only opens in psql
+-- is still a hole.
+CREATE TRIGGER products_basket_index_truncate
+    AFTER TRUNCATE ON products
+    FOR EACH STATEMENT EXECUTE FUNCTION basket_index_refresh_all();

@@ -44,24 +44,27 @@ type ProductTemplate struct {
 }
 
 type Shop struct {
-	ID           int64              `json:"id"`
-	UserID       int64              `json:"user_id"`
-	Name         string             `json:"name"`
-	Address      string             `json:"address"`
-	ContactPhone string             `json:"contact_phone"`
-	ImageUrl     pgtype.Text        `json:"image_url"`
-	Category     string             `json:"category"`
-	Rating       pgtype.Numeric     `json:"rating"`
-	VipUntil     pgtype.Timestamptz `json:"vip_until"`
-	Location     interface{}        `json:"location"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ID                int64              `json:"id"`
+	UserID            int64              `json:"user_id"`
+	Name              string             `json:"name"`
+	Address           string             `json:"address"`
+	ContactPhone      string             `json:"contact_phone"`
+	ImageUrl          pgtype.Text        `json:"image_url"`
+	Category          string             `json:"category"`
+	Rating            pgtype.Numeric     `json:"rating"`
+	VipUntil          pgtype.Timestamptz `json:"vip_until"`
+	Location          interface{}        `json:"location"`
+	ExcludedFromIndex bool               `json:"excluded_from_index"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 }
 
 type ShopBasketIndex struct {
-	ShopID      int64 `json:"shop_id"`
-	BasketPrice int64 `json:"basket_price"`
-	PriceIndex  int64 `json:"price_index"`
+	ShopID       int64              `json:"shop_id"`
+	ShopCategory string             `json:"shop_category"`
+	BasketPrice  int64              `json:"basket_price"`
+	PriceIndex   int64              `json:"price_index"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
 
 type SupportMessage struct {

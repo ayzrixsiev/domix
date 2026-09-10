@@ -291,6 +291,74 @@ func TestBasketIndexNeedsEveryTemplateProductPriced(t *testing.T) {
 	}
 }
 
+// the direction the other tests never travel: a shop that **is** in the comparison and then stops
+// being in it, because the template grew under it.
+//
+// This is a real event, not a hypothetical - it is what AdminSyncTemplateInsert does to every shop
+// in a market the moment the founder adds a row to products.md. Every one of them is suddenly one
+// unpriced item short of a complete basket, and the badge has to go out until its owner prices the
+// new row.
+//
+// **It is here because of how the index is kept up to date.** Since 000006 the table is maintained
+// by triggers, and the insert trigger deliberately does *not* recompute when an unpriced template
+// row arrives at a shop that has no index row - that is what stops Shops.Create's hundred seeding
+// inserts from recomputing the whole market a hundred times inside one transaction. The guard is
+// only sound in that one direction, and this test is the other one: arrive at a shop that *does*
+// have an index row, and the market must be recomputed and that row taken away. A guard written one
+// clause too wide would leave the old badge standing on the map - not missing, which somebody would
+// notice, but *wrong*, which nobody would.
+func TestAGrowingTemplateTakesAShopOutOfTheComparison(t *testing.T) {
+	ctx, conn, q := beginTx(t)
+
+	full := len(catalog.Template(string(catalog.CategoryUniversal)))
+
+	// a second fully priced shop, so there is a market to be indexed against at all
+	reference := makeShopTx(t, ctx, conn, q, "reference", catalog.CategoryUniversal, false)
+	priceProducts(t, ctx, conn, reference, full, 100_000)
+
+	shop := makeShopTx(t, ctx, conn, q, "grower", catalog.CategoryUniversal, false)
+	priceProducts(t, ctx, conn, shop, full, 100_000)
+
+	shops, err := q.ListShops(ctx)
+	if err != nil {
+		t.Fatalf("list shops: %v", err)
+	}
+	if row := findShop(t, shops, shop); !row.PriceIndex.Valid {
+		t.Fatalf("a fully priced catalogue should publish an index before the template grows")
+	}
+
+	// the founder adds one product to the универсальный template and syncs. the same statement the
+	// admin endpoint runs, one unpriced row into a shop that is currently ranked.
+	if err := q.SeedTemplateProduct(ctx, db.SeedTemplateProductParams{
+		ShopID:      shop,
+		Name:        "новый товар",
+		Category:    "tools",
+		Unit:        "шт",
+		TemplateKey: pgtype.Text{String: "universal.grown_row", Valid: true},
+	}); err != nil {
+		t.Fatalf("seed the new template row: %v", err)
+	}
+
+	shops, err = q.ListShops(ctx)
+	if err != nil {
+		t.Fatalf("list shops after the template grew: %v", err)
+	}
+	if row := findShop(t, shops, shop); row.PriceIndex.Valid {
+		t.Fatalf("one unpriced row is an incomplete basket, but the index survived as %d", row.PriceIndex.Int64)
+	}
+
+	// and pricing it puts the shop back
+	priceProducts(t, ctx, conn, shop, full+1, 100_000)
+
+	shops, err = q.ListShops(ctx)
+	if err != nil {
+		t.Fatalf("list shops after pricing the new row: %v", err)
+	}
+	if row := findShop(t, shops, shop); !row.PriceIndex.Valid {
+		t.Fatalf("the basket is complete again and should publish an index")
+	}
+}
+
 // ─────────────────────────── the paid placements ───────────────────────────
 
 // **the one that would cost real money if it broke.** ListVipShops used to inner-join the basket
@@ -345,8 +413,52 @@ func TestAPaidPlacementAppearsBeforeItsCatalogueIsPriced(t *testing.T) {
 
 // the centre of the carousel is the most valuable position in the section and it is being sold, so
 // which row leads this list is a commercial decision rather than an ordering detail. the rule is
-// "the longest placement still ahead of it leads", ties broken by id so the order is total.
-func TestTheVipCarouselLeadsWithTheLongestPlacement(t *testing.T) {
+// "the cheapest basket leads" - the centre answers the question the customer opened the app with,
+// and the placement is what got a shop into the running for it.
+//
+// **the unpriced placement is the half of this that costs money if it breaks.** ListVipShops
+// left-joins the basket index on purpose, so a shop that has paid but not finished pricing has a
+// null where its basket goes. it has nothing to rank, so it belongs at the back of a price ordering
+// - but it still belongs *in the list*, and a null sorting to the front would hand the slot that is
+// sold on comparison to the one card that cannot make one.
+func TestTheVipCarouselLeadsWithTheCheapestBasket(t *testing.T) {
+	ctx, conn, q := beginTx(t)
+
+	full := len(catalog.Template(string(catalog.CategoryUniversal)))
+
+	// created most expensive first, so a query returning insertion order would fail here
+	dear := makeShopTx(t, ctx, conn, q, "dear", catalog.CategoryUniversal, false)
+	mid := makeShopTx(t, ctx, conn, q, "mid", catalog.CategoryUniversal, false)
+	cheap := makeShopTx(t, ctx, conn, q, "cheap", catalog.CategoryUniversal, false)
+	// bought a placement and has priced nothing: no row in the index at all, so basket_price is null
+	unpriced := makeShopTx(t, ctx, conn, q, "unpriced", catalog.CategoryUniversal, false)
+
+	priceProducts(t, ctx, conn, dear, full, 120_000)
+	priceProducts(t, ctx, conn, mid, full, 100_000)
+	priceProducts(t, ctx, conn, cheap, full, 80_000)
+
+	// the longest run is deliberately the most expensive shop's, and the unpriced one outruns two of
+	// the three priced ones: under the old `vip_until DESC` rule this list came back backwards.
+	setVIP(t, ctx, q, dear, time.Now().Add(90*24*time.Hour))
+	setVIP(t, ctx, q, unpriced, time.Now().Add(60*24*time.Hour))
+	setVIP(t, ctx, q, cheap, time.Now().Add(14*24*time.Hour))
+	setVIP(t, ctx, q, mid, time.Now().Add(7*24*time.Hour))
+
+	shops, err := q.ListVipShops(ctx, 5)
+	if err != nil {
+		t.Fatalf("list vip shops: %v", err)
+	}
+
+	want := []int64{cheap, mid, dear, unpriced}
+	if got := vipIDs(shops); !slices.Equal(got, want) {
+		t.Fatalf("want [cheap mid dear unpriced] = %v, got %v - the cheapest basket takes the centre "+
+			"and the placement with no basket sorts last", want, got)
+	}
+}
+
+// the two rules that keep that ordering *total*: equal baskets fall back to the longer placement,
+// and a placement whose date has passed is gone whatever it costs.
+func TestTheVipCarouselTieBreaksOnTheLongerPlacement(t *testing.T) {
 	ctx, conn, q := beginTx(t)
 
 	full := len(catalog.Template(string(catalog.CategoryUniversal)))
@@ -371,8 +483,8 @@ func TestTheVipCarouselLeadsWithTheLongestPlacement(t *testing.T) {
 		t.Fatalf("list vip shops: %v", err)
 	}
 	if got := vipIDs(shops); len(got) != 2 || got[0] != long || got[1] != short {
-		t.Fatalf("want [long short] = %v, got %v - a lapsed placement must drop out and the longest "+
-			"one must lead", []int64{long, short}, got)
+		t.Fatalf("want [long short] = %v, got %v - a lapsed placement must drop out, and with nothing "+
+			"between two identical baskets the longer placement leads", []int64{long, short}, got)
 	}
 }
 

@@ -178,6 +178,7 @@ func main() {
 	http.HandleFunc("/api/admin/shops", adminRoute(adminEndpoints.ListShops))
 	http.HandleFunc("/api/admin/shops/{id}", adminRoute(adminEndpoints.RouteShop))
 	http.HandleFunc("/api/admin/shops/{id}/vip", adminRoute(adminEndpoints.SetVIP))
+	http.HandleFunc("/api/admin/shops/{id}/exclude", adminRoute(adminEndpoints.SetExcluded))
 	http.HandleFunc("/api/admin/shops/{id}/products", adminRoute(adminEndpoints.ListShopProducts))
 	http.HandleFunc("/api/admin/products/{id}", adminRoute(adminEndpoints.UpdateProduct))
 
@@ -330,9 +331,9 @@ func main() {
 // startBasketHistory keeps `basket_history` current: one row per shop category per day.
 //
 // **It exists because the basket price is the one number in this product that cannot be recomputed.**
-// `shop_basket_index` is a view over `products.price`, so it always answers about *now* - the moment
-// an owner retypes a price, what their basket cost yesterday is gone and nothing anywhere remembers
-// it. Every other figure on the admin dashboard is derived from current rows; "средний чек по
+// `shop_basket_index` is kept in step with `products.price` on every write (migration `000006`), so
+// it always answers about *now* - the moment an owner retypes a price, what their basket cost
+// yesterday is overwritten and nothing anywhere remembers it. Every other figure on the admin dashboard is derived from current rows; "средний чек по
 // категории за месяц" needs something to have been written down at the time.
 //
 // **Hourly, not nightly.** A daily job is one `time.Ticker` firing at whatever moment the process
@@ -342,8 +343,9 @@ func main() {
 // runs would have written on its own - and today's point stays current to within the hour instead of
 // being yesterday's until midnight.
 //
-// **The whole aggregate runs in the database** (RecordBasketHistory) - one statement over a view,
-// nothing travelling through Go - which is what makes it cheap enough to put on a timer at all.
+// **The whole aggregate runs in the database** (RecordBasketHistory) - one statement over the index
+// table, nothing travelling through Go - which is what makes it cheap enough to put on a timer at
+// all.
 //
 // A failure is logged and the loop continues: this is a chart, and a missing hour costs nothing that
 // the next hour does not fix. It also deliberately does *not* take the shutdown path - there is no

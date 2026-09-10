@@ -170,17 +170,17 @@ func productImage(urls imagestore.URLs, path pgtype.Text) (url, thumb *string, o
 //
 // **photoEditable is asked of the catalogue, not of the shop's category, and that is the whole
 // design.** The rule is "an owner may photograph what we have not photographed" - which today means
-// обои, whose slots name a *kind* of wallpaper and so have nothing to shoot, and древесные
-// материалы, which has simply never been shot. Everywhere else the picture is the catalogue's: one
-// file on disk shared by every shop of that category, and an owner replacing it makes their tile
-// disagree with the identical row in the shop across the road while the basket index says the two
-// are the same product.
+// обои and nothing else, whose slots name a *kind* of wallpaper and so have nothing to shoot.
+// Everywhere else the picture is the catalogue's: one file on disk shared by every shop of that
+// category, and an owner replacing it makes their tile disagree with the identical row in the shop
+// across the road while the basket index says the two are the same product.
 //
 // Written as `TemplateImage(key) == ""` rather than as a list of category codes because a hand-kept
 // list of "the unphotographed categories" is a second copy of a fact the template already holds -
 // the same argument that keeps the обои slot keys derived rather than written down (see
-// catalog.IsOwnerNamedSlot). It also means the day the wood catalogue is photographed, those rows
-// lock themselves: shooting a category is the whole change, with nothing to remember afterwards.
+// catalog.IsOwnerNamedSlot). **That has now been collected on**: migration 000005 photographed
+// пиломатериалы, and those five rows locked themselves - shooting the catalogue was the whole
+// change, with nothing to remember here afterwards.
 func templateFlags(key pgtype.Text) (isTemplate, nameEditable, photoEditable bool) {
 	if !key.Valid {
 		return false, true, true

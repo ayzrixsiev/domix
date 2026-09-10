@@ -25,10 +25,11 @@ import (
 //	DELETE /api/products/{id}/image  - owner removes it
 //
 // **An owner may photograph anything we have not photographed, and nothing we have.** That means
-// their own products always, обои slots (a slot names a *kind* of wallpaper, so there is nothing to
-// shoot) and древесные материалы (never shot) - and it means the универсальный and сантехника
-// catalogues are ours. The rule is asked of the template rather than of the shop's category, so it
-// is `templateFlags`'s third return value; that function's comment has why.
+// their own products always, and обои slots (a slot names a *kind* of wallpaper, so there is nothing
+// to shoot) - everything else is ours. Пиломатериалы used to be on the permissive side too, simply
+// because nobody had shot it; migration 000005 shot it, and the rows moved over on their own. That
+// is the point of asking the template rather than the shop's category, so the answer is
+// `templateFlags`'s third return value; that function's comment has why.
 //
 // The rule used to be the opposite - every row, template ones included - on the reasoning that a
 // photograph is not one of the three things (key, name, unit) that make two baskets comparable, and
@@ -133,10 +134,10 @@ func (p *Products) UploadImage(w http.ResponseWriter, r *http.Request) {
 //
 // **Deliberately not gated by the rule UploadImage enforces**, even though the two are the same
 // question one step apart. Removal can only ever move a row *towards* the catalogue, so refusing it
-// protects nothing - and the case it would break is real: an owner photographs a wood row today, the
-// wood catalogue is shot next month, and their upload is now the one thing on the row that the rule
-// says should not be there. With removal open they can put the catalogue's shot back; gated, they
-// are stuck with their own picture forever.
+// protects nothing - and the case it would break has since happened: owners photographed древесные
+// rows while that catalogue had no pictures, migration 000005 shot пиломатериалы, and those uploads
+// are now the one thing on the row the rule says should not be there. With removal open they can put
+// the catalogue's shot back; gated, they would be stuck with their own picture forever.
 func (p *Products) RemoveImage(w http.ResponseWriter, r *http.Request) {
 	existing, ok := p.authorizeProductAccess(w, r)
 	if !ok {
@@ -144,7 +145,7 @@ func (p *Products) RemoveImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// "" for a product of the owner's own, and for a template row whose catalogue has no photo -
-	// every обои slot, and the five product categories nothing has been photographed for yet
+	// which since 000005 shot пиломатериалы means every обои slot and nothing else
 	restored := pgtype.Text{}
 	if existing.TemplateKey.Valid {
 		if fallback := catalog.TemplateImage(existing.TemplateKey.String); fallback != "" {

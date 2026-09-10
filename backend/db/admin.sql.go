@@ -262,6 +262,7 @@ func (q *Queries) AdminDeleteUser(ctx context.Context, id int64) (int64, error) 
 const adminListShops = `-- name: AdminListShops :many
 SELECT
     s.id, s.name, s.category, s.address, s.contact_phone, s.created_at, s.vip_until,
+    s.excluded_from_index,
     COALESCE(s.vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip,
     u.id    AS owner_id,
     u.name  AS owner_name,
@@ -286,22 +287,23 @@ type AdminListShopsParams struct {
 }
 
 type AdminListShopsRow struct {
-	ID             int64              `json:"id"`
-	Name           string             `json:"name"`
-	Category       string             `json:"category"`
-	Address        string             `json:"address"`
-	ContactPhone   string             `json:"contact_phone"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	VipUntil       pgtype.Timestamptz `json:"vip_until"`
-	IsVip          bool               `json:"is_vip"`
-	OwnerID        int64              `json:"owner_id"`
-	OwnerName      pgtype.Text        `json:"owner_name"`
-	OwnerPhone     string             `json:"owner_phone"`
-	ProductsTotal  int64              `json:"products_total"`
-	TemplateTotal  int64              `json:"template_total"`
-	TemplatePriced int64              `json:"template_priced"`
-	PriceIndex     pgtype.Int8        `json:"price_index"`
-	BasketPrice    pgtype.Int8        `json:"basket_price"`
+	ID                int64              `json:"id"`
+	Name              string             `json:"name"`
+	Category          string             `json:"category"`
+	Address           string             `json:"address"`
+	ContactPhone      string             `json:"contact_phone"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	VipUntil          pgtype.Timestamptz `json:"vip_until"`
+	ExcludedFromIndex bool               `json:"excluded_from_index"`
+	IsVip             bool               `json:"is_vip"`
+	OwnerID           int64              `json:"owner_id"`
+	OwnerName         pgtype.Text        `json:"owner_name"`
+	OwnerPhone        string             `json:"owner_phone"`
+	ProductsTotal     int64              `json:"products_total"`
+	TemplateTotal     int64              `json:"template_total"`
+	TemplatePriced    int64              `json:"template_priced"`
+	PriceIndex        pgtype.Int8        `json:"price_index"`
+	BasketPrice       pgtype.Int8        `json:"basket_price"`
 }
 
 func (q *Queries) AdminListShops(ctx context.Context, arg AdminListShopsParams) ([]AdminListShopsRow, error) {
@@ -321,6 +323,7 @@ func (q *Queries) AdminListShops(ctx context.Context, arg AdminListShopsParams) 
 			&i.ContactPhone,
 			&i.CreatedAt,
 			&i.VipUntil,
+			&i.ExcludedFromIndex,
 			&i.IsVip,
 			&i.OwnerID,
 			&i.OwnerName,
@@ -707,6 +710,32 @@ func (q *Queries) AdminProductsByCategory(ctx context.Context) ([]AdminProductsB
 		return nil, err
 	}
 	return items, nil
+}
+
+const adminSetShopExcluded = `-- name: AdminSetShopExcluded :one
+UPDATE shops
+SET excluded_from_index = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, name, excluded_from_index
+`
+
+type AdminSetShopExcludedParams struct {
+	ID                int64 `json:"id"`
+	ExcludedFromIndex bool  `json:"excluded_from_index"`
+}
+
+type AdminSetShopExcludedRow struct {
+	ID                int64  `json:"id"`
+	Name              string `json:"name"`
+	ExcludedFromIndex bool   `json:"excluded_from_index"`
+}
+
+func (q *Queries) AdminSetShopExcluded(ctx context.Context, arg AdminSetShopExcludedParams) (AdminSetShopExcludedRow, error) {
+	row := q.db.QueryRow(ctx, adminSetShopExcluded, arg.ID, arg.ExcludedFromIndex)
+	var i AdminSetShopExcludedRow
+	err := row.Scan(&i.ID, &i.Name, &i.ExcludedFromIndex)
+	return i, err
 }
 
 const adminShopsByCategory = `-- name: AdminShopsByCategory :many

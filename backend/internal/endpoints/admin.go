@@ -560,6 +560,8 @@ type adminShopResponse struct {
 	ContactPhone string `json:"contact_phone"`
 	IsVIP        bool   `json:"is_vip"`
 	VipUntil     string `json:"vip_until,omitempty"`
+	// suspended by an admin, independent of catalogue completeness - see AdminSetShopExcluded.
+	ExcludedFromIndex bool `json:"excluded_from_index"`
 
 	OwnerID    int64  `json:"owner_id"`
 	OwnerName  string `json:"owner_name"`
@@ -602,20 +604,21 @@ func (a *Admin) ListShops(w http.ResponseWriter, r *http.Request) {
 	shops := make([]adminShopResponse, 0, len(rows))
 	for _, row := range rows {
 		shop := adminShopResponse{
-			ID:             row.ID,
-			Name:           row.Name,
-			Category:       row.Category,
-			Address:        row.Address,
-			ContactPhone:   row.ContactPhone,
-			IsVIP:          row.IsVip,
-			VipUntil:       timestampString(row.VipUntil),
-			OwnerID:        row.OwnerID,
-			OwnerName:      row.OwnerName.String,
-			OwnerPhone:     row.OwnerPhone,
-			ProductsTotal:  row.ProductsTotal,
-			TemplateTotal:  row.TemplateTotal,
-			TemplatePriced: row.TemplatePriced,
-			CreatedAt:      timestampString(row.CreatedAt),
+			ID:                row.ID,
+			Name:              row.Name,
+			Category:          row.Category,
+			Address:           row.Address,
+			ContactPhone:      row.ContactPhone,
+			IsVIP:             row.IsVip,
+			VipUntil:          timestampString(row.VipUntil),
+			ExcludedFromIndex: row.ExcludedFromIndex,
+			OwnerID:           row.OwnerID,
+			OwnerName:         row.OwnerName.String,
+			OwnerPhone:        row.OwnerPhone,
+			ProductsTotal:     row.ProductsTotal,
+			TemplateTotal:     row.TemplateTotal,
+			TemplatePriced:    row.TemplatePriced,
+			CreatedAt:         timestampString(row.CreatedAt),
 		}
 		if row.PriceIndex.Valid {
 			index := row.PriceIndex.Int64
@@ -961,6 +964,56 @@ func (a *Admin) SetVIP(w http.ResponseWriter, r *http.Request) {
 		"id":        updated.ID,
 		"is_vip":    updated.IsVip,
 		"vip_until": timestampString(updated.VipUntil),
+	})
+}
+
+// PUT /api/admin/shops/{id}/exclude - pull a shop out of its market's comparison, or put it back.
+//
+// separate from catalogue completeness (shop_basket_index) on purpose: that row answers "is every
+// template product priced", derived from products and unable to disagree with them. This flag is an
+// admin's own decision - a rules violation under review, a seller asked to pause - and it must win
+// even when every price is filled in. refresh_basket_index (migration 000007) already excludes a
+// flagged shop from the average; this handler only flips the column and lets the trigger it wires
+// recompute the category.
+func (a *Admin) SetExcluded(w http.ResponseWriter, r *http.Request) {
+	adminID, _ := auth.UserIDFromContext(r.Context())
+
+	shopID, ok := adminPathID(w, r, "shop")
+	if !ok {
+		return
+	}
+
+	var req struct {
+		Excluded bool `json:"excluded"`
+	}
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+
+	ctx, cancel := dbctx.WithTimeout(r.Context())
+	defer cancel()
+
+	updated, err := a.Queries.AdminSetShopExcluded(ctx, db.AdminSetShopExcludedParams{ID: shopID, ExcludedFromIndex: req.Excluded})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeAPIError(w, http.StatusNotFound, "shop_not_found", "no shop with that id")
+			return
+		}
+		log.Printf("CRITICAL: admin %d failed to set excluded=%v on shop %d: %v", adminID, req.Excluded, shopID, err)
+		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not update the shop")
+		return
+	}
+
+	if req.Excluded {
+		log.Printf("ADMIN %d excluded shop %d from the price index", adminID, shopID)
+	} else {
+		log.Printf("ADMIN %d returned shop %d to the price index", adminID, shopID)
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]any{
+		"id":                  updated.ID,
+		"excluded_from_index": updated.ExcludedFromIndex,
 	})
 }
 

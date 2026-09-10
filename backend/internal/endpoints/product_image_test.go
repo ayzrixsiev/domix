@@ -196,45 +196,36 @@ func TestAnOwnerPutsAPhotoOnTheirOwnProduct(t *testing.T) {
 
 // **the founder's rule, positive half: an owner photographs what the catalogue has not.**
 //
-// The two categories that qualify today qualify for different reasons, so both are here. An обои
-// slot names a *kind* of wallpaper - "премиум (Россия)" - and there is no such object to photograph,
-// so the shop's own roll is the only picture that could ever be on that tile. Древесные материалы
-// names real products and simply has not been shot yet.
+// An обои slot names a *kind* of wallpaper - "премиум (Россия)" - and there is no such object to
+// photograph, so the shop's own roll is the only picture that could ever be on that tile. It is the
+// only category on this side of the rule and the only one that can never leave it: древесные rows
+// were the second case, permitted only because nobody had shot them, and migration 000005 moved them
+// across by taking the pictures.
 //
-// The rule is read off the template rather than off this list of categories (see templateFlags), so
-// what this test really pins is that both of those end up on the permissive side of it.
+// The rule is read off the template rather than off a list of categories (see templateFlags), which
+// is what let that happen with no test to update but this one - so what this pins is that a slot
+// with no photograph to share lands on the permissive side of it.
 func TestAnOwnerPhotographsWhatTheCatalogueHasNot(t *testing.T) {
-	for _, tc := range []struct {
-		name     string
-		category catalog.Category
-		key      string
-	}{
-		{"обои slot", catalog.CategoryWallpaper, "wallpaper.premium_ru"},
-		{"unphotographed wood row", catalog.CategoryWood, "wood.board_25x150"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			products, root, ctx, tx, q := imageProductsUnderTest(t)
+	products, root, ctx, tx, q := imageProductsUnderTest(t)
 
-			shop := makeSeededShop(t, ctx, tx, q, "Foto"+tc.key, tc.category, false)
-			owner := shopOwnerID(t, ctx, tx, shop)
-			row := seededProductID(t, ctx, tx, shop, tc.key)
+	shop := makeSeededShop(t, ctx, tx, q, "Foto", catalog.CategoryWallpaper, false)
+	owner := shopOwnerID(t, ctx, tx, shop)
+	row := seededProductID(t, ctx, tx, shop, "wallpaper.premium_ru")
 
-			rec := callUpload(t, ctx, products, row, owner, "roll.jpg", testPhoto(t, 900, 900))
-			if rec.Code != http.StatusOK {
-				t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
-			}
+	rec := callUpload(t, ctx, products, row, owner, "roll.jpg", testPhoto(t, 900, 900))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
 
-			saved := decodeProduct(t, rec)
-			if !saved.IsTemplate {
-				t.Fatal("uploading a photo must not turn a template row into an ordinary product")
-			}
-			if !saved.PhotoEditable {
-				t.Error("photo_editable is false on a row the endpoint just accepted a photo for")
-			}
-			if _, err := os.Stat(storedFile(t, root, saved.ImageURL)); err != nil {
-				t.Fatalf("the file the response names is not on disk: %v", err)
-			}
-		})
+	saved := decodeProduct(t, rec)
+	if !saved.IsTemplate {
+		t.Fatal("uploading a photo must not turn a template row into an ordinary product")
+	}
+	if !saved.PhotoEditable {
+		t.Error("photo_editable is false on a row the endpoint just accepted a photo for")
+	}
+	if _, err := os.Stat(storedFile(t, root, saved.ImageURL)); err != nil {
+		t.Fatalf("the file the response names is not on disk: %v", err)
 	}
 }
 
