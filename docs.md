@@ -4,10 +4,10 @@
 
 ```mermaid
 erDiagram
-    %% Relationship definitions
-    User ||--o{ Shop : "User owns zero or many Shops (Cascade Delete)"
-    Shop ||--o{ Product : "Shop contains zero or many Products (Cascade Delete)"
+    %% --- User / Support cluster ---
     User ||--o{ SupportMessage : "User has one thread of Support Messages (Cascade Delete)"
+    User ||--o{ SupportThreadReads : "Admin's read watermark on a thread (Cascade Delete)"
+    User ||--o{ SupportThreadReads : "Watermark belongs to this user's thread (Cascade Delete)"
 
     User {
         bigint id PK "Internal Sequential ID"
@@ -17,6 +17,26 @@ erDiagram
         timestamp created_at "Creation timestamp"
         timestamp updated_at "Update timestamp"
     }
+
+    SupportMessage {
+        bigint id PK "Internal Sequential ID"
+        bigint user_id FK "Whose thread this is - on both sides. There is no threads table"
+        boolean from_support "Which side wrote it. A role, not a sender id - set by the handler, never read from a request body"
+        text body "TEXT, not VARCHAR(n) - the 2000-rune limit is enforced in Go so retuning it is a deploy, not a migration"
+        timestamp created_at "Creation timestamp"
+    }
+
+    SupportThreadReads {
+        bigint admin_id PK, FK "Which admin did the reading - refers to users.id"
+        bigint thread_user_id PK, FK "Whose thread was read - a thread IS one user's messages, there is no threads table"
+        bigint last_read_id "Watermark: id of the newest support_message this admin has seen in this thread. Taken from the DB, never from the client"
+        timestamp updated_at "When the watermark last moved"
+    }
+
+    %% --- Shop / Product cluster ---
+    User ||--o{ Shop : "User owns zero or many Shops (Cascade Delete)"
+    Shop ||--o{ Product : "Shop contains zero or many Products (Cascade Delete)"
+    Shop ||--o| ShopBasketIndex : "derived, one row per shop that has priced its ENTIRE template"
 
     Shop {
         bigint id PK "Internal Sequential ID"
@@ -29,6 +49,7 @@ erDiagram
         numeric rating "Intended 0.0-5.0, but no CHECK enforces it. Stored, nothing writes it - the app hides the star"
         timestamp vip_until "Paid placement runs until this moment (Nullable) - VIP while it is in the future"
         geometry location "PostGIS spatial point, stored as (longitude, latitude). Nullable - validateCoordinates in Go is what keeps it filled"
+        boolean excluded_from_index "Admin lever: pulled out of its market's price comparison without touching a price. Default false"
         timestamp created_at "Creation timestamp"
         timestamp updated_at "Update timestamp"
     }
@@ -54,25 +75,27 @@ erDiagram
         varchar name "Copied verbatim into products.name at seeding"
         varchar category "One of the 12 product codes"
         varchar unit "шт, кг, мешок ..."
-        text image_path "Catalogue photo, e.g. 'universal/001.jpg' (Nullable - wood and wallpaper have none)"
+        text image_path "Catalogue photo, e.g. 'universal/001.jpg' (Nullable - only обои slots, which name a kind of wallpaper rather than a product)"
         timestamp created_at "Creation timestamp"
         timestamp updated_at "Update timestamp"
     }
 
-    SupportMessage {
-        bigint id PK "Internal Sequential ID"
-        bigint user_id FK "Whose thread this is - on both sides. There is no threads table"
-        boolean from_support "Which side wrote it. A role, not a sender id - set by the handler, never read from a request body"
-        text body "TEXT, not VARCHAR(n) - the 2000-rune limit is enforced in Go so retuning it is a deploy, not a migration"
-        timestamp created_at "Creation timestamp"
-    }
-
-    Shop ||--o| ShopBasketIndex : "derived, one row per shop that has priced its ENTIRE template"
-
     ShopBasketIndex {
         bigint shop_id PK, FK "Refers to shops.id"
+        varchar shop_category "Copy of shops.category, so a refresh can find the rows of the market it is recomputing - including a shop's row under the market it just left"
         bigint basket_price "Sum of this shop's template rows - every сум of it typed by its own owner"
         bigint price_index "basket_price / category market average x 100 - never sent to the app"
+        timestamp updated_at "When this row last agreed with products. Read by nobody; it is how a stale index is diagnosed from psql"
+    }
+
+    %% --- Unconnected: no FK, just a daily snapshot table ---
+    BasketHistory {
+        date day PK "Which day this snapshot is for"
+        text category PK "Which shop category - no FK, it is a Go enum"
+        int shops "How many shops were in the comparison that day"
+        bigint avg_basket "Average basket_price across those shops"
+        bigint min_basket "Cheapest basket that day"
+        bigint max_basket "Priciest basket that day"
     }
 ```
 
@@ -97,7 +120,6 @@ In our backend we have a concept called "Context" AKA ctx, which is designed to 
 Parent context in this function means that we need to pass it an existing ctx which can be taken in two ways:
 1. From incoming http requests (which are not timers, but rather guards that watch whether user e.g turned off his internet or left the app).
 2. Or create ourselfs by using context.Background()
-
 
 <br>
 <br>
@@ -140,4 +162,4 @@ sm.sessions.Store(sessionID, SessionData{
 - TRUNCATE TABLE users RESTART IDENTITY CASCADE;          
 - ngrok http 8080                           
 - go run ./cmd/api    
-- make test-apk
+- make apk-test

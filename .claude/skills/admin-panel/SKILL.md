@@ -453,8 +453,9 @@ category is worth, the line says whether that is moving, and neither carries the
 
 #### The history is written down, because it cannot be recomputed
 
-`shop_basket_index` is a view over `products.price`: it always answers about *now*, and yesterday's
-basket is gone the moment an owner retypes a number. `basket_history` (migration `000003`) is one row
+`shop_basket_index` is recomputed from `products.price` on every write that can move it (migration
+`000006`): it always answers about *now*, and yesterday's basket is gone the moment an owner retypes
+a number. `basket_history` (migration `000003`) is one row
 per `(day, category)`, upserted by **`startBasketHistory`, the third goroutine in `main.go`**.
 
 - **Hourly, not nightly.** A daily ticker fires at whatever moment the process happened to start, so

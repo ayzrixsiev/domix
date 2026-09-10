@@ -229,12 +229,16 @@ button rather than a cron job — at this scale the count is zero or single digi
   token-protected `/metrics`.
 - **`ListShops` has no `LIMIT` and no bounding box**, so opening the map fetches every shop.
   Irrelevant at 50–70; revisit around 1 000.
-- **`shop_basket_index` is a plain view, not materialized**, and its `basket` CTE is referenced twice
-  — a materialization barrier, so postgres cannot push the category predicate down and every query
-  touching it sequentially scans every template product row. `GET /api/home` pays that five times.
-  Measured ~3 ms per home request at 50 shops, 36 ms at 1 000, 175 ms at 5 000. **The axis that hurts
-  is shop count, not user count.** Past ~1 000 shops the fix is a materialized view refreshed on price
-  change, or a cached home payload — **not** a bigger connection pool.
+- **`shop_basket_index` was a plain view and is now a trigger-maintained table** (migration `000006`)
+  — **fixed**, and the numbers are here because the shape of the problem recurs. As a view its
+  `basket` CTE was referenced twice, a materialization barrier, so postgres could not push the
+  category predicate down and every query touching it sequentially scanned every template product
+  row; `GET /api/home` paid that five times. Measured at 500 shops / 50 k products:
+  `ListBestOffersInCategory` 84.2 ms → **0.37 ms**, `ListShops` (the map) 10.4 ms → **0.17 ms**. The
+  cost moved to the write that causes it — one owner retyping one price now recomputes that market,
+  24 ms at 500 shops — which is the right side of the trade while reads outnumber price edits, and it
+  is the number to watch if that ever stops being true. **The axis that hurts is still shop count,
+  not user count**, and the remaining home-screen cost is now `ListShops` having no bound (below).
 - **The glibc collation mismatch on the local database.** `domix_db` was created under glibc 2.43 and
   the OS now provides 2.44, so `CREATE DATABASE` from `template1` fails outright. The repair is
   `REINDEX DATABASE domix_db;` **and then** `ALTER DATABASE domix_db REFRESH COLLATION VERSION;` — in
