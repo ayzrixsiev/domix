@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:frontend/core/constants/api_config.dart';
-import 'package:frontend/core/network/api_get.dart';
+import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/features/profile/data/auth_service.dart';
 import 'shop_category.dart';
 import 'shop_model.dart';
@@ -83,7 +83,7 @@ class StoresRepository {
       throw Exception('You must be logged in to add a shop');
     }
 
-    final response = await http
+    final response = await appHttpClient
         .post(
           _shopsUri,
           headers: {
@@ -131,7 +131,7 @@ class StoresRepository {
       throw const ShopMutationException(code: 'unauthorized', message: 'Not logged in');
     }
 
-    final response = await http
+    final response = await appHttpClient
         .put(
           _shopUri(shopId),
           headers: {
@@ -163,7 +163,7 @@ class StoresRepository {
       throw const ShopMutationException(code: 'unauthorized', message: 'Not logged in');
     }
 
-    final response = await http
+    final response = await appHttpClient
         .delete(_shopUri(shopId), headers: {'Authorization': 'Bearer $token'})
         .timeout(const Duration(seconds: 10));
 

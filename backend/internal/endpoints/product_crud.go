@@ -237,6 +237,9 @@ func (p *Products) ListByShop(w http.ResponseWriter, r *http.Request) {
 
 	products, err := p.Queries.ListProductsByShop(ctx, shopID)
 	if err != nil {
+		if callerGone(r) {
+			return
+		}
 		log.Printf("CRITICAL: failed to list products for shop %d: %v", shopID, err)
 		writeAPIError(w, http.StatusInternalServerError, "server_error", "failed to load products")
 		return

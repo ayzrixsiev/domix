@@ -18,6 +18,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -119,25 +120,30 @@ func (l *Limiter) Wrap(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// TrustProxy: is the api behind a proxy (ngrok, nginx) that writes the caller into X-Forwarded-For?
+// It also makes main.go listen on 127.0.0.1 only, so nothing can reach the api around the proxy.
+// ParseBool, so TRUE/True/1 in .env work too rather than failing silently.
+func TrustProxy() bool {
+	on, _ := strconv.ParseBool(strings.TrimSpace(os.Getenv("TRUST_PROXY")))
+	return on
+}
+
 // clientIP identifies the caller to bucket them by.
 //
-// **X-Forwarded-For is only trusted when TRUST_PROXY is set, and that default is the safe one.** The
-// header is written by the client unless something in front of the app overwrites it, so trusting it
-// unconditionally hands every attacker an unlimited supply of identities - they change one string
-// and get a fresh bucket per request, which is worse than having no limiter at all because it looks
-// like there is one. Trusting it never, on the other hand, means that once this runs behind nginx or
-// Cloudflare every request appears to come from the proxy and the whole internet shares one bucket.
-//
-// Both failure modes are silent, so the choice is explicit: set TRUST_PROXY=true *only* once there
-// is a proxy in front that always rewrites the header.
+// Behind a proxy it is the **last** X-Forwarded-For entry: ngrok and nginx append the address they
+// saw, so anything before it was written by the caller. Reading the first one (as this did) handed
+// anybody a fresh bucket per request. Without TRUST_PROXY the header is ignored entirely.
 func clientIP(r *http.Request) string {
-	if os.Getenv("TRUST_PROXY") == "true" {
-		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-			// leftmost entry is the original client; the rest are the proxies it passed through
-			if first, _, found := strings.Cut(forwarded, ","); found {
-				return strings.TrimSpace(first)
+	if TrustProxy() {
+		// Values, not Get: a header sent twice arrives as two values and the proxy's is the last
+		if values := r.Header.Values("X-Forwarded-For"); len(values) > 0 {
+			last := values[len(values)-1]
+			if i := strings.LastIndexByte(last, ','); i >= 0 {
+				last = last[i+1:]
 			}
-			return strings.TrimSpace(forwarded)
+			if ip := strings.TrimSpace(last); ip != "" {
+				return ip
+			}
 		}
 	}
 

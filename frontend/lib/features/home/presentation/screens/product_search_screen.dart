@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:provider/provider.dart';
 
@@ -12,24 +13,29 @@ import 'package:frontend/features/home/presentation/widgets/product_results_view
 import 'package:frontend/core/widgets/circle_back_button.dart';
 
 /// The screen the home search bar opens: a field, and below it every priced product whose name
-/// contains the query.
+/// contains every word of the query.
 ///
 /// **A screen rather than an inline field**: the bar used to be a live `TextField` on the home feed
 /// with no way to put the keyboard away - nothing there unfocuses on tap and there was no route to
 /// pop.
 ///
-/// Nothing is searched until the search key is pressed: as-you-type would make every keystroke past
-/// two characters an `ILIKE '%q%'` sequential scan.
+/// Nothing is searched until the search key is pressed: as-you-type would turn every keystroke into a
+/// request against the api's most expensive read.
 class ProductSearchScreen extends StatefulWidget {
   const ProductSearchScreen({super.key});
 
-  /// Mirrors `minSearchQueryLen` in `backend/internal/endpoints/home.go`; the server is what enforces
-  /// it and this copy only avoids a doomed round trip.
-  static const int minQueryLength = 2;
+  /// Mirrors `minSearchWordLen` on the server: one word of three characters, the shortest the search
+  /// index can look up. This copy only avoids a doomed round trip.
+  static const int minQueryLength = 3;
+
+  /// Mirrors `maxSearchQueryLen`. Enforced at the keyboard: a longer query is a 400 the results screen
+  /// could only report as a failed load, with a retry that never works.
+  static const int maxQueryLength = 60;
 
   /// Counted in *characters*: Dart's `String.length` is UTF-16 code units, one per letter for every
   /// alphabet the app ships in, so it agrees with the server's rune count.
-  static bool isSearchable(String query) => query.trim().length >= minQueryLength;
+  static bool isSearchable(String query) =>
+      query.trim().split(RegExp(r'\s+')).any((word) => word.length >= minQueryLength);
 
   @override
   State<ProductSearchScreen> createState() => _ProductSearchScreenState();
@@ -43,6 +49,10 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
   /// an already-run query is edited, until the search key is pressed again. Null is the prompt state.
   String? _submitted;
 
+  /// Bumped on every search, and the results are keyed on it: a fresh key is what re-runs the load -
+  /// see [ProductResultsView].
+  int _runs = 0;
+
   @override
   void dispose() {
     _controller.dispose();
@@ -50,16 +60,18 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
     super.dispose();
   }
 
-  /// A query too short to run leaves the field focused and does nothing - the sentence under the
-  /// magnifier has already said why, and an error over a user mid-word would be noise.
+  /// A query too short to run does nothing: the sentence under the magnifier has already said why.
+  /// The same text runs again, since pressing search twice is the retry people reach for.
   void _run(String raw) {
     final trimmed = raw.trim();
     if (!ProductSearchScreen.isSearchable(trimmed)) return;
-    if (trimmed == _submitted) return;
 
     // dropped before the results draw, so the first screenful is not half-hidden behind a keyboard
     _focusNode.unfocus();
-    setState(() => _submitted = trimmed);
+    setState(() {
+      _submitted = trimmed;
+      _runs++;
+    });
   }
 
   void _clear() {
@@ -131,9 +143,9 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
     }
 
     return ProductResultsView(
-      // a new key per query is what re-runs the load: ProductResultsView fetches from its own initState
+      // a new key per search is what re-runs the load: ProductResultsView fetches from its own initState
       // and holds the result, so a fresh State beats racing a second request inside the old one
-      key: ValueKey(query),
+      key: ValueKey(_runs),
       strings: strings,
       load: () => home.searchProducts(query),
       // a magnifier rather than a category glyph: the empty state should look like what failed to find
@@ -191,6 +203,10 @@ class _SearchField extends StatelessWidget {
                 // gives the keyboard a "search" key instead of a newline - without it there is no way to submit
                 textInputAction: TextInputAction.search,
                 textCapitalization: TextCapitalization.sentences,
+                // the server's ceiling, applied where it can be seen - see ProductSearchScreen.maxQueryLength
+                inputFormatters: [
+                  LengthLimitingTextInputFormatter(ProductSearchScreen.maxQueryLength),
+                ],
                 cursorColor: AppColors.primaryOrange,
                 style: const TextStyle(
                   color: AppColors.textDark,

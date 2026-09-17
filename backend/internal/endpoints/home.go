@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -25,6 +26,11 @@ type Home struct {
 	// how a stored image path becomes an address the app can fetch. the zero value serves from this
 	// api's own /static/products/; IMAGE_BASE_URL points it at img.domix-api.uz in production.
 	URLs imagestore.URLs
+
+	// how many searches may run at once - a send takes a slot, a receive frees it. nil = no cap (tests).
+	// this is what protects the database: a per-caller limit cannot bound the total, since hundreds of
+	// phones share one address on a mobile network and a distributed caller has as many as it likes.
+	SearchSlots chan struct{}
 }
 
 const (
@@ -57,15 +63,12 @@ const (
 	// to the end of.
 	searchResultsLimit = 100
 
-	// two characters, because one is not a search. a single letter matches a large fraction of the
-	// catalogue, so it costs a full scan to return a screenful of noise - and every keystroke on the
-	// way to a real word would fire one. the app enforces the same floor before sending, so this is
-	// the backstop rather than the only check.
-	minSearchQueryLen = 2
+	// three characters, in at least one word: the shortest piece the search index can look up, since it
+	// stores three-letter runs (migration 000002). the app enforces the same rule before sending.
+	minSearchWordLen = 3
 
-	// long enough for any product name in the catalogue and short enough that the pattern stays
-	// cheap. an unbounded string here is an anonymous caller choosing how much work the database
-	// does on a LIKE with a leading wildcard.
+	// long enough for any name in the catalogue. an unbounded string here is an anonymous caller
+	// deciding how much work the database does.
 	maxSearchQueryLen = 60
 )
 
@@ -124,6 +127,9 @@ func (h *Home) Get(w http.ResponseWriter, r *http.Request) {
 	// measurement saying so, not before.
 	vip, err := h.Queries.ListVipShops(ctx, vipShopsLimit)
 	if err != nil {
+		if callerGone(r) {
+			return
+		}
 		log.Printf("CRITICAL: failed to list vip shops: %v", err)
 		writeAPIError(w, http.StatusInternalServerError, "server_error", "failed to load home content")
 		return
@@ -139,6 +145,9 @@ func (h *Home) Get(w http.ResponseWriter, r *http.Request) {
 			Limit:    bestOffersLimit,
 		})
 		if err != nil {
+			if callerGone(r) {
+				return
+			}
 			log.Printf("CRITICAL: failed to list best offers for %q: %v", category, err)
 			writeAPIError(w, http.StatusInternalServerError, "server_error", "failed to load home content")
 			return
@@ -202,6 +211,9 @@ func (h *Home) ProductsByCategory(w http.ResponseWriter, r *http.Request) {
 		Limit:    categoryProductsLimit,
 	})
 	if err != nil {
+		if callerGone(r) {
+			return
+		}
 		log.Printf("CRITICAL: failed to list products for category %q: %v", code, err)
 		writeAPIError(w, http.StatusInternalServerError, "server_error", "failed to load products")
 		return
@@ -225,30 +237,56 @@ func (h *Home) ProductsByCategory(w http.ResponseWriter, r *http.Request) {
 //
 // Public, like the rest of this file - searching is the first thing a stranger does, before there is
 // any account to attach the query to.
+//
+// **Every word counts, in any order**: "пвс кабель" finds "Кабель медный ПВС 2х1,5". Names and query
+// are both compared lowercased, with ё written as е - see searchPatterns.
 func (h *Home) SearchProducts(w http.ResponseWriter, r *http.Request) {
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 
 	// RuneCountInString, not len(): len counts *bytes*, and every letter in "цемент" is two of them
-	// in UTF-8. A byte-length floor of 2 would accept a single Cyrillic character, and a byte-length
-	// ceiling would cut a Russian query off at half the words an English one gets.
-	length := utf8.RuneCountInString(query)
-	if length < minSearchQueryLen {
-		writeAPIError(w, http.StatusBadRequest, "query_too_short", "search query is too short")
+	// in UTF-8, so a byte-length ceiling would cut a Russian query off at half the words an English
+	// one gets. searchPatterns counts its floor the same way.
+	if utf8.RuneCountInString(query) > maxSearchQueryLen {
+		writeAPIError(w, http.StatusBadRequest, "query_too_long", "search query is too long")
 		return
 	}
-	if length > maxSearchQueryLen {
-		writeAPIError(w, http.StatusBadRequest, "query_too_long", "search query is too long")
+	anchor, patterns, ok := searchPatterns(query)
+	if !ok {
+		writeAPIError(w, http.StatusBadRequest, "query_too_short", "search query is too short")
 		return
 	}
 
 	ctx, cancel := dbctx.WithTimeout(r.Context())
 	defer cancel()
 
+	// a slot before a connection (see Home.SearchSlots). the wait is the query's own deadline, so a
+	// burst queues rather than being refused, and one that never gets a slot is told to come back.
+	if h.SearchSlots != nil {
+		select {
+		case h.SearchSlots <- struct{}{}:
+		case <-ctx.Done():
+			if callerGone(r) {
+				return
+			}
+			w.Header().Set("Retry-After", "2")
+			writeAPIError(w, http.StatusServiceUnavailable, "search_busy", "search is busy, try again shortly")
+			return
+		}
+	}
+
 	rows, err := h.Queries.SearchProducts(ctx, db.SearchProductsParams{
-		Query:       escapeLikePattern(query),
+		Anchor:      anchor,
+		Patterns:    patterns,
 		ResultLimit: searchResultsLimit,
 	})
+	// given back as soon as the rows are in, not held while a slow phone downloads them
+	if h.SearchSlots != nil {
+		<-h.SearchSlots
+	}
 	if err != nil {
+		if callerGone(r) {
+			return
+		}
 		log.Printf("CRITICAL: product search failed: %v", err)
 		writeAPIError(w, http.StatusInternalServerError, "server_error", "search failed")
 		return
@@ -292,20 +330,31 @@ func categoryProductFromRow(urls imagestore.URLs, row db.ListProductsByCategoryR
 	}
 }
 
-// makes a user's text safe to drop between two `%` wildcards in an ILIKE pattern.
-//
-// **This is not about SQL injection** - the query is a bound parameter and pgx never interpolates it
-// into the statement. It is about the pattern language *inside* the string: to LIKE, `%` means "any
-// run of characters" and `_` means "any one character", so a customer searching for "50%" would
-// match every product in the database, and "М_400" would quietly also find "М5400". Escaping them
-// makes the search mean what the person typed.
-//
-// Backslash first, or the escapes added below would themselves be escaped by the pass that follows.
-func escapeLikePattern(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, "%", `\%`)
-	s = strings.ReplaceAll(s, "_", `\_`)
-	return s
+// turns what a customer typed into the two arguments SearchProducts takes: one pattern per word (all
+// required, in any order), plus the longest word again as the anchor - the only one the trigram index
+// can look up, since it cannot serve `~ ALL`. Lowercased with ё as е, exactly as migration 000002
+// indexes the names. `ok` is false when no word reaches minSearchWordLen.
+func searchPatterns(query string) (anchor string, patterns []string, ok bool) {
+	longest := 0
+	for _, word := range strings.Fields(strings.ReplaceAll(strings.ToLower(query), "ё", "е")) {
+		pattern := wordPattern(word)
+		patterns = append(patterns, pattern)
+		if n := utf8.RuneCountInString(word); n > longest {
+			longest, anchor = n, pattern
+		}
+	}
+	return anchor, patterns, longest >= minSearchWordLen
+}
+
+// one word as a regex: the word itself, plus its Cyrillic spelling when it was typed in Latin
+// ("kabel" -> "кабел"). Both, because catalogue names carry Latin brands too - VERO, TYTAN, LED.
+// QuoteMeta is what keeps a typed "." or "*" a character rather than a pattern.
+func wordPattern(word string) string {
+	pattern := regexp.QuoteMeta(word)
+	if cyrillic := catalog.Cyrillic(word); cyrillic != "" && cyrillic != word {
+		pattern = "(" + pattern + "|" + regexp.QuoteMeta(cyrillic) + ")"
+	}
+	return pattern
 }
 
 // a product plus the name of the shop selling it.

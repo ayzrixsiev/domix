@@ -52,9 +52,13 @@ class _FakeProductsRepository implements ProductsRepository {
   _FakeProductsRepository({this.products = const []});
 
   final List<Product> products;
+  int fetches = 0;
 
   @override
-  Future<List<Product>> fetchShopProducts(int shopId) async => products;
+  Future<List<Product>> fetchShopProducts(int shopId) async {
+    fetches++;
+    return products;
+  }
 
   @override
   Future<Product> createProduct({required int shopId, required Product draft}) async => draft;
@@ -146,6 +150,19 @@ HomeContent _content({List<Shop> vip = const [], List<Shop> offers = const []}) 
 }
 
 void main() {
+  test('the catalogue is read once a session, and again after the app is reopened', () async {
+    final repo = _FakeProductsRepository();
+    final controller = ProductsController(repository: repo);
+
+    await controller.loadProducts(1);
+    await controller.loadProducts(1);
+    expect(repo.fetches, 1, reason: 'browsing must not re-read prices');
+
+    controller.markAllStale();
+    await controller.loadProducts(1);
+    expect(repo.fetches, 2, reason: 'coming back into the app re-reads them');
+  });
+
   testWidgets('a VIP card opens the shop card', (tester) async {
     await _pumpHome(
       tester,

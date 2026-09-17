@@ -7,6 +7,7 @@ import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/app_shell/presentation/widgets/floating_bottom_nav_bar.dart';
 import 'package:frontend/features/home/presentation/screens/home_screen.dart';
 import 'package:frontend/features/map/presentation/screens/map_screen.dart';
+import 'package:frontend/features/products/presentation/controllers/products_controller.dart';
 import 'package:frontend/features/messages/presentation/screens/chats_screen.dart';
 import 'package:frontend/features/profile/presentation/screens/profile_screen.dart';
 import 'package:frontend/features/tickets/presentation/screens/tickets_screen.dart';
@@ -20,8 +21,28 @@ class AppShellScreen extends StatefulWidget {
   State<AppShellScreen> createState() => _AppShellScreenState();
 }
 
-class _AppShellScreenState extends State<AppShellScreen> {
+class _AppShellScreenState extends State<AppShellScreen> with WidgetsBindingObserver {
   static const _bottomPadding = 96.0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // coming back into the app re-reads prices on the next shop opened - nothing refreshes mid-scroll
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      context.read<ProductsController>().markAllStale();
+    }
+  }
 
   List<ShellNavItem> _buildNavItems(AppLocalizations strings) => [
     ShellNavItem(icon: LucideIcons.house, label: strings.homeTab),

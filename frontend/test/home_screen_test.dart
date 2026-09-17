@@ -355,14 +355,8 @@ void main() {
     expect(find.text('Смеси Оптом'), findsOneWidget);
   });
 
-  // the home search bar spent three versions being a control that misbehaved - a styled `Text`, then
-  // a real TextField with an empty `onSubmitted`, then a real TextField whose keyboard could not be
-  // dismissed. these pin what it is now, because a regression in any of it is invisible: the bar
-  // still looks right, and a query that never leaves the screen looks exactly like a search that
-  // found nothing.
-  //
-  // **the home screen has no TextField at all any more**, which is the load-bearing half of the
-  // keyboard fix - the field lives one route up, on ProductSearchScreen, where back dismisses it.
+  // a button that opens ProductSearchScreen, not a field: no TextField on the feed is the half of the
+  // keyboard fix that keeps it fixed.
   testWidgets('the home search bar is a button, not a field', (tester) async {
     await _pumpHome(tester, _FakeHomeRepository(content: _content()));
 
@@ -427,24 +421,29 @@ void main() {
     expect(find.byType(ProductSearchScreen), findsOneWidget);
   });
 
-  testWidgets('a one-letter search goes nowhere', (tester) async {
-    // one character matches a large share of the catalogue, so the backend answers 400. this is the
-    // app's half: the user is mid-word, and neither an error nor a screenful of noise is the right
-    // response to that.
+  testWidgets('a search with no three-letter word goes nowhere', (tester) async {
+    // nothing for the search index to look up, so the server answers 400 - the app does not ask.
     final repo = _FakeHomeRepository(content: _content());
     await _pumpHome(tester, repo);
 
     await tester.tap(find.byType(SearchAndLikeBar));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField).first, 'ц');
+    await tester.enterText(find.byType(TextField).first, 'це');
     await tester.testTextInput.receiveAction(TextInputAction.search);
     await tester.pumpAndSettle();
 
     expect(repo.requestedQuery, isNull);
-    // and the screen says why, rather than swallowing the press. the prompt is still on screen with
-    // the "at least two characters" line under it.
-    expect(find.text('Введите минимум два символа.'), findsOneWidget);
+    // and the screen says why rather than swallowing the press
+    expect(find.text('Нужно хотя бы одно слово от трёх букв.'), findsOneWidget);
+  });
+
+  test('a query is searchable once one of its words has three letters', () {
+    // mirrors minSearchWordLen on the server: the longest word has to reach three
+    expect(ProductSearchScreen.isSearchable('це'), isFalse);
+    expect(ProductSearchScreen.isSearchable('м 4 кг'), isFalse);
+    expect(ProductSearchScreen.isSearchable('  цем  '), isTrue);
+    expect(ProductSearchScreen.isSearchable('пвс 2х1,5'), isTrue);
   });
 
   testWidgets('the category tiles carry no shop counts', (tester) async {

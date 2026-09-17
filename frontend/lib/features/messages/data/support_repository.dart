@@ -5,7 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:frontend/core/constants/api_config.dart';
-import 'package:frontend/core/network/api_get.dart';
+import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/features/profile/data/auth_service.dart';
 import 'support_message.dart';
 
@@ -77,7 +77,7 @@ class SupportRepository {
   Future<SupportMessage> sendMessage(String body) async {
     final token = await _requireToken();
 
-    final response = await http
+    final response = await appHttpClient
         .post(
           _messagesUri,
           headers: {

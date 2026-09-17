@@ -126,7 +126,7 @@ FROM products p
 JOIN shops s ON s.id = p.shop_id
 WHERE p.category = $1
   AND p.price IS NOT NULL
-ORDER BY p.price ASC, s.rating DESC, p.id
+ORDER BY (p.availability = 'unavailable'), p.price ASC, s.rating DESC, p.id
 LIMIT $2
 `
 
@@ -234,14 +234,16 @@ SELECT p.id, p.shop_id, p.name, p.price, p.category, p.unit, p.availability, p.t
 FROM products p
 JOIN shops s ON s.id = p.shop_id
 WHERE p.price IS NOT NULL
-  AND p.name ILIKE '%' || $1::text || '%'
-ORDER BY p.price ASC, s.rating DESC, p.id
-LIMIT $2
+  AND translate(lower(p.name), 'ё', 'е') ~ $1::text
+  AND translate(lower(p.name), 'ё', 'е') ~ ALL ($2::text[])
+ORDER BY (p.availability = 'unavailable'), p.price ASC, s.rating DESC, p.id
+LIMIT $3
 `
 
 type SearchProductsParams struct {
-	Query       string `json:"query"`
-	ResultLimit int32  `json:"result_limit"`
+	Anchor      string   `json:"anchor"`
+	Patterns    []string `json:"patterns"`
+	ResultLimit int32    `json:"result_limit"`
 }
 
 type SearchProductsRow struct {
@@ -257,8 +259,10 @@ type SearchProductsRow struct {
 	ShopName     string      `json:"shop_name"`
 }
 
+// the name expression must stay character for character the one idx_products_search_name indexes
+// (migration 000002): postgres uses an expression index only for the identical expression.
 func (q *Queries) SearchProducts(ctx context.Context, arg SearchProductsParams) ([]SearchProductsRow, error) {
-	rows, err := q.db.Query(ctx, searchProducts, arg.Query, arg.ResultLimit)
+	rows, err := q.db.Query(ctx, searchProducts, arg.Anchor, arg.Patterns, arg.ResultLimit)
 	if err != nil {
 		return nil, err
 	}

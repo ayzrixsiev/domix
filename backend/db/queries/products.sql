@@ -58,17 +58,20 @@ FROM products p
 JOIN shops s ON s.id = p.shop_id
 WHERE p.category = $1
   AND p.price IS NOT NULL
-ORDER BY p.price ASC, s.rating DESC, p.id
+ORDER BY (p.availability = 'unavailable'), p.price ASC, s.rating DESC, p.id
 LIMIT $2;
 
 -- name: SearchProducts :many
+-- the name expression must stay character for character the one idx_products_search_name indexes
+-- (migration 000002): postgres uses an expression index only for the identical expression.
 SELECT p.id, p.shop_id, p.name, p.price, p.category, p.unit, p.availability, p.template_key,
        p.image_path, s.name AS shop_name
 FROM products p
 JOIN shops s ON s.id = p.shop_id
 WHERE p.price IS NOT NULL
-  AND p.name ILIKE '%' || @query::text || '%'
-ORDER BY p.price ASC, s.rating DESC, p.id
+  AND translate(lower(p.name), 'ё', 'е') ~ @anchor::text
+  AND translate(lower(p.name), 'ё', 'е') ~ ALL (@patterns::text[])
+ORDER BY (p.availability = 'unavailable'), p.price ASC, s.rating DESC, p.id
 LIMIT @result_limit;
 
 -- name: SetProductImage :one

@@ -126,10 +126,11 @@ behind it; in a year it is also a file move plus rewriting every path in the dat
 zone to be in Cloudflare. eskiz's own DNS would otherwise be fine. Cloudflare does **not** sell `.uz`,
 so the registration stays at eskiz permanently.
 
-Order: server → Cloudflare account access → `A` record for the apex → Postgres and nginx → certbot →
-deploy the binary → R2 bucket and `img.` → **upload `photos/` to the bucket** → fill in `.env`
-(`IMAGE_BASE_URL` **and** the four `R2_*` keys, or the api will not start) → point `env.prod.json` at
-`https://domix-api.uz` → ship the `.aab`.
+Order: server → Cloudflare account access → `A` record for the apex → Postgres (with a UTF-8 locale:
+migration `000002` refuses a database that cannot lowercase Cyrillic) and nginx (`deploy/nginx.conf`)
+→ certbot → deploy the binary → R2 bucket and `img.` → **upload `photos/` to the bucket** → fill in
+`.env` (`IMAGE_BASE_URL` **and** the four `R2_*` keys, or the api will not start; `TRUST_PROXY=true`)
+→ point `env.prod.json` at `https://domix-api.uz` → ship the `.aab`.
 
 **Verify before buying:** that an international Visa/Mastercard is accepted by Hetzner and
 Cloudflare. Uzbek Humo/UzCard do not work abroad; Hetzner also takes PayPal and bank transfer.
@@ -203,6 +204,9 @@ button rather than a cron job — at this scale the count is zero or single digi
   `POST /api/account-deletion/init`: public, body-carrying, and the login limiter counts _requests_,
   which an unfinished one never becomes. **Fix before going live**, per-handler:
   `http.NewResponseController(w).SetReadDeadline(time.Now().Add(…))`.
+  **nginx closes it once it is in front**: `deploy/nginx.conf` buffers every body in full before Go
+  sees it (`proxy_request_buffering` is on by default) and bounds the silence between reads, so the
+  per-handler deadline only matters for as long as the api still sits behind ngrok.
 - **Delete `DevicePreview`** — see `frontend/CLAUDE.md`, and read the note there before removing it a
   third time.
 - **`shops.rating` is a stored column nothing writes** — root §6. Lighting the star needs a `reviews`
@@ -220,10 +224,13 @@ button rather than a cron job — at this scale the count is zero or single digi
 - **No error reporting.** When the app breaks on an owner's phone, nobody finds out. Structured
   server logs plus a crash reporter would turn "it doesn't work" into a stack trace. The support
   inbox is the closest thing there is, and it needs the user to write in.
-- **Nominatim** is the free public instance (~1 req/sec shared). At the real growth rate — a handful
-  of shops a day, ~30 lookups — the rate limit is thousands of times away and this is not a launch
-  concern. What their policy *does* require regardless of volume is a descriptive `User-Agent` with a
-  contact; add it whenever. Self-hosting is a "much later" item. MapKit Lite has no search to move to.
+- **Nominatim** is the free public instance (~1 req/sec shared). The map looks addresses up **as the
+  text is typed** (debounced 450 ms), which its policy forbids outright — a deliberate call
+  (2026-09-13) for the investor demo, to be replaced by Yandex's own address search once that licence
+  is bought. The risk is a block by `User-Agent`, i.e. every install at once. What the app does keep:
+  answers cached for the session (`GeocodingService`), a `User-Agent` with a contact,
+  «© OpenStreetMap contributors» under the results. MapKit **Lite** has no search, so the move means
+  the paid MapKit/Search SDK or Yandex's HTTP geocoder.
 - **Nothing exposes `pool.Stat().EmptyAcquireCount()`** — the count of requests that waited for a
   connection, and the only evidence that would justify changing `DB_MAX_CONNS`. Ten lines behind a
   token-protected `/metrics`.
@@ -252,5 +259,9 @@ button rather than a cron job — at this scale the count is zero or single digi
 - **No refresh token.** The user-existence check in `RequireAuth` covers deletion, but a _stolen_
   token belonging to a live account works until it expires. Revoking one without deleting the account
   needs a `token_version` column bumped on logout.
-- **`TRUST_PROXY`**: only turn it on once something in front _always_ rewrites `X-Forwarded-For` —
-  both ways of getting it wrong fail silently.
+- **`TRUST_PROXY=true` goes into `.env` the moment the api is behind a proxy — ngrok included.**
+  Without it every request looks like it came from the proxy and the whole internet shares one
+  rate-limit bucket (20 requests/s for *all* users together, 1/s for all logins). With it the api reads
+  the **last** `X-Forwarded-For` entry — the one ngrok/nginx appended — and listens on `127.0.0.1`
+  only, so nothing can reach it around the proxy. It used to read the *first* entry, which the caller
+  writes; fixed 2026-09-11.

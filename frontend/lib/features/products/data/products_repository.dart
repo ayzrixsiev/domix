@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:frontend/core/constants/api_config.dart';
-import 'package:frontend/core/network/api_get.dart';
+import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/features/profile/data/auth_service.dart';
 import 'product_model.dart';
 
@@ -47,7 +47,7 @@ class ProductsRepository {
   Future<Product> createProduct({required int shopId, required Product draft}) async {
     final token = await _requireToken();
 
-    final response = await http
+    final response = await appHttpClient
         .post(
           _shopProductsUri(shopId),
           headers: {
@@ -70,7 +70,7 @@ class ProductsRepository {
   Future<Product> updateProduct(Product product) async {
     final token = await _requireToken();
 
-    final response = await http
+    final response = await appHttpClient
         .put(
           _productUri(product.id),
           headers: {
@@ -93,7 +93,7 @@ class ProductsRepository {
   Future<void> deleteProduct(int productId) async {
     final token = await _requireToken();
 
-    final response = await http
+    final response = await appHttpClient
         .delete(_productUri(productId), headers: {'Authorization': 'Bearer $token'})
         .timeout(const Duration(seconds: 10));
 
@@ -118,7 +118,7 @@ class ProductsRepository {
 
     // MultipartRequest streams, so this comes back as a StreamedResponse and has to be collected
     // before the shared error mapper (which reads .body) can look at it
-    final streamed = await request.send().timeout(_uploadTimeout);
+    final streamed = await appHttpClient.send(request).timeout(_uploadTimeout);
     final response = await http.Response.fromStream(streamed);
 
     if (response.statusCode != 200) {
@@ -133,7 +133,7 @@ class ProductsRepository {
   Future<Product> removeProductImage(int productId) async {
     final token = await _requireToken();
 
-    final response = await http
+    final response = await appHttpClient
         .delete(_productImageUri(productId), headers: {'Authorization': 'Bearer $token'})
         .timeout(const Duration(seconds: 10));
 

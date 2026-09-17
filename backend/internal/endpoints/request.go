@@ -75,3 +75,9 @@ func validateCoordinates(latitude, longitude float64) *accessError {
 
 	return nil
 }
+
+// callerGone: the phone hung up before we could answer, which cancels the query with it. not an
+// incident - logged as CRITICAL it would bury the real ones on a flaky network or under a load test.
+func callerGone(r *http.Request) bool {
+	return r.Context().Err() != nil
+}

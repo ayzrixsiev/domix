@@ -95,7 +95,15 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     FocusScope.of(context).unfocus();
     setState(() => _isSearching = true);
 
-    final results = await _geocodingService.search(query);
+    List<GeocodeResult> results;
+    try {
+      results = await _geocodingService.search(query);
+    } catch (e) {
+      // the picker has its own way out - drag the map onto the spot - so a failed lookup is logged and
+      // reads as no results, as it did before search() started throwing
+      debugPrint('LocationPickerScreen: address search failed: $e');
+      results = <GeocodeResult>[];
+    }
 
     if (!mounted) return;
     setState(() {

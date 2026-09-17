@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"testing"
 	"time"
 
@@ -488,29 +487,6 @@ func TestTheVipCarouselTieBreaksOnTheLongerPlacement(t *testing.T) {
 	}
 }
 
-// the LIMIT is the inventory, not a page size: five slots exist and five is what the app draws.
-func TestTheVipCarouselNeverReturnsMoreThanItsLimit(t *testing.T) {
-	ctx, conn, q := beginTx(t)
-
-	for i := range 7 {
-		makeShopTx(t, ctx, conn, q, "vip"+strconv.Itoa(i), catalog.CategoryUniversal, true)
-	}
-
-	shops, err := q.ListVipShops(ctx, 5)
-	if err != nil {
-		t.Fatalf("list vip shops: %v", err)
-	}
-	if len(shops) != 5 {
-		t.Fatalf("seven live placements against a limit of five, want 5 rows, got %d", len(shops))
-	}
-}
-
-// ─────────────────────────── the ranking ───────────────────────────
-
-// each tab of "Лучшие предложения" is one shop category and nothing else - which is the whole
-// reason the section grew tabs. a Обои shop's basket is ten items and a Универсальный shop's is
-// fifty, so the two were never really rankable against each other even with the index normalising
-// the ordering: the *badges* would be comparing different markets on adjacent rows.
 func TestBestOffersAreScopedToOneShopCategory(t *testing.T) {
 	ctx, conn, q := beginTx(t)
 

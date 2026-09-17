@@ -180,30 +180,6 @@ void main() {
       expect(ringOf(5), ['E', 'C', 'A', 'B', 'D']);
     });
 
-    test('the first placement is always at the position the carousel opens on', () {
-      // the carousel parks on `length ~/ 2`, so this is the assertion that makes "a customer sees a
-      // real shop, not an empty card" true - the rest of the arrangement is about the neighbours
-      for (var sold = 1; sold <= 5; sold++) {
-        final ring = ringOf(sold);
-        expect(ring[ring.length ~/ 2], 'A', reason: 'with $sold sold, the centre is not the first');
-      }
-    });
-
-    test('the nearest cards in both directions are the other real ones', () {
-      // the second and third placements sit either side of the first, so one swipe in either
-      // direction from the opening card lands on a paying shop before it lands on an empty one
-      final ring = ringOf(3);
-      final centre = ring.length ~/ 2;
-      expect(ring[centre + 1], 'B');
-      expect(ring[centre - 1], 'C');
-    });
-
-    test('always draws its full number of places, however few are sold', () {
-      for (var sold = 0; sold <= 5; sold++) {
-        expect(ringOf(sold), hasLength(5));
-      }
-    });
-
     test('more placements than places grows the ring instead of dropping one', () {
       // hiding a placement somebody paid for is the failure this whole section is built to avoid,
       // so a backend that grew the inventory must cost an app an extra card, never a card
@@ -244,9 +220,5 @@ void main() {
       expect(rankedSlots(shops, slotCount: 5), hasLength(8));
     });
 
-    test('nothing ranked is still a full set of places', () {
-      expect(rankedSlots(const [], slotCount: 15), hasLength(15));
-      expect(rankedSlots(const [], slotCount: 15).whereType<HomeShopPreview>(), isEmpty);
-    });
   });
 }

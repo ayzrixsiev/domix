@@ -6,7 +6,8 @@ import '../../data/products_repository.dart';
 
 // viewmodel behind the two screens that show a shop's catalogue. keyed by shop id rather than a
 // single list, because a customer taps three pins in a row and a single slot would make every reopen
-// a fresh round trip. a session cache: nothing is persisted.
+// a fresh round trip. a session cache: nothing is persisted, and prices are re-read only when the app
+// is opened again (see markAllStale) - construction prices do not move while somebody scrolls.
 class ProductsController extends ChangeNotifier {
   final ProductsRepository _repo;
 
@@ -14,6 +15,11 @@ class ProductsController extends ChangeNotifier {
       : _repo = repository ?? ProductsRepository();
 
   final Map<int, List<Product>> _byShop = {};
+
+  /// Cached catalogues to re-read on the next open - see [markAllStale]. The old rows stay on screen
+  /// until the new ones land, so nothing blinks.
+  final Set<int> _stale = {};
+
   final Set<int> _loadingShopIds = {};
   /// The shops whose last catalogue load failed. **A set of ids, not a map of messages** - the
   /// screens read it as "did this shop's catalogue fail" and draw a written sentence of their own.
@@ -29,6 +35,10 @@ class ProductsController extends ChangeNotifier {
   // failed save - and sharing the flags would grey out save for the length of an upload.
   bool _isPhotoBusy = false;
   ProductMutationException? _photoError;
+
+  /// The app came back to the foreground: prices are re-read the next time a shop is opened, and never
+  /// while somebody is browsing. Called from AppShellScreen.
+  void markAllStale() => _stale.addAll(_byShop.keys);
 
   /// `const []` and not a new list each call, so a rebuilding widget does not allocate and does not
   /// get a mutable view of nothing that it might try to add to
@@ -63,10 +73,10 @@ class ProductsController extends ChangeNotifier {
     return (priced, total);
   }
 
-  /// [force] re-fetches a shop already in the cache, which is what a pull-to-refresh wants
+  /// [force] re-fetches a shop already in the cache, which is what a pull-to-refresh wants.
   Future<void> loadProducts(int shopId, {bool force = false}) async {
     if (_loadingShopIds.contains(shopId)) return; // a second call while one is in flight is a no-op
-    if (!force && _byShop.containsKey(shopId)) return;
+    if (!force && _byShop.containsKey(shopId) && !_stale.contains(shopId)) return;
 
     _loadingShopIds.add(shopId);
     _failedLoads.remove(shopId);
@@ -74,6 +84,7 @@ class ProductsController extends ChangeNotifier {
 
     try {
       _byShop[shopId] = await _repo.fetchShopProducts(shopId);
+      _stale.remove(shopId);
     } catch (e) {
       _failedLoads.add(shopId);
       debugPrint('loadProducts failed for shop $shopId: $e');
@@ -206,6 +217,7 @@ class ProductsController extends ChangeNotifier {
   /// the wrong shop
   void forgetShop(int shopId) {
     _byShop.remove(shopId);
+    _stale.remove(shopId);
     _failedLoads.remove(shopId);
   }
 }

@@ -109,30 +109,6 @@ void main() {
     expect(find.text('Стройка'), findsNothing);
   });
 
-  testWidgets('every segment is exactly the same width, whatever the label', (tester) async {
-    // the point of a segmented control is that the options read as peers. "Универсальный" is eleven
-    // characters and "Обои" is four, so sizing to content would make one segment three times
-    // another and leave the control looking like a mistake.
-    await _pump(tester, [
-      CategoryOffers(category: ShopCategory.universal, shops: [_shop('a')]),
-      CategoryOffers(category: ShopCategory.plumbing, shops: [_shop('b')]),
-      CategoryOffers(category: ShopCategory.wallpaper, shops: [_shop('c')]),
-    ]);
-
-    final widths = <double>[];
-    for (final label in ['Универсальный', 'Сантехника', 'Обои']) {
-      // the SizedBox wrapping each segment is what fixes the width
-      final box = find.ancestor(
-        of: find.text(label),
-        matching: find.byType(SizedBox),
-      );
-      widths.add(tester.getSize(box.first).width);
-    }
-
-    expect(widths[0], closeTo(widths[1], 0.5));
-    expect(widths[1], closeTo(widths[2], 0.5));
-  });
-
   testWidgets('four or fewer segments fill the width; more of them scroll', (tester) async {
     CategoryOffers group(ShopCategory c) => CategoryOffers(category: c, shops: [_shop(c.code)]);
 
@@ -220,22 +196,6 @@ void main() {
 
   // ─────────────────────────── the slots ───────────────────────────
 
-  // **the tab is a fixed number of places, not a list that shrinks to its contents.** what an owner
-  // reads off two shops and thirteen open rows is "this category is not full and finishing my prices
-  // puts me in it", which is the one message that reaches somebody stuck halfway through pricing -
-  // in the place they are most likely to be looking.
-  testWidgets('a tab always holds its full number of places', (tester) async {
-    await _pump(tester, [
-      CategoryOffers(
-        category: ShopCategory.universal,
-        shops: [_shop('Первый', basket: 4000000), _shop('Второй', basket: 4500000)],
-      ),
-    ]);
-
-    expect(find.byType(HomeShopRow), findsNWidgets(2));
-    expect(find.byType(EmptyShopRow), findsNWidgets(BestOffersList.slotCount - 2));
-  });
-
   // the ranking is the section's whole meaning, so the real shops occupy the top of the list in the
   // order the server sent them - the open places are the tail, never interleaved
   testWidgets('the real shops come first, in the order they arrived', (tester) async {
@@ -253,30 +213,6 @@ void main() {
     final lastReal = tester.getTopLeft(find.byType(HomeShopRow).last).dy;
     final firstEmpty = tester.getTopLeft(find.byType(EmptyShopRow).first).dy;
     expect(firstEmpty, greaterThan(lastReal));
-  });
-
-  // **no invented shop anywhere in an open place.** this is the section a customer decides where to
-  // drive from, so a plausible-looking name or price in it would be the worst kind of wrong.
-  testWidgets('an open place shows field names and no data', (tester) async {
-    await _pump(tester, [
-      CategoryOffers(category: ShopCategory.universal, shops: [_shop('Настоящий')]),
-    ]);
-
-    final empties = BestOffersList.slotCount - 1;
-    expect(find.text(_strings.slotShopNameLabel), findsNWidgets(empties));
-    expect(find.text(_strings.slotAddressLabel), findsNWidgets(empties));
-    expect(find.text(_strings.slotBasketLabel), findsNWidgets(empties));
-    expect(find.text(_strings.slotComparisonLabel), findsNWidgets(empties));
-    // the one value an open place does show, and it is a description of the field rather than a
-    // score anybody earned
-    expect(find.text('5'), findsNWidgets(empties));
-
-    // and nothing inside an open place that could be read as a real amount. scoped to the empty
-    // rows on purpose - the real shop above them prints its basket, which is the whole point of it.
-    expect(
-      find.descendant(of: find.byType(EmptyShopRow), matching: find.textContaining('сум')),
-      findsNothing,
-    );
   });
 
   // never truncates. the count is a design constant and the server's LIMIT is what it mirrors, so

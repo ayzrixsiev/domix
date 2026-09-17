@@ -119,6 +119,9 @@ func (s *Shops) Get(w http.ResponseWriter, r *http.Request) {
 			writeShopError(w, http.StatusNotFound, "shop_not_found", "shop not found")
 			return
 		}
+		if callerGone(r) {
+			return
+		}
 		log.Printf("CRITICAL: failed to load shop %d: %v", shopID, err)
 		writeShopError(w, http.StatusInternalServerError, "server_error", "failed to load shop")
 		return
@@ -135,6 +138,9 @@ func (s *Shops) List(w http.ResponseWriter, r *http.Request) {
 
 	shops, err := s.Queries.ListShops(ctx)
 	if err != nil {
+		if callerGone(r) {
+			return
+		}
 		log.Printf("CRITICAL: failed to list shops: %v", err)
 		writeShopError(w, http.StatusInternalServerError, "server_error", "failed to load shops")
 		return

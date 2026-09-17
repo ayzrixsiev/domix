@@ -89,12 +89,13 @@ func main() {
 
 
 
-	// 4. initialize session manager
+	// 4. initialize session manager and rate limiters
 	sessionMgr := auth.NewSessionManager()
-	// and rate limiters
+
 	loginLimiter := ratelimit.New(1, 30, 10*time.Minute)
 	apiLimiter := ratelimit.New(20, 60, 10*time.Minute)
 	uploadLimiter := ratelimit.New(1, 20, 30*time.Minute)
+	searchLimiter := ratelimit.New(1, 10, 10*time.Minute)
 
 
 
@@ -119,7 +120,7 @@ func main() {
 
 	// where product photos are written, and where the app is told to fetch them from. two
 	// independent settings, decided together because getting one without the other is a server that
-	// looks healthy and serves blank tiles - see mustOpenPhotoStorage.
+	// looks healthy and serves blank tiles - see mustOpenPhotoStorage
 	productImages, imageURLs := mustOpenPhotoStorage()
 
 	productsEndpoints := &endpoints.Products{
@@ -136,13 +137,16 @@ func main() {
 	// different limits.
 	http.HandleFunc("/api/products/{id}/image", endpoints.WithJSON(apiLimiter.Wrap(productsEndpoints.RouteImage)))
 
-	homeEndpoints := &endpoints.Home{Queries: queries, URLs: imageURLs}
+	homeEndpoints := &endpoints.Home{
+		Queries: queries,
+		URLs:    imageURLs,
+		// four in ten pool connections may be searching at once - see Home.SearchSlots
+		SearchSlots: make(chan struct{}, max(1, int(dbPool.Config().MaxConns)*2/5)),
+	}
 	http.HandleFunc("/api/home", endpoints.WithJSON(apiLimiter.Wrap(homeEndpoints.Get)))
 	http.HandleFunc("/api/categories/{code}/products", endpoints.WithJSON(apiLimiter.Wrap(homeEndpoints.ProductsByCategory)))
-	// the home screen's search field. public like the rest of Home, and on the same limiter - a
-	// leading-wildcard ILIKE is the most expensive read in the api, so the 20-per-minute bucket is
-	// doing real work here rather than being a formality.
-	http.HandleFunc("/api/products/search", endpoints.WithJSON(apiLimiter.Wrap(homeEndpoints.SearchProducts)))
+	// the home screen's search field: public, and behind both buckets - the shared one and its own.
+	http.HandleFunc("/api/products/search", endpoints.WithJSON(apiLimiter.Wrap(searchLimiter.Wrap(homeEndpoints.SearchProducts))))
 
 	// the support inbox, the app's half. one path for both verbs because both act on the same thing
 	// - the caller's own conversation - and neither takes an id: the thread is whoever RequireAuth
@@ -287,17 +291,23 @@ func main() {
 	// for precisely the owners with the worst connection and would never reproduce on a good one.
 	// don't add them "for completeness" - that breaks photo upload.
 	//
-	// IdleTimeout only counts silence on an already-open keep-alive connection, so by definition it
-	// cannot interrupt a request in flight. it does mean the server now closes idle sockets itself,
-	// i.e. more of the "the phone's pool holds a dead socket" case - already handled on the client
-	// side, where core/network/api_get.dart retries a GET once on a fresh connection.
+	// IdleTimeout only counts silence on an already-open keep-alive connection, so it cannot interrupt
+	// a request in flight. the app's shared client (core/network/api_client.dart) drops a quiet
+	// connection after 15 seconds, before this does, and apiGet retries once for what slips through.
+	//
+	// behind a proxy the api listens on loopback only: otherwise anybody could skip the proxy, write
+	// X-Forwarded-For themselves and hand the rate limiter any address they liked.
+	addr := ":" + port
+	if ratelimit.TrustProxy() {
+		addr = "127.0.0.1:" + port
+	}
 	srv := &http.Server{
-		Addr:              ":" + port,
+		Addr:              addr,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
 	go func() {
-		log.Printf("HTTP Server booting up on port %s...", port)
+		log.Printf("HTTP Server booting up on %s...", addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Webserver failed to bind or handle connections: %v", err)
 		}

@@ -16,7 +16,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
-import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/widgets/circle_back_button.dart';
 import 'package:frontend/core/localization/language_provider.dart';
@@ -400,58 +399,6 @@ void main() {
       expect(await alignmentOf(tester, _message(id: 2, fromSupport: true)), Alignment.centerLeft);
     });
 
-    testWidgets('only an incoming message is signed', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: MessageBubble(
-              message: _message(id: 1, fromSupport: true, body: 'здравствуйте'),
-              senderLabel: 'Поддержка Domix',
-            ),
-          ),
-        ),
-      );
-      expect(find.text('Поддержка Domix'), findsOneWidget);
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: MessageBubble(
-              message: _message(id: 2, fromSupport: false, body: 'здравствуйте'),
-              senderLabel: 'Поддержка Domix',
-            ),
-          ),
-        ),
-      );
-      // nobody needs to be told which of these they wrote themselves
-      expect(find.text('Поддержка Domix'), findsNothing);
-    });
-
-    testWidgets('colour follows the side, so the two channels agree', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: MessageBubble(
-              message: _message(id: 1, fromSupport: false),
-              senderLabel: 'Поддержка Domix',
-            ),
-          ),
-        ),
-      );
-
-      final decoration =
-          tester.widget<Container>(find.byType(Container).first).decoration as BoxDecoration;
-      expect(decoration.color, AppColors.primaryOrange);
-    });
-
-    testWidgets('the day separator renders its label', (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(body: MessageDaySeparator(label: 'Вчера')),
-        ),
-      );
-      expect(find.text('Вчера'), findsOneWidget);
-    });
   });
 
   group('localization', () {

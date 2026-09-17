@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:frontend/core/network/api_client.dart';
+
 enum AppLanguage {
   ru('Русский', 'ru'),
   uz("O'zbekcha", 'uz');
@@ -231,14 +233,19 @@ class AppLocalizations {
 
   // an empty screen under a focused text field reads as one that failed to load
   String get searchPromptTitle => isRu ? 'Что вы ищете?' : 'Nimani qidiryapsiz?';
+  // **the examples have to be things the catalogue holds**: it used to suggest «цемент» and «плитка»,
+  // neither of which is in it, so a first search taken straight from the hint found nothing. names are
+  // Russian and in Cyrillic, which is why the Uzbek line asks for the name as the catalogue writes it -
+  // a Latin «sement» can never match.
   String get searchPromptHint => isRu
-      ? 'Введите название товара — например «цемент» или «плитка» — и нажмите поиск на клавиатуре.'
-      : "Mahsulot nomini kiriting — masalan «sement» yoki «plitka» — va klaviaturadagi qidiruvni bosing.";
+      ? 'Введите название товара — например «кабель» или «саморезы» — и нажмите поиск на клавиатуре.'
+      : "Mahsulot nomini katalogdagidek, rus tilida kiriting — masalan «кабель» yoki «саморезы» — va klaviaturadagi qidiruvni bosing.";
 
-  // the backend refuses a one-character query, so saying so beats a search key that ignores the press
+  // the backend refuses a query with no word of three letters, so saying so beats a search key that
+  // ignores the press
   String get searchMinLengthHint => isRu
-      ? 'Введите минимум два символа.'
-      : "Kamida ikkita belgi kiriting.";
+      ? 'Нужно хотя бы одно слово от трёх букв.'
+      : "Kamida uch harfli so'z kiriting.";
 
   String get currencySom => isRu ? 'сум' : "so'm";
 
@@ -304,6 +311,19 @@ class AppLocalizations {
   String get loadErrorHint => isRu
       ? 'Проверьте подключение и попробуйте снова.'
       : "Ulanishni tekshirib, qayta urinib ko'ring.";
+
+  /// The sentence under a failed read whose kind is known - see [LoadFailure]. **"Проверьте
+  /// подключение" is only for [LoadFailure.network]**: over a busy server it sends somebody off to fix
+  /// a connection that is working.
+  String loadErrorHintFor(LoadFailure failure) => switch (failure) {
+        LoadFailure.network => loadErrorHint,
+        LoadFailure.busy => isRu
+            ? 'Сервер сейчас перегружен. Попробуйте через минуту.'
+            : "Server hozir band. Bir daqiqadan so'ng urinib ko'ring.",
+        LoadFailure.server => isRu
+            ? 'На сервере что-то пошло не так. Попробуйте позже.'
+            : "Serverda nimadir noto'g'ri ketdi. Keyinroq urinib ko'ring.",
+      };
 
   /// Localizes a failed send off the backend's stable `code` (see SupportException).
   String supportSendErrorMessage(String code) {
@@ -495,6 +515,12 @@ class AppLocalizations {
   String get searchSectionPlaces => isRu ? 'Адреса' : 'Manzillar';
   String get searchNoResults => isRu ? 'Ничего не найдено' : 'Hech narsa topilmadi';
   String get searchClear => isRu ? 'Очистить' : 'Tozalash';
+
+  String get mapPlacesSearchFailed => isRu
+      ? 'Не удалось найти адрес. Проверьте подключение.'
+      : "Manzilni topib bo'lmadi. Ulanishni tekshiring.";
+  String get mapShopsUnavailable =>
+      isRu ? 'Магазины не загрузились' : "Do'konlar yuklanmadi";
 
   // the number is a labelled detail row, so the call button carries a verb instead of the raw number
   String get addressLabel => isRu ? 'Адрес' : 'Manzil';

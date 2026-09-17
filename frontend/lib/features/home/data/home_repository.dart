@@ -1,13 +1,14 @@
 import 'dart:convert';
 
 import 'package:frontend/core/constants/api_config.dart';
-import 'package:frontend/core/network/api_get.dart';
+import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/features/home/data/category_product.dart';
 import 'package:frontend/features/home/data/home_content.dart';
 import 'package:frontend/features/products/data/product_category.dart';
 
-/// Talks to the two public discovery endpoints behind the home screen. No `Authorization` header
-/// anywhere here: the home screen draws before anyone has logged in.
+/// Talks to the two public discovery endpoints behind the home screen. No `Authorization` header: the
+/// home screen draws before anyone has logged in. A refusal throws [ApiException] with the status, so
+/// a screen can tell "server busy" from "phone offline" - see [LoadFailure].
 class HomeRepository {
   static final Uri _homeUri = Uri.parse('${ApiConfig.serverRoot}/api/home');
 
@@ -17,7 +18,7 @@ class HomeRepository {
     final response = await apiGet(_homeUri);
 
     if (response.statusCode != 200) {
-      throw Exception('Failed to load home content (${response.statusCode})');
+      throw ApiException(response.statusCode);
     }
 
     return HomeContent.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
@@ -48,7 +49,7 @@ class HomeRepository {
     final response = await apiGet(uri);
 
     if (response.statusCode != 200) {
-      throw Exception('Failed to load products (${response.statusCode})');
+      throw ApiException(response.statusCode);
     }
 
     final data = jsonDecode(response.body) as List<dynamic>;

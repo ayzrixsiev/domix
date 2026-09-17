@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'package:frontend/core/constants/api_config.dart';
+import 'package:frontend/core/network/api_client.dart';
 
 // the data the backend sends back when a login session is opened
 class AuthInitResult {
@@ -120,7 +121,7 @@ class AuthService {
   Future<AuthInitResult> initSession({required String name, required String role}) async {
     return _executeWithRetry(
       () async {
-        final response = await http.post(
+        final response = await appHttpClient.post(
           Uri.parse('$_baseUrl/init'),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({'name': name, 'role': role}),
@@ -145,7 +146,7 @@ class AuthService {
   Future<AuthStatusResult> checkStatus(String sessionId) async {
     return _executeWithRetry(
       () async {
-        final response = await http.get(
+        final response = await appHttpClient.get(
           Uri.parse('$_baseUrl/status?session_id=$sessionId'),
           headers: {'Content-Type': 'application/json'},
         ).timeout(const Duration(seconds: 5));
@@ -216,7 +217,7 @@ class AuthService {
     final token = await getToken();
     if (token == null || token.isEmpty) throw const SessionExpiredException();
 
-    final response = await http
+    final response = await appHttpClient
         .get(_meUri, headers: {'Authorization': 'Bearer $token'})
         .timeout(const Duration(seconds: 10));
 
@@ -247,7 +248,7 @@ class AuthService {
     final token = await getToken();
     if (token == null || token.isEmpty) throw const SessionExpiredException();
 
-    final response = await http
+    final response = await appHttpClient
         .delete(_meUri, headers: {'Authorization': 'Bearer $token'})
         .timeout(const Duration(seconds: 15));
 

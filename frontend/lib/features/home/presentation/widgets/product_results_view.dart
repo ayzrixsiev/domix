@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
+import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
 import 'package:frontend/core/widgets/primary_action_button.dart';
 import 'package:frontend/features/home/data/category_product.dart';
@@ -14,7 +15,7 @@ import 'package:frontend/features/stores/presentation/screens/shop_card_screen.d
 /// app bar - [ProductResultsScreen] puts a title above it, [ProductSearchScreen] a text field.
 ///
 /// **Re-running it means giving it a new [Key]**: it loads once from `initState` and holds the
-/// result, so a `ValueKey(query)` builds a fresh State instead of racing a second request.
+/// result, so a new key builds a fresh State instead of racing a second request.
 class ProductResultsView extends StatefulWidget {
   const ProductResultsView({
     super.key,
@@ -48,8 +49,8 @@ class _ProductResultsViewState extends State<ProductResultsView> {
   List<CategoryProduct>? _products;
   bool _isLoading = true;
 
-  /// **a flag, not the exception's text**: one written sentence and a retry; the exception is logged
-  bool _failed = false;
+  /// what kind of failure, never the exception's text - it picks one of three written sentences
+  LoadFailure? _failure;
 
   @override
   void initState() {
@@ -60,7 +61,7 @@ class _ProductResultsViewState extends State<ProductResultsView> {
   Future<void> _load() async {
     setState(() {
       _isLoading = true;
-      _failed = false;
+      _failure = null;
     });
 
     try {
@@ -77,7 +78,7 @@ class _ProductResultsViewState extends State<ProductResultsView> {
       if (!mounted) return;
       debugPrint('ProductResultsView: could not load results: $e');
       setState(() {
-        _failed = true;
+        _failure = LoadFailure.of(e);
         _isLoading = false;
       });
       widget.onCountChanged?.call(null);
@@ -102,15 +103,18 @@ class _ProductResultsViewState extends State<ProductResultsView> {
   Widget _content() {
     final strings = widget.strings;
 
-    if (_failed) {
+    if (_failure case final failure?) {
       return _FullPage(
         child: EmptyStateView(
-          icon: CupertinoIcons.wifi_exclamationmark,
+          // the wifi glyph only when the connection is the problem
+          icon: failure == LoadFailure.network
+              ? CupertinoIcons.wifi_exclamationmark
+              : CupertinoIcons.exclamationmark_circle,
           // danger-coloured: a failure should not look like a friendly "nothing here yet"
           iconColor: AppColors.danger,
           iconBackground: AppColors.dangerSoft,
           title: strings.categoryProductsLoadError,
-          subtitle: strings.loadErrorHint,
+          subtitle: strings.loadErrorHintFor(failure),
           action: PrimaryActionButton(label: strings.retryButtonShort, onTap: _load),
         ),
       );

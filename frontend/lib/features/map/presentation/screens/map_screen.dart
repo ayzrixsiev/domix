@@ -195,6 +195,9 @@ class _MapScreenState extends State<MapScreen> {
                 children: [
                   MapSearchPanel(
                     shops: controller.stores,
+                    // only when there is nothing at all to search: a list that loaded before a failed
+                    // refresh is still worth searching
+                    shopsFailed: controller.loadFailed && controller.stores.isEmpty,
                     strings: strings,
                     onShopSelected: (shop) {
                       // the camera moves first, so popping the card lands back on a map already centred on the shop

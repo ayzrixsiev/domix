@@ -1,18 +1,7 @@
 package endpoints
 
-// the two endpoints added for the store launch: deleting your own account, and searching products
-// from the home screen.
-//
-// they share a file because they share nothing else - this is not a resource, it is the pair of
-// things that had to exist before shop owners could be handed the app. what each one is guarding:
-//
-//   - deletion is a Google Play requirement, and the way it fails is *quietly incomplete*: a user
-//     row that goes while its shops stay behind leaves pins on the map pointing at a business
-//     nobody owns, and leaves the owner's phone number in `shops.contact_phone` after they asked to
-//     be forgotten. the cascade is declared in the schema, so what these check is that it is
-//     actually reached, not that ON DELETE CASCADE works.
-//   - search is a pattern language pointed at user text, and the way *that* fails is by matching
-//     more than the person typed. `%` is not a character to LIKE, it is an instruction.
+// account deletion (a Google Play requirement) and product search. deletion has to take the shops and
+// products with it; search has to find what the person meant and nothing more.
 
 import (
 	"context"
@@ -40,9 +29,8 @@ func accountUnderTest(t *testing.T) (*Auth, context.Context, pgx.Tx, *db.Queries
 	return &Auth{Queries: q}, ctx, tx, q
 }
 
-// goes through the real auth.RequireAuth with a real signed token rather than calling DeleteMe
-// directly, for the same reason the product tests do: the handler reads its user id out of a context
-// the middleware puts it in, so calling it directly would test a code path the app never takes.
+// through the real RequireAuth with a real token: the handler reads its user id off the context the
+// middleware fills, so calling it directly would test a path the app never takes.
 func requestMe(t *testing.T, ctx context.Context, a *Auth, method string, asUserID int64) *httptest.ResponseRecorder {
 	t.Helper()
 
@@ -80,9 +68,6 @@ func shopOwner(t *testing.T, ctx context.Context, tx pgx.Tx, shopID int64) int64
 }
 
 // the whole point of the endpoint: one call and nothing of theirs is left.
-//
-// Обои rather than Универсальный because ten seeded rows make the assertion readable, and the
-// cascade does not care which template it is walking.
 func TestDeletingAnAccountTakesItsShopsAndProductsWithIt(t *testing.T) {
 	authEndpoints, ctx, tx, q := accountUnderTest(t)
 
@@ -110,10 +95,8 @@ func TestDeletingAnAccountTakesItsShopsAndProductsWithIt(t *testing.T) {
 	}
 }
 
-// there is no revocation list, so the token this request arrived with is still a valid signature
-// over a real user id. what stops it is RequireAuth reading the row on every request and finding it
-// gone. this pins that the two halves line up - and specifically that the answer is the
-// `account_deleted` code, which is the one the app wipes its storage on.
+// there is no revocation list: what stops a deleted user's token is RequireAuth reading the row on
+// every request. the code has to be `account_deleted` - the one the app wipes its storage on.
 func TestTheTokenStopsWorkingTheRequestAfterDeletion(t *testing.T) {
 	authEndpoints, ctx, tx, q := accountUnderTest(t)
 
@@ -140,11 +123,8 @@ func TestTheTokenStopsWorkingTheRequestAfterDeletion(t *testing.T) {
 	}
 }
 
-// deleting is idempotent on purpose - see the DeleteUser query. checked at the query rather than at
-// the http boundary because that is where the property lives: through RequireAuth a second attempt
-// never reaches the handler at all, it is the 401 above. what this rules out is the version of
-// DeleteUser that reports "0 rows affected" as an error, which would turn two devices pressing the
-// same button into one of them staring at a failure about an account that is, as requested, gone.
+// deleting twice is not an error: two devices pressing the same button must not leave one of them
+// staring at a failure about an account that is, as requested, gone.
 func TestDeletingTwiceIsNotAnError(t *testing.T) {
 	_, ctx, tx, q := accountUnderTest(t)
 
@@ -158,8 +138,8 @@ func TestDeletingTwiceIsNotAnError(t *testing.T) {
 	}
 }
 
-// a shop with products whose names this file chooses, so the search assertions are about the
-// matching rather than about whatever the template happens to contain.
+// a shop whose product names this file chooses, so the assertions are about matching rather than
+// about whatever the template holds.
 func makeSearchableShop(t *testing.T, ctx context.Context, tx pgx.Tx, q *db.Queries, named map[string]*int64) int64 {
 	t.Helper()
 
@@ -176,9 +156,7 @@ func makeSearchableShop(t *testing.T, ctx context.Context, tx pgx.Tx, q *db.Quer
 	return shopID
 }
 
-// url.QueryEscape, not raw interpolation: every query in this file is Cyrillic, and one of them is
-// a literal `%`. Pasted straight into a url string, `%` starts a percent-escape and turns the rest
-// of the query into a parse error rather than a search term.
+// QueryEscape, not interpolation: a literal `%` in a query would otherwise start a percent-escape.
 func searchURL(query string) string {
 	return "/api/products/search?q=" + url.QueryEscape(query)
 }
@@ -203,8 +181,7 @@ func containsName(names []string, want string) bool {
 	return slices.Contains(names, want)
 }
 
-// the catalogue is typed in by hand, so "Цемент" and "цемент" are both going to be in there. a
-// case-sensitive LIKE would find whichever one the customer happened to capitalise the same way.
+// the catalogue is typed by hand, so both "Цемент" and "цемент" are in there.
 func TestSearchIsCaseInsensitiveAndMatchesInsideAName(t *testing.T) {
 	home, ctx, tx, q := homeUnderTest(t)
 	if _, err := tx.Exec(ctx, "DELETE FROM shops"); err != nil {
@@ -228,9 +205,7 @@ func TestSearchIsCaseInsensitiveAndMatchesInsideAName(t *testing.T) {
 	}
 }
 
-// the same rule the category drill-down follows: a product with no price answers nothing in a
-// cross-shop list. the seeded template rows are all unpriced here, so this also checks a fresh
-// shop's hundred blanks stay out of everyone's search results.
+// an unpriced row answers nothing in a cross-shop list, and a fresh shop has a hundred of them.
 func TestSearchExcludesUnpricedProducts(t *testing.T) {
 	home, ctx, tx, q := homeUnderTest(t)
 	if _, err := tx.Exec(ctx, "DELETE FROM shops"); err != nil {
@@ -252,9 +227,8 @@ func TestSearchExcludesUnpricedProducts(t *testing.T) {
 	}
 }
 
-// `%` and `_` are instructions to LIKE, not characters. unescaped, a customer searching for "50%"
-// gets the entire catalogue - which looks like a broken search, not like a security problem, which
-// is exactly why it would survive review.
+// what somebody types is text, not a pattern: unescaped, "50%" or ".*" would match the whole
+// catalogue and read as a broken search rather than as a bug.
 func TestSearchTreatsWildcardsAsLiteralText(t *testing.T) {
 	home, ctx, tx, q := homeUnderTest(t)
 	if _, err := tx.Exec(ctx, "DELETE FROM shops"); err != nil {
@@ -282,19 +256,22 @@ func TestSearchRejectsAQueryTooShortToMeanAnything(t *testing.T) {
 		t.Fatalf("clearing shops: %v", err)
 	}
 
-	// the empty string, whitespace that trims to nothing, and one letter
-	for _, query := range []string{"", "   ", "ц"} {
+	// the empty string, whitespace that trims to nothing, one and two letters, and several words none
+	// of which reaches three. two Cyrillic letters are four bytes, so a byte-length floor would have
+	// let "це" through - the case that makes counting runes load-bearing rather than a style choice.
+	for _, query := range []string{"", "   ", "ц", "це", "м 4 кг"} {
 		rec := getJSON(t, ctx, home.SearchProducts, searchURL(query), nil)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("query %q: want 400, got %d: %s", query, rec.Code, rec.Body.String())
 		}
 	}
 
-	// one Cyrillic letter is two bytes, so a byte-length floor of 2 would let it through. this is
-	// the case that makes RuneCountInString load-bearing rather than a style choice.
-	rec := getJSON(t, ctx, home.SearchProducts, searchURL("це"), nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("two cyrillic letters must be an acceptable query, got %d: %s", rec.Code, rec.Body.String())
+	// one word of three letters is enough, however short the others are
+	for _, query := range []string{"цем", "цем 4"} {
+		rec := getJSON(t, ctx, home.SearchProducts, searchURL(query), nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("query %q must be acceptable, got %d: %s", query, rec.Code, rec.Body.String())
+		}
 	}
 }
 
@@ -315,29 +292,120 @@ func TestSearchWithNoMatchesReturnsAnEmptyListNotNull(t *testing.T) {
 	}
 }
 
-func TestEscapeLikePatternLeavesOrdinaryTextAlone(t *testing.T) {
-	cases := map[string]string{
-		"цемент":   "цемент",
-		"50%":      `50\%`,
-		"М_400":    `М\_400`,
-		`c:\путь`:  `c:\\путь`,
-		`100%_a\b`: `100\%\_a\\b`,
+// almost nobody types ё, and 19 catalogue names are spelled with it. both directions have to work.
+func TestSearchTreatsYoAsYe(t *testing.T) {
+	home, ctx, tx, q := homeUnderTest(t)
+	if _, err := tx.Exec(ctx, "DELETE FROM shops"); err != nil {
+		t.Fatalf("clearing shops: %v", err)
 	}
 
-	for input, want := range cases {
-		if got := escapeLikePattern(input); got != want {
-			t.Errorf("escapeLikePattern(%q) = %q, want %q", input, got, want)
-		}
+	price := int64(30000)
+	makeSearchableShop(t, ctx, tx, q, map[string]*int64{
+		"Шпатлёвка гипсовая": &price,
+		"Пленка техническая": &price,
+	})
+
+	if names := searchNames(t, ctx, home, "шпатлевка"); !containsName(names, "Шпатлёвка гипсовая") {
+		t.Fatalf("a query typed with е missed a name spelled with ё: %v", names)
+	}
+	if names := searchNames(t, ctx, home, "ПЛЁНКА"); !containsName(names, "Пленка техническая") {
+		t.Fatalf("a query typed with Ё missed a name spelled with е: %v", names)
 	}
 }
 
-// belt and braces on the numbers the endpoints hand the database: a limit that arrived as 0 would
-// return nothing at all and read to the app as an empty catalogue.
-func TestSearchAndCategoryLimitsAreNonZero(t *testing.T) {
-	if searchResultsLimit <= 0 || categoryProductsLimit <= 0 {
-		t.Fatalf("limits must be positive: search=%d category=%d", searchResultsLimit, categoryProductsLimit)
+// every word has to be in the name, in any order - people type "пвс кабель" as often as the reverse.
+func TestSearchMatchesEveryWordInAnyOrder(t *testing.T) {
+	home, ctx, tx, q := homeUnderTest(t)
+	if _, err := tx.Exec(ctx, "DELETE FROM shops"); err != nil {
+		t.Fatalf("clearing shops: %v", err)
 	}
-	if minSearchQueryLen < 1 || maxSearchQueryLen <= minSearchQueryLen {
-		t.Fatalf("query length bounds are inverted: min=%d max=%d", minSearchQueryLen, maxSearchQueryLen)
+
+	price := int64(7000)
+	makeSearchableShop(t, ctx, tx, q, map[string]*int64{
+		"Кабель медный ПВС 2х1,5": &price,
+		"Кабель алюминиевый":      &price,
+	})
+
+	names := searchNames(t, ctx, home, "пвс кабель")
+	if !containsName(names, "Кабель медный ПВС 2х1,5") {
+		t.Fatalf("the words in reverse order missed the product: %v", names)
+	}
+	if containsName(names, "Кабель алюминиевый") {
+		t.Fatalf("a name missing one of the words matched anyway: %v", names)
+	}
+}
+
+// the cheapest row is no use if it cannot be bought, so «нет в наличии» goes last whatever its price.
+func TestSearchPutsUnavailableProductsLast(t *testing.T) {
+	home, ctx, tx, q := homeUnderTest(t)
+	if _, err := tx.Exec(ctx, "DELETE FROM shops"); err != nil {
+		t.Fatalf("clearing shops: %v", err)
+	}
+
+	cheap, dear := int64(1000), int64(9000)
+	shopID := makeSearchableShop(t, ctx, tx, q, map[string]*int64{
+		"Грунтовка дешёвая": &cheap,
+		"Грунтовка дорогая": &dear,
+	})
+	if _, err := tx.Exec(ctx,
+		`UPDATE products SET availability = 'unavailable' WHERE shop_id = $1 AND name = $2`,
+		shopID, "Грунтовка дешёвая"); err != nil {
+		t.Fatalf("marking a product unavailable: %v", err)
+	}
+
+	names := searchNames(t, ctx, home, "грунтовка")
+	if want := []string{"Грунтовка дорогая", "Грунтовка дешёвая"}; !slices.Equal(names, want) {
+		t.Fatalf("want %v, got %v", want, names)
+	}
+}
+
+// the pure half of search: what the typed words become before they reach the database.
+func TestSearchPatterns(t *testing.T) {
+	anchor, patterns, ok := searchPatterns("  ПВС   Кабель  Чёрный ")
+	if !ok {
+		t.Fatal("a query with a six-letter word was refused")
+	}
+	// lowercased, ё written as е, longest word as the anchor
+	if anchor != "кабель" {
+		t.Fatalf("want the anchor кабель, got %q", anchor)
+	}
+	if want := []string{"пвс", "кабель", "черный"}; !slices.Equal(patterns, want) {
+		t.Fatalf("want %v, got %v", want, patterns)
+	}
+
+	// a latin word carries its cyrillic spelling as an alternative
+	if _, patterns, _ := searchPatterns("kabel"); !slices.Equal(patterns, []string{"(kabel|кабел)"}) {
+		t.Fatalf("latin word: got %v", patterns)
+	}
+
+	// regex characters in what somebody typed stay characters
+	if _, patterns, _ := searchPatterns("50%.*"); !slices.Equal(patterns, []string{`50%\.\*`}) {
+		t.Fatalf("want the symbols escaped, got %v", patterns)
+	}
+
+	if _, _, ok := searchPatterns("м 4 кг"); ok {
+		t.Fatal("a query with no word of three letters was accepted")
+	}
+}
+
+// a customer typing latin finds the cyrillic catalogue: "kabel" comes from the letter rules,
+// "sement" from the alias list (the rules alone would spell it "семент").
+func TestSearchFindsAProductTypedInLatin(t *testing.T) {
+	home, ctx, tx, q := homeUnderTest(t)
+	if _, err := tx.Exec(ctx, "DELETE FROM shops"); err != nil {
+		t.Fatalf("clearing shops: %v", err)
+	}
+
+	price := int64(20000)
+	makeSearchableShop(t, ctx, tx, q, map[string]*int64{
+		"Кабель медный ПВС 2х1,5": &price,
+		"Цемент М400":             &price,
+	})
+
+	if names := searchNames(t, ctx, home, "kabel"); !containsName(names, "Кабель медный ПВС 2х1,5") {
+		t.Fatalf("a latin query missed the cyrillic product: %v", names)
+	}
+	if names := searchNames(t, ctx, home, "sement"); !containsName(names, "Цемент М400") {
+		t.Fatalf("the alias list did not reach цемент: %v", names)
 	}
 }

@@ -78,6 +78,14 @@ class _ShopByIdScreenState extends State<ShopByIdScreen> {
   void initState() {
     super.initState();
     _load();
+    // the catalogue is fetched alongside the shop rather than after it: the id is all it needs, and
+    // waiting for the shop first cost a whole extra round trip on the most common way into a shop -
+    // tapping a search result. the card's own call then finds it in flight or done and does nothing.
+    // deferred a frame for the reason ShopCardView's is: loadProducts notifies before its first await.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<ProductsController>().loadProducts(widget.shopId);
+    });
   }
 
   Future<void> _load() async {

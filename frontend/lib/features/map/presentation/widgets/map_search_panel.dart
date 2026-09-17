@@ -8,9 +8,12 @@ import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/features/map/data/geocoding_service.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 
-// The map's search field and its results panel, searching two sources at once: **shops** are
-// already in memory, so they match synchronously on every keystroke, while **addresses** come from
-// Nominatim over HTTP and are debounced to fit their ~1 request/second free tier.
+// The map's search field and its results panel. **Shops** are already in memory and match on every
+// keystroke; **addresses** come from Nominatim over HTTP, debounced.
+//
+// Nominatim's policy forbids as-you-type on its public api, and this does it anyway - a deliberate
+// call until the Yandex search licence is bought (it has its own address search). Everything else the
+// policy asks for is kept: cached answers, a User-Agent with a contact, the credit line.
 //
 // It owns the text state and reports only *selections* upward, which keeps MapScreen concerned with
 // the camera and the sheets rather than with text editing.
@@ -21,10 +24,15 @@ class MapSearchPanel extends StatefulWidget {
     required this.strings,
     required this.onShopSelected,
     required this.onPlaceSelected,
+    this.shopsFailed = false,
   });
 
   /// the shops currently plotted on the map - searched locally, never re-fetched
   final List<Shop> shops;
+
+  /// the map's shop list failed to load, so "no shop matched" would be a claim nobody checked
+  final bool shopsFailed;
+
   final AppLocalizations strings;
   final ValueChanged<Shop> onShopSelected;
   final ValueChanged<GeocodeResult> onPlaceSelected;
@@ -34,8 +42,6 @@ class MapSearchPanel extends StatefulWidget {
 }
 
 class _MapSearchPanelState extends State<MapSearchPanel> {
-  static const _debounceDelay = Duration(milliseconds: 450);
-
   /// below this, a query matches half of Tashkent and is not worth a network round trip
   static const _minRemoteQueryLength = 3;
 
@@ -46,10 +52,19 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
   final _focusNode = FocusNode();
   final _geocoding = GeocodingService();
 
+  static const _debounceDelay = Duration(milliseconds: 450);
+
   Timer? _debounce;
   String _query = '';
+
+  /// The text the addresses on screen were looked up for: typing on retires them, so the list never
+  /// contradicts the field.
+  String? _placesQuery;
   List<GeocodeResult> _places = const [];
   bool _isSearchingPlaces = false;
+
+  /// **a flag, not the exception** - the card draws one written sentence, the reason goes to the log
+  bool _placesFailed = false;
 
   @override
   void initState() {
@@ -60,7 +75,6 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
 
   @override
   void dispose() {
-    // a pending timer that fires after dispose would call setState on a dead State object
     _debounce?.cancel();
     _focusNode.removeListener(_onFocusChanged);
     _focusNode.dispose();
@@ -71,63 +85,92 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
   void _onFocusChanged() => setState(() {});
 
   void _onQueryChanged(String value) {
-    setState(() => _query = value);
-
     _debounce?.cancel();
     final trimmed = value.trim();
+    final lookUp = trimmed.length >= _minRemoteQueryLength;
 
-    if (trimmed.length < _minRemoteQueryLength) {
-      // drop any in-flight results too, otherwise stale addresses from a longer query linger under
-      // a query that no longer asked for them
-      setState(() {
-        _places = const [];
-        _isSearchingPlaces = false;
-      });
-      return;
-    }
+    setState(() {
+      _query = value;
+      if (trimmed != _placesQuery) _forgetPlaces();
+      // the spinner starts with the typing, not with the request the timer will make
+      if (lookUp) _isSearchingPlaces = true;
+    });
 
-    setState(() => _isSearchingPlaces = true);
-    _debounce = Timer(_debounceDelay, () => _searchPlaces(trimmed));
+    if (lookUp) _debounce = Timer(_debounceDelay, () => _searchPlaces(trimmed));
   }
 
-  Future<void> _searchPlaces(String query) async {
-    final results = await _geocoding.search(query);
-    if (!mounted) return;
+  /// called from inside a setState
+  void _forgetPlaces() {
+    _placesQuery = null;
+    _places = const [];
+    _placesFailed = false;
+    _isSearchingPlaces = false;
+  }
 
-    // the user may have typed on while the request was in flight; showing its results now would
-    // contradict what is in the field
-    if (_textController.text.trim() != query) return;
+  /// Repeats cost nothing: GeocodingService answers them from its cache.
+  Future<void> _searchPlaces(String raw) async {
+    final query = raw.trim();
+    if (query.length < _minRemoteQueryLength) return;
+    if (query == _placesQuery && !_placesFailed) return;
+
+    setState(() {
+      _placesQuery = query;
+      _places = const [];
+      _placesFailed = false;
+      _isSearchingPlaces = true;
+    });
+
+    var results = const <GeocodeResult>[];
+    var failed = false;
+    try {
+      results = await _geocoding.search(query);
+    } catch (e) {
+      debugPrint('MapSearchPanel: address lookup failed: $e');
+      failed = true;
+    }
+
+    // the user may have typed on while the request was in flight; its answer is for a query the field
+    // no longer holds
+    if (!mounted || _textController.text.trim() != query) return;
 
     setState(() {
       _places = results;
+      _placesFailed = failed;
       _isSearchingPlaces = false;
     });
   }
 
-  /// case-insensitive match on name or address, capped so the dropdown stays a shortlist
+  /// case-insensitive match on name or address, capped so the dropdown stays a shortlist. ё is read as
+  /// е on both sides, as the product search does: customers rarely type it, owners sometimes do.
   List<Shop> get _matchingShops {
-    final needle = _query.trim().toLowerCase();
+    final needle = _fold(_query.trim());
     if (needle.isEmpty) return const [];
 
     return widget.shops
-        .where((shop) =>
-            shop.name.toLowerCase().contains(needle) ||
-            shop.address.toLowerCase().contains(needle))
+        .where((shop) => _fold(shop.name).contains(needle) || _fold(shop.address).contains(needle))
         .take(4)
         .toList();
   }
+
+  static String _fold(String text) => text.toLowerCase().replaceAll('ё', 'е');
 
   void _clear() {
     _debounce?.cancel();
     _textController.clear();
     setState(() {
       _query = '';
-      _places = const [];
-      _isSearchingPlaces = false;
+      _forgetPlaces();
     });
   }
 
-  void _dismiss() {
+  /// A row was picked: the field takes its text, and the results that led to it are done with.
+  void _select(String text) {
+    _debounce?.cancel();
+    _textController.text = text;
+    setState(() {
+      _query = text;
+      _forgetPlaces();
+    });
     _focusNode.unfocus();
   }
 
@@ -162,19 +205,17 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
                   child: _ResultsCard(
                     maxHeight: _maxPanelHeight,
                     shops: shops,
+                    shopsFailed: widget.shopsFailed,
                     places: _places,
                     isSearchingPlaces: _isSearchingPlaces,
+                    placesFailed: _placesFailed,
                     strings: widget.strings,
                     onShopTap: (shop) {
-                      _textController.text = shop.name;
-                      setState(() => _query = shop.name);
-                      _dismiss();
+                      _select(shop.name);
                       widget.onShopSelected(shop);
                     },
                     onPlaceTap: (place) {
-                      _textController.text = place.displayName;
-                      setState(() => _query = place.displayName);
-                      _dismiss();
+                      _select(place.displayName);
                       widget.onPlaceSelected(place);
                     },
                   ),
@@ -278,8 +319,10 @@ class _ResultsCard extends StatelessWidget {
   const _ResultsCard({
     required this.maxHeight,
     required this.shops,
+    required this.shopsFailed,
     required this.places,
     required this.isSearchingPlaces,
+    required this.placesFailed,
     required this.strings,
     required this.onShopTap,
     required this.onPlaceTap,
@@ -287,15 +330,21 @@ class _ResultsCard extends StatelessWidget {
 
   final double maxHeight;
   final List<Shop> shops;
+  final bool shopsFailed;
   final List<GeocodeResult> places;
   final bool isSearchingPlaces;
+  final bool placesFailed;
+
   final AppLocalizations strings;
   final ValueChanged<Shop> onShopTap;
   final ValueChanged<GeocodeResult> onPlaceTap;
 
   @override
   Widget build(BuildContext context) {
-    final isEmpty = shops.isEmpty && places.isEmpty && !isSearchingPlaces;
+    // a failed shop list keeps its section, with a line saying so: "nothing matched" would be a claim
+    // about shops nobody could check
+    final showShops = shops.isNotEmpty || shopsFailed;
+    final showPlaces = places.isNotEmpty || isSearchingPlaces || placesFailed;
 
     return Container(
       constraints: BoxConstraints(maxHeight: maxHeight),
@@ -307,28 +356,35 @@ class _ResultsCard extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.md),
-        child: isEmpty
-            ? _EmptyRow(label: strings.searchNoResults)
+        child: !showShops && !showPlaces
+            ? _NoticeRow(label: strings.searchNoResults)
             : ListView(
                 padding: EdgeInsets.zero,
                 shrinkWrap: true,
                 physics: const ClampingScrollPhysics(),
                 children: [
-                  if (shops.isNotEmpty) ...[
+                  if (showShops) ...[
                     _SectionLabel(strings.searchSectionShops),
-                    for (final shop in shops)
-                      _ResultRow(
-                        icon: CupertinoIcons.building_2_fill,
-                        iconColor: AppColors.primaryOrange,
-                        iconBackground: AppColors.primarySoft,
-                        title: shop.name,
-                        subtitle: shop.address,
-                        onTap: () => onShopTap(shop),
-                      ),
+                    if (shops.isEmpty)
+                      _NoticeRow(
+                        label: strings.mapShopsUnavailable,
+                        icon: CupertinoIcons.exclamationmark_circle,
+                        isError: true,
+                      )
+                    else
+                      for (final shop in shops)
+                        _ResultRow(
+                          icon: CupertinoIcons.building_2_fill,
+                          iconColor: AppColors.primaryOrange,
+                          iconBackground: AppColors.primarySoft,
+                          title: shop.name,
+                          subtitle: shop.address,
+                          onTap: () => onShopTap(shop),
+                        ),
                   ],
-                  if (places.isNotEmpty || isSearchingPlaces) ...[
+                  if (showPlaces) ...[
                     _SectionLabel(strings.searchSectionPlaces),
-                    if (isSearchingPlaces && places.isEmpty)
+                    if (isSearchingPlaces)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 16),
                         child: Center(
@@ -342,7 +398,13 @@ class _ResultsCard extends StatelessWidget {
                           ),
                         ),
                       )
-                    else
+                    else if (placesFailed)
+                      _NoticeRow(
+                        label: strings.mapPlacesSearchFailed,
+                        icon: CupertinoIcons.wifi_exclamationmark,
+                        isError: true,
+                      )
+                    else ...[
                       for (final place in places)
                         _ResultRow(
                           icon: CupertinoIcons.location_solid,
@@ -352,6 +414,8 @@ class _ResultsCard extends StatelessWidget {
                           subtitle: place.displayName,
                           onTap: () => onPlaceTap(place),
                         ),
+                      const _OsmAttribution(),
+                    ],
                   ],
                 ],
               ),
@@ -470,10 +534,19 @@ class _ResultRow extends StatelessWidget {
   }
 }
 
-class _EmptyRow extends StatelessWidget {
-  const _EmptyRow({required this.label});
+// one line standing in for results: nothing matched, a lookup failed, or how to start one
+class _NoticeRow extends StatelessWidget {
+  const _NoticeRow({
+    required this.label,
+    this.icon = CupertinoIcons.search,
+    this.isError = false,
+  });
 
   final String label;
+  final IconData icon;
+
+  /// danger-coloured: a failure must not read as a friendly "nothing here"
+  final bool isError;
 
   @override
   Widget build(BuildContext context) {
@@ -481,17 +554,43 @@ class _EmptyRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
       child: Row(
         children: [
-          const Icon(CupertinoIcons.search, color: AppColors.textFaint, size: 16),
+          Icon(icon, color: isError ? AppColors.danger : AppColors.textFaint, size: 16),
           const SizedBox(width: 10),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.textGrey,
-              fontSize: 13.5,
-              fontWeight: FontWeight.w500,
+          // Expanded: the prompt and the failure are whole sentences and would overflow the row
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isError ? AppColors.danger : AppColors.textGrey,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// Nominatim's addresses are OpenStreetMap data, and its licence asks for the credit wherever they are
+// shown. the map underneath is Yandex's and credits only Yandex, so this line under the results is the
+// one place it can go.
+class _OsmAttribution extends StatelessWidget {
+  const _OsmAttribution();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(14, 0, 14, 8),
+      child: Text(
+        '© OpenStreetMap contributors',
+        textAlign: TextAlign.right,
+        style: TextStyle(
+          color: AppColors.textFaint,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }
