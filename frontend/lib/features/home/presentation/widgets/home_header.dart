@@ -71,9 +71,31 @@ class HomeHeader extends StatelessWidget {
 }
 
 // pill-shaped rather than on the radius scale, which governs rectangles: a full stadium reads as a
-// chip. both controls lift off the page - flat white with a hairline is an inert surface, and on a
-// page of shadowed cards they were the palest thing rather than the two you can press.
-const List<BoxShadow> _chipShadow = AppShadows.card;
+// chip.
+//
+// **Both chips are white and lifted, and both are lit.** Filling them with the search bar's grey was
+// tried and is gone: two grey lozenges over a grey bar over a grey page flattened the whole top of
+// the screen into one wash, and the pills stopped reading as things you can press.
+//
+// What makes them premium rather than merely white is the same trick as the category tiles - a
+// surface is convincing when it is *lit*, not when it is bright:
+//
+//   - a near-vertical gradient, white at the top easing to [AppColors.surfaceMuted] at the bottom,
+//     so the pill has a lit edge and a shaded one instead of one flat fill
+//   - **and no shadow at all.** Both `raised` and the tighter `card` were tried, and on a #EFF1F5
+//     page a black shadow at any alpha is simply a grey shape: soft-edged, but plainly visible
+//     behind a 40px chip and reading as a second box sitting behind it. The gradient and the
+//     hairline do the whole job - a lit surface does not need a cast shadow to look raised
+//   - the hairline stays, and it is doing real work here - it is the only thing defining the pill's
+//     edge where the gradient's top end meets the page
+
+/// The lit fill both chips share. Kept here rather than repeated, so the round one and the long one
+/// cannot drift apart.
+const LinearGradient _chipFill = LinearGradient(
+  begin: Alignment.topCenter,
+  end: Alignment.bottomCenter,
+  colors: [AppColors.surfaceWhite, AppColors.surfaceMuted],
+);
 
 /// 40, up from 38: off Android's 38dp "small control" reading and onto the 40dp that the search bar
 /// under them and the nav bar's targets already sit on.
@@ -110,10 +132,9 @@ class _CityChip extends StatelessWidget {
             child: Ink(
               height: _chipHeight,
               decoration: BoxDecoration(
-                color: AppColors.surfaceWhite,
+                gradient: _chipFill,
                 borderRadius: borderRadius,
                 border: Border.all(color: AppColors.hairline),
-                boxShadow: _chipShadow,
               ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 13),
@@ -178,10 +199,9 @@ class _IconChip extends StatelessWidget {
             height: _chipHeight,
             width: _chipHeight,
             decoration: BoxDecoration(
-              color: AppColors.surfaceWhite,
+              gradient: _chipFill,
               shape: BoxShape.circle,
               border: Border.all(color: AppColors.hairline),
-              boxShadow: _chipShadow,
             ),
             child: Center(
               child: Icon(icon, color: AppColors.textDark, size: 18),

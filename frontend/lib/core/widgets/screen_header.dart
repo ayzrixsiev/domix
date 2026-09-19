@@ -39,6 +39,30 @@ class ScreenHeader extends StatelessWidget {
   /// Horizontal values also set where the rule below starts and stops, so the two cannot drift.
   final EdgeInsets padding;
 
+  /// The same rule, shaped for [AppBar.bottom].
+  ///
+  /// A *pushed* screen titles itself in an app bar rather than with this widget - the back button
+  /// has to sit beside the title - so without this the rule would exist on the five tabs and be
+  /// missing on every screen they open. One constructor, so the colour and weight cannot drift.
+  ///
+  /// [inset] defaults to 16 rather than the tab header's 20: that is both the page gutter a results
+  /// list uses and where [CircleBackButton]'s disc starts, so the line runs edge to edge under it.
+  static PreferredSizeWidget appBarRule({double inset = 16, double gap = 6}) {
+    return PreferredSize(
+      preferredSize: Size.fromHeight(gap + ruleHeight),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(inset, gap, inset, 0),
+        child: rule,
+      ),
+    );
+  }
+
+  /// The line on its own, for a screen that composes its own [AppBar.bottom] out of more than the
+  /// rule - a category page puts a filter field above it.
+  static const Widget rule = _Rule();
+
+  static const double ruleHeight = 1;
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -84,13 +108,29 @@ class ScreenHeader extends StatelessWidget {
             // inset to the header's own horizontal padding, so the rule begins under the first
             // letter of the title and ends under the last column of the row above it
             padding: EdgeInsets.symmetric(horizontal: padding.left),
-            child: const SizedBox(
-              height: 1,
-              child: ColoredBox(color: AppColors.textFaint),
-            ),
+            child: const _Rule(),
           ),
         ],
       ],
+    );
+  }
+}
+
+/// The line itself - see [ScreenHeader]'s class doc for why it is [AppColors.textFaint] and not one
+/// of the two lighter neutrals. Shared by the header and by [ScreenHeader.appBarRule].
+class _Rule extends StatelessWidget {
+  const _Rule();
+
+  @override
+  Widget build(BuildContext context) {
+    // **`width: double.infinity` is the whole of this widget working.** A childless `ColoredBox`
+    // takes the smallest size its constraints allow, so under the *loose* ones `AppBar.bottom`
+    // hands down it laid out 1px tall and 0px wide - present in the tree, painting nothing. It only
+    // looked right inside [ScreenHeader] because that Column stretches its children to full width.
+    return const SizedBox(
+      height: ScreenHeader.ruleHeight,
+      width: double.infinity,
+      child: ColoredBox(color: AppColors.textFaint),
     );
   }
 }

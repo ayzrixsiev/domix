@@ -23,7 +23,9 @@ import 'package:frontend/features/home/presentation/widgets/search_and_like_bar.
 import 'package:frontend/features/products/data/product_model.dart';
 import 'package:frontend/features/products/presentation/widgets/product_tile.dart';
 import 'package:frontend/features/home/presentation/screens/home_screen.dart';
+import 'package:frontend/features/home/presentation/screens/all_categories_screen.dart';
 import 'package:frontend/features/home/presentation/widgets/best_offers.dart';
+import 'package:frontend/features/home/presentation/widgets/popular_categories_grid.dart';
 import 'package:frontend/features/home/presentation/widgets/home_shop_row.dart';
 import 'package:frontend/features/home/presentation/widgets/vip_shops_carousel.dart';
 import 'package:frontend/core/widgets/pressable_scale.dart';
@@ -136,8 +138,8 @@ Future<HomeController> _pumpHome(WidgetTester tester, _FakeHomeRepository repo) 
 
 void main() {
   // **the state a fresh install is in, and the one that used to be covered up.** an empty database
-  // draws all three sections at full size - five VIP places, twelve tiles, fifteen ranked places -
-  // and not one shop name anywhere.
+  // draws all three sections at full size - five VIP places, eight category cards, fifteen ranked
+  // places - and not one shop name anywhere.
   testWidgets('an empty backend draws every section, never invented shops', (tester) async {
     final strings = AppLocalizations(AppLanguage.ru);
     final controller = await _pumpHome(tester, _FakeHomeRepository(content: _content()));
@@ -397,7 +399,8 @@ void main() {
     );
     await _pumpHome(tester, repo);
 
-    await tester.tap(find.byIcon(ProductCategory.mixes.icon));
+    // the card is found by its name: the grid draws a product photograph, not a glyph
+    await tester.tap(find.text(AppLocalizations(AppLanguage.ru).categoryMixes));
     await tester.pumpAndSettle();
 
     expect(find.byType(CategoryProductsScreen), findsOneWidget);
@@ -500,9 +503,10 @@ void main() {
     expect(ProductSearchScreen.isSearchable('пвс 2х1,5'), isTrue);
   });
 
-  testWidgets('the category tiles carry no shop counts', (tester) async {
+  testWidgets('the category cards carry no shop counts', (tester) async {
     // they did briefly, and it cost a database aggregate on every home load to tell a customer
-    // something they had not asked. a tile is a way in, not a statistic.
+    // something they had not asked. a card is a way in, not a statistic.
+    final strings = AppLocalizations(AppLanguage.ru);
     await _pumpHome(
       tester,
       _FakeHomeRepository(
@@ -514,9 +518,19 @@ void main() {
       ),
     );
 
-    // the grid is a two-page pager, so only the first eight tiles are built
-    for (final category in ProductCategory.values.take(8)) {
-      expect(find.byIcon(category.icon), findsWidgets);
+    // the grid is the categories that have a product shot - the other four are behind the header's
+    // "Все категории", which is the whole reason the pager went away.
+    //
+    // scoped to the grid: several product categories share a name with a *shop* category, and those
+    // are on this same screen as the best-offers segments
+    for (final category in PopularCategoriesGrid.photographed) {
+      expect(
+        find.descendant(
+          of: find.byType(PopularCategoriesGrid),
+          matching: find.text(category.label(strings)),
+        ),
+        findsOneWidget,
+      );
     }
     // and no numeric badge anywhere on it
     for (final digit in ['0', '2', '3', '4', '7']) {
@@ -555,12 +569,46 @@ void main() {
   // the drill-down behind a category tile reads the database or shows an empty state. it used to
   // answer from the invented catalogue whenever the home screen was showing invented shops, so a
   // tapped tile opened onto plausible products at plausible prices from businesses that do not exist.
+  // **the four categories with no photograph are still reachable**, which is the deal the grid makes
+  // by showing only eight. if this ever fails, a third of the catalogue has no way in from the feed.
+  testWidgets('"Все категории" reaches the categories the grid leaves out', (tester) async {
+    final strings = AppLocalizations(AppLanguage.ru);
+    final repo = _FakeHomeRepository(content: _content(), categoryProducts: const []);
+    await _pumpHome(tester, repo);
+
+    // "Отделка" has no product shot, so it is on no card of the grid
+    expect(
+      find.descendant(
+        of: find.byType(PopularCategoriesGrid),
+        matching: find.text(strings.categoryFinishing),
+      ),
+      findsNothing,
+    );
+
+    await tester.tap(find.text(strings.allCategories));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AllCategoriesScreen), findsOneWidget);
+    // all twelve, scrolled to in order - the list is longer than a phone
+    for (final category in ProductCategory.values) {
+      await tester.scrollUntilVisible(find.text(category.label(strings)), 120);
+      expect(find.text(category.label(strings)), findsOneWidget);
+    }
+
+    await tester.tap(find.text(strings.categoryFinishing));
+    await tester.pumpAndSettle();
+
+    expect(repo.requestedCategory, ProductCategory.finishing);
+    // the list popped itself on the way through, so back from the products is the feed
+    expect(find.byType(AllCategoriesScreen), findsNothing);
+  });
+
   testWidgets('a category with no products opens onto an empty state, not a story', (tester) async {
     final strings = AppLocalizations(AppLanguage.ru);
     final repo = _FakeHomeRepository(content: _content(), categoryProducts: const []);
     await _pumpHome(tester, repo);
 
-    await tester.tap(find.byIcon(ProductCategory.mixes.icon));
+    await tester.tap(find.text(strings.categoryMixes));
     await tester.pumpAndSettle();
 
     expect(repo.requestedCategory, ProductCategory.mixes);

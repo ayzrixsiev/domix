@@ -239,6 +239,8 @@ class AppLocalizations {
   /// ranked by lowest average check, not by distance - the copy promises a price, not a location
   String get bestOffersTitle => isRu ? 'Лучшие предложения' : 'Eng yaxshi takliflar';
   String get popularCategories => isRu ? 'Популярные категории' : 'Mashhur kategoriyalar';
+  /// the home grid shows the eight categories that have a product shot; this opens the full twelve
+  String get allCategories => isRu ? 'Все категории' : 'Barcha kategoriyalar';
   String get seeAll => isRu ? 'Все' : 'Hammasi';
 
   // "VIP" stays latin in both languages: it is the name of the paid tier, not a word to translate
@@ -889,6 +891,35 @@ class AppLocalizations {
   String get availabilityInStock => isRu ? 'Есть' : 'Bor';
   String get availabilityOnOrder => isRu ? 'Под заказ' : 'Buyurtma asosida';
   String get availabilityUnavailable => isRu ? 'Нет' : "Yo'q";
+
+  /// The same three states **as a standalone badge on a product card**. The three above are the
+  /// answers in the edit form's "Наличие:" dropdown, where the label supplies the noun; alone on a
+  /// tile, "Есть" and "Нет" are fragments with nothing to answer.
+  String get availabilityBadgeInStock => isRu ? 'В наличии' : 'Mavjud';
+  String get availabilityBadgeOnOrder => isRu ? 'Под заказ' : 'Buyurtma asosida';
+  String get availabilityBadgeUnavailable => isRu ? 'Нет в наличии' : 'Mavjud emas';
+
+  /// The filter over a category's products. **"в категории", because it narrows what is already on
+  /// screen** rather than searching the whole catalogue - the home bar is what does that, and a user
+  /// who cannot tell the two apart will read an empty result as "Domix has none of these".
+  String get categoryFilterHint =>
+      isRu ? 'Поиск в категории' : 'Turkum ichidan qidirish';
+  /// shown instead of the count once the search has left the category behind
+  String get searchAcrossCategories =>
+      isRu ? 'Поиск по всем категориям' : 'Barcha turkumlar bo\'yicha qidiruv';
+
+  String get categoryFilterNoResults =>
+      isRu ? 'В категории ничего не найдено' : 'Turkumda hech narsa topilmadi';
+  /// **Names the escape hatch.** The filter narrows this category only, so a user who types a word
+  /// that lives in another one sees nothing and concludes Domix does not stock it. The search key is
+  /// what looks everywhere, and this is the only place that says so.
+  String get categoryFilterNoResultsHint => isRu
+      ? 'Нажмите «Поиск» на клавиатуре, чтобы искать по всем категориям.'
+      : "Barcha turkumlar bo'yicha qidirish uchun klaviaturadagi «Qidirish» tugmasini bosing.";
+
+  /// the heart on a product card - nothing reads it on screen, so it exists for screen readers
+  String get addToFavouritesLabel => isRu ? 'В избранное' : 'Sevimlilarga';
+  String get addToBasketLabel => isRu ? 'В корзину' : 'Savatga';
 
   // customer-facing catalogue on a shop's card
   String get shopProductsSectionTitle => isRu ? 'Товары' : 'Mahsulotlar';

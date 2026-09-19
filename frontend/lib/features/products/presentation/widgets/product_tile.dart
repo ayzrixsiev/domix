@@ -1,13 +1,24 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import '../../data/product_model.dart';
 
-// one product as a square card in a two-per-row grid. a fixed height (see [height]) rather than an
-// aspect ratio, which derives height from *width* - so the same tile grows on a wide phone and the
-// text block underneath, which needs the same room everywhere, is what breaks first.
+/// One product as a card in a two-per-row grid. A fixed height (see [height]) rather than an aspect
+/// ratio, which derives height from *width* - so the same tile grows on a wide phone and the text
+/// block underneath, which needs the same room everywhere, is what breaks first.
+///
+/// **The card is grey and the photo panel inside it is white** - the inverse of the obvious way
+/// round, and it is load-bearing rather than decorative. Every catalogue shot is a product
+/// photographed on white, so a *grey* panel showed that white as a rectangle around each product.
+/// Putting the white on the panel lets the photo's own background disappear into it, and moves the
+/// grey out to the card, where nothing is composited against it.
+///
+/// It also means the 410 committed catalogue JPEGs need no reprocessing at all: the alternative was
+/// repainting every one of their backgrounds to match a panel colour, which would have welded the
+/// assets to a hex value in this file.
 class ProductTile extends StatelessWidget {
   const ProductTile({
     super.key,
@@ -15,15 +26,15 @@ class ProductTile extends StatelessWidget {
     required this.strings,
     this.onTap,
     this.showOwnBadge = false,
+    this.showBuyerActions = false,
     this.subtitle,
   });
 
   final Product product;
   final AppLocalizations strings;
 
-  /// A second line under the name - the selling shop, on the cross-shop browse, where it is the
-  /// difference between a price and an actionable price. When present the product name is capped to
-  /// one line, so the tile keeps its fixed [height].
+  /// A line under the price - the selling shop, on the cross-shop browse, where it is the difference
+  /// between a price and an actionable price.
   final String? subtitle;
 
   /// null on the customer-facing grid: a tile that lights up under a finger but does nothing when
@@ -33,40 +44,63 @@ class ProductTile extends StatelessWidget {
   /// only the owner's own grid distinguishes their products from the template's
   final bool showOwnBadge;
 
-  /// banner 118 + text block 90. hand-tuned to fit a two-line name plus a price row at the smallest
-  /// width the app supports, with nothing left over at the largest.
-  static const double height = 208;
-  static const double _bannerHeight = 118;
+  /// The heart and the basket button.
+  ///
+  /// **Off on the owner's management grid** - they are not shopping in their own catalogue - and on
+  /// wherever a customer is browsing. Neither is wired to anything yet: a basket is phase two, so
+  /// for now they are drawn and inert.
+  final bool showBuyerActions;
+
+  /// Photo block 124 (the panel's 118 plus the 6 of frame above it) + text block 98. Hand-tuned to
+  /// fit a two-line name, a price, the shop line and the basket button at the smallest width the app
+  /// supports, with nothing left over at the largest.
+  static const double height = 222;
+
+  /// the grey panel's own height. [_frame] of white sits above it and either side.
+  static const double _photoHeight = 118;
+
+  /// the white margin between the card's edge and the photo panel, on three sides
+  static const double _frame = 6;
 
   @override
   Widget build(BuildContext context) {
     final card = Container(
+      // trackGrey rather than the `cardGrey` that was on the panel: #F1F3F6 is *lighter* than the
+      // #EFF1F5 page, so a card filled with it is two units from its background and disappears.
+      //
+      // **No border.** One was tried in `textFaint`, since every lighter neutral is at or above this
+      // fill and would ring a grey card in a paler line. It was visible and it was worse: twelve
+      // outlined boxes down a scrolling grid read as a table. The fill carries the shape on its own.
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.trackGrey,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.hairline),
         boxShadow: AppShadows.card,
       ),
-      // the ink splash of a tapped tile must not paint over the card's rounded corners, and the banner
-      // has to be clipped to them too
+      // the ink splash of a tapped tile must not paint over the card's rounded corners
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ProductBanner(
-            product: product,
-            strings: strings,
-            showOwnBadge: showOwnBadge,
+          // no bottom inset: the panel's lower edge meets the text block, so the white frame reads as
+          // a margin around the picture rather than as a box drawn around it
+          Padding(
+            padding: const EdgeInsets.fromLTRB(_frame, _frame, _frame, 0),
+            child: _PhotoPanel(
+              product: product,
+              strings: strings,
+              showOwnBadge: showOwnBadge,
+              showFavourite: showBuyerActions,
+            ),
           ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(11, 10, 11, 10),
+              padding: const EdgeInsets.fromLTRB(11, 9, 11, 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     product.name,
-                    maxLines: subtitle == null ? 2 : 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: AppColors.textDark,
@@ -76,33 +110,31 @@ class ProductTile extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  if (subtitle case final shop?) ...[
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        const Icon(CupertinoIcons.building_2_fill,
-                            color: AppColors.textFaint, size: 10),
-                        const SizedBox(width: 3),
-                        Expanded(
-                          child: Text(
-                            shop,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: AppColors.textGrey,
-                              fontSize: 10.5,
-                              height: 1.2,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  // pushes the price to the bottom edge, so prices line up across a row whether a name wrapped onto
-                  // one line or two
+                  // pushes the price to the bottom edge, so prices line up across a row whether a name
+                  // wrapped onto one line or two
                   const Spacer(),
-                  _PriceLine(product: product, strings: strings),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _PriceLine(product: product, strings: strings),
+                            if (subtitle case final shop?) ...[
+                              const SizedBox(height: 4),
+                              _ShopLine(name: shop),
+                            ],
+                          ],
+                        ),
+                      ),
+                      if (showBuyerActions) ...[
+                        const SizedBox(width: 6),
+                        _BasketButton(label: strings.addToBasketLabel),
+                      ],
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -124,53 +156,66 @@ class ProductTile extends StatelessWidget {
   }
 }
 
-// the photo, or the placeholder that stands in for one.
-class _ProductBanner extends StatelessWidget {
-  const _ProductBanner({
+/// The white panel the photo is mounted on, with the availability badge and the heart over it.
+class _PhotoPanel extends StatelessWidget {
+  const _PhotoPanel({
     required this.product,
     required this.strings,
     required this.showOwnBadge,
+    required this.showFavourite,
   });
 
   final Product product;
   final AppLocalizations strings;
   final bool showOwnBadge;
+  final bool showFavourite;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: ProductTile._bannerHeight,
+      height: ProductTile._photoHeight,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // always painted, and always *under* the photo rather than instead of it: it is what shows while
-          // the image downloads and what is left if it fails, so the tile never flashes a bare white rectangle
-          const _BannerPlaceholder(),
-          // **the thumbnail, not the photo.** a shop card is up to a hundred tiles, and at 1000px apiece that
-          // is ~15 MB down a mobile connection for a band 118px tall. `thumbUrl` already falls back to the
-          // full-size url when the backend did not send one.
-          if (product.thumbUrl case final url?)
-            _BannerPhoto(url: url, fallbackUrl: product.imageUrl),
-
-          // in stock is the normal case and the one nobody needs told, so only the two exceptions get a chip
-          if (product.availability != ProductAvailability.inStock)
-            Positioned(
-              top: 8,
-              left: 8,
-              child: _TileChip(
-                label: product.availability == ProductAvailability.onOrder
-                    ? strings.availabilityOnOrder
-                    : strings.availabilityUnavailable,
-                color: product.availability == ProductAvailability.onOrder
-                    ? AppColors.starYellow
-                    : AppColors.textGrey,
+          // the panel, and the only thing here that clips: the photo has to take its rounded corners,
+          // while the badges sit on top of them
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            child: ColoredBox(
+              // white, and the whole point of the layout - see the class doc on [ProductTile]
+              color: AppColors.surfaceWhite,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // always painted, and always *under* the photo rather than instead of it: it is what
+                  // shows while the image downloads and what is left if it fails
+                  const _PanelPlaceholder(),
+                  // **the thumbnail, not the photo.** a shop card is up to a hundred tiles, and at
+                  // 1000px apiece that is ~15 MB down a mobile connection for a panel 118px tall.
+                  // `thumbUrl` already falls back to the full-size url when the backend sent none.
+                  if (product.thumbUrl case final url?)
+                    _PanelPhoto(url: url, fallbackUrl: product.imageUrl),
+                ],
               ),
             ),
-
+          ),
+          Positioned(
+            top: 7,
+            left: 7,
+            child: _AvailabilityBadge(availability: product.availability, strings: strings),
+          ),
+          if (showFavourite)
+            Positioned(
+              top: 7,
+              right: 7,
+              child: _FavouriteButton(label: strings.addToFavouritesLabel),
+            ),
+          // the owner's marker moves to the bottom: the top right is the shopper's heart, and on the
+          // owner's own grid the heart is off, but the two must not be able to collide either way
           if (showOwnBadge && !product.isTemplate)
             Positioned(
-              top: 8,
-              right: 8,
+              bottom: 7,
+              right: 7,
               child: _TileChip(label: strings.ownProductBadge, color: AppColors.primaryOrange),
             ),
         ],
@@ -179,33 +224,28 @@ class _ProductBanner extends StatelessWidget {
   }
 }
 
-// **Plain white, and that is about the photos rather than the empty state.** This is painted *under*
-// every tile and the photo on top is `contain`, so it is the bars either side of the picture. A
-// peach-to-grey gradient made a shot cut out on white read as pasted onto the tile; white is the
-// white the photos are flattened onto, so the seam disappears. The cost - a photoless product is a
-// white band with one glyph - is the right way round, since that is the exception.
-class _BannerPlaceholder extends StatelessWidget {
-  const _BannerPlaceholder();
+// **The panel is white and the photo sits straight on it.** The catalogue shots are `contain`, so
+// whatever is behind them is the bars either side of the picture - and since every one of those
+// shots was taken on white, white is the one colour that leaves no seam.
+class _PanelPlaceholder extends StatelessWidget {
+  const _PanelPlaceholder();
 
   @override
   Widget build(BuildContext context) {
-    return const ColoredBox(
-      color: AppColors.surfaceWhite,
-      child: Center(
-        child: Icon(CupertinoIcons.cube_box_fill, color: AppColors.textFaint, size: 30),
-      ),
+    return const Center(
+      child: Icon(CupertinoIcons.cube_box_fill, color: AppColors.textFaint, size: 30),
     );
   }
 }
 
-// the product photo. `contain`, not `cover`: these are catalogue shots of a single object on white,
-// and cropping one to a 118px band cuts the head off a hammer.
+// the product photo. `contain`, not `cover`: these are catalogue shots of a single object, and
+// cropping one to a 118px band cuts the head off a hammer.
 //
 // [cacheWidth] is the one line that keeps a 99-tile grid from running out of memory - without it a
 // 1000x1000 jpeg costs 4 MB of raw bitmap however small it is drawn. [fallbackUrl] covers exactly
 // one failure: a missing thumbnail, generated by a `magick` command somebody runs by hand.
-class _BannerPhoto extends StatelessWidget {
-  const _BannerPhoto({required this.url, this.fallbackUrl});
+class _PanelPhoto extends StatelessWidget {
+  const _PanelPhoto({required this.url, this.fallbackUrl});
 
   final String url;
   final String? fallbackUrl;
@@ -221,7 +261,7 @@ class _BannerPhoto extends StatelessWidget {
       // there, so try it once - the nested widget passes no fallback, which stops this recursing.
       errorBuilder: (_, _, _) => fallbackUrl == null || fallbackUrl == url
           ? const SizedBox.shrink()
-          : _BannerPhoto(url: fallbackUrl!),
+          : _PanelPhoto(url: fallbackUrl!),
       // fades in once decoded instead of popping, and shows nothing before then - the placeholder
       // underneath is already the loading state
       frameBuilder: (_, child, frame, wasSynchronouslyLoaded) {
@@ -237,8 +277,117 @@ class _BannerPhoto extends StatelessWidget {
   }
 }
 
-// a solid white pill rather than a translucent one: it sits over a gradient, and a tint that reads
-// correctly against the light end washes out against the dark end
+/// All three availability states, as a solid pill. **Every tile carries one**, where the old card
+/// showed a chip only for the two exceptions: on a marketplace "в наличии" is the fact a shopper is
+/// scanning for, and a card that says nothing when the answer is yes makes them check each one.
+class _AvailabilityBadge extends StatelessWidget {
+  const _AvailabilityBadge({required this.availability, required this.strings});
+
+  final ProductAvailability availability;
+  final AppLocalizations strings;
+
+  @override
+  Widget build(BuildContext context) {
+    final (color, label) = switch (availability) {
+      ProductAvailability.inStock => (AppColors.success, strings.availabilityBadgeInStock),
+      ProductAvailability.onOrder => (AppColors.warning, strings.availabilityBadgeOnOrder),
+      ProductAvailability.unavailable =>
+        (AppColors.textGrey, strings.availabilityBadgeUnavailable),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(AppRadius.xs)),
+      child: Text(
+        label,
+        style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+/// The heart over the photo panel. **Inert**: there is nowhere to save a favourite yet.
+///
+/// A ringed white disc, not a plain one: the panel behind it is now white too, so without the
+/// `trackGrey` edge there is no disc at all - just a heart floating on the photo.
+class _FavouriteButton extends StatelessWidget {
+  const _FavouriteButton({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: Container(
+        width: 26,
+        height: 26,
+        decoration: BoxDecoration(
+          color: AppColors.surfaceWhite,
+          shape: BoxShape.circle,
+          border: Border.all(color: AppColors.trackGrey),
+        ),
+        child: const Icon(LucideIcons.heart, color: AppColors.textDark, size: 14),
+      ),
+    );
+  }
+}
+
+/// The dark disc beside the price. **Inert**: the basket is phase two.
+class _BasketButton extends StatelessWidget {
+  const _BasketButton({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: const BoxDecoration(color: AppColors.primaryDark, shape: BoxShape.circle),
+        child: const Icon(LucideIcons.shopping_cart, color: Colors.white, size: 15),
+      ),
+    );
+  }
+}
+
+/// Who is selling it. Under the price rather than under the name: the price and the shop are one
+/// fact together, and splitting them put the name's second line between them.
+class _ShopLine extends StatelessWidget {
+  const _ShopLine({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Icon(LucideIcons.store, color: AppColors.textFaint, size: 10),
+        const SizedBox(width: 3),
+        Expanded(
+          child: Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.textGrey,
+              fontSize: 10.5,
+              height: 1.2,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// a solid white pill rather than a translucent one: it sits over a photo, and a tint that reads
+// correctly against a light shot washes out against a dark one
 class _TileChip extends StatelessWidget {
   const _TileChip({required this.label, required this.color});
 

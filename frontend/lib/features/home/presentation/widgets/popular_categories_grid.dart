@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
@@ -8,253 +6,144 @@ import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/pressable_scale.dart';
 import 'package:frontend/features/products/data/product_category.dart';
 
-// One icon family, monochrome: Lucide ships a real glyph font, and both the label and the glyph come
-// off `ProductCategory`, so a category cannot look different depending on the screen.
-//
-// **A pager, not a taller grid** - twelve in one static grid meant three rows dominating the feed,
-// and it is also what retired the "Все →" action.
-//
-// **No white surface anywhere in this section**, behind it or behind a tile, and **no shop count on
-// the tiles** - that cost a database aggregate on every home load.
-class PopularCategoriesGrid extends StatefulWidget {
+/// The eight photographed categories, four across and two down - a product shot on a white card
+/// with its name under it.
+///
+/// **Which eight is not a list kept here.** It is every category [ProductCategory.photo] answers
+/// for, in the enum's own order, so adding a shot to the assets and naming it on the enum is the
+/// whole of promoting a category onto this grid - there is no second list to forget.
+///
+/// **The pager and its dots are gone.** Twelve categories over two swiped pages hid four of them
+/// behind a gesture nobody makes on a page that already scrolls vertically; the four without a
+/// photo now live behind the header's "Все категории", which is a thing you can see.
+class PopularCategoriesGrid extends StatelessWidget {
   const PopularCategoriesGrid({super.key, required this.onCategoryTap});
 
   /// passed in rather than pushed from here, so this stays a pure renderer with no route knowledge
   final void Function(ProductCategory category) onCategoryTap;
 
-  @override
-  State<PopularCategoriesGrid> createState() => _PopularCategoriesGridState();
-}
+  /// derived, never hand-written - see the class doc
+  static List<ProductCategory> get photographed =>
+      ProductCategory.values.where((category) => category.photo != null).toList();
 
-class _PopularCategoriesGridState extends State<PopularCategoriesGrid> {
   static const int _columns = 4;
-  static const int _rows = 2;
-  static const int _perPage = _columns * _rows;
+  static const double _gap = 8;
 
-  // the content's real height (64 box + 7 gap + two 13.2px lines) plus slack, times two rows. a
-  // constant rather than a childAspectRatio - see the delegate below.
-  static const double _cellHeight = 100;
-  static const double _rowGap = 6;
-  static const double _pageHeight = _cellHeight * _rows + _rowGap * (_rows - 1);
-
-  late final PageController _controller;
-
-  /// derived, so a thirteenth category grows the pager instead of being silently hidden
-  int get _pageCount => (ProductCategory.values.length / _perPage).ceil();
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = PageController();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  // the photo slot plus the name strip below it. a constant rather than a childAspectRatio, which
+  // derives height from *width* - that made the cell grow on a wide phone and shrink on a narrow
+  // one until a two-line name no longer fit.
+  static const double _photoHeight = 64;
+  static const double _labelHeight = 34;
 
   @override
   Widget build(BuildContext context) {
     final strings = Provider.of<LanguageProvider>(context).strings;
+    final categories = photographed;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          height: _pageHeight,
-          child: PageView.builder(
-            controller: _controller,
-            physics: const BouncingScrollPhysics(),
-            itemCount: _pageCount,
-            itemBuilder: (context, page) {
-              // clamped at the end: the last page is partial - twelve categories over eight-per-page leaves four
-              final start = page * _perPage;
-              final end = math.min(start + _perPage, ProductCategory.values.length);
-              final categories = ProductCategory.values.sublist(start, end);
-
-              return GridView.builder(
-                // the PageView is the scrollable here; a grid that also scrolled would fight it for the same drag
-                physics: const NeverScrollableScrollPhysics(),
-                padding: EdgeInsets.zero,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: _columns,
-                  // a fixed row height rather than childAspectRatio, which derives height from *width* - so the cell
-                  // grew on a wide phone and shrank on a narrow one, until a two-line label no longer fit. this is
-                  // the content's real height plus slack, and it holds on every screen width.
-                  mainAxisExtent: _cellHeight,
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: _rowGap,
-                ),
-                itemCount: categories.length,
-                itemBuilder: (context, index) {
-                  final category = categories[index];
-                  return _CategoryTile(
-                    icon: category.icon,
-                    label: category.label(strings),
-                    onTap: () => widget.onCategoryTap(category),
-                  );
-                },
-              );
-            },
-          ),
-        ),
-        // 4, not the 14 this started at: the dots carry their own vertical touch padding, so the gap the
-        // eye measures is that padding plus whatever is added here
-        const SizedBox(height: 4),
-        _PageDots(controller: _controller, pageCount: _pageCount),
-      ],
-    );
-  }
-}
-
-/// The dots under the pager, driven by the controller's *fractional* page: `onPageChanged` fires
-/// after the page has snapped, so a dot driven by it jumps a beat behind the finger.
-class _PageDots extends StatelessWidget {
-  const _PageDots({required this.controller, required this.pageCount});
-
-  final PageController controller;
-  final int pageCount;
-
-  static const double _dotSize = 6;
-  static const double _activeWidth = 20;
-
-  @override
-  Widget build(BuildContext context) {
-    if (pageCount < 2) return const SizedBox.shrink();
-
-    return AnimatedBuilder(
-      // the controller ticks on every scroll frame, so only the dots rebuild - not the tiles above
-      animation: controller,
-      builder: (context, _) {
-        // `page` is null until the PageView has been laid out and `hasClients` is false before it is
-        // attached - both on the first frame, so fall back rather than render with no active dot
-        final current = controller.hasClients && controller.page != null
-            ? controller.page!
-            : controller.initialPage.toDouble();
-
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            for (var i = 0; i < pageCount; i++) ...[
-              if (i > 0) const SizedBox(width: 6),
-              _Dot(
-                // 1 when this page is centred, 0 a full page away, fractional mid-drag. one number drives width
-                // and colour together, which keeps the two from disagreeing.
-                activation: (1 - (current - i).abs()).clamp(0.0, 1.0),
-                onTap: () => controller.animateToPage(
-                  i,
-                  duration: AppMotion.base,
-                  curve: AppMotion.easing,
-                ),
-              ),
-            ],
-          ],
+    return GridView.builder(
+      // the feed is the scrollable here; a grid that also scrolled would fight it for the same drag
+      physics: const NeverScrollableScrollPhysics(),
+      shrinkWrap: true,
+      padding: EdgeInsets.zero,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: _columns,
+        mainAxisExtent: _photoHeight + _labelHeight,
+        crossAxisSpacing: _gap,
+        mainAxisSpacing: _gap,
+      ),
+      itemCount: categories.length,
+      itemBuilder: (context, index) {
+        final category = categories[index];
+        return _CategoryCard(
+          // non-null by construction: `photographed` filtered on exactly this
+          photo: category.photo!,
+          label: category.label(strings),
+          onTap: () => onCategoryTap(category),
         );
       },
     );
   }
 }
 
-class _Dot extends StatelessWidget {
-  const _Dot({required this.activation, required this.onTap});
-
-  /// 0 = fully inactive, 1 = fully active. fractional while a swipe is in progress.
-  final double activation;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      // the dot is 6px tall, far under the 44px a finger needs, so the tap target is padded around it
-      // rather than the dot being drawn bigger than it should look
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
-        child: SizedBox(
-          width: _PageDots._activeWidth,
-          child: Align(
-            child: Container(
-              height: _PageDots._dotSize,
-              width: _PageDots._dotSize +
-                  (_PageDots._activeWidth - _PageDots._dotSize) * activation,
-              decoration: BoxDecoration(
-                // **the inactive end is textFaint, and it used to be hairline** - #ECEEF2 on a #EFF1F5 page is
-                // about 1.02 contrast, which is why nobody could tell there was a second page. lerped rather than
-                // switched at a threshold: a colour that flips halfway through a drag flickers.
-                color: Color.lerp(AppColors.textFaint, AppColors.primaryOrange, activation),
-                borderRadius: BorderRadius.circular(_PageDots._dotSize / 2),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// One category: the glyph on a grey box, with the name under it. **Two surfaces were tried and
-/// both are gone** - a white panel behind all twelve, then a white card per tile.
-class _CategoryTile extends StatelessWidget {
-  const _CategoryTile({
-    required this.icon,
+/// One category: the product shot filling the top of a white card, its name under it.
+///
+/// **No chevron on the card.** The reference this is built from has one per tile, but that layout
+/// is a wide one - at four columns on a phone the card is about 86dp, and a name plus a chevron on
+/// one line does not fit at any size worth reading. The only chevron is the section's own "Все
+/// категории", where it points at something new rather than repeating what a tap already implies.
+class _CategoryCard extends StatelessWidget {
+  const _CategoryCard({
+    required this.photo,
     required this.label,
     required this.onTap,
   });
 
-  final IconData icon;
+  final String photo;
   final String label;
   final VoidCallback onTap;
 
-  static const double _glyphBox = 64;
-
   @override
   Widget build(BuildContext context) {
-    // a bit more travel than the default: a 3% shrink on a 64px box is barely perceptible
+    // a bit more travel than the default: 3% on a card this small is barely perceptible
     return PressableScale(
-      pressedScale: 0.93,
+      pressedScale: 0.95,
       onTap: onTap,
-      // the grid hands this cell a *tight* height. top-aligned rather than centred: centring drops the
-      // glyph box half a line on the tiles whose label wraps, so a row of four wobbles - and which tiles
-      // those are changes with the display language.
-      child: Column(
-        children: [
-          // the box stays - it separates one category from the next - but it is neutral: eight pastel fills
-          // with matching icon colours read as a children's app.
-          //
-          // **trackGrey, because a fill is only grey relative to what is behind it**: cardGrey is *lighter*
-          // than the page the tile now sits on. no border - hairline is lighter still and would ring a darker
-          // fill in a paler line. the glyph is `textMuted`: eight near-black marks in a grid is the heaviest
-          // thing on the home screen, and `textGrey` on this fill is under the 3:1 a non-text mark wants.
-          Container(
-            height: _glyphBox,
-            width: _glyphBox,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: AppColors.trackGrey,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-            ),
-            child: Icon(icon, color: AppColors.textMuted, size: 27),
-          ),
-          const SizedBox(height: 7),
-          // Expanded, so the label owns the whole strip under the glyph box however many lines it uses - a
-          // Text given a tight height paints from the top, keeping first lines on one baseline
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.textDark,
-                fontSize: 11,
-                height: 1.2,
-                fontWeight: FontWeight.w500,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: AppColors.surfaceWhite,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          boxShadow: AppShadows.card,
+        ),
+        // the card's own radius, so the photo is cut by the corner instead of squaring it off
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          child: Column(
+            children: [
+              // full-bleed rather than inset inside the card: an inset would spend 8dp of an 86dp
+              // card on margin, and it has nothing to show there - the ground is the same white.
+              SizedBox(
+                height: PopularCategoriesGrid._photoHeight,
+                width: double.infinity,
+                // the shots are cut onto a pure white ground, so the whole card is one white
+                // surface and the frame before an image decodes is the colour of the frame after it.
+                //
+                // **they arrived on a light grey ground and it could not stay.** The reference this
+                // is built from insets a grey panel inside a white card, which works on a white
+                // page; ours is #EFF1F5, and grey-on-grey left the top two thirds of every card
+                // with no edge at all - only the name strip read as a card.
+                child: ColoredBox(
+                  color: AppColors.surfaceWhite,
+                  child: Image.asset(
+                    photo,
+                    // the assets are 1.3:1 and the slot is a little wider on most phones, so cover
+                    // trims a few pixels top and bottom - the product sits in the middle 80% of
+                    // every file for exactly that reason
+                    fit: BoxFit.cover,
+                  ),
+                ),
               ),
-            ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Center(
+                    child: Text(
+                      label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: AppColors.textDark,
+                        fontSize: 11,
+                        height: 1.15,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

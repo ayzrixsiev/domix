@@ -4,8 +4,8 @@ import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 
 // the "Title ........ See all" row above each home section, so the sections line up.
-// [actionLabel]/[onAction] are passed by nobody today - do not wire one up to an empty
-// `onAction: () {}` just to make the row look complete.
+// [actionLabel]/[onAction] are optional and only "Популярные категории" passes them today - do not
+// wire one up to an empty `onAction: () {}` just to make the row look complete.
 class SectionHeader extends StatelessWidget {
   const SectionHeader({
     super.key,

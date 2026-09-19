@@ -35,9 +35,10 @@ class HomeShopRow extends StatelessWidget {
             color: AppColors.surfaceWhite,
             borderRadius: BorderRadius.circular(AppRadius.md),
             border: Border.all(color: AppColors.hairline),
-            // matches the VIP cards: six of these stacked down the page is the section that most needed
-            // separating from the background
-            boxShadow: AppShadows.raised,
+            // **No shadow.** `raised` and then `card` were both tried: on the #EFF1F5 page a black
+            // shadow at any alpha is a grey shape around the row, and fifteen of them stacked down
+            // the section read as a column of grey boxes. White against #EFF1F5 with a hairline is
+            // already a clear edge - there is nothing for a shadow to add here.
           ),
           padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
           child: Row(
@@ -169,7 +170,6 @@ class EmptyShopRow extends StatelessWidget {
         color: AppColors.surfaceWhite,
         borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: AppColors.hairline),
-        boxShadow: AppShadows.raised,
       ),
       padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
       child: Row(

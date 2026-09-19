@@ -5,6 +5,7 @@ import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
 import 'package:frontend/core/widgets/circle_back_button.dart';
+import 'package:frontend/core/widgets/screen_header.dart';
 
 // The destination behind the home header's bell. Nothing produces a notification yet, so this is
 // permanently empty - but an icon that does nothing when tapped reads as broken, whereas an empty
@@ -38,6 +39,8 @@ class NotificationsScreen extends StatelessWidget {
             fontWeight: FontWeight.w700,
           ),
         ),
+        // the same edge the tabs and the category pages draw under their titles
+        bottom: ScreenHeader.appBarRule(),
       ),
       body: SafeArea(
         child: EmptyStateView(

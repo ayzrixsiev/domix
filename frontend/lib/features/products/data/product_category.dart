@@ -62,6 +62,32 @@ enum ProductCategory {
         ProductCategory.tools => strings.categoryTools,
       };
 
+  /// The product shot the home screen's category tile is built on, or null for a category that has
+  /// no artwork yet.
+  ///
+  /// **Nullable, and that nullability is the rule that picks the popular eight** - see
+  /// [PopularCategoriesGrid]. A tile whose whole design is a photograph cannot fall back to a glyph
+  /// without the grid looking half-finished, so a category without a shot simply is not on it; it is
+  /// reachable through "Все категории" like every other. Shooting the missing four is what promotes
+  /// them.
+  ///
+  /// Still an exhaustive switch: a thirteenth category has to say here whether it has a photo, rather
+  /// than silently inheriting a default.
+  String? get photo => switch (this) {
+        ProductCategory.mixes => 'assets/categories/building_materials.webp',
+        ProductCategory.blocks => null,
+        ProductCategory.lumber => 'assets/categories/lumber.webp',
+        ProductCategory.metal => null,
+        ProductCategory.fasteners => 'assets/categories/fasteners.webp',
+        ProductCategory.roofing => 'assets/categories/roofing.webp',
+        ProductCategory.insulation => null,
+        ProductCategory.electrical => 'assets/categories/electrical.webp',
+        ProductCategory.plumbing => 'assets/categories/plumbing.webp',
+        ProductCategory.paints => 'assets/categories/paints_and_finishing.webp',
+        ProductCategory.finishing => null,
+        ProductCategory.tools => 'assets/categories/tools.webp',
+      };
+
   /// Lucide only, one family and one stroke weight. The glyph belongs on the enum now that two
   /// screens draw the same categories and would otherwise pick different icons for them.
   IconData get icon => switch (this) {

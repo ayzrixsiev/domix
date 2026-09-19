@@ -27,6 +27,8 @@ class CategoryProductsScreen extends StatelessWidget {
       title: category.label(strings),
       subtitle: strings.categoryProductsSubtitle,
       load: () => home.productsForCategory(category),
+      // the field in the app bar can leave this category behind - see ProductResultsScreen.onSearch
+      onSearch: home.searchProducts,
       // the category's own glyph: arriving somewhere should feel like arriving at the thing you tapped
       emptyIcon: category.icon,
       emptyTitle: strings.noProductsInCategory,

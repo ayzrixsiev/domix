@@ -24,6 +24,8 @@ class ProductResultsView extends StatefulWidget {
     required this.emptyIcon,
     required this.emptyTitle,
     required this.emptyHint,
+    this.query = '',
+    this.canSearchWider = false,
     this.onCountChanged,
   });
 
@@ -37,8 +39,20 @@ class ProductResultsView extends StatefulWidget {
   final String emptyTitle;
   final String emptyHint;
 
-  /// fires with the result count so an app bar above can show one. null on a failure - "0 товаров"
-  /// and "the request failed" are not the same sentence, and only one of them is true.
+  /// Narrows what is already loaded, live as it is typed. **A client-side filter over the fetched
+  /// list, not a second request**: the category is already in memory, and re-querying the api on
+  /// every keystroke is the thing [ProductSearchScreen] deliberately does not do either.
+  ///
+  /// Empty on the search screen, which has nothing to narrow - its list *is* the query's answer.
+  final String query;
+
+  /// Whether this screen can go wider than what it loaded - a category page can search the whole
+  /// catalogue, the search screen already has. Only changes what the empty state offers.
+  final bool canSearchWider;
+
+  /// fires with the count **that is on screen**, so a filter that hides nine of ten rows is reflected
+  /// in the app bar rather than leaving it claiming ten. null on a failure - "0 товаров" and "the
+  /// request failed" are not the same sentence, and only one of them is true.
   final void Function(int? count)? onCountChanged;
 
   @override
@@ -58,6 +72,38 @@ class _ProductResultsViewState extends State<ProductResultsView> {
     _load();
   }
 
+  // typing does not refetch; it re-filters what is already here. the count in the app bar has to
+  // follow, and it is reported after the frame rather than inside didUpdateWidget - the parent is
+  // mid-build at that point and calling its setState there is the "setState during build" crash.
+  @override
+  void didUpdateWidget(ProductResultsView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.query == oldWidget.query || _products == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onCountChanged?.call(_visible().length);
+    });
+  }
+
+  /// The loaded products the current [ProductResultsView.query] leaves standing.
+  ///
+  /// **Every word has to appear somewhere**, matching how the server's search reads a query, so
+  /// "клей эрон" finds the row that "эрон клей" finds. The shop name is searched too: on a
+  /// cross-shop list, narrowing to one seller is the other thing a filter is for.
+  List<CategoryProduct> _visible() {
+    final products = _products ?? const <CategoryProduct>[];
+    final query = widget.query.trim().toLowerCase();
+    if (query.isEmpty) return products;
+
+    final words = query.split(RegExp(r'\s+'));
+    return [
+      for (final entry in products)
+        if (words.every(
+          (word) => '${entry.product.name} ${entry.shopName}'.toLowerCase().contains(word),
+        ))
+          entry,
+    ];
+  }
+
   Future<void> _load() async {
     setState(() {
       _isLoading = true;
@@ -73,7 +119,7 @@ class _ProductResultsViewState extends State<ProductResultsView> {
         _products = products;
         _isLoading = false;
       });
-      widget.onCountChanged?.call(products.length);
+      widget.onCountChanged?.call(_visible().length);
     } catch (e) {
       if (!mounted) return;
       debugPrint('ProductResultsView: could not load results: $e');
@@ -120,13 +166,21 @@ class _ProductResultsViewState extends State<ProductResultsView> {
       );
     }
 
-    final products = _products ?? const <CategoryProduct>[];
+    final products = _visible();
     if (products.isEmpty) {
+      // **two different empty states, because they are two different facts.** "nobody has priced
+      // anything in this category" is about the market; "your filter matched none of the 100 rows
+      // that are here" is about the four letters just typed, and offering the first for the second
+      // tells the user the category is bare when it is not.
+      final filtered = widget.query.trim().isNotEmpty;
       return _FullPage(
         child: EmptyStateView(
-          icon: widget.emptyIcon,
-          title: widget.emptyTitle,
-          subtitle: widget.emptyHint,
+          icon: filtered ? CupertinoIcons.search : widget.emptyIcon,
+          title: filtered ? strings.categoryFilterNoResults : widget.emptyTitle,
+          // the "press search to look everywhere" line is only true where there is a wider search
+          subtitle: filtered && widget.canSearchWider
+              ? strings.categoryFilterNoResultsHint
+              : (filtered ? strings.searchNoResultsHint : widget.emptyHint),
         ),
       );
     }
@@ -142,6 +196,8 @@ class _ProductResultsViewState extends State<ProductResultsView> {
             strings: strings,
             // a price with no seller attached answers a question nobody asked
             subtitle: entry.shopName,
+            // this is the browse surface, so the shopper's two controls belong here
+            showBuyerActions: true,
             // the tile carries only shop_id, so this is the one route into a shop card that fetches
             onTap: () => openShopById(context, entry.product.shopId),
           ),

@@ -97,7 +97,10 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
         leading: const CircleBackButton(),
         leadingWidth: CircleBackButton.leadingWidth,
         title: Padding(
-          padding: const EdgeInsets.only(right: 16),
+          // 12 on the left, where it used to be 0: `leadingWidth` ends 2px past the back disc, so with
+          // no padding the field started hard against it and the two read as one broken-up control.
+          // 16 on the right is the page gutter, which is also where the disc's left edge sits.
+          padding: const EdgeInsets.only(left: 12, right: 16),
           child: _SearchField(
             controller: _controller,
             focusNode: _focusNode,
@@ -156,8 +159,13 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
   }
 }
 
-/// The pill the query is typed into. Deliberately the same surface, radius and hairline as
-/// [SearchAndLikeBar], so tapping that one and arriving here reads as one control moving up.
+/// The pill the query is typed into: the same shape and height as the home feed's bar, **in the
+/// other of that bar's two states**.
+///
+/// On the feed the bar is a recessed grey well - it is one row of a page, and a white card there
+/// would read as the first item of the feed. Here it is the screen: it gets the white fill, the
+/// `trackGrey` ring and the soft lift [CircleBackButton] wears, so the two controls beside each
+/// other are visibly the same material instead of a white disc glued to a grey slab.
 class _SearchField extends StatelessWidget {
   const _SearchField({
     required this.controller,
@@ -175,9 +183,6 @@ class _SearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // the same recessed grey well the home feed's bar is, down to the 48px height, so pressing that bar
-    // reads as one control travelling up rather than two.
-    //
     // the whole well takes the tap, not only the TextField - the magnifier and its padding are ~40px
     // that looks like a button. a tap on the field still goes to the field: the innermost wins.
     return GestureDetector(
@@ -186,12 +191,19 @@ class _SearchField extends StatelessWidget {
       child: Container(
         height: 48,
         padding: const EdgeInsets.symmetric(horizontal: 14),
+        // white needs the ring *and* the lift to separate from the page: #EFF1F5 against #FFFFFF is
+        // too small a step for a fill alone to read as a raised surface - the same reason the back
+        // button has both.
         decoration: BoxDecoration(
-          color: AppColors.trackGrey,
+          color: AppColors.surfaceWhite,
           borderRadius: BorderRadius.circular(AppRadius.sm),
+          border: Border.all(color: AppColors.trackGrey),
+          boxShadow: AppShadows.card,
         ),
         child: Row(
           children: [
+            // the back button's chevron is textDark; the magnifier is one step under it so the two
+            // glyphs read as a pair without the field looking like it has a second button in it
             const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 19),
             const SizedBox(width: 10),
             Expanded(
@@ -219,8 +231,10 @@ class _SearchField extends StatelessWidget {
                   isCollapsed: true,
                   border: InputBorder.none,
                   hintText: hintText,
+                  // textMuted, not the feed bar's textGrey: that shade was picked to sit on the grey
+                  // well, and on white it is the palest thing on the screen
                   hintStyle: const TextStyle(
-                    color: AppColors.textGrey,
+                    color: AppColors.textMuted,
                     fontSize: 14.5,
                     fontWeight: FontWeight.w400,
                   ),
@@ -238,7 +252,7 @@ class _SearchField extends StatelessWidget {
                   behavior: HitTestBehavior.opaque,
                   child: const Padding(
                     padding: EdgeInsets.only(left: 8),
-                    child: Icon(Icons.close_rounded, color: AppColors.textGrey, size: 18),
+                    child: Icon(Icons.close_rounded, color: AppColors.textMuted, size: 18),
                   ),
                 );
               },

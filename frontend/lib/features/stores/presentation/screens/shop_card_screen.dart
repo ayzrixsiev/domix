@@ -1028,7 +1028,7 @@ class _ProductsSliver extends StatelessWidget {
     return ProductSliverGrid(
       tiles: [
         for (final Product product in products)
-          ProductTile(product: product, strings: strings),
+          ProductTile(product: product, strings: strings, showBuyerActions: true),
       ],
     );
   }
