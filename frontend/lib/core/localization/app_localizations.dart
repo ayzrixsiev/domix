@@ -75,6 +75,100 @@ class AppLocalizations {
   String get selectLanguage => isRu ? 'Выберите язык' : 'Tilni tanlang';
   String get version => 'Domix • 1.0.0';
 
+  // ---------------------------------------------------------------------------------------------
+  // Onboarding: the four steps a guest walks through before an account exists.
+  // ---------------------------------------------------------------------------------------------
+
+  /// The header over the whole flow, so the guest tab is a titled screen rather than a card on an
+  /// empty canvas - see ScreenHeader.
+  String get onboardingTitle => isRu ? 'Вход в Domix' : "Domix'ga kirish";
+  String get onboardingSubtitle =>
+      isRu ? 'Несколько коротких шагов' : "Bir necha qisqa qadam";
+
+  /// «Шаг 2 из 4», read aloud by the progress bar and shown beside it.
+  String stepCounter(int step, int total) =>
+      isRu ? 'Шаг $step из $total' : "$total qadamdan $step-si";
+
+  String get nextButton => isRu ? 'Далее' : 'Keyingisi';
+  /// Not [backButton], which is «Назад в профиль» and names a destination - this one only walks one
+  /// step back inside the flow.
+  String get stepBackButton => isRu ? 'Назад' : 'Orqaga';
+
+
+  // step 2 - privacy policy
+  String get onboardingPolicyTitle =>
+      isRu ? 'Политика конфиденциальности' : 'Maxfiylik siyosati';
+  String policyRevision(String date) =>
+      isRu ? 'Редакция от $date' : '$date tahriri';
+  String get policyReadFull => isRu ? 'Читать полностью' : "To'liq o'qish";
+  String get policyAcceptLabel => isRu
+      ? 'Я прочитал(а) и принимаю политику конфиденциальности'
+      : "Men maxfiylik siyosatini o'qidim va qabul qilaman";
+  /// Shown when «Далее» is pressed with the box unticked, instead of a disabled button that never
+  /// explains itself.
+  String get policyMustAccept => isRu
+      ? 'Чтобы продолжить, примите политику конфиденциальности'
+      : "Davom etish uchun maxfiylik siyosatini qabul qiling";
+
+
+  String get phoneInputLabel => isRu ? 'Номер телефона' : 'Telefon raqami';
+  String get phoneInvalidError => isRu
+      ? 'Введите номер из 9 цифр, например 90 123 45 67'
+      : "9 xonali raqam kiriting, masalan 90 123 45 67";
+  String get sendCodeButton => isRu ? 'Получить код' : 'Kodni olish';
+
+  String codeSentTo(String phone) => isRu
+      ? 'Мы отправили шестизначный код на $phone'
+      : "Biz $phone raqamiga olti xonali kod yubordik";
+  String get codeInputLabel => isRu ? 'Код из СМС' : 'SMS dagi kod';
+  String get verifyCodeButton => isRu ? 'Подтвердить' : 'Tasdiqlash';
+  String get resendCodeButton => isRu ? 'Отправить код ещё раз' : 'Kodni qayta yuborish';
+  /// The countdown on the resend control. Seconds, because a minute is the whole wait.
+  String resendCodeIn(int seconds) => isRu
+      ? 'Отправить повторно можно через $seconds с'
+      : "Qayta yuborish $seconds soniyadan keyin";
+  String get changePhoneButton => isRu ? 'Изменить номер' : "Raqamni o'zgartirish";
+
+  /// Every refusal `/api/auth/request-code` and `/api/auth/verify` can answer with, as written copy.
+  /// **A code, not the server's sentence**: the server speaks one language and the app speaks the
+  /// reader's, and an unrecognised code has to land somewhere rather than draw an empty string.
+  String authErrorFor(String? code) => switch (code) {
+        'invalid_phone' => phoneInvalidError,
+        'name_too_long' => nameTooLongError,
+        'code_cooldown' || 'code_quota' => authTooManyRequests,
+        'code_not_sent' => authCodeNotSent,
+        'code_invalid' => authCodeWrong,
+        'code_expired' => authCodeExpired,
+        'code_not_found' => authCodeNotFound,
+        'code_attempts_exhausted' => authAttemptsExhausted,
+        'rate_limited' => authTooManyRequests,
+        _ => authGenericError,
+      };
+
+  String get nameTooLongError =>
+      isRu ? 'Имя слишком длинное' : 'Ism juda uzun';
+  String get authCodeWrong =>
+      isRu ? 'Неверный код. Проверьте и введите снова.' : "Kod noto'g'ri. Tekshirib qayta kiriting.";
+  String get authCodeExpired => isRu
+      ? 'Срок действия кода истёк. Запросите новый.'
+      : "Kod muddati tugadi. Yangisini so'rang.";
+  String get authCodeNotFound => isRu
+      ? 'Код не найден. Запросите новый.'
+      : "Kod topilmadi. Yangisini so'rang.";
+  String get authAttemptsExhausted => isRu
+      ? 'Слишком много попыток. Запросите новый код.'
+      : "Urinishlar juda ko'p. Yangi kod so'rang.";
+  String get authTooManyRequests => isRu
+      ? 'Слишком много запросов. Подождите немного.'
+      : "So'rovlar juda ko'p. Biroz kuting.";
+  String get authCodeNotSent => isRu
+      ? 'Не удалось отправить код. Попробуйте ещё раз.'
+      : "Kodni yuborib bo'lmadi. Qayta urinib ko'ring.";
+  String get authGenericError => isRu
+      ? 'Что-то пошло не так. Попробуйте ещё раз.'
+      : "Nimadir xato ketdi. Qayta urinib ko'ring.";
+
+
   String get registerTitle => isRu ? 'Регистрация' : "Ro'yxatdan o'tish";
   String get registerSubtitle => '';
   String get nameInputLabel => isRu ? 'Имя и фамилия' : "Ism va familiyangiz";
@@ -358,12 +452,10 @@ class AppLocalizations {
 
   // ── Заявки: the job marketplace. three roles, three screens, one nav item ──
 
-  /// Asked by the tab when no role has been chosen, and again whenever the header's role pill is tapped.
-  String get rolePromptTitle =>
-      isRu ? 'Кто вы на Domix?' : "Domix'da siz kimsiz?";
-  String get rolePromptBody => isRu
-      ? 'От этого зависит, что вы увидите в разделе «Заявки». Роль можно сменить в любой момент.'
-      : "Bunga qarab «Buyurtmalar» bo'limida nima ko'rishingiz aniqlanadi. Rolni istalgan vaqtda o'zgartirish mumkin.";
+  /// The tab's subtitle while no role has been chosen - the header asks the question the screen
+  /// below answers, so the chooser needs no banner of its own.
+  String get rolePromptSubtitle =>
+      isRu ? 'Выберите роль' : 'Rolni tanlang';
 
   // one subtitle per role: three different tabs behind one icon is otherwise something to infer
   String get ticketsClientSubtitle =>

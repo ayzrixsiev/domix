@@ -245,10 +245,6 @@ func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// one transaction for two writes: the shop row, and the category template copied into its
-	// product catalogue. without it a failure halfway through would leave a shop that exists but
-	// has a half-filled catalogue - and the owner has no way to ask for the rest of it, since
-	// seeding only ever happens here, at creation
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		log.Printf("CRITICAL: failed to begin shop creation transaction for user %d: %v", userID, err)

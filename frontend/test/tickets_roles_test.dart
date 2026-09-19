@@ -71,7 +71,9 @@ void main() {
   testWidgets('with no role chosen the tab asks rather than guessing', (tester) async {
     await _pump(tester);
 
-    expect(find.text(_strings.rolePromptTitle), findsOneWidget);
+    // the header asks it - the chooser itself is three tiles and nothing else
+    expect(find.text(_strings.ticketsTab), findsOneWidget);
+    expect(find.text(_strings.rolePromptSubtitle), findsOneWidget);
     // all three sides on offer - a two-sided market that only offers one side of itself is the bug
     expect(find.byType(RoleOptionTile), findsNWidgets(3));
     expect(find.text(_strings.roleWorker), findsOneWidget);
@@ -140,10 +142,11 @@ void main() {
   // ─────────────────────────── where the role is actually chosen ───────────────────────────
   //
   // Registration is the other end of the same decision, and it is the one that grew: two role
-  // squares became three stacked rows, which is ~125px more sheet on a screen that also has to hold
-  // the keyboard. A bottom sheet is a min-height Column - it does not scroll unless told to - so the
-  // failure mode is a striped overflow bar under the name field on any ordinary phone.
-  testWidgets('the registration sheet offers all three roles with the keyboard up', (tester) async {
+  // squares became three stacked rows. It used to be a bottom sheet - a min-height Column that does
+  // not scroll unless told to - and the failure mode was a striped overflow bar under the name field
+  // on any ordinary phone with the keyboard up. It is now step three of OnboardingFlow, on a
+  // ListView, and this test is what keeps it scrollable.
+  testWidgets('onboarding offers all three roles with the keyboard up', (tester) async {
     tester.view.physicalSize = const Size(360 * 3, 800 * 3);
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
@@ -160,14 +163,25 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text(_strings.loginButton));
+    // step 1, language - two options, and «Далее» moves on
+    expect(find.text(AppLanguage.ru.displayName), findsOneWidget);
+    await tester.tap(find.text(_strings.nextButton));
     await tester.pumpAndSettle();
 
+    // step 2, the policy: a summary, a way in to the full text, and the tick
+    expect(find.text(_strings.onboardingPolicyTitle), findsOneWidget);
+    expect(find.text(_strings.policyReadFull), findsOneWidget);
+    await tester.tap(find.text(_strings.policyAcceptLabel));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(_strings.nextButton));
+    await tester.pumpAndSettle();
+
+    // step 3, the roles themselves
     expect(find.byType(RoleOptionTile), findsNWidgets(3));
     expect(find.text(_strings.roleWorker), findsOneWidget);
     expect(find.text(_strings.roleVendor), findsOneWidget);
 
-    // the keyboard the name field brings up, which is what turns a tall sheet into an overflow
+    // the keyboard the name field brings up, which is what used to turn this into an overflow
     tester.view.viewInsets = const FakeViewPadding(bottom: 300 * 3);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);

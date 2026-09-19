@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../data/auth_service.dart';
 import '../screens/profile_screen.dart';
 
@@ -27,7 +26,6 @@ class AuthController extends ChangeNotifier {
 
   final AuthService _authService = AuthService();
   
-  bool _isPolling = false;
   bool _isLoading = false;
 
   // deliberately *not* _isLoading: that flag draws the "open telegram and share your number" overlay,
@@ -149,99 +147,29 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // start the login pipeline: send name and role to the backend, then open telegram
-  Future<void> startTelegramLogin({
-    required String name, 
+  /// Step one of signing in: ask the server to send a one-time code to [phone].
+  ///
+  /// Returns the number in the server's own canonical spelling (`998XXXXXXXXX`) - [verifyCode] must
+  /// be called with that, not with whatever was typed. Throws [AuthApiException] carrying the
+  /// server's refusal code, which the screen turns into a sentence.
+  ///
+  /// **Nothing is stored and no state changes here.** Until a code comes back verified there is no
+  /// account, which is the same reason the server keeps pending codes out of its database.
+  Future<CodeRequestResult> requestCode({
+    required String phone,
+    required String name,
     required String role,
-    required VoidCallback onSuccess,
-  }) async {
-    try {
-      _isLoading = true;
-      _loginErrorDetail = null;
-      notifyListeners();
-
-      // step 1: hit /init
-      final initResult = await _authService.initSession(name: name, role: role);
-
-      // step 2: open telegram, launched directly rather than behind a canLaunchUrl gate - on Android 11+
-      // that answers false unless the manifest declares a <queries> intent for VIEW+https, which broke
-      // login on every real phone. the t.me link is an ordinary https url (a phone without telegram opens
-      // its web preview), and launchUrl returning false or throwing is the real signal.
-      final uri = Uri.parse(initResult.telegramUrl);
-      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!opened) {
-        throw Exception("Could not open Telegram");
-      }
-
-      // step 3: start 2-second background polling
-      _startPolling(initResult.sessionId, name, onSuccess);
-
-    } catch (e) {
-      _isLoading = false;
-      _loginErrorDetail = e.toString().replaceAll("Exception: ", "");
-      notifyListeners();
-    }
+  }) {
+    return _authService.requestCode(phone: phone, name: name, role: role);
   }
 
-  // ask the backend whether the login completed, every 2 seconds, 60 times at most
-  void _startPolling(String sessionId, String userName, VoidCallback onSuccess) {
-    _cancelPolling(); // kill any polling loops before starting new
-
-    _isPolling = true;
-
-    // a separate async loop, so requests cannot overlap
-    () async {
-      const maxAttempts = 60;
-      int attempts = 0;
-
-      while (_isPolling && attempts < maxAttempts) {
-        attempts++;
-        try {
-          final result = await _authService.checkStatus(sessionId);
-
-          if (result.isSuccess && result.token != null) {
-            _isPolling = false;
-
-            final displayName = result.name ?? userName;
-            final displayPhone = result.phone ?? '';
-            final displayRole = result.role ?? 'customer';
-
-            await _authService.saveSession(
-              token: result.token!,
-              role: displayRole,
-              name: displayName,
-              phone: displayPhone,
-            );
-
-            _isLoading = false;
-            // the same mapping the cached and /api/me paths use, rather than a second copy of the role
-            // comparison - it was a second copy, and only one of the two learned about `admin`.
-            _applyAccount(role: displayRole, name: displayName, phone: displayPhone);
-            onSuccess();
-            return;
-          }
-        } catch (_) {
-          // ignore temporary errors and keep polling
-        }
-
-        // wait between attempts, checking the cancellation flag while waiting
-        for (int i = 0; i < 20; i++) {
-          if (!_isPolling) break;
-          await Future.delayed(const Duration(milliseconds: 100));
-        }
-      }
-
-      if (_isPolling) {
-        // max attempts reached, or it never succeeded
-        _isPolling = false;
-        _isLoading = false;
-        notifyListeners();
-      }
-    }();
-  }
-
-  void _cancelPolling() {
-    _isPolling = false;
+  /// Step two: exchange the code for a session. On success the token is already in secure storage
+  /// and the profile state has flipped to signed-in, so the caller only has to leave the screen.
+  Future<void> verifyCode({required String phone, required String code}) async {
+    final me = await _authService.verifyCode(phone: phone, code: code);
+    // the same mapping the cached and /api/me paths use, rather than a second copy of the role
+    // comparison - it was a second copy once, and only one of the two learned about `admin`
+    _applyAccount(role: me.role, name: me.name, phone: me.phone);
   }
 
   // dismiss the current error once the user has read it, so it doesn't linger forever
@@ -261,7 +189,6 @@ class AuthController extends ChangeNotifier {
 
   // wipe local storage and reset the interface back to guest
   Future<void> logout({bool accountDeleted = false}) async {
-    _cancelPolling();
     _isLoading = false;
     _loginErrorDetail = null;
     await _authService.logout();
@@ -319,10 +246,8 @@ class AuthController extends ChangeNotifier {
     return name.substring(0, name.length > 1 ? 2 : 1).toUpperCase();
   }
 
- // stop polling before the controller goes away
   @override
   void dispose() {
-    _cancelPolling();
     WidgetsBinding.instance.removeObserver(_lifecycle);
     super.dispose();
   }

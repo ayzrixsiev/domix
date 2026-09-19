@@ -27,6 +27,12 @@ import 'package:frontend/features/products/data/product_category.dart';
 /// out and bleed to the screen edges.
 const EdgeInsets _gutter = EdgeInsets.symmetric(horizontal: 10);
 
+/// How far the feed has to be dragged before letting go actually refreshes, and how tall the gap
+/// stays while it does. The trigger sits well above the resting extent so the gesture has somewhere
+/// to travel - pulling past the trigger is what fills the ring.
+const double _refreshTriggerDistance = 110;
+const double _refreshIndicatorExtent = 70;
+
 /// The home feed: VIP Магазины, Популярные категории, Лучшие предложения - all three from one
 /// `GET /api/home`. **Everything here is either a real row from the database or an empty slot that
 /// says so.**
@@ -81,28 +87,43 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // the header sits on the shared gutter rather than carrying its own copy of the number
+          // the header sits on the shared gutter rather than carrying its own copy of the number.
+          // it lives *outside* the scroll view, which is what makes the refresh gap open between it
+          // and the search bar rather than pushing the whole page down.
           const Padding(padding: _gutter, child: HomeHeader()),
           Expanded(
-            child: RefreshIndicator(
-              color: AppColors.primaryOrange,
-              onRefresh: () => home.loadHome(force: true),
-              // no horizontal padding here on purpose: each block applies the gutter itself, which lets the
-              // carousel bleed to the screen edges while every heading still lines up
-              child: SingleChildScrollView(
-                // AlwaysScrollable wrapping the bouncing physics, not replacing it: content that exactly fits the
-                // viewport has nothing to overscroll and the pull gesture is never recognised
-                physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 14),
-                    const Padding(padding: _gutter, child: SearchAndLikeBar()),
-                    ..._sections(home, strings),
-                    SizedBox(height: widget.bottomPadding),
-                  ],
+            // slivers rather than a SingleChildScrollView, because the refresh control below is one:
+            // it has to be able to set its own height frame by frame to open and close the gap.
+            child: CustomScrollView(
+              // AlwaysScrollable wrapping the bouncing physics, not replacing it: content that exactly fits the
+              // viewport has nothing to overscroll and the pull gesture is never recognised. Bouncing is also
+              // what gives the pull somewhere to travel on Android, where the default clamps at zero.
+              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+              slivers: [
+                // **Cupertino's control rather than RefreshIndicator's floating circle.** The circle
+                // hovers *over* the content and snaps away the instant the future completes. This one
+                // opens a gap, holds the spinner inside the gap it opened, and then animates that gap
+                // shut on its own - the spinner stays lit the whole way down and leaves with it.
+                CupertinoSliverRefreshControl(
+                  refreshTriggerPullDistance: _refreshTriggerDistance,
+                  refreshIndicatorExtent: _refreshIndicatorExtent,
+                  builder: _buildRefreshIndicator,
+                  onRefresh: () => home.loadHome(force: true),
                 ),
-              ),
+                // **no title block here.** the home feed already names itself: the DOMIX wordmark
+                // sits in the header row above, and a second «Главная» under it was one label too
+                // many on the one screen that never needed telling apart from another.
+                SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: const [
+                      SizedBox(height: 14),
+                      Padding(padding: _gutter, child: SearchAndLikeBar()),
+                    ],
+                  ),
+                ),
+                ..._feed(home, strings),
+              ],
             ),
           ),
         ],
@@ -116,75 +137,130 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(backgroundColor: AppColors.background, body: body);
   }
 
-  /// The feed below the search bar. **All three sections always draw, whatever the database holds** -
-  /// a section that vanished when empty read as a screen missing a chunk of itself. No heading carries
-  /// a "see all": each one already shows everything it has.
-  List<Widget> _sections(HomeController home, AppLocalizations strings) {
+  /// What sits inside the gap while it is open.
+  ///
+  /// One spinner family for the whole app: the same [CircularProgressIndicator] the cold start
+  /// draws, in brand orange. It is *determinate* while the finger is still down - the ring fills as
+  /// the gap opens, so the gesture shows its own progress and letting go early is visibly early -
+  /// and switches to the indeterminate spin once the request is actually in flight.
+  Widget _buildRefreshIndicator(
+    BuildContext context,
+    RefreshIndicatorMode mode,
+    double pulledExtent,
+    double triggerDistance,
+    double indicatorExtent,
+  ) {
+    final progress = (pulledExtent / triggerDistance).clamp(0.0, 1.0);
+    final isDragging = mode == RefreshIndicatorMode.drag;
+
+    return Center(
+      child: Opacity(
+        // fades in with the pull rather than appearing at full strength in a 2px gap
+        opacity: isDragging ? progress : 1,
+        child: SizedBox(
+          height: 22,
+          width: 22,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.4,
+            color: AppColors.primaryOrange,
+            value: isDragging ? progress : null,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The feed below the search bar, as slivers.
+  ///
+  /// Three states, and only ever one of them on screen: starting up, failed, or the feed itself.
+  /// **A failure replaces the feed rather than being appended under it** - five empty VIP slots and
+  /// fifteen empty rows followed by "не удалось загрузить" reads as a working screen with a
+  /// complaint stapled to the bottom, and buries the retry a full scroll away from the problem.
+  List<Widget> _feed(HomeController home, AppLocalizations strings) {
     // the very first paint, before the fetch has come back. a spinner rather than a full screen of
     // empty slots flashing past and then filling in.
     if (!home.hasLoaded) {
       return const [
-        SizedBox(height: 64),
-        Center(child: CircularProgressIndicator(color: AppColors.primaryOrange)),
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(child: CircularProgressIndicator(color: AppColors.primaryOrange)),
+        ),
+      ];
+    }
+
+    if (home.loadFailed) {
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: Padding(
+              padding: _gutter,
+              child: EmptyStateView(
+                icon: CupertinoIcons.wifi_exclamationmark,
+                iconColor: AppColors.danger,
+                iconBackground: AppColors.dangerSoft,
+                title: strings.homeLoadError,
+                // a written sentence, never the exception - see AppLocalizations.loadErrorHint
+                subtitle: strings.loadErrorHint,
+                action: PrimaryActionButton(
+                  label: strings.retryButtonShort,
+                  onTap: () => home.loadHome(force: true),
+                ),
+              ),
+            ),
+          ),
+        ),
       ];
     }
 
     final vipSlots = vipSlotRing(home.vipShops, slotCount: VipShopsCarousel.slotCount);
 
     return [
-      const SizedBox(height: 26),
-      Padding(padding: _gutter, child: SectionHeader(title: strings.vipShops)),
-      const SizedBox(height: 12),
-      // keyed on the slot count, so the State is rebuilt if the ring ever grows - a PageController's
-      // initialPage is derived from that size and cannot be changed afterwards
-      VipShopsCarousel(
-        key: ValueKey(vipSlots.length),
-        slots: vipSlots,
-        onShopTap: _openShop,
-      ),
-
-      // no panel behind this section: the white surface moved onto the individual tiles
-      const SizedBox(height: 26),
-      Padding(padding: _gutter, child: SectionHeader(title: strings.popularCategories)),
-      const SizedBox(height: 12),
-      Padding(
-        padding: _gutter,
-        child: PopularCategoriesGrid(onCategoryTap: _openCategory),
-      ),
-
-      const SizedBox(height: 26),
-      Padding(padding: _gutter, child: SectionHeader(title: strings.bestOffersTitle)),
-      const SizedBox(height: 12),
-      Padding(
-        padding: _gutter,
-        child: BestOffersList(groups: home.bestOffers, onShopTap: _openShop),
-      ),
-
-      // drawn *below* the sections rather than instead of them: the five VIP slots and the twelve tiles
-      // are the shape of the screen, not data that came back wrong. danger-coloured with a retry, since
-      // a failure must not look like a friendly "nothing here yet".
-      if (home.loadFailed) ...[
-        const SizedBox(height: 40),
-        Padding(
-          padding: _gutter,
-          child: EmptyStateView(
-            icon: CupertinoIcons.wifi_exclamationmark,
-            iconColor: AppColors.danger,
-            iconBackground: AppColors.dangerSoft,
-            title: strings.homeLoadError,
-            // a written sentence, never the exception - see AppLocalizations.loadErrorHint
-            subtitle: strings.loadErrorHint,
-            action: PrimaryActionButton(
-              label: strings.retryButtonShort,
-              onTap: () => home.loadHome(force: true),
+      // one adapter holding the whole feed rather than a lazy SliverList: the three sections are a
+      // fixed, short page - five carousel slots, twelve tiles, fifteen rows - and building them
+      // together is what the Column did before the refresh control needed slivers here. Going lazy
+      // would be a different screen (headings below the fold stop existing until scrolled to), and
+      // that is not what this change is for.
+      SliverToBoxAdapter(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 26),
+            Padding(padding: _gutter, child: SectionHeader(title: strings.vipShops)),
+            const SizedBox(height: 12),
+            // keyed on the slot count, so the State is rebuilt if the ring ever grows - a PageController's
+            // initialPage is derived from that size and cannot be changed afterwards
+            VipShopsCarousel(
+              key: ValueKey(vipSlots.length),
+              slots: vipSlots,
+              onShopTap: _openShop,
             ),
-          ),
-        ),
-      ],
 
-      // **no "пока нет магазинов" block here on purpose**: a screenful of designed-empty cards followed
-      // by a notice apologising for being empty says the same thing twice. the open places are the
-      // answer. a *failure* still gets the block above, which the feed cannot explain by itself.
+            // no panel behind this section: the white surface moved onto the individual tiles
+            const SizedBox(height: 26),
+            Padding(padding: _gutter, child: SectionHeader(title: strings.popularCategories)),
+            const SizedBox(height: 12),
+            Padding(
+              padding: _gutter,
+              child: PopularCategoriesGrid(onCategoryTap: _openCategory),
+            ),
+
+            const SizedBox(height: 26),
+            Padding(padding: _gutter, child: SectionHeader(title: strings.bestOffersTitle)),
+            const SizedBox(height: 12),
+            Padding(
+              padding: _gutter,
+              child: BestOffersList(groups: home.bestOffers, onShopTap: _openShop),
+            ),
+
+            SizedBox(height: widget.bottomPadding),
+
+            // **no "пока нет магазинов" block here on purpose**: a screenful of designed-empty cards followed
+            // by a notice apologising for being empty says the same thing twice. the open places are the
+            // answer. a *failure* is the branch above, which takes the screen instead of sharing it.
+          ],
+        ),
+      ),
     ];
   }
 }

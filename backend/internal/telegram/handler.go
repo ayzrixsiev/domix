@@ -17,6 +17,12 @@ import (
 
 // processes updates arriving from the telegram bot webhook: linking a flutter login session to
 // the chat that pressed /start, then completing that login once the user shares their phone number
+//
+// **This whole package is SUPERSEDED by the phone-code login** (endpoints.PhoneAuth, internal/auth
+// code.go, internal/verify). It is kept only while the apk on the founder's phone still calls
+// /api/auth/init; when that goes, this package, the bot wiring in cmd/api/main.go, the webhook and
+// the TELEGRAM_BOT_TOKEN / WEBHOOK_URL settings all go with it - together, because the deletion page
+// shares this same handshake and has to be moved to a code first (CLAUDE.md §3).
 type Handler struct {
 	Bot        *tgbotapi.BotAPI
 	SessionMgr *auth.SessionManager

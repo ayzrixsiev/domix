@@ -19,6 +19,12 @@ const maxUserNameLen = 150
 
 // the telegram-login handshake's endpoints - kicking off a login attempt, polling for whether it has
 // completed - plus the one that tells an already-logged-in app whether its session is still real.
+//
+// **Init and Status are SUPERSEDED by endpoints.PhoneAuth** (POST /api/auth/request-code and
+// /api/auth/verify). They are still registered only because the apk currently installed on the
+// founder's phone calls them; once the flutter side is on the code flow, delete them, the
+// SessionMgr and BotUsername fields, and internal/telegram with them. RouteMe/Me/DeleteMe stay -
+// they were never part of the handshake.
 type Auth struct {
 	Queries     *db.Queries
 	SessionMgr  *auth.SessionManager
@@ -41,7 +47,7 @@ func (a *Auth) Init(w http.ResponseWriter, r *http.Request) {
 
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
-		req.Name = "Domix User"
+		req.Name = defaultUserName
 	}
 	if utf8.RuneCountInString(req.Name) > maxUserNameLen {
 		writeAPIError(w, http.StatusBadRequest, "name_too_long",

@@ -59,6 +59,18 @@ Future<void> _signIn({required String role}) async {
   await AuthController().checkExistingLogin();
 }
 
+/// An empty secure store: nobody is signed in. Same shape as [_signIn] so the singleton is reset
+/// the same way - a state left behind by another test is what would otherwise decide this one.
+Future<void> _signOut() async {
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+    const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+    (call) async => call.method == 'readAll' ? <String, String>{} : null,
+  );
+
+  await AuthController().logout();
+  await AuthController().checkExistingLogin();
+}
+
 /// Rendered at a real phone's width rather than the 800px test default, so a row that only fits on a
 /// tablet fails here instead of on a demo device.
 Future<void> _pumpProfile(WidgetTester tester) async {
@@ -106,6 +118,42 @@ void main() {
     expect(find.text(_strings.manageShops), findsNothing);
     // ...but still gets the deletion path, which Google Play requires of every account
     expect(find.text(_strings.deleteAccount), findsOneWidget);
+  });
+
+  testWidgets('a guest gets the onboarding flow, not a profile', (tester) async {
+    await _signOut();
+    await _pumpProfile(tester);
+
+    expect(AuthController().profileState.isGuest, isTrue);
+
+    // step one of OnboardingFlow - the language choice, and the counter saying how many steps
+    // there are. the step carries no title of its own: two language tiles do not need a sentence
+    // above them saying they are language tiles.
+    expect(find.text(_strings.onboardingTitle), findsOneWidget);
+    expect(find.text(AppLanguage.ru.displayName), findsOneWidget);
+    expect(find.text(AppLanguage.uz.displayName), findsOneWidget);
+    expect(find.text(_strings.stepCounter(1, 5)), findsOneWidget);
+
+    // the three rows a guest used to be handed. favourites and language mean nothing without an
+    // account, and support is its own tab in the nav bar - so all three were a menu that either did
+    // nothing or sent the visitor back to this same screen to log in first.
+    expect(find.text(_strings.favorites), findsNothing);
+    expect(find.text(_strings.support), findsNothing);
+
+    // and none of the signed-in screen leaks through
+    expect(find.text(_strings.logout), findsNothing);
+    expect(find.text(_strings.deleteAccount), findsNothing);
+  });
+
+  testWidgets('«Поддержка» is gone from the signed-in menu too, it lives in the nav bar', (tester) async {
+    await _signIn(role: 'customer');
+    await _pumpProfile(tester);
+
+    expect(find.text(_strings.support), findsNothing);
+    // the rows either side of where it sat are still there, so this is a removal and not a
+    // collapsed menu
+    expect(find.text(_strings.favorites), findsOneWidget);
+    expect(find.textContaining(_strings.languageSettings), findsOneWidget);
   });
 
   testWidgets('tapping «Удалить аккаунт» opens the confirmation', (tester) async {

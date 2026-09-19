@@ -21,6 +21,7 @@ import (
 	"domix/backend/internal/imagestore"
 	"domix/backend/internal/ratelimit"
 	"domix/backend/internal/telegram"
+	"domix/backend/internal/verify"
 	"domix/backend/internal/webui"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -92,10 +93,22 @@ func main() {
 	// 4. initialize session manager and rate limiters
 	sessionMgr := auth.NewSessionManager()
 
+	// the phone-code login's half of the same idea: codes in ram, swept on a timer, never in the
+	// database. see internal/auth/code.go.
+	codeMgr := auth.NewCodeManager()
+	codeSender := mustOpenCodeSender()
+
 	loginLimiter := ratelimit.New(1, 30, 10*time.Minute)
 	apiLimiter := ratelimit.New(20, 60, 10*time.Minute)
 	uploadLimiter := ratelimit.New(1, 20, 30*time.Minute)
 	searchLimiter := ratelimit.New(1, 10, 10*time.Minute)
+
+	// the per-ip layer in front of the one endpoint that spends money on every call. far tighter
+	// than loginLimiter because this is not about protecting the process - it is about the sms bill.
+	// the per-phone limits live in auth.CodeManager, and neither is enough on its own: this one alone
+	// would let a botnet spread the sends across addresses, that one alone would let a single address
+	// walk through every number in the country a minute apart.
+	codeLimiter := ratelimit.New(0.2, 5, 30*time.Minute)
 
 
 
@@ -104,11 +117,27 @@ func main() {
 
 
 	// 5. wire up http routes - this section's job is just plugging dependencies into each endpoint
+
+	// the login: a code is delivered to the number, typing it back mints the jwt. see
+	// endpoints.PhoneAuth. request-code sits behind codeLimiter because it spends money; verify sits
+	// behind the general login bucket because it only reads from ram.
+	phoneAuth := &endpoints.PhoneAuth{Queries: queries, Codes: codeMgr, Sender: codeSender, JWTSecret: jwtSecret}
+	http.HandleFunc("/api/auth/request-code", endpoints.WithJSON(codeLimiter.Wrap(phoneAuth.RequestCode)))
+	http.HandleFunc("/api/auth/verify", endpoints.WithJSON(loginLimiter.Wrap(phoneAuth.Verify)))
+
 	authEndpoints := &endpoints.Auth{Queries: queries, SessionMgr: sessionMgr, BotUsername: bot.Self.UserName}
+	// SUPERSEDED by /api/auth/request-code and /api/auth/verify above. these two are the telegram
+	// contact handshake and are kept only because the apk in the founder's hands still calls them -
+	// delete both lines, endpoints.Auth's Init and Status, and the SessionMgr field, the day the
+	// flutter side is on the code flow. /api/me stays: it is not part of the handshake.
 	http.HandleFunc("/api/auth/init", endpoints.WithJSON(loginLimiter.Wrap(authEndpoints.Init)))
 	http.HandleFunc("/api/auth/status", endpoints.WithJSON(loginLimiter.Wrap(authEndpoints.Status)))
 	http.HandleFunc("/api/me", endpoints.WithJSON(apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, authEndpoints.RouteMe))))
 
+	// SUPERSEDED, same handshake: the /delete-account page proves ownership by asking for a contact
+	// in telegram, which is the flow being retired. it goes with the bot, and the page then proves
+	// the number the same way the login does - a code to it. Google Play requires the page itself to
+	// keep working, so this is a rewrite rather than a deletion (CLAUDE.md §3).
 	deletionEndpoints := &endpoints.AccountDeletion{SessionMgr: sessionMgr, BotUsername: bot.Self.UserName}
 	http.HandleFunc("/api/account-deletion/init", endpoints.WithJSON(loginLimiter.Wrap(deletionEndpoints.Init)))
 	http.HandleFunc("/api/account-deletion/status", endpoints.WithJSON(loginLimiter.Wrap(deletionEndpoints.Status)))
@@ -313,6 +342,10 @@ func main() {
 		}
 	}()
 
+	// SUPERSEDED by the phone-code login (step 5). this goroutine, the webhook setup in step 6, the
+	// bot in step 3 and the whole internal/telegram package exist only to serve /api/auth/init and
+	// the deletion page's handshake - all of which go together once flutter is on the code flow.
+	// TELEGRAM_BOT_TOKEN and WEBHOOK_URL stop being required at that point too.
 	telegramHandler := &telegram.Handler{Bot: bot, SessionMgr: sessionMgr, Queries: queries, JWTSecret: jwtSecret}
 	go telegramHandler.ProcessUpdates(updates)
 
@@ -378,6 +411,35 @@ func startBasketHistory(queries *db.Queries) {
 	for range ticker.C {
 		record()
 	}
+}
+
+// mustOpenCodeSender picks who delivers login codes, from the environment.
+//
+// **The default is the console, and it says so loudly.** An api whose .env has no provider in it
+// still has a working login - the code is printed into this log - which is what lets the flutter
+// side be built and tested before there is a Telegram Gateway balance or a moderated Eskiz
+// template. The alternative, refusing to boot without a provider, would make a local server
+// something only the founder can run.
+//
+// A half-filled provider *is* fatal, though: see verify.New. Three of the four Eskiz settings is
+// somebody midway through a .env, and answering that by quietly printing everybody's login codes
+// into a production log is the worst outcome this function can produce.
+func mustOpenCodeSender() verify.Sender {
+	sender, kind, err := verify.New(verify.SettingsFromEnv())
+	if err != nil {
+		log.Fatalf("Cannot configure the login code sender: %v", err)
+	}
+
+	switch kind {
+	case verify.KindConsole:
+		log.Printf("WARNING: login codes are NOT being delivered - they are printed into this log. "+
+			"Set %s (telegram gateway) or %s + %s + %s (eskiz sms) before anyone outside this machine tries to sign in.",
+			verify.EnvTelegramToken, verify.EnvEskizEmail, verify.EnvEskizPassword, verify.EnvEskizTemplate)
+	default:
+		log.Printf("Login codes: %s", kind)
+	}
+
+	return sender
 }
 
 // reads product_templates into internal/catalog's in-memory copy, or dies trying.

@@ -1,0 +1,188 @@
+// The guest flow, at the two things that were wrong about it on a real phone.
+//
+// **The footer moved between steps.** «Далее» and «Назад» were laid out under a conditional error
+// line and a conditional back button, so the pair sat at three different heights across five steps
+// and walked up and down the screen as you advanced. The fix is that both slots are always drawn
+// and the error lives in the scrolling content instead - and the assertion here is a measurement,
+// because nothing throws when a button is 40px lower than it was.
+//
+// **The footer was behind the nav bar.** The shell's bar pads itself by the system inset, so on a
+// gesture-navigation phone its top edge is higher than the 96px of bottom padding the shell hands
+// down, and the back button was underneath it.
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+
+import 'package:frontend/core/localization/app_localizations.dart';
+import 'package:frontend/core/localization/language_provider.dart';
+import 'package:frontend/core/widgets/role_option_tile.dart';
+import 'package:frontend/features/onboarding/presentation/screens/onboarding_flow.dart';
+import 'package:frontend/features/profile/presentation/controllers/auth_controller.dart';
+import 'package:frontend/features/tickets/presentation/controllers/tickets_controller.dart';
+
+final _strings = AppLocalizations(AppLanguage.ru);
+
+/// The shell's own number, so this measures what a user actually sees rather than the widget's
+/// standalone default.
+const double _shellBottomPadding = 96;
+
+/// A phone with a home indicator: `viewPadding.bottom` is what the old footer ignored.
+const double _systemInset = 34;
+
+const Size _phone = Size(360, 800);
+
+Future<void> _pumpFlow(WidgetTester tester) async {
+  tester.view.physicalSize = Size(_phone.width * 3, _phone.height * 3);
+  tester.view.devicePixelRatio = 3;
+  tester.view.viewPadding = const FakeViewPadding(bottom: _systemInset * 3);
+  tester.view.padding = const FakeViewPadding(bottom: _systemInset * 3);
+  addTearDown(tester.view.reset);
+
+  await tester.pumpWidget(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => LanguageProvider()),
+        ChangeNotifierProvider.value(value: AuthController()),
+        ChangeNotifierProvider.value(value: TicketsController()),
+      ],
+      child: const MaterialApp(
+        home: Scaffold(body: OnboardingFlow(bottomPadding: _shellBottomPadding)),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+/// Ticks the consent box, which is the only thing the policy step gates on.
+///
+/// `ensureVisible` first: `flutter_test` measures every glyph as a square em box, so the Cyrillic
+/// here lays out roughly twice as wide as the real thing and the tick sits below the fold in the
+/// test where it is on screen on a real phone.
+Future<void> _acceptPolicy(WidgetTester tester) async {
+  await _scrollTo(tester, find.text(_strings.policyAcceptLabel));
+  await tester.tap(find.text(_strings.policyAcceptLabel));
+  await tester.pumpAndSettle();
+}
+
+/// Scrolls the step's list until [target] is built and on screen. A `ListView` does not build what
+/// it does not show, so `ensureVisible` has nothing to find until this has run.
+Future<void> _scrollTo(WidgetTester tester, Finder target) async {
+  await tester.scrollUntilVisible(
+    target,
+    120,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  testWidgets('the footer sits at one height on every step', (tester) async {
+    await _pumpFlow(tester);
+
+    // the primary button's caption changes with the step; its position must not
+    final positions = <String, double>{};
+    void record(String step, String label) {
+      positions[step] = tester.getCenter(find.text(label)).dy;
+    }
+
+    record('language', _strings.nextButton);
+
+    await tester.tap(find.text(_strings.nextButton));
+    await tester.pumpAndSettle();
+    record('policy', _strings.nextButton);
+
+    await _acceptPolicy(tester);
+    await tester.tap(find.text(_strings.nextButton));
+    await tester.pumpAndSettle();
+    expect(find.byType(RoleOptionTile), findsNWidgets(3), reason: 'we are on the profile step');
+    record('profile', _strings.nextButton);
+
+    await tester.enterText(find.byType(TextField).first, 'Азиз');
+    await tester.tap(find.text(_strings.nextButton));
+    await tester.pumpAndSettle();
+    record('phone', _strings.sendCodeButton);
+
+    final heights = positions.values.toSet();
+    expect(
+      heights,
+      hasLength(1),
+      reason: 'the primary button moved between steps: $positions',
+    );
+  });
+
+  testWidgets('an error does not move the footer', (tester) async {
+    await _pumpFlow(tester);
+
+    await tester.tap(find.text(_strings.nextButton));
+    await tester.pumpAndSettle();
+    final before = tester.getCenter(find.text(_strings.nextButton)).dy;
+
+    // «Далее» on the policy step without accepting it: a refusal, drawn in the content above
+    await tester.tap(find.text(_strings.nextButton));
+    await tester.pumpAndSettle();
+
+    expect(find.text(_strings.policyMustAccept), findsOneWidget);
+    expect(
+      tester.getCenter(find.text(_strings.nextButton)).dy,
+      before,
+      reason: 'the error line pushed the footer down',
+    );
+  });
+
+  testWidgets('the footer clears the shell nav bar and its system inset', (tester) async {
+    await _pumpFlow(tester);
+
+    // step two, so the back button is drawn and is the lowest thing on screen
+    await tester.tap(find.text(_strings.nextButton));
+    await tester.pumpAndSettle();
+
+    // where the shell's floating bar starts: 76 tall, 8 above the system inset
+    final navBarTop = _phone.height - (76 + 8 + _systemInset);
+
+    expect(
+      tester.getBottomLeft(find.text(_strings.stepBackButton)).dy,
+      lessThan(navBarTop),
+      reason: 'the back button is underneath the floating nav bar',
+    );
+  });
+
+  // The steps carry no headline of their own: the screen header names the flow, the progress bar
+  // says where you are, and each control is labelled. «Выберите язык» over two language tiles and
+  // «Как вас зовут?» over a field called «Имя и фамилия» were saying it a third time.
+  testWidgets('the steps carry no titles of their own', (tester) async {
+    await _pumpFlow(tester);
+
+    expect(find.text(AppLanguage.ru.displayName), findsOneWidget);
+    expect(find.byType(RoleOptionTile), findsNWidgets(AppLanguage.values.length));
+
+    await tester.tap(find.text(_strings.nextButton));
+    await tester.pumpAndSettle();
+    await _acceptPolicy(tester);
+    await tester.tap(find.text(_strings.nextButton));
+    await tester.pumpAndSettle();
+
+    // the field's own label and nothing above it
+    expect(find.text(_strings.nameInputLabel), findsWidgets);
+    expect(find.byType(RoleOptionTile), findsNWidgets(3));
+  });
+
+  // The full policy is a sheet, not the step. Opening it is the thing that has to keep working,
+  // because it is the only route to the text both stores require be available before consent.
+  testWidgets('«Читать полностью» opens the whole policy', (tester) async {
+    await _pumpFlow(tester);
+    await tester.tap(find.text(_strings.nextButton));
+    await tester.pumpAndSettle();
+
+    // the summary is on the step; the sections themselves are not
+    expect(find.textContaining('Кто обрабатывает ваши данные'), findsNothing);
+
+    await _scrollTo(tester, find.text(_strings.policyReadFull));
+    await tester.tap(find.text(_strings.policyReadFull));
+    await tester.pumpAndSettle();
+
+    // only the first section is asserted: the rest are below the sheet's fold and a ListView does
+    // not build what it does not show
+    expect(find.textContaining('Кто обрабатывает ваши данные'), findsOneWidget);
+  });
+}

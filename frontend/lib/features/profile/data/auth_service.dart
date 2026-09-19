@@ -32,6 +32,48 @@ class AuthStatusResult {
   bool get isSuccess => status == 'success';
 }
 
+/// What `/api/auth/request-code` answered: the canonical number the code went to, and the two
+/// timers the screen counts down.
+class CodeRequestResult {
+  const CodeRequestResult({
+    required this.phone,
+    required this.expiresIn,
+    required this.resendAfter,
+  });
+
+  /// `998XXXXXXXXX` - the server's spelling, which is what `/verify` has to be called with.
+  final String phone;
+
+  /// Seconds the code stays valid.
+  final int expiresIn;
+
+  /// Seconds before another code may be asked for.
+  final int resendAfter;
+}
+
+/// A refusal from the auth endpoints, carrying **the server's machine-readable code** rather than
+/// its sentence: the server answers in one language and the app draws the reader's, so the mapping
+/// to written copy belongs in AppLocalizations.authErrorFor.
+class AuthApiException implements Exception {
+  const AuthApiException(this.code, {this.retryAfter});
+
+  factory AuthApiException.from(http.Response response, Map<String, dynamic> body) {
+    final retryAfter = body['retry_after'];
+    return AuthApiException(
+      body['code'] as String? ?? 'server_error',
+      retryAfter: retryAfter is int ? retryAfter : null,
+    );
+  }
+
+  final String code;
+
+  /// Seconds to wait, on the two refusals that are about time (`code_cooldown`, `code_quota`).
+  final int? retryAfter;
+
+  @override
+  String toString() => 'AuthApiException($code)';
+}
+
 /// The account as `/api/me` currently reports it.
 class MeResult {
   const MeResult({required this.name, required this.phone, required this.role});
@@ -255,6 +297,85 @@ class AuthService {
     if (response.statusCode == 200 || response.statusCode == 401) return;
 
     throw Exception('Could not delete the account (${response.statusCode})');
+  }
+
+
+  // -----------------------------------------------------------------------------------------------
+  // The phone-code login: POST /api/auth/request-code, then POST /api/auth/verify.
+  // -----------------------------------------------------------------------------------------------
+
+  /// `/api/auth/request-code`. Returns what the server echoed back, because the canonical spelling
+  /// of the number is the server's to decide - it is what `/verify` must be called with, and what
+  /// the "we sent a code to ..." line should show.
+  ///
+  /// **Not wrapped in [_executeWithRetry], and that is deliberate.** Every one of these sends a real
+  /// message that costs real money; a blind retry on a timeout bills twice and can deliver two codes
+  /// of which only the second works. A failure here is reported, not retried.
+  Future<CodeRequestResult> requestCode({
+    required String phone,
+    required String name,
+    required String role,
+  }) async {
+    final response = await appHttpClient
+        .post(
+          Uri.parse('${ApiConfig.serverRoot}/api/auth/request-code'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'phone': phone, 'name': name, 'role': role}),
+        )
+        .timeout(const Duration(seconds: 20));
+
+    final body = _decodeBody(response);
+
+    if (response.statusCode != 200) throw AuthApiException.from(response, body);
+
+    return CodeRequestResult(
+      phone: body['phone'] as String? ?? phone,
+      expiresIn: body['expires_in'] as int? ?? 300,
+      resendAfter: body['resend_after'] as int? ?? 60,
+    );
+  }
+
+  /// `/api/auth/verify`. On success the session is already saved before this returns, so a caller
+  /// that forgets to persist it cannot leave a logged-in user looking like a guest.
+  Future<MeResult> verifyCode({required String phone, required String code}) async {
+    final response = await appHttpClient
+        .post(
+          Uri.parse('${ApiConfig.serverRoot}/api/auth/verify'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'phone': phone, 'code': code}),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    final body = _decodeBody(response);
+
+    if (response.statusCode != 200) throw AuthApiException.from(response, body);
+
+    final token = body['token'] as String?;
+    final user = body['user'];
+    if (token == null || token.isEmpty || user is! Map<String, dynamic>) {
+      // a 200 whose body we cannot read is a server we do not understand, not a login
+      throw const AuthApiException('server_error');
+    }
+
+    final me = MeResult(
+      name: user['name'] as String? ?? '',
+      phone: user['phone'] as String? ?? phone,
+      role: user['role'] as String? ?? 'customer',
+    );
+
+    await saveSession(token: token, role: me.role, name: me.name, phone: me.phone);
+    return me;
+  }
+
+  /// A body that is not JSON is a proxy's error page rather than our API - ngrok answers an offline
+  /// tunnel with HTML and a 404. An empty map lets the status code decide the message.
+  static Map<String, dynamic> _decodeBody(http.Response response) {
+    try {
+      final decoded = jsonDecode(response.body);
+      return decoded is Map<String, dynamic> ? decoded : const {};
+    } catch (_) {
+      return const {};
+    }
   }
 
   Future<String?> getRole() async => await _storage.read(key: _roleKey);

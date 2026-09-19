@@ -9,6 +9,7 @@ import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
 import 'package:frontend/core/widgets/primary_action_button.dart';
 import 'package:frontend/core/widgets/role_option_tile.dart';
+import 'package:frontend/core/widgets/screen_header.dart';
 import 'package:frontend/core/widgets/segmented_tabs.dart';
 import 'package:frontend/features/profile/presentation/controllers/auth_controller.dart';
 import 'package:frontend/features/tickets/data/job_role.dart';
@@ -78,22 +79,29 @@ class _TicketsScreenState extends State<TicketsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _Header(
+        ScreenHeader(
           title: strings.ticketsTab,
           subtitle: switch (role) {
             JobRole.client => strings.ticketsClientSubtitle,
             JobRole.worker => strings.ticketsWorkerSubtitle,
             JobRole.shopOwner => strings.ticketsOwnerSubtitle,
           },
-          roleLabel: role.label(strings),
-          roleIcon: role.icon,
-          onSwitchRole: () {
-            setState(() => _tab = 0);
-            tickets.clearRole();
-          },
+          // capped: «Владелец магазина» takes every pixel it is offered, and the title beside it is
+          // what pays for that - at 360px it was squeezed to 37px and wrapped mid-word
+          trailing: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 160),
+            child: _RolePill(
+              label: role.label(strings),
+              icon: role.icon,
+              onTap: () {
+                setState(() => _tab = 0);
+                tickets.clearRole();
+              },
+            ),
+          ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
           child: SegmentedTabs(
             labels: tabs,
             selected: _tab,
@@ -264,106 +272,52 @@ class _TicketsScreenState extends State<TicketsScreen> {
   }
 }
 
-/// The tab's title block, with the current role as a pill that is also the way to change it. **The
-/// role is on screen rather than only implied by the layout**: somebody who picked the wrong one at
-/// registration has otherwise no way to find out that is what happened.
-class _Header extends StatelessWidget {
-  const _Header({
-    required this.title,
-    required this.subtitle,
-    required this.roleLabel,
-    required this.roleIcon,
-    required this.onSwitchRole,
-  });
+/// The role pill: what you are on Domix, and the way to stop being it.
+///
+/// Its own widget rather than inline in the header, because the ellipsis and the `Flexible` around
+/// the label are load-bearing - «Владелец магазина» is long enough to overflow the trailing slot on
+/// a 360px phone, and an overflow here is a striped bar across the top of the tab.
+class _RolePill extends StatelessWidget {
+  const _RolePill({required this.label, required this.icon, required this.onTap});
 
-  final String title;
-  final String subtitle;
-  final String roleLabel;
-  final IconData roleIcon;
-  final VoidCallback onSwitchRole;
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 16, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // **the subtitle gets its own line, and the pill is Flexible** - both matter at 360px: a Row hands
-          // its non-flex children unbounded width, so beside a wrapping subtitle «Владелец магазина» took
-          // everything and squeezed the title column to 37px. the title is short in both languages, so it is
-          // the one that stays non-flex.
-          Row(
+    final radius = BorderRadius.circular(AppRadius.xs + 2);
+
+    return Material(
+      color: AppColors.primarySoft,
+      borderRadius: radius,
+      child: InkWell(
+        borderRadius: radius,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  color: AppColors.textDark,
-                  fontSize: 22,
-                  letterSpacing: -0.4,
-                  fontWeight: FontWeight.w700,
+              Icon(icon, size: 14, color: AppColors.primaryOrange),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.primaryOrange,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-              const SizedBox(width: 12),
-              // Expanded + an inner end-aligned Row, rather than a Spacer beside a Flexible pill: two flex
-              // children split the free width 50/50, which cut «Владелец магазина» in half with 120px sitting
-              // empty beside it. this gives the pill all the room there is.
-              Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Flexible(
-                      child: Material(
-                        color: AppColors.primarySoft,
-                        borderRadius: BorderRadius.circular(AppRadius.xs + 2),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(AppRadius.xs + 2),
-                          onTap: onSwitchRole,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(roleIcon, size: 14, color: AppColors.primaryOrange),
-                                const SizedBox(width: 6),
-                                Flexible(
-                                  child: Text(
-                                    roleLabel,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: AppColors.primaryOrange,
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                const Icon(
-                                  LucideIcons.chevron_down,
-                                  size: 14,
-                                  color: AppColors.primaryOrange,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              const SizedBox(width: 4),
+              const Icon(LucideIcons.chevron_down, size: 14, color: AppColors.primaryOrange),
             ],
           ),
-          const SizedBox(height: 3),
-          Text(
-            subtitle,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: AppColors.textGrey, fontSize: 12.5, height: 1.3),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -380,48 +334,32 @@ class _RoleChooser extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: EdgeInsets.fromLTRB(20, 28, 20, bottomPadding + 24),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          width: 64,
-          height: 64,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppColors.primarySoft,
-            borderRadius: BorderRadius.circular(AppRadius.md),
+        // the header asks the question, so the screen does not ask it twice. it used to open with a
+        // 64px icon tile over «Кто вы на Domix?» and a paragraph under that - three quarters of the
+        // first screen spent introducing three tiles that explain themselves.
+        ScreenHeader(title: strings.ticketsTab, subtitle: strings.rolePromptSubtitle),
+        Expanded(
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(20, 18, 20, bottomPadding + 24),
+            children: [
+              for (final role in JobRole.values) ...[
+                RoleOptionTile(
+                  icon: role.icon,
+                  title: role.label(strings),
+                  subtitle: role.subtitle(strings),
+                  // null, not false: this list acts on the tap, so it draws a chevron rather than
+                  // an empty radio promising a Continue button that is not there
+                  isSelected: null,
+                  onTap: () => context.read<TicketsController>().setRole(role),
+                ),
+                const SizedBox(height: 10),
+              ],
+            ],
           ),
-          child: const Icon(LucideIcons.hard_hat, size: 28, color: AppColors.primaryOrange),
         ),
-        const SizedBox(height: 18),
-        Text(
-          strings.rolePromptTitle,
-          style: const TextStyle(
-            color: AppColors.textDark,
-            fontSize: 21,
-            height: 1.25,
-            letterSpacing: -0.3,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          strings.rolePromptBody,
-          style: const TextStyle(color: AppColors.textGrey, fontSize: 13.5, height: 1.45),
-        ),
-        const SizedBox(height: 20),
-        for (final role in JobRole.values) ...[
-          RoleOptionTile(
-            icon: role.icon,
-            title: role.label(strings),
-            subtitle: role.subtitle(strings),
-            // null, not false: this list acts on the tap, so it draws a chevron rather than an empty radio
-            // promising a Continue button that is not there
-            isSelected: null,
-            onTap: () => context.read<TicketsController>().setRole(role),
-          ),
-          const SizedBox(height: 10),
-        ],
       ],
     );
   }

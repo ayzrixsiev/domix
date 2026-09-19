@@ -50,8 +50,13 @@ class _FakeHomeRepository implements HomeRepository {
   ProductCategory? requestedCategory;
   String? requestedQuery;
 
+  /// how many times the feed has actually been fetched - the only way to tell a refresh that ran
+  /// from one whose gesture was never recognised, which is how pull-to-refresh fails
+  int fetchCount = 0;
+
   @override
   Future<HomeContent> fetchHomeContent() async {
+    fetchCount++;
     if (error != null) throw error!;
     return content!;
   }
@@ -243,6 +248,48 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  // **pull-to-refresh is the gesture that fails silently.** nothing throws when the scroll physics
+  // do not allow an overscroll - the finger just drags and nothing happens - so the only honest
+  // assertion is that the repository was asked a second time.
+  testWidgets('pulling the feed down opens the gap, spins in it, and refetches', (tester) async {
+    final repo = _FakeHomeRepository(content: _content());
+    await _pumpHome(tester, repo);
+    expect(repo.fetchCount, 1, reason: 'the initial load');
+
+    // no spinner on a feed that is sitting still
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+
+    final gesture = await tester.startGesture(tester.getCenter(find.byType(CustomScrollView)));
+    // **the finger travels much further than the gap opens.** BouncingScrollPhysics damps an
+    // overscroll the further past the edge it goes, so pulling 110px of finger yields nowhere near
+    // 110px of extent - and it is the extent that _refreshTriggerDistance is measured against.
+    // Moved in steps with a pump between, which is also what a real drag delivers.
+    for (var i = 0; i < 6; i++) {
+      await gesture.moveBy(const Offset(0, 60));
+      await tester.pump();
+    }
+
+    // the gap is open and the indicator is in it - drawn *above* the search bar, in the space that
+    // opened under the header
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(
+      tester.getCenter(find.byType(CircularProgressIndicator)).dy,
+      lessThan(tester.getTopLeft(find.byType(SearchAndLikeBar)).dy),
+      reason: 'the spinner belongs in the gap between the header and the search bar',
+    );
+
+    await gesture.up();
+    await tester.pump();
+    expect(repo.fetchCount, 2, reason: 'letting go past the trigger has to actually refetch');
+
+    // and the gap closes again on its own, taking the spinner with it. pumped in steps rather than
+    // settled: an indeterminate CircularProgressIndicator animates forever, so pumpAndSettle would
+    // time out here rather than ever returning.
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
+
   testWidgets('an unreachable backend says so and offers a retry', (tester) async {
     final strings = AppLocalizations(AppLanguage.ru);
     final controller = await _pumpHome(
@@ -263,6 +310,13 @@ void main() {
     expect(find.text(strings.homeLoadError), findsOneWidget);
     expect(find.text(strings.loadErrorHint), findsOneWidget);
     expect(find.text(strings.retryButtonShort), findsOneWidget);
+
+    // **and it takes the screen rather than hanging off the end of the feed.** the block used to be
+    // appended below the sections, so a failed load drew five empty VIP slots and fifteen empty
+    // rows and then apologised underneath them - a screen that looks like it worked, with the retry
+    // a full scroll away from the problem it answers.
+    expect(find.text(strings.vipShops), findsNothing);
+    expect(find.text(strings.bestOffersTitle), findsNothing);
 
     // **and the exception itself is nowhere on screen.** this line is the point of the test now: the
     // card used to render `e.toString()` as its subtitle, so a customer looking for cement was shown

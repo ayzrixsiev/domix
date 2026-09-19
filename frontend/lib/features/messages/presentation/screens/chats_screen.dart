@@ -7,6 +7,7 @@ import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
+import 'package:frontend/core/widgets/screen_header.dart';
 import 'package:frontend/core/widgets/primary_action_button.dart';
 import 'package:frontend/features/messages/presentation/controllers/support_controller.dart';
 import 'package:frontend/features/messages/presentation/screens/messages_screen.dart';
@@ -141,7 +142,7 @@ class _ChatsScreenState extends State<ChatsScreen> with WidgetsBindingObserver {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ListHeader(title: strings.chatsScreenTitle, subtitle: strings.chatsScreenSubtitle),
+          ScreenHeader(title: strings.chatsScreenTitle, subtitle: strings.chatsScreenSubtitle),
           Expanded(child: isGuest ? _guestState(strings) : _threads(strings)),
         ],
       ),
@@ -206,39 +207,6 @@ class _ChatsScreenState extends State<ChatsScreen> with WidgetsBindingObserver {
     }
     if (difference == 1) return strings.yesterdayLabel;
     return '${day.day.toString().padLeft(2, '0')}.${day.month.toString().padLeft(2, '0')}.${day.year}';
-  }
-}
-
-/// The tab's title block. Not an `AppBar`: inside the shell this screen is one child of an
-/// `IndexedStack` with no Scaffold of its own, and a header drawn here is the same in both modes.
-class _ListHeader extends StatelessWidget {
-  const _ListHeader({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: AppColors.textDark,
-              fontSize: 22,
-              letterSpacing: -0.4,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(subtitle, style: const TextStyle(color: AppColors.textGrey, fontSize: 12.5)),
-        ],
-      ),
-    );
   }
 }
 

@@ -5,9 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/destructive_confirm_dialog.dart';
-import 'package:frontend/core/widgets/role_option_tile.dart';
-import 'package:frontend/features/tickets/data/job_role.dart';
-import 'package:frontend/features/tickets/presentation/controllers/tickets_controller.dart';
+import 'package:frontend/features/onboarding/presentation/screens/onboarding_flow.dart';
 import '../controllers/auth_controller.dart';
 
 const Color _kPrimaryOrange = Color(0xFFFF6F00);
@@ -68,7 +66,6 @@ class ProfileScreen extends StatefulWidget {
     this.onManageShopTap,
     this.onAddStoreTap,
     this.onFavoritesTap,
-    this.onSupportTap,
   });
 
   final bool showScaffold;
@@ -76,7 +73,6 @@ class ProfileScreen extends StatefulWidget {
   final VoidCallback? onManageShopTap;
   final VoidCallback? onAddStoreTap;
   final VoidCallback? onFavoritesTap;
-  final VoidCallback? onSupportTap;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -84,9 +80,6 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _showShopsSubMenu = false;
-
-  // which error we already showed a dialog for, so it is not popped again on every rebuild
-  String? _lastHandledError;
 
   /// The current language's copy, read **without subscribing** - see [build] for the subscription.
   /// **`Provider.of(context)` defaults to `listen: true`, and that is illegal outside a build**: from
@@ -153,246 +146,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // open modal sheet to collect user name and role before launching telegram
-  void _showLoginBottomSheet(BuildContext context) {
-    final nameController = TextEditingController();
-    JobRole selectedRole = JobRole.client;
-    // shown under the name field if the user tries to continue without typing a name
-    String? nameError;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        // **scrollable, and the third role is what made it necessary.** the sheet is a min-height Column,
-        // so anything taller than the space left over simply overflows. two role squares were ~90px; three
-        // stacked rows are ~215, and with the keyboard up that crosses 800px on an ordinary phone.
-        builder: (ctx, setModalState) => SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(
-            22,
-            16,
-            22,
-            MediaQuery.of(ctx).viewInsets.bottom + 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // top drag handle
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4.5,
-                  decoration: BoxDecoration(
-                    color: _kDivider,
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Center(
-                child: Text(
-                  _strings.registerTitle,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: _kTextPrimary,
-                    fontSize: 21,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-              ),
-              if (_strings.registerSubtitle.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Center(
-                  child: Text(
-                    _strings.registerSubtitle,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: _kTextMuted,
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 20),
-              TextField(
-                controller: nameController,
-                style: const TextStyle(
-                  color: _kTextPrimary,
-                  fontSize: 15.5,
-                  fontWeight: FontWeight.w600,
-                ),
-                // clear the inline error as soon as the user starts fixing it
-                onChanged: (_) {
-                  if (nameError != null) setModalState(() => nameError = null);
-                },
-                decoration: InputDecoration(
-                  labelText: _strings.nameInputLabel,
-                  errorText: nameError,
-                  labelStyle: const TextStyle(
-                    color: _kTextMuted,
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  filled: true,
-                  fillColor: const Color(0xFFF1F5F9),
-                  prefixIcon: const Icon(
-                    CupertinoIcons.person_fill,
-                    color: _kTextMuted,
-                    size: 20,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(
-                      color: _kPrimaryOrange,
-                      width: 1.5,
-                    ),
-                  ),
-                  errorBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: _kDanger, width: 1.5),
-                  ),
-                  focusedErrorBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: _kDanger, width: 1.5),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              // the three sides of the marketplace, stacked. **a list rather than a row of squares**: three
-              // squares split this width into thirds, at which point «Владелец магазина» wraps to three lines and
-              // the subtitle that explains the choice has nowhere left to go. see RoleOptionTile.
-              Text(
-                _strings.registerRolePrompt,
-                style: const TextStyle(
-                  color: _kTextMuted,
-                  fontSize: 13,
-                  letterSpacing: 0.1,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 10),
-              for (final role in JobRole.values) ...[
-                RoleOptionTile(
-                  icon: role.icon,
-                  title: role.label(_strings),
-                  subtitle: role.subtitle(_strings),
-                  isSelected: selectedRole == role,
-                  onTap: () => setModalState(() => selectedRole = role),
-                ),
-                if (role != JobRole.values.last) const SizedBox(height: 8),
-              ],
-              const SizedBox(height: 26),
-              Container(
-                width: double.infinity,
-                height: 54,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _kPrimaryOrange.withValues(alpha: 0.28),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _kPrimaryOrange,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  onPressed: () {
-                    final trimmedName = nameController.text.trim();
-
-                    // block progress to telegram until a name is actually entered
-                    if (trimmedName.isEmpty) {
-                      setModalState(() => nameError = _strings.nameRequiredError);
-                      return;
-                    }
-
-                    final scaffoldMessenger = ScaffoldMessenger.of(context);
-                    // read before the pop - after it, `ctx` is deactivated and the lookup asserts
-                    final ticketsController =
-                        Provider.of<TicketsController>(context, listen: false);
-                    Navigator.pop(ctx);
-
-                    // **the role is remembered on the phone, not only sent to the server.** the backend has no worker
-                    // role yet - `/api/auth/init` maps everything that is not shop_owner down to customer - so this is
-                    // what keeps a worker a worker when `/api/me` answers "customer" on the next foreground.
-                    ticketsController.setRole(selectedRole);
-
-                    // trigger backend authorization and switch to the telegram bot
-                    final authController = Provider.of<AuthController>(context, listen: false);
-                    authController.startTelegramLogin(
-                      name: trimmedName,
-                      // the real intent, normalised server-side: sending `worker` rather than pre-flattening it here
-                      // means the day the backend grows the role, the app already speaks it
-                      role: selectedRole.code,
-                      onSuccess: () {
-                        // captured before the await, so a snackbar two minutes later cannot touch a dead context
-                        scaffoldMessenger.showSnackBar(
-                          SnackBar(
-                            content: Text(_strings.welcomeMessage),
-                            backgroundColor: _kTextPrimary,
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        CupertinoIcons.paperplane_fill,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 10),
-                      // Flexible, not a bare Text: this Row is centred and min-sized, so a long label sizes past the
-                      // sheet instead of wrapping, and the striped bar is the first anyone hears about it
-                      Flexible(
-                        child: Text(
-                          _strings.continueTelegram,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      // the sheet owns the field, so the sheet closing is what ends the controller's life. one
-      // TextEditingController per opened sheet, never released, is a leak the analyzer cannot see
-      // because the object is a local rather than a field.
-    ).whenComplete(nameController.dispose);
-  }
-
   @override
   Widget build(BuildContext context) {
     // the one place this screen subscribes to the language. every `_strings` below reads without
@@ -403,176 +156,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final authController = Provider.of<AuthController>(context);
     final currentProfile = authController.profileState;
 
-    // a centred dialog once per new error, rather than a banner that never goes away
-    final currentError = authController.loginErrorDetail;
-    if (currentError != null && currentError != _lastHandledError) {
-      _lastHandledError = currentError;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        // the login path shows instructions rather than the exception: "Could not open Telegram" names a
-        // cause the user cannot act on, while "check Telegram is installed" is the same fact turned into
-        // something they can do. the raw string goes to the log.
-        if (mounted) {
-          _showErrorDialog(
-            title: _strings.errorDialogTitle,
-            body: _strings.errorDialogInstructions,
-            detail: currentError,
-          );
-        }
-      });
-    } else if (currentError == null) {
-      _lastHandledError = null;
-    }
+    // **A guest gets the onboarding flow, not a card.** Language, the privacy policy, name and
+    // role, then the phone code - see OnboardingFlow, which owns all four and every error they can
+    // produce. This screen is the signed-in profile and the host of that flow, nothing else.
+    final body = currentProfile.isGuest
+        ? OnboardingFlow(bottomPadding: widget.bottomPadding)
+        : _buildAccountBody(currentProfile, authController);
 
-    final body = SafeArea(
-      child: ListView(
-        physics: const BouncingScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(20, 16, 20, widget.bottomPadding),
-        children: [
-          // guest hero prompt when unauthenticated, otherwise the account header
-          if (currentProfile.isGuest) ...[
-            _buildGuestLoginHeroCard(),
-            const SizedBox(height: 24),
-          ] else ...[
-            _buildAccountHeaderCard(currentProfile),
-            const SizedBox(height: 24),
-          ],
-
-          // shop management, as an accordion the owner opens in place. it used to swap this card for an
-          // entirely different one, which is why the entry point vanished on tap and its chevron could never
-          // indicate open or closed.
-          if (currentProfile.isVendor) ...[
-            _MenuGroupCard(
-              rows: const [],
-              leading: _ExpandableMenuSection(
-                isExpanded: _showShopsSubMenu,
-                onToggle: () => setState(() => _showShopsSubMenu = !_showShopsSubMenu),
-                // the header doubles as the close control once open, so the group needs no separate "collapse"
-                // row: the chevron already rotated to point at what it revealed
-                header: _MenuRowData(
-                  icon: CupertinoIcons.bag,
-                  title: _showShopsSubMenu ? _strings.closeButton : _strings.manageShops,
-                  onTap: null, // supplied by the section, which owns the toggle
-                ),
-                children: [
-                  _MenuRowData(
-                    icon: CupertinoIcons.slider_horizontal_3,
-                    title: _strings.shopSettings,
-                    onTap: widget.onManageShopTap,
-                  ),
-                  _MenuRowData(
-                    icon: CupertinoIcons.plus_square,
-                    title: _strings.addStore,
-                    onTap: widget.onAddStoreTap,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-
-          // standard operations card showing basic options for customers
-          _MenuGroupCard(
-            rows: [
-              _MenuRowData(
-                icon: CupertinoIcons.heart,
-                title: _strings.favorites,
-                onTap: widget.onFavoritesTap,
-              ),
-              _MenuRowData(
-                icon: CupertinoIcons.globe,
-                title: '${_strings.languageSettings} (${_currentLang.displayName})',
-                onTap: _showLanguagePicker,
-              ),
-              _MenuRowData(
-                icon: CupertinoIcons.chat_bubble_2,
-                title: _strings.support,
-                onTap: widget.onSupportTap,
-              ),
-              if (!currentProfile.isGuest)
-                _MenuRowData(
-                  icon: CupertinoIcons.square_arrow_right,
-                  title: _strings.logout,
-                  textColor: _kDanger,
-                  iconColor: _kDanger,
-                  iconBackground: _kDangerSoft,
-                  onTap: () {
-                    setState(() => _showShopsSubMenu = false);
-                    Provider.of<AuthController>(context, listen: false).logout();
-                  },
-                ),
-            ],
-          ),
-
-          // account deletion, in a card of its own below the menu: an irreversible action sharing a list with
-          // "Язык приложения" is one somebody eventually taps on the way to something else.
-          //
-          // **This exists because Google Play requires it** - an app that lets a user create an account must
-          // let them delete it from inside the app, or the listing is rejected at review.
-          if (!currentProfile.isGuest) ...[
-            const SizedBox(height: 16),
-            _MenuGroupCard(
-              rows: [
-                _MenuRowData(
-                  icon: CupertinoIcons.trash,
-                  title: _strings.deleteAccount,
-                  textColor: _kDanger,
-                  iconColor: _kDanger,
-                  iconBackground: _kDangerSoft,
-                  // a spinner in the trailing slot rather than a disabled row: the request is a round trip a shop
-                  // owner with a large catalogue will notice, and a row that stops responding reads as a freeze
-                  trailing: authController.isDeletingAccount
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: _kDanger),
-                        )
-                      : null,
-                  onTap: authController.isDeletingAccount ? null : _confirmDeleteAccount,
-                ),
-              ],
-            ),
-          ],
-
-          const SizedBox(height: 32),
-          Center(
-            child: Text(
-              _strings.version,
-              style: TextStyle(
-                color: _kTextMuted.withValues(alpha: 0.6),
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    // base scaffold
-    final scaffold = widget.showScaffold
+    return widget.showScaffold
         ? Scaffold(backgroundColor: _kSoftSurface, body: body)
         : ColoredBox(color: _kSoftSurface, child: body);
-
-    // overlays: the loading indicator (errors show as a dialog, scheduled above)
-    return Stack(
-      children: [
-        scaffold,
-        if (authController.isLoading)
-          Positioned.fill(
-            child: ColoredBox(
-              color: const Color.fromRGBO(15, 23, 42, 0.4),
-              child: Center(
-                child: _TelegramAuthOverlay(
-                  authController: authController,
-                  strings: _strings,
-                  onRetry: () => _showLoginBottomSheet(context),
-                  onCancel: () => authController.logout(),
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
   }
 
   /// Asks once, then destroys the account on the server and signs out locally. The confirmation lives
@@ -685,67 +278,125 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // prompts an unauthenticated user to log in
-  Widget _buildGuestLoginHeroCard() {
-    return _ProfileCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  /// The signed-in profile: account header, the shop accordion for owners, the settings menu and
+  /// the deletion card. Only ever reached with a real account - [build] sends a guest to the login
+  /// card instead - so nothing in here re-checks for one.
+  Widget _buildAccountBody(ProfileViewState currentProfile, AuthController authController) {
+    return SafeArea(
+      child: ListView(
+        physics: const BouncingScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(20, 16, 20, widget.bottomPadding),
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                height: 48,
-                width: 48,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF0E3),
-                  borderRadius: BorderRadius.circular(16),
+          _buildAccountHeaderCard(currentProfile),
+          const SizedBox(height: 24),
+
+          // shop management, as an accordion the owner opens in place. it used to swap this card for an
+          // entirely different one, which is why the entry point vanished on tap and its chevron could never
+          // indicate open or closed.
+          if (currentProfile.isVendor) ...[
+            _MenuGroupCard(
+              rows: const [],
+              leading: _ExpandableMenuSection(
+                isExpanded: _showShopsSubMenu,
+                onToggle: () => setState(() => _showShopsSubMenu = !_showShopsSubMenu),
+                // the header doubles as the close control once open, so the group needs no separate "collapse"
+                // row: the chevron already rotated to point at what it revealed
+                header: _MenuRowData(
+                  icon: CupertinoIcons.bag,
+                  title: _showShopsSubMenu ? _strings.closeButton : _strings.manageShops,
+                  onTap: null, // supplied by the section, which owns the toggle
                 ),
-                child: const Icon(
-                  CupertinoIcons.lock_shield,
-                  color: _kPrimaryOrange,
-                  size: 24,
-                ),
+                children: [
+                  _MenuRowData(
+                    icon: CupertinoIcons.slider_horizontal_3,
+                    title: _strings.shopSettings,
+                    onTap: widget.onManageShopTap,
+                  ),
+                  _MenuRowData(
+                    icon: CupertinoIcons.plus_square,
+                    title: _strings.addStore,
+                    onTap: widget.onAddStoreTap,
+                  ),
+                ],
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _strings.loginTitle,
-                      style: const TextStyle(
-                        color: _kTextPrimary,
-                        fontSize: 19,
-                        height: 1.2,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _strings.loginSubtitle,
-                      style: const TextStyle(
-                        color: _kTextMuted,
-                        fontSize: 13.5,
-                        height: 1.4,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // standard operations card showing basic options for customers.
+          //
+          // **No «Поддержка» row.** Support is a tab in the nav bar, always one tap away from
+          // anywhere; a second door to the same screen buried in a settings list is one more thing
+          // to keep in step for no reach it does not already have.
+          _MenuGroupCard(
+            rows: [
+              _MenuRowData(
+                icon: CupertinoIcons.heart,
+                title: _strings.favorites,
+                onTap: widget.onFavoritesTap,
+              ),
+              _MenuRowData(
+                icon: CupertinoIcons.globe,
+                title: '${_strings.languageSettings} (${_currentLang.displayName})',
+                onTap: _showLanguagePicker,
+              ),
+              _MenuRowData(
+                icon: CupertinoIcons.square_arrow_right,
+                title: _strings.logout,
+                textColor: _kDanger,
+                iconColor: _kDanger,
+                iconBackground: _kDangerSoft,
+                onTap: () {
+                  setState(() => _showShopsSubMenu = false);
+                  Provider.of<AuthController>(context, listen: false).logout();
+                },
               ),
             ],
           ),
-          const SizedBox(height: 22),
-          _ProfileButton(
-            label: _strings.loginButton,
-            onTap: () => _showLoginBottomSheet(context),
+
+          // account deletion, in a card of its own below the menu: an irreversible action sharing a list with
+          // "Язык приложения" is one somebody eventually taps on the way to something else.
+          //
+          // **This exists because Google Play requires it** - an app that lets a user create an account must
+          // let them delete it from inside the app, or the listing is rejected at review.
+          const SizedBox(height: 16),
+          _MenuGroupCard(
+            rows: [
+              _MenuRowData(
+                icon: CupertinoIcons.trash,
+                title: _strings.deleteAccount,
+                textColor: _kDanger,
+                iconColor: _kDanger,
+                iconBackground: _kDangerSoft,
+                // a spinner in the trailing slot rather than a disabled row: the request is a round trip a shop
+                // owner with a large catalogue will notice, and a row that stops responding reads as a freeze
+                trailing: authController.isDeletingAccount
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: _kDanger),
+                      )
+                    : null,
+                onTap: authController.isDeletingAccount ? null : _confirmDeleteAccount,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 32),
+          Center(
+            child: Text(
+              _strings.version,
+              style: TextStyle(
+                color: _kTextMuted.withValues(alpha: 0.6),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
-
   Widget _buildAccountHeaderCard(ProfileViewState profile) {
     return Container(
       width: double.infinity,
@@ -871,180 +522,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-class _TelegramAuthOverlay extends StatefulWidget {
-  const _TelegramAuthOverlay({
-    required this.authController,
-    required this.strings,
-    required this.onRetry,
-    required this.onCancel,
-  });
-
-  final AuthController authController;
-  final AppLocalizations strings;
-  final VoidCallback onRetry;
-  final VoidCallback onCancel;
-
-  @override
-  State<_TelegramAuthOverlay> createState() => _TelegramAuthOverlayState();
-}
-
-class _TelegramAuthOverlayState extends State<_TelegramAuthOverlay> {
-  Timer? _timer;
-  int _secondsRemaining = 120;
-
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_secondsRemaining > 0) {
-        setState(() => _secondsRemaining--);
-      } else {
-        timer.cancel();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  String _formatTime(int seconds) {
-    final mins = (seconds ~/ 60).toString().padLeft(2, '0');
-    final secs = (seconds % 60).toString().padLeft(2, '0');
-    return '$mins:$secs';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final hasFailed = widget.authController.loginErrorDetail != null;
-    final hasTimedOut = _secondsRemaining == 0 || hasFailed;
-
-    return Container(
-      width: MediaQuery.of(context).size.width * 0.85,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15),
-            blurRadius: 30,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (!hasTimedOut) ...[
-            const SizedBox(
-              width: 52,
-              height: 52,
-              child: CircularProgressIndicator(
-                strokeWidth: 4,
-                color: _kPrimaryOrange,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              widget.strings.authWaitingTitle,
-              style: const TextStyle(
-                color: _kTextPrimary,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              widget.strings.authWaitingDesc,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: _kTextMuted,
-                fontSize: 13.5,
-                height: 1.4,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF0E3),
-                borderRadius: BorderRadius.circular(99),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(CupertinoIcons.timer, color: _kPrimaryOrangeDark, size: 18),
-                  const SizedBox(width: 6),
-                  Text(
-                    '${widget.strings.timerLabel} ${_formatTime(_secondsRemaining)}',
-                    style: const TextStyle(
-                      color: _kPrimaryOrangeDark,
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ] else ...[
-            Container(
-              width: 56,
-              height: 56,
-              decoration: const BoxDecoration(
-                color: _kDangerSoft,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                CupertinoIcons.exclamationmark_triangle_fill,
-                color: _kDanger,
-                size: 28,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              // **written copy, never the exception**: this printed `loginErrorDetail` verbatim, so a failed /init
-              // showed the reader `Failed to initialize login session: 502`. the two states say different things -
-              // the countdown running out means nobody shared a number, a failure means it never got that far.
-              hasFailed ? widget.strings.errorDialogInstructions : widget.strings.timeoutError,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: _kTextPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 24),
-            _ProfileButton(
-              label: widget.strings.retryButton,
-              onTap: () {
-                widget.onCancel();
-                widget.onRetry();
-              },
-            ),
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: widget.onCancel,
-              child: Text(
-                widget.strings.cancelButton,
-                style: const TextStyle(
-                  color: _kTextMuted,
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-// 4. helper components and interactive tiles
 class _LanguageOptionTile extends StatelessWidget {
   const _LanguageOptionTile({
     required this.language,
@@ -1329,33 +806,6 @@ class _ProfileAvatar extends StatelessWidget {
           fontWeight: FontWeight.w800,
         ),
       ),
-    );
-  }
-}
-
-class _ProfileCard extends StatelessWidget {
-  const _ProfileCard({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _kCardBorder),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: child,
     );
   }
 }

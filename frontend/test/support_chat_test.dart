@@ -19,6 +19,7 @@ import 'package:provider/provider.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/widgets/circle_back_button.dart';
 import 'package:frontend/core/localization/language_provider.dart';
+import 'package:frontend/core/widgets/screen_header.dart';
 import 'package:frontend/features/messages/data/support_message.dart';
 import 'package:frontend/features/messages/data/support_repository.dart';
 import 'package:frontend/features/messages/presentation/controllers/support_controller.dart';
@@ -662,6 +663,22 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    // **The header is the only thing separating this tab from an empty white page.** It used to be
+    // a bare heading over an `AppColors.hairline` rule - three units away from the page colour,
+    // which is to say invisible - and now sits on the white surface with a trackGrey edge. The
+    // guest state is the emptier of the two and is exactly where a missing header reads as an
+    // unfinished screen, so that is the one pinned here; the signed-in case is asserted in the
+    // list test below, which already owns the poll timer's teardown.
+    testWidgets('a guest still gets the tab header', (tester) async {
+      await signIn(signedIn: false);
+      await pumpList(tester, SupportController(repository: _FakeSupportRepository()));
+
+      final strings = AppLocalizations(AppLanguage.ru);
+      expect(find.byType(ScreenHeader), findsOneWidget);
+      expect(find.text(strings.chatsScreenTitle), findsOneWidget);
+      expect(find.text(strings.chatsScreenSubtitle), findsOneWidget);
+    });
+
     testWidgets('the tab is a list, and its row opens the conversation', (tester) async {
       await signIn(signedIn: true);
       final controller = SupportController(
@@ -673,6 +690,9 @@ void main() {
       await pumpList(tester, controller);
 
       final strings = AppLocalizations(AppLanguage.ru);
+      // the header, signed in - the guest half of this is its own test above
+      expect(find.byType(ScreenHeader), findsOneWidget);
+      expect(find.text(strings.chatsScreenTitle), findsOneWidget);
       // the list, not the chat: a row previewing the thread and no composer anywhere
       expect(find.byType(ChatListRow), findsOneWidget);
       expect(find.text(strings.supportSenderLabel), findsOneWidget);
