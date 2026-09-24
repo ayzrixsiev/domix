@@ -7,8 +7,8 @@ import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/home/data/category_product.dart';
 import 'package:frontend/features/home/presentation/widgets/product_results_view.dart';
 import 'package:frontend/features/home/presentation/screens/product_search_screen.dart';
-import 'package:frontend/core/widgets/circle_back_button.dart';
-import 'package:frontend/core/widgets/screen_header.dart';
+import 'package:frontend/core/widgets/app_page_header.dart';
+import 'package:frontend/core/widgets/circle_icon_button.dart';
 
 /// A titled page of products from across every shop - what a category tile opens: an app bar and
 /// [ProductResultsView], and that split is the whole of it.
@@ -69,13 +69,46 @@ class _ProductResultsScreenState extends State<ProductResultsScreen> {
   /// Bumped per search so the results view is re-keyed, which is what re-runs its load.
   int _runs = 0;
 
-  /// field 44, plus 2 above it, 10 under it, and the rule.
-  static const double _barHeight = 2 + 44 + 10 + ScreenHeader.ruleHeight;
+  /// Whether the field has taken the title's place - see [_openSearch].
+  bool _searching = false;
+
+  final FocusNode _filterFocus = FocusNode();
 
   @override
   void dispose() {
     _filter.dispose();
+    _filterFocus.dispose();
     super.dispose();
+  }
+
+  /// **The field is not on the header until it is asked for.** A category page opens to say which
+  /// category it is, and a search bar permanently parked under that title is a control taking a
+  /// quarter of the navigation zone to do nothing on arrival. The magnifier trades places with the
+  /// title instead: one tap, the heading steps aside, the field is already focused.
+  void _openSearch() {
+    setState(() => _searching = true);
+    // after the frame: the node has no attached field until this build lands
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _filterFocus.requestFocus();
+    });
+  }
+
+  /// Back to the title, and back to the category - a field being put away has nothing left to say
+  /// about what is on screen.
+  void _closeSearch() {
+    _filterFocus.unfocus();
+    // a catalogue-wide search is a different list under a different view key: closing it reloads the
+    // category, which reports its own count. a local filter never left the category, so the count it
+    // had is still about the right list until the view recomputes it - nulling it there would blank
+    // the subtitle of a screen nothing had changed.
+    final wasCatalogueWide = _submitted != null;
+    _filter.clear();
+    setState(() {
+      _searching = false;
+      _typed = '';
+      _submitted = null;
+      if (wasCatalogueWide) _count = null;
+    });
   }
 
   /// Leaves the category and searches the whole catalogue.
@@ -88,15 +121,19 @@ class _ProductResultsScreenState extends State<ProductResultsScreen> {
     // too short for the server's index to answer - the local narrowing is already showing what it can
     if (!ProductSearchScreen.isSearchable(trimmed)) return;
 
-    FocusScope.of(context).unfocus();
+    _filterFocus.unfocus();
     setState(() {
       _submitted = trimmed;
+      // the field collapses back into a title, which now names the query rather than the category -
+      // the keyboard is gone, the results have the screen, and the header still says what they are
+      _searching = false;
       _runs++;
       _count = null;
     });
   }
 
-  /// Back to the category's own list.
+  /// Back to the category's own list, with the field still up - the × inside the field empties it,
+  /// the × on the header puts it away.
   void _clearSearch() {
     _filter.clear();
     setState(() {
@@ -112,66 +149,52 @@ class _ProductResultsScreenState extends State<ProductResultsScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        leading: const CircleBackButton(),
-        leadingWidth: CircleBackButton.leadingWidth,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              widget.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppColors.textDark,
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.2,
+      appBar: _searching
+          ? AppPageHeader.custom(
+              // keyed, or the header sees one CircleIconButton throughout and swaps the glyph
+              // without the cross-fade the title beside it is getting
+              action: CircleIconButton(
+                key: const ValueKey('close-search'),
+                icon: Icons.close_rounded,
+                tooltip: strings.cancelButton,
+                onTap: _closeSearch,
               ),
-            ),
-            Text(
-              // once the search has left the category, say so - the title still reads "Смеси" and a
-              // bare count under it would claim these are all products of that category
-              _submitted != null
+              child: _FilterField(
+                controller: _filter,
+                focusNode: _filterFocus,
+                hint: strings.categoryFilterHint,
+                onChanged: (value) => setState(() => _typed = value),
+                onSubmitted: widget.onSearch == null ? null : _search,
+                onClear: _clearSearch,
+              ),
+            )
+          : AppPageHeader(
+              // after a catalogue-wide search the heading is the query: the results are no longer
+              // this category's, and leaving "Смеси" over them would be a false claim
+              title: _submitted ?? widget.title,
+              subtitle: _submitted != null
                   ? (_count == null
-                      ? strings.searchAcrossCategories
-                      : '${strings.searchAcrossCategories} · ${strings.productsCountLabel(_count!)}')
+                        ? strings.searchAcrossCategories
+                        : '${strings.searchAcrossCategories} · ${strings.productsCountLabel(_count!)}')
                   : (_count == null
-                      ? (widget.subtitle ?? '')
-                      : strings.productsCountLabel(_count!)),
-              style: const TextStyle(
-                color: AppColors.textGrey,
-                fontSize: 12,
-                fontWeight: FontWeight.w400,
-              ),
+                        ? widget.subtitle
+                        : strings.productsCountLabel(_count!)),
+              // a magnifier while there is nothing to undo, an × once the screen is showing the
+              // answer to a search - one control, saying the only thing there is to do next
+              action: _submitted == null
+                  ? CircleIconButton(
+                      key: const ValueKey('open-search'),
+                      icon: Icons.search_rounded,
+                      tooltip: strings.searchHint,
+                      onTap: _openSearch,
+                    )
+                  : CircleIconButton(
+                      key: const ValueKey('close-search'),
+                      icon: Icons.close_rounded,
+                      tooltip: strings.cancelButton,
+                      onTap: _closeSearch,
+                    ),
             ),
-          ],
-        ),
-        // the filter sits between the title and the rule, so the edge still closes the header off
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(_barHeight),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
-                child: _FilterField(
-                  controller: _filter,
-                  hint: strings.categoryFilterHint,
-                  onChanged: (value) => setState(() => _typed = value),
-                  onSubmitted: widget.onSearch == null ? null : _search,
-                  onClear: _clearSearch,
-                ),
-              ),
-              ScreenHeader.rule,
-            ],
-          ),
-        ),
-      ),
       body: SafeArea(
         top: false,
         child: ProductResultsView(
@@ -208,6 +231,7 @@ class _ProductResultsScreenState extends State<ProductResultsScreen> {
 class _FilterField extends StatelessWidget {
   const _FilterField({
     required this.controller,
+    required this.focusNode,
     required this.hint,
     required this.onChanged,
     required this.onSubmitted,
@@ -215,6 +239,10 @@ class _FilterField extends StatelessWidget {
   });
 
   final TextEditingController controller;
+
+  /// Held by the screen, which focuses it the frame after the magnifier opens this.
+  final FocusNode focusNode;
+
   final String hint;
   final ValueChanged<String> onChanged;
 
@@ -225,14 +253,16 @@ class _FilterField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // the home feed's search bar exactly - same height, radius and recessed grey - since this is the
-    // same gesture arriving one screen deeper
+    // the home feed's search bar exactly - same height, radius, white fill and ring - since this is
+    // the same gesture arriving one screen deeper
     return Container(
       height: 44,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: AppColors.trackGrey,
+        color: AppColors.surfaceWhite,
         borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: AppColors.trackGrey),
+        boxShadow: AppShadows.card,
       ),
       child: Row(
         children: [
@@ -241,9 +271,10 @@ class _FilterField extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: controller,
+              focusNode: focusNode,
               onChanged: onChanged,
-              // no autofocus: the user came here to *browse* a category. raising a keyboard over the
-              // first row of results would be answering a question they have not asked yet.
+              // focus is given by the screen rather than by `autofocus`, because this field is not in
+              // the tree until the magnifier puts it there - and when it is, it was asked for
               textCapitalization: TextCapitalization.sentences,
               // gives the keyboard a "search" key rather than a newline - without it there is no way
               // to ask for the wider search at all
@@ -274,6 +305,7 @@ class _FilterField extends StatelessWidget {
             builder: (context, value, _) {
               if (value.text.isEmpty) return const SizedBox.shrink();
               return GestureDetector(
+                key: const ValueKey('clear-filter'),
                 behavior: HitTestBehavior.opaque,
                 // clears the text *and* drops back out of a catalogue-wide search into the category
                 onTap: onClear,

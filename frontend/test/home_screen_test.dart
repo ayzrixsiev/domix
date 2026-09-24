@@ -10,6 +10,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:frontend/features/favorites/presentation/controllers/favorites_controller.dart';
 
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
@@ -92,7 +93,6 @@ Shop _shop({
     category: ShopCategory.universal,
     latitude: 41.3,
     longitude: 69.2,
-    rating: 4.5,
     priceTier: priceTier,
     priceDifferencePercent: differencePercent,
     basketPrice: basketPrice,
@@ -124,6 +124,7 @@ Future<HomeController> _pumpHome(WidgetTester tester, _FakeHomeRepository repo) 
       providers: [
         ChangeNotifierProvider(create: (_) => LanguageProvider()),
         ChangeNotifierProvider(create: (_) => CityController()),
+        ChangeNotifierProvider(create: (_) => FavoritesController()),
         ChangeNotifierProvider<HomeController>.value(value: controller),
       ],
       child: const MaterialApp(home: HomeScreen()),

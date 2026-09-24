@@ -12,6 +12,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:frontend/features/favorites/presentation/controllers/favorites_controller.dart';
 
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
@@ -87,7 +88,6 @@ Shop _shop({required int id, required String name, bool isVip = false}) {
     category: ShopCategory.universal,
     latitude: 41.3,
     longitude: 69.2,
-    rating: 0,
     priceTier: PriceTier.cheaper,
     priceDifferencePercent: 4,
     basketPrice: 4850000,
@@ -119,6 +119,7 @@ Future<void> _pumpHome(
       providers: [
         ChangeNotifierProvider(create: (_) => LanguageProvider()),
         ChangeNotifierProvider(create: (_) => CityController()),
+        ChangeNotifierProvider(create: (_) => FavoritesController()),
         ChangeNotifierProvider(
           create: (_) => HomeController(repository: _FakeHomeRepository(content: content)),
         ),

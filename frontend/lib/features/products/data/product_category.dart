@@ -74,18 +74,18 @@ enum ProductCategory {
   /// Still an exhaustive switch: a thirteenth category has to say here whether it has a photo, rather
   /// than silently inheriting a default.
   String? get photo => switch (this) {
-        ProductCategory.mixes => 'assets/categories/building_materials.webp',
+        ProductCategory.mixes => 'assets/decorations/categories/building_materials.webp',
         ProductCategory.blocks => null,
-        ProductCategory.lumber => 'assets/categories/lumber.webp',
+        ProductCategory.lumber => 'assets/decorations/categories/lumber.webp',
         ProductCategory.metal => null,
-        ProductCategory.fasteners => 'assets/categories/fasteners.webp',
-        ProductCategory.roofing => 'assets/categories/roofing.webp',
+        ProductCategory.fasteners => 'assets/decorations/categories/fasteners.webp',
+        ProductCategory.roofing => 'assets/decorations/categories/roofing.webp',
         ProductCategory.insulation => null,
-        ProductCategory.electrical => 'assets/categories/electrical.webp',
-        ProductCategory.plumbing => 'assets/categories/plumbing.webp',
-        ProductCategory.paints => 'assets/categories/paints_and_finishing.webp',
+        ProductCategory.electrical => 'assets/decorations/categories/electrical.webp',
+        ProductCategory.plumbing => 'assets/decorations/categories/plumbing.webp',
+        ProductCategory.paints => 'assets/decorations/categories/paints_and_finishing.webp',
         ProductCategory.finishing => null,
-        ProductCategory.tools => 'assets/categories/tools.webp',
+        ProductCategory.tools => 'assets/decorations/categories/tools.webp',
       };
 
   /// Lucide only, one family and one stroke weight. The glyph belongs on the enum now that two

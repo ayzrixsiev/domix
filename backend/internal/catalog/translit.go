@@ -2,10 +2,8 @@ package catalog
 
 import "strings"
 
-// Latin spellings a customer types instead of the Cyrillic in the catalogue: "kabel" -> "кабел".
-//
-// **Add a line here when the letter rules below spell a word wrong.** Everything else they handle:
-// "plitka" -> "плитка", "samorez" -> "саморез", "molotok" -> "молоток".
+// **add a line here when the letter rules below spell a word wrong** - they handle everything else:
+// "plitka" -> "плитка", "samorez" -> "саморез", "molotok" -> "молоток"
 var latinAliases = map[string]string{
 	"sement":       "цемент", // uzbek spelling; the rules would give "семент"
 	"elektr":       "электр",
@@ -26,8 +24,8 @@ var latinLetters = map[rune]rune{
 	's': 'с', 't': 'т', 'u': 'у', 'v': 'в', 'w': 'в', 'x': 'х', 'y': 'й', 'z': 'з',
 }
 
-// Cyrillic spells a Latin word the way the catalogue writes it, or "" when the word has no Latin
-// letters. The word must already be lowercased. "ё" is written as "е", as the search index has it.
+// spells a latin word the way the catalogue writes it, or "" when it has no latin letters. the word
+// must already be lowercased, and "ё" is written as "е", as the search index has it.
 func Cyrillic(word string) string {
 	if !strings.ContainsFunc(word, isLatin) {
 		return ""

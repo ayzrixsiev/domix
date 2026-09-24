@@ -120,7 +120,6 @@ Shop _shop(int id, String name) => Shop(
       category: ShopCategory.universal,
       latitude: 41.3,
       longitude: 69.2,
-      rating: 0,
     );
 
 /// Stands in for the HTTP layer. Extends the real repository rather than implementing an interface,

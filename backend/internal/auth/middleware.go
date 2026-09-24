@@ -14,6 +14,7 @@ import (
 )
 
 type contextKey string
+
 const userIDContextKey contextKey = "userID"
 const bearerPrefix = "Bearer "
 
@@ -21,7 +22,8 @@ type UserStore interface {
 	GetUserRole(ctx context.Context, id int64) (string, error)
 }
 
-// wraps a handler (http endpoints) so it only runs once we've confirmed the caller sent a valid jwt and that the account that jwt names still exists
+// runs a handler only once the caller's jwt is valid *and* the account it names still exists - the
+// second half is a live database read, so a deleted account stops working immediately
 func RequireAuth(jwtSecret string, users UserStore, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
@@ -51,29 +53,44 @@ func RequireAuth(jwtSecret string, users UserStore, next http.HandlerFunc) http.
 			return
 		}
 
-		// wrap original context created by the net/http package (which checks whether user conn drops), and add a sticky note to it - user id
+		// the user id rides on the context from here, which is what every handler authorizes on
 		authed := context.WithValue(r.Context(), userIDContextKey, claims.UserID)
-		// run the wrapped function and hand it context with sticky note
 		next(w, r.WithContext(authed))
 	}
 }
 
-// reads back the user id that RequireAuth attached as sticky note to the request context
+// UserIDFromRequest reads the account id straight off the Authorization header, verifying the
+// signature but touching no database. It exists for the rate limiter, which runs *before*
+// RequireAuth and therefore before anything has been put on the context - and which only needs a
+// stable key, not an authorization decision. A forged token fails the signature check and falls
+// back to the caller's address.
+func UserIDFromRequest(r *http.Request, jwtSecret string) (int64, bool) {
+	header := r.Header.Get("Authorization")
+	if !strings.HasPrefix(header, bearerPrefix) {
+		return 0, false
+	}
+	claims, err := ValidateJWT(strings.TrimPrefix(header, bearerPrefix), jwtSecret)
+	if err != nil {
+		return 0, false
+	}
+	return claims.UserID, true
+}
+
+// reads back the user id RequireAuth put on the request context
 func UserIDFromContext(ctx context.Context) (int64, bool) {
 	userID, ok := ctx.Value(userIDContextKey).(int64)
 	return userID, ok
 }
 
-// func to send back to flutter one json response: "you are not allowed in".
-// carries a machine-readable `code` alongside the english message for flutter to show appropriate error message
+// carries a machine-readable `code` next to the english message - the app switches on the code
 func respondUnauthorized(w http.ResponseWriter, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
 	json.NewEncoder(w).Encode(map[string]string{"code": code, "error": message})
 }
 
-// a failed user lookup is our problem, not the caller's, so it must not come back as a 401 - the app
-// treats 401 as "log out", and a minute of database trouble would otherwise sign out every user
+// a failed lookup is our problem, not the caller's: the app treats 401 as "log out", so a minute of
+// database trouble would otherwise sign every user out
 func respondServiceUnavailable(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusServiceUnavailable)

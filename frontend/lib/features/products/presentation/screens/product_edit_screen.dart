@@ -16,7 +16,7 @@ import '../../data/product_model.dart';
 import '../controllers/products_controller.dart';
 import '../widgets/product_category_field.dart';
 import '../widgets/product_photo_field.dart';
-import 'package:frontend/core/widgets/circle_back_button.dart';
+import 'package:frontend/core/widgets/app_page_header.dart';
 
 // add or edit one product - one screen for both, since the fields are the same either way.
 //
@@ -352,27 +352,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: false,
-        titleSpacing: 20,
-        iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
-        // the disc, not a bare chevron. leadingWidth must move with it or flutter keeps its own 56 and
-        // the title sits wrong.
-        leading: const CircleBackButton(),
-        leadingWidth: CircleBackButton.leadingWidth,
-        title: Text(
-          widget.isNew ? strings.addProductTitle : strings.editProductTitle,
-          style: const TextStyle(
-            color: AppColors.textDark,
-            fontSize: 18,
-            letterSpacing: -0.2,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
+      appBar: AppPageHeader(title: widget.isNew ? strings.addProductTitle : strings.editProductTitle),
       body: SafeArea(
         child: ListView(
           physics: const BouncingScrollPhysics(),

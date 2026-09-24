@@ -281,6 +281,108 @@ class AuthService {
       role: body['role'] as String? ?? 'customer',
     );
   }
+  /// `PATCH /api/me` - the name, and the one role change the server allows.
+  ///
+  /// **Both arguments are nullable and a null is not sent**, which is the whole reason this is a
+  /// PATCH: the server tells an omitted field from a field set to empty, so saving a role change
+  /// cannot blank the name and vice versa.
+  ///
+  /// The session cache is rewritten before this returns, so a screen reading from storage never
+  /// disagrees with one reading from the controller.
+  Future<MeResult> updateProfile({String? name, String? role}) async {
+    final token = await getToken();
+    if (token == null || token.isEmpty) throw const SessionExpiredException();
+
+    final response = await appHttpClient
+        .patch(
+          _meUri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          // the null-aware `?` drops the key entirely rather than sending a null - which is the
+          // whole contract of this PATCH: an omitted field is left alone, a null would be a value
+          body: jsonEncode({'name': ?name, 'role': ?role}),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    final me = await _readMeAnswer(response, token);
+    return me;
+  }
+
+  /// `POST /api/me/phone/request-code` - send a code to the number this account wants to move onto.
+  ///
+  /// **Not retried, for the reason [requestCode] is not**: every attempt is a paid message.
+  Future<CodeRequestResult> requestPhoneChangeCode(String phone) async {
+    final token = await getToken();
+    if (token == null || token.isEmpty) throw const SessionExpiredException();
+
+    final response = await appHttpClient
+        .post(
+          Uri.parse('${ApiConfig.serverRoot}/api/me/phone/request-code'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({'phone': phone}),
+        )
+        .timeout(const Duration(seconds: 20));
+
+    final body = _decodeBody(response);
+    if (response.statusCode != 200) throw AuthApiException.from(response, body);
+
+    return CodeRequestResult(
+      phone: body['phone'] as String? ?? phone,
+      expiresIn: body['expires_in'] as int? ?? 300,
+      resendAfter: body['resend_after'] as int? ?? 60,
+    );
+  }
+
+  /// `POST /api/me/phone/verify` - the code was right, so the account is now on that number.
+  ///
+  /// **The token is not replaced and does not need to be.** Its phone claim authorizes nothing -
+  /// the server reads the user id off it and nothing else - so the session opened under the old
+  /// number keeps working.
+  Future<MeResult> verifyPhoneChange({required String phone, required String code}) async {
+    final token = await getToken();
+    if (token == null || token.isEmpty) throw const SessionExpiredException();
+
+    final response = await appHttpClient
+        .post(
+          Uri.parse('${ApiConfig.serverRoot}/api/me/phone/verify'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({'phone': phone, 'code': code}),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    return _readMeAnswer(response, token);
+  }
+
+  /// The shared tail of the two authenticated writes: refusals carry a code the screen localizes, a
+  /// 401 ends the session, and a success is the account's new state - cached on the way past.
+  Future<MeResult> _readMeAnswer(http.Response response, String token) async {
+    if (response.statusCode == 401) {
+      // not silent: this answers something the user just did, so they get told why they are out
+      onSessionInvalidated?.call(silent: false);
+      throw const SessionExpiredException();
+    }
+
+    final body = _decodeBody(response);
+    if (response.statusCode != 200) throw AuthApiException.from(response, body);
+
+    final me = MeResult(
+      name: body['name'] as String? ?? '',
+      phone: body['phone'] as String? ?? '',
+      role: body['role'] as String? ?? 'customer',
+    );
+
+    await saveSession(token: token, role: me.role, name: me.name, phone: me.phone);
+    return me;
+  }
+
   /// Destroys the account on the server: `DELETE /api/me`.
   ///
   /// **This does not touch local storage** - wiping the phone is [logout]'s job, and if the server

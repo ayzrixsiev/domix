@@ -9,7 +9,7 @@ import 'package:frontend/features/map/presentation/screens/location_picker_scree
 import 'package:frontend/features/stores/data/shop_category.dart';
 import 'package:frontend/features/stores/presentation/widgets/store_form_fields.dart';
 import '../controllers/stores_controller.dart';
-import 'package:frontend/core/widgets/circle_back_button.dart';
+import 'package:frontend/core/widgets/app_page_header.dart';
 
 // the "add store" page: shop name, contact number, and a location picked on the map. on success
 // the new shop goes into StoresController's list, so it appears on the map immediately.
@@ -128,27 +128,7 @@ class _AddStoreScreenState extends State<AddStoreScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: false,
-        titleSpacing: 20,
-        iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
-        // the disc, not a bare chevron. leadingWidth must move with it or flutter keeps its own 56 and
-        // the title sits wrong.
-        leading: const CircleBackButton(),
-        leadingWidth: CircleBackButton.leadingWidth,
-        title: Text(
-          _strings.addStoreScreenTitle,
-          style: const TextStyle(
-            color: AppColors.textDark,
-            fontSize: 18,
-            letterSpacing: -0.2,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
+      appBar: AppPageHeader(title: _strings.addStoreScreenTitle),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),

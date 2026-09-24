@@ -17,17 +17,7 @@ SELECT
 
     (SELECT COUNT(*) FROM products)::bigint                                                 AS products_total,
     (SELECT COUNT(price) FROM products)::bigint                                             AS products_priced,
-    (SELECT COUNT(*) FROM products WHERE template_key IS NULL)::bigint                      AS products_custom,
-
-    (SELECT COUNT(DISTINCT user_id) FROM support_messages)::bigint                          AS support_threads,
-    (SELECT COUNT(*) FROM (
-        SELECT m.user_id
-        FROM support_messages m
-        WHERE NOT m.from_support
-          AND m.id > COALESCE((SELECT MAX(s.id) FROM support_messages s
-                                WHERE s.user_id = m.user_id AND s.from_support), 0)
-        GROUP BY m.user_id
-     ) waiting)::bigint                                                                     AS support_awaiting;
+    (SELECT COUNT(*) FROM products WHERE template_key IS NULL)::bigint                      AS products_custom;
 
 -- name: AdminSignupsByDay :many
 SELECT
@@ -103,16 +93,9 @@ RETURNING id, name, excluded_from_index;
 DELETE FROM users WHERE id = $1;
 
 -- name: AdminCountAdmins :one
---
--- the one number standing between the panel and locking itself out for good. Granting and revoking
--- `admin` are both panel operations now, so the old blanket refusals are gone (see Admin.UpdateUser)
--- - what replaces them is narrower and is not a policy: an account can be demoted or deleted unless
--- it is the last administrator, because there is no way back from zero except SQL on production.
---
--- Read inside the same request as the write and not in a transaction with it, so two admins demoting
--- each other in the same second could in principle both pass. At one machine and one person that is
--- not a race worth a lock; if this ever matters, the honest fix is a partial unique index rather
--- than a bigger check here.
+-- the one number standing between the panel and locking itself out: there is no way back from zero
+-- administrators except SQL on production. not in a transaction with the write it guards, so two
+-- admins demoting each other in the same second could both pass.
 SELECT COUNT(*)::bigint AS admins FROM users WHERE role = 'admin';
 
 -- name: AdminUpdateUser :one
@@ -124,12 +107,8 @@ WHERE id = $1
 RETURNING id, name, phone, role, created_at;
 
 -- name: AdminPriceAnomalies :many
---
--- the report carries the two numbers a phone call needs as well as the two it is about: a row here
--- ends with somebody ringing the shop, and looking the number up in another tab is the step that
--- makes a report get skipped. contact_phone is the shop's own line and owner_phone is the account
--- the price was typed from - they are usually the same and are not always, which is why both are
--- here rather than one being assumed.
+-- a row here ends with somebody ringing the shop, so both numbers travel: contact_phone is the
+-- shop's own line, owner_phone is the account the price was typed from.
 WITH comparable AS (
     SELECT p.id, p.shop_id, p.name, p.template_key, p.price,
            s.category AS shop_category, s.name AS shop_name, s.contact_phone,
@@ -264,17 +243,9 @@ scored AS (
            CASE WHEN template_rows > 0 THEN priced_rows::float8 / template_rows * 100 ELSE 0 END AS pct
     FROM progress
 )
--- three buckets, not five, and the reason is the rule they describe: a catalogue is either
--- complete or it is not in the comparison, so 50% and 90% are the same outcome as 1%. The panel
--- had a «Больше половины» and a «Почти готово» band, which invited reading the funnel as progress
--- towards something when only the last band is worth anything. Who is closest to the line is a
--- real question and it is answered properly by AdminShopsNeedingAttention, by name and phone
--- number, rather than by a count of anonymous shops in a band.
---
--- `stalled` - empty and older than a fortnight - was a fifth number here and is gone with the card
--- that printed it. Every unfinished shop is now one row in the panel's «Не заполнены» list with its
--- own creation date against it, which is the same fact per shop instead of a count of anonymous
--- ones, and nothing was left reading the aggregate.
+-- three buckets and not five, because a catalogue is either complete or it is not in the comparison:
+-- 50% and 90% are the same outcome as 1%. who is closest to the line is answered by
+-- AdminShopsNeedingAttention, by name and phone number, rather than by a band.
 SELECT
     COUNT(*)::bigint                                                       AS shops,
     (COUNT(*) FILTER (WHERE priced_rows = 0))::bigint                      AS empty,
@@ -283,15 +254,8 @@ SELECT
 FROM scored;
 
 -- name: AdminShopsNeedingAttention :many
---
--- every shop whose catalogue is not finished, nearest the line first. It used to be the top 8 behind
--- a «Кому позвонить» card; it is now the whole list behind the gauge's «Не заполнены» box, so the
--- limit is a ceiling rather than a page - 100 rows of five columns is a few kilobytes on a request
--- the panel already makes every 45 seconds, and the day it is not, this grows a page rather than a
--- second endpoint.
---
--- `contact_phone` as well as the owner's: the shop's line is the one to ring about the shop, and
--- they are usually but not always the same number.
+-- every shop whose catalogue is not finished, nearest the line first. the limit is a ceiling rather
+-- than a page; the day it is not, this grows a page rather than a second endpoint.
 SELECT s.id,
        s.name,
        s.category,
@@ -311,17 +275,12 @@ ORDER BY (COUNT(p.id) - COUNT(p.price)), s.created_at
 LIMIT $1;
 
 -- name: AdminMarketRankings :many
+-- the cheapest few shops in every market, in order, because the question the panel exists to answer
+-- is **whether anybody is competing**: 4.61/4.63/4.65 is a fight, 4.6/5.4/6.2 is one shop with no
+-- pressure on it, and the two look identical if you print only the winner.
 --
--- the cheapest few shops in every market, in order. It replaced AdminMarketLeaders, which returned
--- only the winner - one row per category said who was cheapest and could not show what the panel is
--- actually for: **whether anybody is competing.** A market where the top three are 4.61, 4.63 and
--- 4.65 million is a fight; one where they are 4.6, 5.4 and 6.2 is one shop with no pressure on it,
--- and the two look identical if you only print the first row.
---
--- `CROSS JOIN LATERAL` and not a window function: sqlc cannot compile a `ROW_NUMBER()` filtered from
--- an outer WHERE (§6), and the lateral is the shape postgres wants anyway - "for each category, the
--- first N of this ordered list". The rank itself is not selected; it is the row's position in the
--- result, which the panel and Go both already have.
+-- CROSS JOIN LATERAL and not a window function: sqlc cannot compile a ROW_NUMBER() filtered from an
+-- outer WHERE, and the lateral is the shape postgres wants anyway.
 SELECT c.category,
        r.shop_id,
        r.shop_name,
@@ -339,14 +298,9 @@ CROSS JOIN LATERAL (
 ORDER BY c.category, r.price_index, r.shop_id;
 
 -- name: AdminCategoryBaskets :many
---
--- what a basket costs in each market right now, and how far apart its shops are. This is the number
--- the founder wants "чтобы примерно понимать" - the one figure that says what a category is worth
--- before any comparison between shops inside it.
---
--- It reads the index view, so **only complete catalogues are in it** (§5): a shop with one unpriced
--- row has no basket and cannot be averaged into one. That is the same rule the badge follows, which
--- is what keeps this number and the app's agreeing.
+-- what a basket costs in each market right now, and how far apart its shops are. it joins the index
+-- table, so **only complete catalogues are in it** - the same rule the app's badge follows, which is
+-- what keeps the two numbers agreeing.
 SELECT s.category,
        COUNT(*)::bigint                          AS shops,
        ROUND(AVG(bi.basket_price))::bigint       AS avg_basket,
@@ -358,15 +312,9 @@ GROUP BY s.category
 ORDER BY s.category;
 
 -- name: RecordBasketHistory :exec
---
--- today's row for every market, written by the hourly job in cmd/api/main.go.
---
--- **The whole statement runs in the database and nothing travels through Go**, which is what makes
--- it safe to run on a timer: it is one aggregate over a view, and the upsert means running it twice
--- an hour or once a day produces exactly the same table.
---
--- A market that has no shops in the comparison writes no row at all rather than a zero - see the
--- migration: a zero here would be a claim that the basket was free.
+-- today's row for every market, written by the hourly job in cmd/api/main.go. the upsert is what
+-- makes running it twice an hour identical to running it once a day. a market with no shops in the
+-- comparison writes no row rather than a zero, which would claim the basket was free.
 INSERT INTO basket_history (day, category, shops, avg_basket, min_basket, max_basket)
 SELECT CURRENT_DATE,
        s.category,
@@ -384,10 +332,8 @@ SET shops      = EXCLUDED.shops,
     max_basket = EXCLUDED.max_basket;
 
 -- name: AdminBasketHistory :many
---
--- the last 30 days of every market, oldest first. No generate_series here, unlike AdminSignupsByDay:
--- a missing day is a day the server was not running, and drawing it as a gap is the honest answer
--- where filling it with a zero would draw a market that briefly cost nothing.
+-- the last 30 days of every market. no generate_series, unlike AdminSignupsByDay: a missing day is a
+-- day the server was not running, and a zero would draw a market that briefly cost nothing.
 SELECT to_char(day, 'YYYY-MM-DD')::text AS day,
        category,
        shops,
@@ -405,16 +351,9 @@ ORDER BY s.vip_until
 LIMIT $1;
 
 -- name: AdminUploadedImagePaths :many
--- every products.image_path that names an owner's upload, for the orphan sweep.
---
--- filtered in SQL rather than in Go because the catalogue paths outnumber the uploads by two orders
--- of magnitude - one универсальный shop is a hundred rows pointing at photos/universal - and there
--- is no reason to carry them across the wire only to drop them. the prefix is a parameter so
+-- every products.image_path naming an owner's upload, for the orphan sweep. filtered in SQL because
+-- catalogue paths outnumber uploads a hundred to one. the prefix is a parameter so
 -- imagestore.UploadDir stays the one declaration of what "uploads/" is.
---
--- ::text on the projection, not decoration: image_path is a nullable column, and without the cast
--- sqlc types the result []pgtype.Text and every caller unwraps a wrapper the WHERE clause has
--- already made impossible. same trick as the ::bigint on the counts above.
 SELECT image_path::text AS image_path
 FROM products
 WHERE image_path LIKE @prefix::text;

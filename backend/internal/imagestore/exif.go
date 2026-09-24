@@ -5,21 +5,13 @@ import (
 	"encoding/binary"
 )
 
-// Reading one number out of a JPEG's EXIF block: the orientation tag.
+// one number out of a JPEG's EXIF block: the orientation tag.
 //
-// **Why this is here rather than a dependency.** A phone's camera does not rotate the pixels it
-// captured. It stores the sensor's own raster and writes a tag saying which of eight ways up it
-// should be displayed, and every viewer is expected to honour that tag. Go's image/jpeg decoder
-// does not - it hands back the raw raster - and re-encoding drops the tag along with the rest of the
-// metadata. So a photo taken in portrait, which is most of them, would be stored on its side, and
-// the app would show a sideways bag of cement with nothing in any log to explain it.
-//
-// The full EXIF specification is large; this is one 16-bit integer at a known place inside it, and
-// the parse is bounded at every step. Anything unexpected answers 1 ("upright"), which is what a
-// photo with no EXIF at all - a screenshot, a PNG, anything re-encoded on the way here - means.
-
-// orientationOf returns the EXIF orientation of a JPEG, or 1 for anything that is not one, does not
-// carry EXIF, or carries EXIF this cannot read.
+// **why this is here rather than a dependency.** a phone stores the sensor's own raster plus a tag
+// saying which of eight ways up it goes. Go's jpeg decoder hands back the raw raster and re-encoding
+// drops the tag, so a portrait photo - most of them - would be stored on its side with nothing in
+// any log to explain it. the full spec is large; this is one 16-bit integer at a known place, parsed
+// with a bound at every step, and anything unexpected answers 1 ("upright").
 func orientationOf(src []byte) int {
 	block, ok := exifBlock(src)
 	if !ok {
@@ -28,8 +20,7 @@ func orientationOf(src []byte) int {
 	return orientationInTIFF(block)
 }
 
-// exifBlock walks the JPEG's marker segments and returns the payload of the first APP1 segment that
-// announces itself as EXIF, with the six-byte "Exif\0\0" introducer stripped - i.e. the TIFF block.
+// the payload of the first APP1 segment announcing itself as EXIF, introducer stripped: the TIFF block
 func exifBlock(src []byte) ([]byte, bool) {
 	// SOI. anything else is not a JPEG, which includes every PNG that reaches here.
 	if len(src) < 4 || src[0] != 0xFF || src[1] != 0xD8 {
@@ -60,8 +51,8 @@ func exifBlock(src []byte) ([]byte, bool) {
 		if pos+2 > len(src) {
 			return nil, false
 		}
-		// the length field counts itself, so the payload is two bytes shorter. always big-endian,
-		// whatever byte order the TIFF block inside later declares.
+		// the length counts itself, so the payload is two bytes shorter. always big-endian, whatever
+		// the TIFF block inside later declares.
 		length := int(binary.BigEndian.Uint16(src[pos : pos+2]))
 		if length < 2 || pos+length > len(src) {
 			return nil, false
@@ -91,8 +82,8 @@ func orientationInTIFF(tiff []byte) int {
 		return upright
 	}
 
-	// the block declares its own byte order in its first two bytes, and the whole point of that is
-	// that it may differ from the JPEG's. every multi-byte read below has to go through it.
+	// the block declares its own byte order, which may differ from the JPEG's - every multi-byte
+	// read below has to go through it
 	var order binary.ByteOrder
 	switch {
 	case tiff[0] == 'I' && tiff[1] == 'I':
@@ -123,8 +114,7 @@ func orientationInTIFF(tiff []byte) int {
 		if order.Uint16(tiff[at+2:at+4]) != typeShort {
 			return upright // the tag exists but is not the type it is defined as
 		}
-		// a SHORT fits in the entry's four-byte value field, so it is here rather than at an offset
-		// somewhere else in the block
+		// a SHORT fits in the entry's value field rather than at an offset elsewhere in the block
 		value := int(order.Uint16(tiff[at+8 : at+10]))
 		if value < 1 || value > maxOrientation {
 			return upright

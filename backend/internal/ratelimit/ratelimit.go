@@ -1,16 +1,8 @@
 // package ratelimit caps how fast one caller can hit the api.
 //
-// Nothing in this service limited anything before, which mattered most on the two endpoints that
-// need no login at all. POST /api/auth/init stores a session in RAM for ten minutes per call, so an
-// unthrottled loop is a memory-exhaustion button anyone can press; GET /api/auth/status is the
-// lookup that hands out a JWT when you name a live session, so an unthrottled loop is also the only
-// thing making a guessing attack expensive.
-//
-// **In-memory and per-process, which is a real limit on what this can promise.** Two instances
-// behind a load balancer each enforce their own budget, so the effective rate doubles. That is the
-// right trade at one server and stops being right the day there are two - at which point the limiter
-// belongs in front of the app (nginx, Cloudflare) or in Redis, not here. It is a floor, not a
-// perimeter.
+// **in-memory and per-process, which bounds what it can promise**: two instances behind a load
+// balancer each enforce their own budget, so the effective rate doubles. right at one server, wrong
+// the day there are two - at which point this belongs in nginx or Cloudflare. a floor, not a perimeter.
 package ratelimit
 
 import (
@@ -24,16 +16,14 @@ import (
 	"time"
 )
 
-// Limiter is a token bucket per client, refilled continuously.
-//
-// A bucket rather than a counter per fixed window, because a window resets on a wall-clock edge: a
-// caller allowed 60/minute can send 60 at 11:59:59 and 60 more at 12:00:00, which is 120 in one
-// second - exactly the burst the limit existed to prevent. A bucket holds at most Burst tokens and
-// earns Rate of them per second, so a quiet client keeps a small allowance for a genuine spike and a
-// loud one is held at Rate forever.
+// a token bucket per client, refilled continuously. a bucket rather than a fixed window, because a
+// window resets on a wall-clock edge: 60/minute allows 60 at 11:59:59 and 60 more at 12:00:00.
 type Limiter struct {
 	rate  float64 // tokens earned per second
 	burst float64 // most tokens a bucket can hold
+
+	// who to bucket a request under. nil means the caller's network address.
+	identity func(*http.Request) string
 
 	mu      sync.Mutex
 	buckets map[string]*bucket
@@ -44,12 +34,8 @@ type bucket struct {
 	seen   time.Time
 }
 
-// New builds a limiter allowing `rate` requests per second sustained, with room for `burst` in one
-// go, and starts a sweeper that forgets clients idle for longer than `idleTTL`.
-//
-// The sweeper is what keeps the map from becoming the leak the limiter was meant to prevent: every
-// distinct IP allocates an entry, and an attacker rotating source addresses would otherwise grow it
-// without bound.
+// `rate` per second sustained with room for `burst` in one go, plus a sweeper that forgets clients
+// idle longer than `idleTTL` - without it every distinct IP is an entry the map never gives back.
 func New(rate float64, burst int, idleTTL time.Duration) *Limiter {
 	l := &Limiter{
 		rate:    rate,
@@ -74,7 +60,7 @@ func (l *Limiter) Allow(client string) bool {
 		return true
 	}
 
-	// refill for the time that has passed since we last looked, capped at the bucket's size
+	// refill for the time since we last looked, capped at the bucket's size
 	b.tokens += now.Sub(b.seen).Seconds() * l.rate
 	if b.tokens > l.burst {
 		b.tokens = l.burst
@@ -102,11 +88,30 @@ func (l *Limiter) sweep(idleTTL time.Duration) {
 	}
 }
 
-// Wrap puts the limiter in front of a handler. A rejected caller gets 429 and a Retry-After, which
-// is what tells an honest client (a retry loop with a bug) to back off rather than hammer harder.
+// Keyed buckets by `identity` instead of by network address.
+//
+// **an address is the wrong unit for anything a signed-in user does.** uzbek mobile operators put
+// thousands of subscribers behind one public address, so an address bucket throttles a whole carrier
+// as though it were one person - and the failure is invisible in testing, because a laptop and an
+// office wifi each get an address of their own. main.go passes the caller's account id.
+func (l *Limiter) Keyed(identity func(*http.Request) string) *Limiter {
+	l.identity = identity
+	return l
+}
+
+// who this request counts against
+func (l *Limiter) client(r *http.Request) string {
+	if l.identity != nil {
+		return l.identity(r)
+	}
+	return ClientIP(r)
+}
+
+// Wrap puts the limiter in front of a handler. 429 plus a Retry-After, which is what tells an honest
+// client with a buggy retry loop to back off rather than hammer harder.
 func (l *Limiter) Wrap(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !l.Allow(clientIP(r)) {
+		if !l.Allow(l.client(r)) {
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Retry-After", "1")
 			w.WriteHeader(http.StatusTooManyRequests)
@@ -120,20 +125,18 @@ func (l *Limiter) Wrap(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// TrustProxy: is the api behind a proxy (ngrok, nginx) that writes the caller into X-Forwarded-For?
-// It also makes main.go listen on 127.0.0.1 only, so nothing can reach the api around the proxy.
-// ParseBool, so TRUE/True/1 in .env work too rather than failing silently.
+// is the api behind a proxy that writes the caller into X-Forwarded-For? it also makes main.go
+// listen on loopback only, so nothing can reach the api around the proxy.
 func TrustProxy() bool {
 	on, _ := strconv.ParseBool(strings.TrimSpace(os.Getenv("TRUST_PROXY")))
 	return on
 }
 
-// clientIP identifies the caller to bucket them by.
-//
-// Behind a proxy it is the **last** X-Forwarded-For entry: ngrok and nginx append the address they
-// saw, so anything before it was written by the caller. Reading the first one (as this did) handed
-// anybody a fresh bucket per request. Without TRUST_PROXY the header is ignored entirely.
-func clientIP(r *http.Request) string {
+// ClientIP is the caller's network address. behind a proxy it is the **last** X-Forwarded-For entry
+// - the proxy appends the address it saw, so anything before it was written by the caller and
+// reading the first one hands anybody a fresh bucket per request. without TRUST_PROXY the header is
+// ignored entirely.
+func ClientIP(r *http.Request) string {
 	if TrustProxy() {
 		// Values, not Get: a header sent twice arrives as two values and the proxy's is the last
 		if values := r.Header.Values("X-Forwarded-For"); len(values) > 0 {
@@ -147,8 +150,7 @@ func clientIP(r *http.Request) string {
 		}
 	}
 
-	// RemoteAddr is "ip:port"; the port changes every connection, so bucketing by it would give
-	// every request its own bucket and limit nothing
+	// RemoteAddr is "ip:port", and the port changes every connection - bucketing by it limits nothing
 	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		return host
 	}

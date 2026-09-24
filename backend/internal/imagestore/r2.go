@@ -13,43 +13,31 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-// Cloudflare R2, which speaks the S3 API, reached through **minio-go** rather than aws-sdk-go-v2.
+// Cloudflare R2, which speaks the S3 API, through **minio-go rather than aws-sdk-go-v2**: this file
+// needs three calls against one endpoint with one static key pair, and the aws sdk's dozen modules
+// exist to resolve a region, an endpoint and a credential chain we are all hardcoding anyway.
 //
-// Both were on the table and the deciding argument is the number of moving parts. What this file
-// needs is three calls - put an object, delete an object, list a prefix - against one endpoint with
-// one static key pair. minio-go is a single module that does exactly that. aws-sdk-go-v2's s3 client
-// arrives with `config`, `credentials`, `smithy-go` and around a dozen internal modules whose job is
-// resolving what we are hardcoding anyway: the region is "auto", the endpoint is written out below,
-// and the credentials come from four environment variables rather than from a profile chain, an IMDS
-// lookup or SSO. Paying for that machinery to switch it all off is the opposite of the trade.
-//
-// The cost of the choice: minio-go is written against MinIO's reading of S3, so anything exotic
-// (presigned POST policies, object lock, S3 Select) would need checking against R2 rather than
-// assumed. None of that is used here, and if it ever is, this file is the whole boundary.
+// the cost: minio-go follows MinIO's reading of S3, so anything exotic would need checking against
+// R2 rather than assumed. none of it is used here, and this file is the whole boundary.
 
 const (
-	// R2 does not have regions the way S3 does; "auto" is what Cloudflare's documentation says to
-	// send, and the value only ever appears inside the SigV4 signature.
+	// R2 has no regions; "auto" only ever appears inside the SigV4 signature
 	r2Region = "auto"
 
-	// what the object's own headers say. **The cache header is not decoration** - it is the same
-	// `immutable, max-age=1y` staticFiles sets on the disk path, and it is safe for exactly the same
-	// reason: a stored file's name is random, so a url is never reused (see randomName).
+	// **the cache header is not decoration** - the same immutable year staticFiles sets on the disk
+	// path, safe for the same reason: a stored file's name is random, so a url is never reused
 	r2ContentType  = "image/jpeg"
 	r2CacheControl = "public, max-age=31536000, immutable"
 
-	// A bound on one upload or delete, applied inside this file rather than left to the caller.
-	// Without it a stalled connection to Cloudflare holds an http handler open for as long as the
-	// TCP stack is willing to wait, and the shop owner who pressed "добавить фото" sees a spinner
-	// with no end. 30s is far above two ~150 KB PUTs over any working link.
+	// without it a stalled connection to Cloudflare holds an http handler open for as long as the
+	// TCP stack will wait, and the owner who pressed "добавить фото" sees a spinner with no end
 	r2OpTimeout = 30 * time.Second
 
-	// the sweep's listing walks every uploaded file in the market, so it gets its own, longer bound
+	// the sweep's listing walks every uploaded file in the market, so it gets a longer bound
 	r2ListTimeout = 2 * time.Minute
 )
 
-// R2Config is the four things needed to reach a bucket, and nothing else. Read from the environment
-// by [R2ConfigFromEnv].
+// the four things needed to reach a bucket, and nothing else
 type R2Config struct {
 	AccountID string
 	AccessKey string
@@ -57,8 +45,7 @@ type R2Config struct {
 	Bucket    string
 }
 
-// the environment variables main.go decides on. Named after the product rather than after S3,
-// because that is what the Cloudflare dashboard calls them when it hands them over.
+// named after the product rather than after S3 - what the Cloudflare dashboard calls them
 const (
 	EnvR2AccountID = "R2_ACCOUNT_ID"
 	EnvR2AccessKey = "R2_ACCESS_KEY_ID"
@@ -66,14 +53,12 @@ const (
 	EnvR2Bucket    = "R2_BUCKET"
 )
 
-// R2ConfigFromEnv reads the four variables. The second return value is whether *any* of them was
-// set, which is what main.go branches on: none set is a laptop and means the disk, and anything else
-// is a deployment that meant to use R2.
+// the second return is whether *any* of the four was set: none means a laptop and the disk,
+// anything else is a deployment that meant to use R2.
 //
-// **A partial configuration is an error rather than a silent fall back to the disk.** Three keys out
-// of four is somebody halfway through filling in a .env, and answering that by quietly writing
-// photos onto the container's filesystem produces a server that works perfectly until it is
-// restarted, at which point every photo uploaded since the last deploy is gone.
+// **a partial configuration is an error rather than a silent fall back to the disk**: writing photos
+// onto the container's filesystem gives a server that works perfectly until it is restarted, at
+// which point every photo uploaded since the last deploy is gone.
 func R2ConfigFromEnv() (R2Config, bool, error) {
 	cfg := R2Config{
 		AccountID: strings.TrimSpace(os.Getenv(EnvR2AccountID)),
@@ -115,23 +100,16 @@ func plural(n int, one, many string) string {
 	return many
 }
 
-// Endpoint is the S3 host for this account, without a scheme - which is the shape minio.New wants,
-// with https chosen separately by Options.Secure.
-//
-// Written out here rather than taken as a fifth setting: it is derived from the account id by a rule
-// Cloudflare documents, so a setting for it would be a fifth thing that can be wrong and a fifth
-// thing to keep in step. This is also the one piece of address assembly that is worth a test, since
-// getting it wrong produces a DNS failure at the first upload and nowhere earlier.
+// the S3 host for this account, without a scheme. derived rather than taken as a fifth setting,
+// which would be a fifth thing that can be wrong - and getting it wrong fails at the first upload
+// and nowhere earlier, which is why it has a test.
 func (c R2Config) Endpoint() string {
 	return c.AccountID + ".r2.cloudflarestorage.com"
 }
 
-// R2 is [Storage] backed by a Cloudflare R2 bucket.
-//
-// **The object keys are byte-identical to the paths [Disk] writes** - "uploads/3f/3f9c.jpg", no
-// bucket-side prefix of its own. That is what makes products.image_path portable: a dump taken from
-// production restores onto a laptop and every row still points at something the disk store can find,
-// and a move in the other direction needs no rewriting either.
+// **the object keys are byte-identical to the paths [Disk] writes**, with no bucket-side prefix,
+// which is what makes products.image_path portable: a production dump restores onto a laptop and
+// every row still points at something the disk store can find.
 type R2 struct {
 	client *minio.Client
 	bucket string
@@ -140,19 +118,16 @@ type R2 struct {
 
 var _ Storage = (*R2)(nil)
 
-// NewR2 builds the client. It performs no network call - minio.New only assembles credentials and an
-// endpoint - so a wrong key or an unreachable bucket is discovered at the first upload rather than
-// at boot. That is a deliberate acceptance rather than an oversight: a HeadBucket at startup would
-// make the api refuse to boot during a Cloudflare incident, when everything except photo upload
-// would otherwise still work.
+// no network call here, so a wrong key is discovered at the first upload rather than at boot -
+// deliberately: a HeadBucket at startup would refuse to boot the whole api during a Cloudflare
+// incident, when everything except photo upload would still work.
 func NewR2(cfg R2Config) (*R2, error) {
 	client, err := minio.New(cfg.Endpoint(), &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
 		Secure: true,
 		Region: r2Region,
-		// R2 addresses a bucket as a path segment under the account host. minio-go's automatic mode
-		// reaches the same conclusion for an unknown endpoint, but "the SDK guessed right" is not
-		// the kind of thing to leave implicit in the one code path that cannot be tested offline.
+		// R2 addresses a bucket as a path segment. minio-go's automatic mode guesses the same, and
+		// "the SDK guessed right" is not what to rely on in the one path that cannot be tested offline.
 		BucketLookup: minio.BucketLookupPath,
 	})
 	if err != nil {
@@ -163,10 +138,8 @@ func NewR2(cfg R2Config) (*R2, error) {
 
 func (r *R2) Describe() string { return "Cloudflare R2 bucket " + r.bucket + " at " + r.host }
 
-// Save uploads both copies and returns the master's relative path.
-//
-// Same ordering as [Disk.Save] and for the same reason: the thumbnail goes up first, so there is
-// never a master reachable by a reader whose thumbnail has not landed yet.
+// the same ordering as [Disk.Save]: the thumbnail goes up first, so no reader can reach a master
+// whose thumbnail has not landed
 func (r *R2) Save(ctx context.Context, photo Photo) (string, error) {
 	master, thumb, err := newPaths()
 	if err != nil {
@@ -194,7 +167,7 @@ func (r *R2) Remove(ctx context.Context, rel string) error {
 	ctx, cancel := context.WithTimeout(ctx, r2OpTimeout)
 	defer cancel()
 
-	// the mirror of Save, and the same note applies: either half failing leaves a file for the sweep
+	// the mirror of Save: either half failing leaves a file for the sweep
 	if err := r.delete(ctx, ThumbPath(rel)); err != nil {
 		return err
 	}
@@ -211,17 +184,15 @@ func (r *R2) RemoveFile(ctx context.Context, rel string) error {
 	return r.delete(ctx, rel)
 }
 
-// List walks every object under uploads/. The prefix is not a filter applied afterwards - it is sent
-// to the bucket, so the curated catalogue (which lives in the same bucket, under universal/ and
-// plumbing/) is never even enumerated, let alone considered for deletion.
+// every object under uploads/. **the prefix is sent to the bucket, not filtered afterwards**, so the
+// curated catalogue - same bucket, other prefixes - is never enumerated, let alone deleted.
 func (r *R2) List(ctx context.Context) ([]Object, error) {
 	ctx, cancel := context.WithTimeout(ctx, r2ListTimeout)
 	defer cancel()
 
 	var out []Object
-	// ListObjects returns a channel and fills it from a goroutine, one page of results at a time.
-	// Ranging to the end is what closes it; bailing out early would leak that goroutine, which is
-	// why an error below returns only after the loop, not from inside it.
+	// ListObjects fills a channel from a goroutine, and ranging to the end is what closes it - so an
+	// error returns after the loop rather than from inside it
 	var listErr error
 	for obj := range r.client.ListObjects(ctx, r.bucket, minio.ListObjectsOptions{
 		Prefix:    UploadDir + "/",
@@ -249,9 +220,7 @@ func (r *R2) put(ctx context.Context, key string, content []byte) error {
 	return nil
 }
 
-// deleting what is already gone is a success, the same contract [Disk] keeps. S3 answers a DELETE of
-// a missing key with 204 anyway, so the NoSuchKey branch is for a bucket that behaves differently
-// rather than for R2 as it stands.
+// deleting what is already gone is a success, the same contract [Disk] keeps
 func (r *R2) delete(ctx context.Context, key string) error {
 	err := r.client.RemoveObject(ctx, r.bucket, key, minio.RemoveObjectOptions{})
 	if err == nil {

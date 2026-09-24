@@ -1,8 +1,10 @@
 package endpoints
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -23,6 +25,10 @@ type Shops struct {
 	Pool      *pgxpool.Pool
 	Queries   *db.Queries
 	JWTSecret string
+
+	// the map's whole shop list, held for a few seconds - it is the same bytes for everybody and the
+	// most-opened read in the app. nil = build every time, which is what the tests do.
+	Cache *publicCache
 }
 
 func writeShopError(w http.ResponseWriter, status int, code, message string) {
@@ -83,7 +89,6 @@ func (s *Shops) authorizeShopAccess(w http.ResponseWriter, r *http.Request) (sho
 	return shopID, true
 }
 
-
 func validateShopFieldLengths(name, contactPhone, address string) *accessError {
 	const (
 		maxShopNameLen  = 150
@@ -99,7 +104,6 @@ func validateShopFieldLengths(name, contactPhone, address string) *accessError {
 
 	return nil
 }
-
 
 // public, unauthenticated: get the shop from any listed product by id
 func (s *Shops) Get(w http.ResponseWriter, r *http.Request) {
@@ -131,28 +135,21 @@ func (s *Shops) Get(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(shopFromList(db.ListShopsRow(shop)))
 }
 
-// public, unauthenticated: used by the map screen to plot every shop as a pin
+// public, unauthenticated: used by the map screen to plot every shop as a pin. answered from
+// publicCache, because every caller gets the same list.
 func (s *Shops) List(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := dbctx.WithTimeout(r.Context())
-	defer cancel()
-
-	shops, err := s.Queries.ListShops(ctx)
-	if err != nil {
-		if callerGone(r) {
-			return
+	s.Cache.serve(w, r, "shops", "shops", func(ctx context.Context) (any, error) {
+		shops, err := s.Queries.ListShops(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("listing shops: %w", err)
 		}
-		log.Printf("CRITICAL: failed to list shops: %v", err)
-		writeShopError(w, http.StatusInternalServerError, "server_error", "failed to load shops")
-		return
-	}
 
-	response := make([]ShopResponse, 0, len(shops))
-	for _, shop := range shops {
-		response = append(response, shopFromList(shop))
-	}
-
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+		response := make([]ShopResponse, 0, len(shops))
+		for _, shop := range shops {
+			response = append(response, shopFromList(shop))
+		}
+		return response, nil
+	})
 }
 
 // authenticated: called by "manage my shops" screen, every shop owner owns
@@ -274,12 +271,12 @@ func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 	template := catalog.Template(category)
 	for _, item := range template {
 		if err := qtx.SeedTemplateProduct(ctx, db.SeedTemplateProductParams{
-			ShopID: 	 shop.ID,
-			Name:   	 item.Name,
+			ShopID:      shop.ID,
+			Name:        item.Name,
 			Category:    string(item.Category),
 			Unit:        item.Unit,
 			TemplateKey: pgtype.Text{String: item.Key, Valid: true},
-			ImagePath: 	 pgtype.Text{String: item.ImagePath, Valid: item.ImagePath != ""},
+			ImagePath:   pgtype.Text{String: item.ImagePath, Valid: item.ImagePath != ""},
 		}); err != nil {
 			log.Printf("CRITICAL: failed to seed template product %q into shop %d: %v", item.Key, shop.ID, err)
 			writeShopError(w, http.StatusInternalServerError, "server_error", "failed to create shop")
@@ -341,10 +338,10 @@ func (s *Shops) Update(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	shop, err := s.Queries.UpdateShop(ctx, db.UpdateShopParams{
-		ID:           shopID,
-		Name:         name,
-		ContactPhone: contactPhone,
-		Address:      address,
+		ID:            shopID,
+		Name:          name,
+		ContactPhone:  contactPhone,
+		Address:       address,
 		StMakepoint:   req.Longitude,
 		StMakepoint_2: req.Latitude,
 	})

@@ -128,7 +128,7 @@ so the registration stays at eskiz permanently.
 
 Order: server → Cloudflare account access → `A` record for the apex → Postgres (with a UTF-8 locale:
 migration `000002` refuses a database that cannot lowercase Cyrillic) and nginx (`deploy/nginx.conf`)
-→ certbot → deploy the binary → R2 bucket and `img.` → **upload `photos/` to the bucket** → fill in
+→ certbot → deploy the binary → R2 bucket and `img.` → **upload `images/` to the bucket** → fill in
 `.env` (`IMAGE_BASE_URL` **and** the four `R2_*` keys, or the api will not start; `TRUST_PROXY=true`)
 → point `env.prod.json` at `https://domix-api.uz` → ship the `.aab`.
 
@@ -146,24 +146,24 @@ every test, no network) and `R2` (production). Two files per photo — a 1000px 
 `_thumb`, the grid loading the thumbnail; that is ~99% of image traffic and turns a 100-tile
 catalogue from ~15 MB into ~2.5 MB. Only the master's path is in the database; `ProductResponse`
 sends both urls. `IMAGE_BASE_URL` is the host Go prepends — unset, everything is served from this
-api's own `/static/products/`.
+api's own `/images/`.
 
 **Four things the deploy must get right, three of them silent:**
 
-- **The curated catalogue has to go into the bucket too**, `_thumb` files included. `photos/universal`
-  and `photos/plumbing` are **gitignored**, so they exist only on the founder's laptop. Every seeded
-  row points at one, so a bucket with only `uploads/` is a market where the only visible photos are
-  the ones owners took themselves. Regenerate thumbnails first if missing (root §7 has the `magick`
-  loop).
+- **The curated catalogue has to go into the bucket too**, `_thumb` files included. `images/shops/universal`
+  and `images/shops/plumbing` are **not in git**, so they exist only on the founder's laptop. Every
+  seeded row points at one, so a bucket holding only `shops/uploads/` is a market where the only
+  visible photos are the ones owners took themselves. **Object keys must match `products.image_path`
+  exactly** — `shops/universal/001.jpg`, so the copy starts one level above `shops/`.
   ```bash
-  rclone copy photos/ r2:domix-photos/ --exclude 'uploads/**'
+  rclone copy images/ r2:domix-photos/ --exclude 'shops/uploads/**'
   ```
 - **R2 without `IMAGE_BASE_URL` refuses to boot**, deliberately: photos would be written to the bucket
   and served from a disk that does not have them — `/health` green, uploads answering 200, every tile
   blank. **Three R2 keys out of four also refuses to boot.**
 - **`img.domix-api.uz` must be R2's _public_ custom domain**, not the S3 endpoint. The S3 host wants a
   signature on every GET; `<img>` cannot sign.
-- **`PRODUCT_IMAGES_DIR` still matters on R2** only for `/static/products/`, which nothing asks for
+- **`IMAGES_DIR` still matters on R2** only for `/images/`, which nothing asks for
   once `IMAGE_BASE_URL` is set. The boot log prints which store and url prefix are in use — the
   fastest answer to "why are there no photos".
 
@@ -176,13 +176,13 @@ button rather than a cron job — at this scale the count is zero or single digi
 
 - **The account-deletion page** `/delete-account` is served by the API and `SUPPORT_EMAIL` is set
   (`domix.support@gmail.com`). Remaining: put the production URL in the Play Console.
-- **App access instructions.** Login goes through a Telegram bot, so a reviewer without Telegram hits
-  the login wall and rejects the submission as broken. Fill in the Console's **App access** section
-  with a walkthrough and a screen recording — one of the most common rejections for phone-verified
-  apps.
-- **The Data Safety form.** Declare name, phone number, Telegram chat id, **approximate location**,
-  and **in-app messages** (the support thread). A mismatch found later is a policy strike, not a
-  correction.
+- **App access instructions.** Login is a code delivered through Telegram Gateway, so a reviewer
+  whose number has no Telegram hits the login wall and rejects the submission as broken. Fill in the
+  Console's **App access** section with a walkthrough and a screen recording — one of the most common
+  rejections for phone-verified apps, and decide beforehand what a reviewer without Telegram does.
+- **The Data Safety form.** Declare name, phone number and **approximate location**. In-app messages
+  are gone with the support thread — put them back on the form the day that feature returns. A
+  mismatch found later is a policy strike, not a correction.
 - **Justify `ACCESS_FINE_LOCATION`** (see the MapKit permissions note).
 - Content rating questionnaire, target audience, privacy policy URL — all Console forms, all needing
   the domain.

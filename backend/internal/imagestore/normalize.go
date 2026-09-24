@@ -10,52 +10,39 @@ import (
 	"image/jpeg"
 	"math"
 
-	// registers the png decoder with image.Decode. blank imports, because nothing here calls into
-	// either package by name - the format is discovered from the bytes.
+	// registers the png decoder with image.Decode - the format is discovered from the bytes
 	_ "image/png"
 
 	xdraw "golang.org/x/image/draw"
 )
 
 const (
-	// OutputMaxSide is the longest side a stored photo may have. The curated catalogue photos are
-	// resized to exactly this before being committed (see the `magick` line in CLAUDE.md §7), and an
-	// owner's photo sits in the same grid beside them - a tile that downloads four times as much
-	// data as its neighbour for the same 118px band is the difference between a grid that scrolls
-	// and one that stalls on a phone tethered to mobile data.
-	//
-	// This is the copy the *edit screen* loads, and any future full-size view. It is not what a grid
-	// loads - see [ThumbMaxSide].
+	// the longest side a stored photo may have, matching the curated catalogue it sits beside in a
+	// grid. what the *edit screen* loads - a grid loads [ThumbMaxSide].
 	OutputMaxSide = 1000
 
-	// ThumbMaxSide is the longest side of the copy a catalogue grid loads, which is very nearly all
-	// the image traffic this api will ever serve: one shop card is up to a hundred tiles and one
-	// edit screen is one photo.
-	//
-	// 400 rather than the ~180dp a tile is actually painted at, because the same file has to survive
-	// a 3x screen without going soft, and because a thumbnail is also what a future full-width list
-	// row would use. It turns a 100-tile universal catalogue from roughly 15 MB into roughly 2.5 MB.
+	// what a catalogue grid loads, which is very nearly all the image traffic this api will serve:
+	// one shop card is up to a hundred tiles. turns a 100-tile catalogue from ~15 MB into ~2.5 MB.
+	// 400 rather than the ~180dp it is painted at, so it survives a 3x screen.
 	ThumbMaxSide = 400
 
-	// 85 is where JPEG stops paying for itself: the file roughly doubles between 85 and 95 and the
-	// difference is not visible on a photo of a bag of cement at 180dp. Same value as the catalogue.
+	// where JPEG stops paying for itself: the file roughly doubles between 85 and 95 and the
+	// difference is invisible on a bag of cement at 180dp
 	jpegQuality = 85
 
-	// under this on either side it is an icon, a screenshot fragment or a mistake - not a photo of a
-	// product, and it would be upscaled into mush by the grid
+	// under this it is an icon or a screenshot fragment, and the grid would upscale it into mush
 	minSourceSide = 64
 
-	// **These two bound the decode, and that is their whole job.** A JPEG is compressed, so a file
-	// well inside MaxUploadBytes can describe an image with hundreds of millions of pixels, and
-	// decoding it allocates four bytes per pixel whatever the file weighed - the classic
-	// decompression bomb. image.DecodeConfig reads only the header, so both are answered before a
-	// single pixel is allocated.
+	// **these two bound the decode, and that is their whole job.** a compressed file well inside
+	// MaxUploadBytes can describe hundreds of millions of pixels, and decoding allocates four bytes
+	// per pixel whatever the file weighed. DecodeConfig reads only the header, so both are answered
+	// before a single pixel is allocated.
 	maxSourceSide   = 12000
 	maxSourcePixels = 60_000_000
 )
 
-// What Normalize refuses, as sentinel errors, so the handler can turn each into its own error code
-// for the app to localize - "this is not a photo" and "this photo is enormous" need different words.
+// sentinels, so the handler can turn each into its own code: "this is not a photo" and "this photo
+// is enormous" need different words
 var (
 	ErrUnsupportedFormat = errors.New("imagestore: only jpeg and png images are accepted")
 	ErrTooSmall          = errors.New("imagestore: the image is too small")
@@ -63,31 +50,19 @@ var (
 	ErrBroken            = errors.New("imagestore: the image could not be decoded")
 )
 
-// Normalize turns whatever arrived into the two files this api stores: JPEGs, no alpha channel and
-// no metadata, one bounded by [OutputMaxSide] and one by [ThumbMaxSide].
+// turns whatever arrived into the two files this api stores: JPEGs, no alpha, no metadata.
 //
-// Four things happen here and each is load-bearing:
+// four things happen here and each is load-bearing:
 //
-//   - **It decodes.** Content-Type and file extension are both written by the client, so the only
-//     honest answer to "is this a photo" is to parse it. Everything after this line is operating on
-//     pixels rather than on a claim.
-//   - **It re-encodes**, which is what strips the metadata. A phone photo carries EXIF, and EXIF
-//     routinely carries the GPS coordinates the picture was taken at. Serving that untouched off a
-//     public url would publish the location of a shop owner's home for any photo not taken in the
-//     shop, and nothing in the ui would ever hint at it.
-//   - **It applies the EXIF orientation first** (see exif.go). A phone stores the sensor's pixels
-//     and a tag saying which way up they go; drop the tag without acting on it and every photo taken
-//     in portrait arrives on its side.
-//   - **It flattens transparency onto white.** JPEG has no alpha, and Go's encoder composites
-//     against black, so a PNG with a transparent background would come out as a product floating on
-//     a black rectangle in a grid of white tiles.
+//   - **it decodes.** Content-Type and extension are both written by the client, so the only honest
+//     answer to "is this a photo" is to parse it.
+//   - **it re-encodes**, which is what strips EXIF - and EXIF routinely carries the GPS coordinates
+//     a picture was taken at, which off a public url publishes a shop owner's home address.
+//   - **it applies the EXIF orientation first** (exif.go), or every portrait photo arrives sideways.
+//   - **it flattens transparency onto white**, because Go's jpeg encoder composites against black.
 //
-// **The thumbnail is scaled from the master, not from the source**, which is worth being deliberate
-// about. It is fractionally lossier - two resamples instead of one, invisible at 400px on a
-// photograph - and it buys two things: the expensive work (decode, EXIF, the big downscale) happens
-// once, and the two files are guaranteed to frame the product identically. Two independent scales of
-// the same source would round their dimensions separately, so a tile and the photo it opens into
-// could differ by a pixel of crop.
+// **the thumbnail is scaled from the master, not the source**: the expensive work happens once, and
+// the two files are guaranteed to frame the product identically.
 func Normalize(src []byte) (Photo, error) {
 	// header only - no pixels are allocated until the two bounds below have been checked
 	cfg, format, err := image.DecodeConfig(bytes.NewReader(src))
@@ -110,9 +85,8 @@ func Normalize(src []byte) (Photo, error) {
 		return Photo{}, fmt.Errorf("%w: %v", ErrBroken, err)
 	}
 
-	// **Scaled first, rotated second, and the order is free.** The target is a square bound - fit
-	// inside 1000x1000 - so it is the same box whichever way up the photo ends up, and rotating a
-	// one-megapixel result costs a hundredth of what rotating a twelve-megapixel source does.
+	// scaled first, rotated second: the target is a square bound, so it is the same box whichever
+	// way up the photo ends, and rotating one megapixel costs a hundredth of rotating twelve
 	master := orient(fit(img, OutputMaxSide), orientationOf(src))
 
 	masterJPEG, err := encode(master)
@@ -134,9 +108,8 @@ func encode(img image.Image) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// fit draws the source onto an opaque white canvas no larger than `maxSide` on its longest side,
-// preserving the aspect ratio. Always returns a fresh *image.RGBA, so everything downstream has one
-// concrete type to work with.
+// draws the source onto an opaque white canvas bounded by `maxSide`, preserving the aspect ratio.
+// always a fresh *image.RGBA, so everything downstream has one concrete type.
 func fit(src image.Image, maxSide int) *image.RGBA {
 	bounds := src.Bounds()
 	width, height := bounds.Dx(), bounds.Dy()
@@ -152,26 +125,22 @@ func fit(src image.Image, maxSide int) *image.RGBA {
 	draw.Draw(dst, dst.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
 
 	if width == bounds.Dx() && height == bounds.Dy() {
-		// no resampling wanted. running the scaler at 1:1 would still filter every pixel through
-		// the kernel and soften a photo that needed nothing done to it.
+		// running the scaler at 1:1 would still filter every pixel and soften a photo that needed
+		// nothing done to it
 		draw.Draw(dst, dst.Bounds(), src, bounds.Min, draw.Over)
 		return dst
 	}
 
-	// CatmullRom rather than ApproxBiLinear: this is a large downscale of a photograph, done once,
-	// on a request nobody is watching a frame counter for. Bilinear drops detail on a 4x reduction
-	// in a way that shows up as mush on the small print of a paint tin.
+	// CatmullRom rather than ApproxBiLinear: a large downscale done once, where bilinear would turn
+	// the small print on a paint tin into mush
 	xdraw.CatmullRom.Scale(dst, dst.Bounds(), src, bounds, xdraw.Over, nil)
 	return dst
 }
 
-// orient applies one of the eight EXIF orientations, mapping each source pixel to where it belongs
-// once the photo is the right way up. Orientations 5-8 transpose the image, so the destination's
-// width and height are swapped.
+// applies one of the eight EXIF orientations. 5-8 transpose, so width and height swap.
 //
-// A pixel loop rather than a library: the eight cases *are* the specification, and written out this
-// way each one is a line that can be checked against it. The image is already down to at most a
-// megapixel by the time this runs.
+// a pixel loop rather than a library: the eight cases *are* the specification, and the image is
+// already down to at most a megapixel by the time this runs.
 func orient(img *image.RGBA, orientation int) *image.RGBA {
 	if orientation <= 1 || orientation > 8 {
 		return img // 1 is "already upright", and anything unrecognised is treated as such

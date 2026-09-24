@@ -10,7 +10,7 @@ import 'package:frontend/features/stores/data/shop_model.dart';
 import 'package:frontend/features/stores/presentation/widgets/store_form_fields.dart';
 import 'edit_store_screen.dart';
 import '../controllers/stores_controller.dart';
-import 'package:frontend/core/widgets/circle_back_button.dart';
+import 'package:frontend/core/widgets/app_page_header.dart';
 
 // the per-shop hub, opened by tapping a shop in MyShopsScreen: a menu of sections, each opening its
 // own screen - Товары to the catalogue grid, Данные магазина to the edit form and delete.
@@ -37,27 +37,7 @@ class ShopSettingsScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: false,
-        titleSpacing: 20,
-        iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
-        // the disc, not a bare chevron. leadingWidth must move with it or flutter keeps its own 56 and
-        // the title sits wrong.
-        leading: const CircleBackButton(),
-        leadingWidth: CircleBackButton.leadingWidth,
-        title: Text(
-          strings.shopSettingsScreenTitle,
-          style: const TextStyle(
-            color: AppColors.textDark,
-            fontSize: 18,
-            letterSpacing: -0.2,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
+      appBar: AppPageHeader(title: strings.shopSettingsScreenTitle),
       body: SafeArea(
         child: ListView(
           physics: const BouncingScrollPhysics(),

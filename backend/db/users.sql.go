@@ -100,6 +100,35 @@ func (q *Queries) GetUserRole(ctx context.Context, id int64) (string, error) {
 	return role, err
 }
 
+const updateUserPhone = `-- name: UpdateUserPhone :one
+UPDATE users
+SET phone = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, name, phone, role, created_at, updated_at
+`
+
+type UpdateUserPhoneParams struct {
+	ID    int64  `json:"id"`
+	Phone string `json:"phone"`
+}
+
+// separate from UpdateUserProfile because phone is the identity column: UNIQUE, and what every login
+// looks an account up by, so the one write that touches it is the one the code flow guards.
+func (q *Queries) UpdateUserPhone(ctx context.Context, arg UpdateUserPhoneParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserPhone, arg.ID, arg.Phone)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Phone,
+		&i.Role,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateUserProfile = `-- name: UpdateUserProfile :one
 UPDATE users
 SET name = $2,

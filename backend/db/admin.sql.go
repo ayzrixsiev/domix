@@ -28,9 +28,8 @@ type AdminBasketHistoryRow struct {
 	AvgBasket int64  `json:"avg_basket"`
 }
 
-// the last 30 days of every market, oldest first. No generate_series here, unlike AdminSignupsByDay:
-// a missing day is a day the server was not running, and drawing it as a gap is the honest answer
-// where filling it with a zero would draw a market that briefly cost nothing.
+// the last 30 days of every market. no generate_series, unlike AdminSignupsByDay: a missing day is a
+// day the server was not running, and a zero would draw a market that briefly cost nothing.
 func (q *Queries) AdminBasketHistory(ctx context.Context) ([]AdminBasketHistoryRow, error) {
 	rows, err := q.db.Query(ctx, adminBasketHistory)
 	if err != nil {
@@ -86,17 +85,9 @@ type AdminCatalogueFunnelRow struct {
 	Complete int64 `json:"complete"`
 }
 
-// three buckets, not five, and the reason is the rule they describe: a catalogue is either
-// complete or it is not in the comparison, so 50% and 90% are the same outcome as 1%. The panel
-// had a «Больше половины» and a «Почти готово» band, which invited reading the funnel as progress
-// towards something when only the last band is worth anything. Who is closest to the line is a
-// real question and it is answered properly by AdminShopsNeedingAttention, by name and phone
-// number, rather than by a count of anonymous shops in a band.
-//
-// `stalled` - empty and older than a fortnight - was a fifth number here and is gone with the card
-// that printed it. Every unfinished shop is now one row in the panel's «Не заполнены» list with its
-// own creation date against it, which is the same fact per shop instead of a count of anonymous
-// ones, and nothing was left reading the aggregate.
+// three buckets and not five, because a catalogue is either complete or it is not in the comparison:
+// 50% and 90% are the same outcome as 1%. who is closest to the line is answered by
+// AdminShopsNeedingAttention, by name and phone number, rather than by a band.
 func (q *Queries) AdminCatalogueFunnel(ctx context.Context) (AdminCatalogueFunnelRow, error) {
 	row := q.db.QueryRow(ctx, adminCatalogueFunnel)
 	var i AdminCatalogueFunnelRow
@@ -129,13 +120,9 @@ type AdminCategoryBasketsRow struct {
 	MaxBasket int64  `json:"max_basket"`
 }
 
-// what a basket costs in each market right now, and how far apart its shops are. This is the number
-// the founder wants "чтобы примерно понимать" - the one figure that says what a category is worth
-// before any comparison between shops inside it.
-//
-// It reads the index view, so **only complete catalogues are in it** (§5): a shop with one unpriced
-// row has no basket and cannot be averaged into one. That is the same rule the badge follows, which
-// is what keeps this number and the app's agreeing.
+// what a basket costs in each market right now, and how far apart its shops are. it joins the index
+// table, so **only complete catalogues are in it** - the same rule the app's badge follows, which is
+// what keeps the two numbers agreeing.
 func (q *Queries) AdminCategoryBaskets(ctx context.Context) ([]AdminCategoryBasketsRow, error) {
 	rows, err := q.db.Query(ctx, adminCategoryBaskets)
 	if err != nil {
@@ -166,15 +153,9 @@ const adminCountAdmins = `-- name: AdminCountAdmins :one
 SELECT COUNT(*)::bigint AS admins FROM users WHERE role = 'admin'
 `
 
-// the one number standing between the panel and locking itself out for good. Granting and revoking
-// `admin` are both panel operations now, so the old blanket refusals are gone (see Admin.UpdateUser)
-// - what replaces them is narrower and is not a policy: an account can be demoted or deleted unless
-// it is the last administrator, because there is no way back from zero except SQL on production.
-//
-// Read inside the same request as the write and not in a transaction with it, so two admins demoting
-// each other in the same second could in principle both pass. At one machine and one person that is
-// not a race worth a lock; if this ever matters, the honest fix is a partial unique index rather
-// than a bigger check here.
+// the one number standing between the panel and locking itself out: there is no way back from zero
+// administrators except SQL on production. not in a transaction with the write it guards, so two
+// admins demoting each other in the same second could both pass.
 func (q *Queries) AdminCountAdmins(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, adminCountAdmins)
 	var admins int64
@@ -465,16 +446,12 @@ type AdminMarketRankingsRow struct {
 	BasketPrice int64  `json:"basket_price"`
 }
 
-// the cheapest few shops in every market, in order. It replaced AdminMarketLeaders, which returned
-// only the winner - one row per category said who was cheapest and could not show what the panel is
-// actually for: **whether anybody is competing.** A market where the top three are 4.61, 4.63 and
-// 4.65 million is a fight; one where they are 4.6, 5.4 and 6.2 is one shop with no pressure on it,
-// and the two look identical if you only print the first row.
+// the cheapest few shops in every market, in order, because the question the panel exists to answer
+// is **whether anybody is competing**: 4.61/4.63/4.65 is a fight, 4.6/5.4/6.2 is one shop with no
+// pressure on it, and the two look identical if you print only the winner.
 //
-// `CROSS JOIN LATERAL` and not a window function: sqlc cannot compile a `ROW_NUMBER()` filtered from
-// an outer WHERE (§6), and the lateral is the shape postgres wants anyway - "for each category, the
-// first N of this ordered list". The rank itself is not selected; it is the row's position in the
-// result, which the panel and Go both already have.
+// CROSS JOIN LATERAL and not a window function: sqlc cannot compile a ROW_NUMBER() filtered from an
+// outer WHERE, and the lateral is the shape postgres wants anyway.
 func (q *Queries) AdminMarketRankings(ctx context.Context, limit int32) ([]AdminMarketRankingsRow, error) {
 	rows, err := q.db.Query(ctx, adminMarketRankings, limit)
 	if err != nil {
@@ -520,17 +497,7 @@ SELECT
 
     (SELECT COUNT(*) FROM products)::bigint                                                 AS products_total,
     (SELECT COUNT(price) FROM products)::bigint                                             AS products_priced,
-    (SELECT COUNT(*) FROM products WHERE template_key IS NULL)::bigint                      AS products_custom,
-
-    (SELECT COUNT(DISTINCT user_id) FROM support_messages)::bigint                          AS support_threads,
-    (SELECT COUNT(*) FROM (
-        SELECT m.user_id
-        FROM support_messages m
-        WHERE NOT m.from_support
-          AND m.id > COALESCE((SELECT MAX(s.id) FROM support_messages s
-                                WHERE s.user_id = m.user_id AND s.from_support), 0)
-        GROUP BY m.user_id
-     ) waiting)::bigint                                                                     AS support_awaiting
+    (SELECT COUNT(*) FROM products WHERE template_key IS NULL)::bigint                      AS products_custom
 `
 
 type AdminOverviewRow struct {
@@ -547,8 +514,6 @@ type AdminOverviewRow struct {
 	ProductsTotal   int64 `json:"products_total"`
 	ProductsPriced  int64 `json:"products_priced"`
 	ProductsCustom  int64 `json:"products_custom"`
-	SupportThreads  int64 `json:"support_threads"`
-	SupportAwaiting int64 `json:"support_awaiting"`
 }
 
 func (q *Queries) AdminOverview(ctx context.Context) (AdminOverviewRow, error) {
@@ -568,8 +533,6 @@ func (q *Queries) AdminOverview(ctx context.Context) (AdminOverviewRow, error) {
 		&i.ProductsTotal,
 		&i.ProductsPriced,
 		&i.ProductsCustom,
-		&i.SupportThreads,
-		&i.SupportAwaiting,
 	)
 	return i, err
 }
@@ -637,11 +600,8 @@ type AdminPriceAnomaliesRow struct {
 	DeviationPercent int64       `json:"deviation_percent"`
 }
 
-// the report carries the two numbers a phone call needs as well as the two it is about: a row here
-// ends with somebody ringing the shop, and looking the number up in another tab is the step that
-// makes a report get skipped. contact_phone is the shop's own line and owner_phone is the account
-// the price was typed from - they are usually the same and are not always, which is why both are
-// here rather than one being assumed.
+// a row here ends with somebody ringing the shop, so both numbers travel: contact_phone is the
+// shop's own line, owner_phone is the account the price was typed from.
 func (q *Queries) AdminPriceAnomalies(ctx context.Context, arg AdminPriceAnomaliesParams) ([]AdminPriceAnomaliesRow, error) {
 	rows, err := q.db.Query(ctx, adminPriceAnomalies, arg.Column1, arg.Column2, arg.Limit)
 	if err != nil {
@@ -815,14 +775,8 @@ type AdminShopsNeedingAttentionRow struct {
 	Remaining    int64              `json:"remaining"`
 }
 
-// every shop whose catalogue is not finished, nearest the line first. It used to be the top 8 behind
-// a «Кому позвонить» card; it is now the whole list behind the gauge's «Не заполнены» box, so the
-// limit is a ceiling rather than a page - 100 rows of five columns is a few kilobytes on a request
-// the panel already makes every 45 seconds, and the day it is not, this grows a page rather than a
-// second endpoint.
-//
-// `contact_phone` as well as the owner's: the shop's line is the one to ring about the shop, and
-// they are usually but not always the same number.
+// every shop whose catalogue is not finished, nearest the line first. the limit is a ceiling rather
+// than a page; the day it is not, this grows a page rather than a second endpoint.
 func (q *Queries) AdminShopsNeedingAttention(ctx context.Context, limit int32) ([]AdminShopsNeedingAttentionRow, error) {
 	rows, err := q.db.Query(ctx, adminShopsNeedingAttention, limit)
 	if err != nil {
@@ -1107,16 +1061,9 @@ FROM products
 WHERE image_path LIKE $1::text
 `
 
-// every products.image_path that names an owner's upload, for the orphan sweep.
-//
-// filtered in SQL rather than in Go because the catalogue paths outnumber the uploads by two orders
-// of magnitude - one универсальный shop is a hundred rows pointing at photos/universal - and there
-// is no reason to carry them across the wire only to drop them. the prefix is a parameter so
+// every products.image_path naming an owner's upload, for the orphan sweep. filtered in SQL because
+// catalogue paths outnumber uploads a hundred to one. the prefix is a parameter so
 // imagestore.UploadDir stays the one declaration of what "uploads/" is.
-//
-// ::text on the projection, not decoration: image_path is a nullable column, and without the cast
-// sqlc types the result []pgtype.Text and every caller unwraps a wrapper the WHERE clause has
-// already made impossible. same trick as the ::bigint on the counts above.
 func (q *Queries) AdminUploadedImagePaths(ctx context.Context, prefix string) ([]string, error) {
 	rows, err := q.db.Query(ctx, adminUploadedImagePaths, prefix)
 	if err != nil {
@@ -1240,14 +1187,9 @@ SET shops      = EXCLUDED.shops,
     max_basket = EXCLUDED.max_basket
 `
 
-// today's row for every market, written by the hourly job in cmd/api/main.go.
-//
-// **The whole statement runs in the database and nothing travels through Go**, which is what makes
-// it safe to run on a timer: it is one aggregate over a view, and the upsert means running it twice
-// an hour or once a day produces exactly the same table.
-//
-// A market that has no shops in the comparison writes no row at all rather than a zero - see the
-// migration: a zero here would be a claim that the basket was free.
+// today's row for every market, written by the hourly job in cmd/api/main.go. the upsert is what
+// makes running it twice an hour identical to running it once a day. a market with no shops in the
+// comparison writes no row rather than a zero, which would claim the basket was free.
 func (q *Queries) RecordBasketHistory(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, recordBasketHistory)
 	return err

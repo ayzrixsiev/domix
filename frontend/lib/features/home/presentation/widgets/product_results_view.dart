@@ -1,11 +1,14 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
 import 'package:frontend/core/widgets/primary_action_button.dart';
+import 'package:frontend/features/favorites/presentation/controllers/favorites_controller.dart';
+import 'package:frontend/features/favorites/presentation/favorite_action.dart';
 import 'package:frontend/features/home/data/category_product.dart';
 import 'package:frontend/features/products/presentation/widgets/product_grid.dart';
 import 'package:frontend/features/products/presentation/widgets/product_tile.dart';
@@ -148,6 +151,8 @@ class _ProductResultsViewState extends State<ProductResultsView> {
 
   Widget _content() {
     final strings = widget.strings;
+    // watched, not read: a heart tapped here repaints this grid, and the same product may be on it twice
+    final favorites = context.watch<FavoritesController>();
 
     if (_failure case final failure?) {
       return _FullPage(
@@ -198,6 +203,8 @@ class _ProductResultsViewState extends State<ProductResultsView> {
             subtitle: entry.shopName,
             // this is the browse surface, so the shopper's two controls belong here
             showBuyerActions: true,
+            isFavorite: favorites.contains(entry.product.id),
+            onFavoriteToggle: () => toggleFavorite(context, entry),
             // the tile carries only shop_id, so this is the one route into a shop card that fetches
             onTap: () => openShopById(context, entry.product.shopId),
           ),

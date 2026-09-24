@@ -59,8 +59,8 @@ enum ShopCategory {
   /// so what matters is that no two share a silhouette. Judge a candidate by rendering it at 22px,
   /// never by its name - `wallpaper` is a monitor, `logs` is a log *file*, `droplets` is a forecast.
   ///
-  /// `wrench_off` requires **flutter_lucide 1.33.0 or newer**. Not `hard_hat`, which the Заявки tab
-  /// wears. `tree_pine` and `paint_roller` also mark [ProductCategory] tiles - accepted, since a kind
+  /// `wrench_off` requires **flutter_lucide 1.33.0 or newer**. Not `hard_hat`, which marks the
+  /// worker role. `tree_pine` and `paint_roller` also mark [ProductCategory] tiles - accepted, since a kind
   /// of *shop* and a kind of *product* never share a surface.
   IconData get icon => switch (this) {
         ShopCategory.universal => LucideIcons.wrench_off,

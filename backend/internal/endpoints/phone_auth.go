@@ -25,18 +25,9 @@ import (
 //	POST /api/auth/request-code  {phone, name, role} -> a code is delivered to that number
 //	POST /api/auth/verify        {phone, code}       -> the account is created or found, jwt back
 //
-// **This replaces the telegram handshake, and the shape of the replacement is the point.** The old
-// flow had three round trips and a detour through another app: init a session, open t.me, share a
-// contact, then poll /api/auth/status every two seconds until a bot somewhere completed it. Every
-// one of those steps was a place to lose a user, and the status poll was a public endpoint that
-// hands out a jwt to whoever names a live session id. Here the proof of ownership is the code
-// itself, so there is no session to poll, nothing to guess and nobody has to leave the app.
-//
-// The name and role travel with the *request* for the code rather than with the verification: by
-// the time the code comes back the user is on a keypad screen, and asking them to retype their name
-// there would be asking twice for something already given. They are held in ram with the code (see
-// auth.CodeManager) and land in the database only once the number is proven - which is what keeps an
-// abandoned signup from leaving a row behind.
+// the proof of ownership is the code itself, so there is no session to poll and nothing to guess.
+// name and role travel with the *request* - by the time the code comes back there is no screen left
+// to ask on - and they sit in ram with it, so an abandoned signup leaves no row behind.
 type PhoneAuth struct {
 	Queries   *db.Queries
 	Codes     *auth.CodeManager
@@ -44,13 +35,11 @@ type PhoneAuth struct {
 	JWTSecret string
 }
 
-// what an unnamed account is called. the app asks for a name, but an empty string in users.name is a
-// blank line in the admin panel and in every support thread.
+// an empty users.name is a blank line on every screen in the admin panel
 const defaultUserName = "Domix User"
 
-// how long one delivery attempt gets. verify.Sender has its own client timeout; this is the
-// endpoint's own ceiling on the whole attempt, so a provider that accepts a connection and then says
-// nothing cannot hold this handler open.
+// the endpoint's own ceiling on one delivery attempt, so a provider that accepts a connection and
+// then says nothing cannot hold this handler open
 const codeSendTimeout = 15 * time.Second
 
 // POST /api/auth/request-code - mint a code for this number and hand it to the provider.
@@ -69,16 +58,15 @@ func (p *PhoneAuth) RequestCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// normalized here *and* in Verify, with the same function. the pending codes are keyed by this
-	// string, so two spellings of one number is a map miss that reads as "you never asked for a code"
+	// the pending codes are keyed by this string, so two spellings of one number would be a map miss
+	// that reads as "you never asked for a code" - hence the same function here and in Verify
 	phone, ok := auth.CanonicalPhone(req.Phone)
 	if !ok {
 		writeAPIError(w, http.StatusBadRequest, "invalid_phone", "that is not an uzbek phone number")
 		return
 	}
 
-	// the same two rules the telegram flow applied: anything that is not shop_owner is a customer,
-	// and an empty name gets a placeholder rather than a blank row.
+	// anything that is not shop_owner is a customer, and an empty name gets a placeholder
 	role := req.Role
 	if role != "shop_owner" {
 		role = "customer"
@@ -93,23 +81,25 @@ func (p *PhoneAuth) RequestCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	code, wait, err := p.Codes.Issue(phone, name, role)
+	code, wait, err := p.Codes.Issue(auth.Pending{
+		Purpose: auth.CodeLogin,
+		Phone:   phone,
+		Name:    name,
+		Role:    role,
+	})
 	if err != nil {
-		p.writeIssueError(w, err, wait)
+		writeIssueError(w, err, wait)
 		return
 	}
 
-	// **context.WithoutCancel, and this is a money decision.** A phone changing cell tower mid-request
-	// cancels r.Context(), which would abort a send that the provider may already have accepted and
-	// billed - and the code would then be dropped below, so the user receives a message whose digits
-	// no longer work. Detaching means the attempt always runs to a real answer; the deadline is what
-	// stops it running forever.
+	// **WithoutCancel is a money decision**: a phone changing cell tower would otherwise abort a send
+	// the provider has already billed, and the code would be dropped - so the user gets an sms whose
+	// digits no longer work. the deadline is what stops the detached attempt running forever.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), codeSendTimeout)
 	defer cancel()
 
 	if err := p.Sender.Send(ctx, phone, code); err != nil {
-		// the pending entry goes with the failure. leaving it would hold this number in a
-		// sixty-second cooldown waiting for a message that was never sent.
+		// leaving it would hold this number in a cooldown waiting for a message that was never sent
 		p.Codes.Drop(phone)
 		log.Printf("WARNING: could not deliver a login code to %s: %v", auth.MaskPhone(phone), err)
 		writeAPIError(w, http.StatusBadGateway, "code_not_sent", "could not send the code, try again")
@@ -120,24 +110,23 @@ func (p *PhoneAuth) RequestCode(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{
 		"sent":  true,
 		"phone": phone, // echoed canonical, so the app sends back exactly what the code is keyed by
-		// both in seconds, so the app can draw its own expiry and resend countdowns without
-		// hardcoding numbers that then have to be changed in two repositories at once
+		// seconds, so the app draws its countdowns without hardcoding numbers in two repositories
 		"expires_in":   int(auth.CodeTTL.Seconds()),
 		"resend_after": int(auth.ResendCooldown.Seconds()),
 	})
 }
 
-// the three ways minting a code can fail, each with its own machine-readable code because the app
-// shows a different screen for each: wait and watch a countdown, give up for today, or an outage.
-func (p *PhoneAuth) writeIssueError(w http.ResponseWriter, err error, wait time.Duration) {
+// the three ways minting a code can fail, each with its own code - the app shows a different screen
+// for each: wait and watch a countdown, give up for today, or an outage
+func writeIssueError(w http.ResponseWriter, err error, wait time.Duration) {
 	switch {
 	case errors.Is(err, auth.ErrResendTooSoon):
 		// rounded up, never to zero: "retry in 0 seconds" is what makes an app retry immediately
 		retryAfter := int(wait/time.Second) + 1
 		w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
 		w.WriteHeader(http.StatusTooManyRequests)
-		// the standard {error, code} pair plus the countdown. a user who already has the sms in hand
-		// can be sent straight to the code screen on this answer rather than being made to wait.
+		// the standard pair plus the countdown: a user who already has the sms can be sent straight
+		// to the code screen on this answer
 		json.NewEncoder(w).Encode(map[string]any{
 			"error":       "a code was already sent to this number",
 			"code":        "code_cooldown",
@@ -154,11 +143,8 @@ func (p *PhoneAuth) writeIssueError(w http.ResponseWriter, err error, wait time.
 	}
 }
 
-// PhoneAuthResponse is what a correct code buys: the token, and the account it belongs to.
-//
-// The user object is the same shape GET /api/me answers with, deliberately - the app stores one
-// profile model, and a login that handed back a differently-shaped user would need a second parser
-// for the same three fields.
+// what a correct code buys: the token, and the account it belongs to. the user is the same shape
+// GET /api/me answers with, so the app has one profile model and one parser.
 type PhoneAuthResponse struct {
 	Token string     `json:"token"`
 	User  MeResponse `json:"user"`
@@ -186,8 +172,8 @@ func (p *PhoneAuth) Verify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// nothing touches the database until the code is right: an unproven number must not be able to
-	// make this endpoint do work, and a wrong guess must not be distinguishable by how long it took.
-	pending, err := p.Codes.Verify(phone, strings.TrimSpace(req.Code))
+	// make this endpoint do work
+	pending, err := p.Codes.Verify(auth.CodeLogin, phone, strings.TrimSpace(req.Code))
 	if err != nil {
 		writeCodeError(w, err)
 		return
@@ -203,8 +189,7 @@ func (p *PhoneAuth) Verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// role is deliberately not a claim - see internal/auth/jwt.go. a token lives four months and a
-	// role can change inside that, so every check asks the database.
+	// role is deliberately not a claim (internal/auth/jwt.go): a token outlives a role change
 	token, err := auth.GenerateJWT(user.ID, user.Phone, p.JWTSecret)
 	if err != nil {
 		log.Printf("CRITICAL: could not sign a token for user %d: %v", user.ID, err)
@@ -218,9 +203,8 @@ func (p *PhoneAuth) Verify(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(PhoneAuthResponse{Token: token, User: user})
 }
 
-// every way a typed code can be refused. four codes rather than one, because "that code is wrong"
-// and "that code is dead, ask for another" send the user to different places - and a single
-// message for both is how someone ends up typing into a box that will never accept anything.
+// four codes rather than one: "that code is wrong" and "that code is dead" send the user to
+// different places, and one message for both is how somebody keeps typing into a dead box
 func writeCodeError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, auth.ErrNoPendingCode):
@@ -234,13 +218,9 @@ func writeCodeError(w http.ResponseWriter, err error) {
 	}
 }
 
-// upsertUser turns a proven number into an account row: found, upgraded, or created.
-//
-// The rules are the ones the telegram handler already applied, kept identical on purpose so the two
-// flows cannot produce two different ideas of what logging in means while both are live:
-//   - a role only ever goes up, customer -> shop_owner. a returning shop owner who happens to tap
-//     "я покупатель" must not lose the shops they own.
-//   - a name is taken as typed, either direction, because it is theirs to change.
+// upsertUser turns a proven number into an account row: found, upgraded, or created. a role only
+// ever goes up (a returning owner who tapped "я покупатель" must not lose their shops); a name is
+// taken as typed. identical to what the telegram handler does, while both flows are live.
 func (p *PhoneAuth) upsertUser(ctx context.Context, pending auth.Pending) (MeResponse, error) {
 	existing, found, err := p.findUser(ctx, pending.Phone)
 	if err != nil {
@@ -281,8 +261,8 @@ func (p *PhoneAuth) upsertUser(ctx context.Context, pending auth.Pending) (MeRes
 		Role: newRole,
 	})
 	if err != nil {
-		// the profile edit failed but the login itself did not - the account exists and the number is
-		// proven, so signing them in with what is stored beats refusing over a changed display name
+		// the login itself did not fail, so signing them in with what is stored beats refusing over
+		// a changed display name
 		log.Printf("WARNING: could not update the profile of user %d while signing in: %v", existing.ID, err)
 		return meResponseOf(existing), nil
 	}
@@ -290,29 +270,19 @@ func (p *PhoneAuth) upsertUser(ctx context.Context, pending auth.Pending) (MeRes
 	return meResponseOf(updated), nil
 }
 
-// findUser looks a proven number up under both spellings it could have been stored as.
-//
-// **This is a migration detail with a very sharp edge.** users.phone holds whatever telegram
-// reported at registration, and telegram sends some clients' numbers with a leading '+'. The
-// canonical form has none, and users.phone is UNIQUE - so looking up only the canonical spelling
-// would miss a user registered through the old flow and register them a *second* time, on a row
-// that owns none of their shops, while the original row keeps the name they are known by.
-//
-// Two primary-key lookups instead of one, and it can go the day the old rows are normalized (a
-// one-line UPDATE, once the telegram flow is gone and nothing is writing the '+' form any more).
+// findUser looks a proven number up. one spelling, because migration 000003 normalized every row
+// that the telegram flow had written with a leading '+' and nothing writes that form any more.
 func (p *PhoneAuth) findUser(ctx context.Context, phone string) (db.User, bool, error) {
-	for _, spelling := range []string{phone, "+" + phone} {
-		user, err := p.Queries.GetUserByPhone(ctx, spelling)
-		if err == nil {
-			return user, true, nil
+	user, err := p.Queries.GetUserByPhone(ctx, phone)
+	if err != nil {
+		// errors.Is, never a substring match: a database that fell over must not be read as "no such
+		// user" and send us into CreateUser
+		if errors.Is(err, pgx.ErrNoRows) {
+			return db.User{}, false, nil
 		}
-		// errors.Is against pgx's sentinel, never a substring match on the message - a database that
-		// just fell over must not be read as "this user does not exist" and send us into CreateUser
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return db.User{}, false, err
-		}
+		return db.User{}, false, err
 	}
-	return db.User{}, false, nil
+	return user, true, nil
 }
 
 func meResponseOf(user db.User) MeResponse {

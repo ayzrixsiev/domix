@@ -7,7 +7,7 @@ import 'package:frontend/core/localization/language_provider.dart';
 import '../../data/geocoding_service.dart';
 import '../widgets/domix_map.dart';
 import '../widgets/shop_marker.dart';
-import 'package:frontend/core/widgets/circle_back_button.dart';
+import 'package:frontend/core/widgets/circle_icon_button.dart';
 
 // what the caller gets back once the user confirms a location
 class LocationPickResult {
@@ -170,8 +170,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
           // back button + search bar
           SafeArea(
             child: Padding(
-              // 2 on the left, not 16: CircleBackButton carries the rest of the gutter itself
-              padding: const EdgeInsets.fromLTRB(2, 12, 16, 0),
+              // 14 on the left, not 16: the disc sits 2px inside its own tap target, so this lands
+              // its edge on the same page gutter the search field's starts on
+              padding: const EdgeInsets.fromLTRB(CircleIconButton.gutterInset, 12, 16, 0),
               child: Column(
                 children: [
                   Row(

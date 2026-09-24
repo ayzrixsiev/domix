@@ -1,10 +1,12 @@
 // The two pieces of screen chrome that can be present in the widget tree and still paint nothing.
 //
-// The rule under a header is the reason this file exists. It was added to every pushed screen and
-// was invisible on all of them: a childless ColoredBox takes the smallest size its constraints
+// The header is the reason this file exists. It began as a 1px rule added to every pushed screen
+// and invisible on all of them: a childless ColoredBox takes the smallest size its constraints
 // allow, and `AppBar.bottom` hands down *loose* ones, so it laid out 1px tall and 0px wide. Nothing
 // threw, no test failed, and the only symptom was a header that looked exactly as it had before -
-// which is why the check here is on measured width rather than on the widget being findable.
+// which is why the checks here are on measured geometry rather than on a widget being findable.
+// The rule is gone now; what separates a header from the page is a surface, and the same class of
+// bug would be a surface that is the page's own colour or has no height, so that is what is pinned.
 //
 // The product card is the other shape: a fixed-height tile that has to hold a two-line name, a
 // price, a shop line and a button at the narrowest width the app supports. Its failure mode is a
@@ -15,7 +17,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
-import 'package:frontend/core/widgets/screen_header.dart';
+import 'package:frontend/core/widgets/app_page_header.dart';
+import 'package:frontend/core/widgets/circle_icon_button.dart';
 import 'package:frontend/features/products/data/product_model.dart';
 import 'package:frontend/features/products/presentation/widgets/product_tile.dart';
 import 'package:frontend/core/localization/language_provider.dart';
@@ -23,6 +26,7 @@ import 'package:frontend/features/home/data/category_product.dart';
 import 'package:frontend/features/home/presentation/screens/product_results_screen.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:provider/provider.dart';
+import 'package:frontend/features/favorites/presentation/controllers/favorites_controller.dart';
 
 /// The narrowest tile the two-per-row grid ever builds: a 360dp phone, the grid's 16dp gutters and
 /// its 12dp column gap.
@@ -48,44 +52,81 @@ Product _product({
   );
 }
 
-Finder _ruleFinder() => find.byWidgetPredicate(
-      (w) => w is ColoredBox && w.color == AppColors.textFaint,
+/// The header's own surface - what makes it a zone rather than text on the page.
+Finder _headerSurface() => find.descendant(
+      of: find.byType(AppPageHeader),
+      matching: find.byWidgetPredicate(
+        (w) =>
+            w is DecoratedBox &&
+            w.decoration is BoxDecoration &&
+            (w.decoration as BoxDecoration).color == AppColors.surfaceMuted,
+      ),
     );
 
+Future<Size> _pumpHeader(WidgetTester tester, AppPageHeader header) async {
+  await tester.pumpWidget(MaterialApp(
+    home: Scaffold(backgroundColor: AppColors.background, appBar: header),
+  ));
+  return tester.getSize(_headerSurface());
+}
+
 void main() {
-  group('the header rule', () {
-    testWidgets('spans the app bar it is given to, rather than collapsing to nothing',
+  group('the page header', () {
+    testWidgets('is a surface the full width of the screen, not a line under a title',
         (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          appBar: AppBar(title: const Text('Смеси'), bottom: ScreenHeader.appBarRule()),
-        ),
-      ));
+      final size = await _pumpHeader(tester, const AppPageHeader(title: 'Мои магазины'));
 
-      final size = tester.getSize(_ruleFinder());
-      expect(size.height, 1);
-      // the real assertion. it was 0 here, and every other check still passed.
-      expect(size.width, greaterThan(200));
+      expect(size.width, tester.view.physicalSize.width / tester.view.devicePixelRatio);
+      // the real assertion: it has to be a *zone*, which a 1px rule was not
+      expect(size.height, greaterThan(40));
+      // and the separation is tonal - nothing in the header paints a divider
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is ColoredBox && w.color == AppColors.textFaint,
+        ),
+        findsNothing,
+      );
     });
 
-    testWidgets('and inside a ScreenHeader, where the Column already stretches it', (tester) async {
-      await tester.pumpWidget(const MaterialApp(
-        home: Scaffold(
-          body: ScreenHeader(title: 'Сообщения', subtitle: 'Ваши переписки'),
-        ),
-      ));
+    testWidgets('and stands a real step away from the page it sits on', (tester) async {
+      await _pumpHeader(tester, const AppPageHeader(title: 'Мои магазины'));
 
-      expect(tester.getSize(_ruleFinder()).width, greaterThan(200));
+      final decoration =
+          tester.widget<DecoratedBox>(_headerSurface()).decoration as BoxDecoration;
+      expect(decoration.color, isNot(AppColors.background));
+      // the step alone is deliberately small, so the shadow is what closes the edge off. losing it
+      // is the failure this catches: the two surfaces would meet with nothing between them.
+      expect(decoration.boxShadow, isNotNull);
+      expect(decoration.boxShadow, isNotEmpty);
     });
 
-    testWidgets('and is gone when a screen has its own structure under the title', (tester) async {
-      await tester.pumpWidget(const MaterialApp(
-        home: Scaffold(
-          body: ScreenHeader(title: 'Заявки', subtitle: 'Шаг 1', showRule: false),
-        ),
-      ));
+    testWidgets('is exactly as tall with a subtitle as without one', (tester) async {
+      final plain = await _pumpHeader(tester, const AppPageHeader(title: 'Заявки'));
+      final withSubtitle = await _pumpHeader(
+        tester,
+        const AppPageHeader(title: 'Заявки', subtitle: 'Ваши заявки мастерам'),
+      );
 
-      expect(_ruleFinder(), findsNothing);
+      // the row is a fixed height rather than an intrinsic one precisely so two tabs beside each
+      // other cannot disagree about where the content starts
+      expect(withSubtitle.height, plain.height);
+    });
+
+    testWidgets('and its two ends are the same control at the same size', (tester) async {
+      await _pumpHeader(
+        tester,
+        AppPageHeader(
+          title: 'Мои магазины',
+          action: CircleIconButton(icon: Icons.add, onTap: () {}),
+        ),
+      );
+
+      final discs = tester.widgetList<CircleIconButton>(find.byType(CircleIconButton));
+      expect(discs.length, 2);
+      final sizes = find.byType(CircleIconButton).evaluate().map(
+            (e) => tester.getSize(find.byWidget(e.widget)),
+          );
+      expect(sizes.toSet().length, 1);
     });
   });
 
@@ -162,6 +203,12 @@ void main() {
     });
   });
 
+  /// The filter field is not on the header until it is asked for - see ProductResultsScreen.
+  Future<void> openSearch(WidgetTester tester) async {
+    await tester.tap(find.byKey(const ValueKey('open-search')));
+    await tester.pumpAndSettle();
+  }
+
   group('the category filter', () {
     CategoryProduct entry(String name, String shop) => CategoryProduct(
           product: _product(name: name),
@@ -175,8 +222,12 @@ void main() {
     ];
 
     Future<void> pumpCategory(WidgetTester tester) async {
-      await tester.pumpWidget(ChangeNotifierProvider(
-        create: (_) => LanguageProvider(),
+      await tester.pumpWidget(MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => LanguageProvider()),
+          // the hearts on the grid read it; nothing here taps one
+          ChangeNotifierProvider(create: (_) => FavoritesController()),
+        ],
         child: MaterialApp(
           home: ProductResultsScreen(
             title: 'Смеси',
@@ -192,8 +243,12 @@ void main() {
 
     testWidgets('narrows the loaded list as it is typed, without refetching', (tester) async {
       var loads = 0;
-      await tester.pumpWidget(ChangeNotifierProvider(
-        create: (_) => LanguageProvider(),
+      await tester.pumpWidget(MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => LanguageProvider()),
+          // the hearts on the grid read it; nothing here taps one
+          ChangeNotifierProvider(create: (_) => FavoritesController()),
+        ],
         child: MaterialApp(
           home: ProductResultsScreen(
             title: 'Смеси',
@@ -210,6 +265,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Цемент М400'), findsOneWidget);
 
+      await openSearch(tester);
       await tester.enterText(find.byType(TextField), 'клей');
       await tester.pumpAndSettle();
 
@@ -221,6 +277,7 @@ void main() {
 
     testWidgets('matches every word in any order, and matches the shop too', (tester) async {
       await pumpCategory(tester);
+      await openSearch(tester);
 
       await tester.enterText(find.byType(TextField), 'эрон клей');
       await tester.pumpAndSettle();
@@ -236,6 +293,7 @@ void main() {
 
     testWidgets('says the filter found nothing, not that the category is bare', (tester) async {
       await pumpCategory(tester);
+      await openSearch(tester);
       await tester.enterText(find.byType(TextField), 'ламинат');
       await tester.pumpAndSettle();
 
@@ -248,9 +306,35 @@ void main() {
       await pumpCategory(tester);
       expect(find.text(_strings.productsCountLabel(3)), findsOneWidget);
 
+      // opening the search gives the field the title's place, and the count goes with the title -
+      // the narrowed list is its own answer while somebody is typing at it
+      await openSearch(tester);
+      expect(find.text(_strings.productsCountLabel(3)), findsNothing);
+
       await tester.enterText(find.byType(TextField), 'клей');
       await tester.pumpAndSettle();
-      expect(find.text(_strings.productsCountLabel(2)), findsOneWidget);
+
+      // and putting the field away brings back the title, the whole category and its count
+      await tester.tap(find.byKey(const ValueKey('close-search')));
+      await tester.pumpAndSettle();
+      expect(find.text('Смеси'), findsOneWidget);
+      expect(find.text('Цемент М400'), findsOneWidget);
+      expect(find.text(_strings.productsCountLabel(3)), findsOneWidget);
+    });
+
+    testWidgets('and there is no field on the header until the magnifier is tapped',
+        (tester) async {
+      await pumpCategory(tester);
+
+      // the whole point of the magnifier: a category page opens saying which category it is
+      expect(find.byType(TextField), findsNothing);
+      expect(find.text('Смеси'), findsOneWidget);
+
+      await openSearch(tester);
+
+      expect(find.byType(TextField), findsOneWidget);
+      // the title has stepped aside rather than moved over
+      expect(find.text('Смеси'), findsNothing);
     });
   });
 
@@ -269,8 +353,12 @@ void main() {
       required List<String> searched,
       bool withSearch = true,
     }) async {
-      await tester.pumpWidget(ChangeNotifierProvider(
-        create: (_) => LanguageProvider(),
+      await tester.pumpWidget(MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => LanguageProvider()),
+          // the hearts on the grid read it; nothing here taps one
+          ChangeNotifierProvider(create: (_) => FavoritesController()),
+        ],
         child: MaterialApp(
           home: ProductResultsScreen(
             title: 'Смеси',
@@ -293,6 +381,7 @@ void main() {
     testWidgets('typing narrows this category only, and costs no request', (tester) async {
       final searched = <String>[];
       await pump(tester, searched: searched);
+      await openSearch(tester);
 
       await tester.enterText(find.byType(TextField), 'клей');
       await tester.pumpAndSettle();
@@ -306,6 +395,7 @@ void main() {
         (tester) async {
       final searched = <String>[];
       await pump(tester, searched: searched);
+      await openSearch(tester);
 
       await tester.enterText(find.byType(TextField), 'обои');
       await tester.testTextInput.receiveAction(TextInputAction.search);
@@ -322,13 +412,16 @@ void main() {
     testWidgets('clearing drops back into the category', (tester) async {
       final searched = <String>[];
       await pump(tester, searched: searched);
+      await openSearch(tester);
 
       await tester.enterText(find.byType(TextField), 'обои');
       await tester.testTextInput.receiveAction(TextInputAction.search);
       await tester.pumpAndSettle();
       expect(find.text('Обои Erismann'), findsOneWidget);
 
-      await tester.tap(find.byIcon(Icons.close_rounded));
+      // the search key already put the field away and titled the screen with the query, so the way
+      // back into the category is the × that took the magnifier's place
+      await tester.tap(find.byKey(const ValueKey('close-search')));
       await tester.pumpAndSettle();
 
       expect(find.text('Клей ПВА Эрон'), findsOneWidget);
@@ -339,6 +432,7 @@ void main() {
     testWidgets('a query under three characters does not spend a request', (tester) async {
       final searched = <String>[];
       await pump(tester, searched: searched);
+      await openSearch(tester);
 
       await tester.enterText(find.byType(TextField), 'об');
       await tester.testTextInput.receiveAction(TextInputAction.search);
@@ -350,6 +444,7 @@ void main() {
     testWidgets('an empty filter points at the search key as the way out', (tester) async {
       final searched = <String>[];
       await pump(tester, searched: searched);
+      await openSearch(tester);
 
       await tester.enterText(find.byType(TextField), 'ламинат');
       await tester.pumpAndSettle();

@@ -11,7 +11,7 @@ import 'package:frontend/features/products/presentation/controllers/products_con
 import 'package:frontend/features/stores/data/shop_model.dart';
 import 'package:frontend/features/stores/presentation/widgets/store_form_fields.dart';
 import '../controllers/stores_controller.dart';
-import 'package:frontend/core/widgets/circle_back_button.dart';
+import 'package:frontend/core/widgets/app_page_header.dart';
 
 // the "Данные магазина" section of ShopSettingsScreen: name, phone and location, and - in its own
 // block below a full-width rule - delete. pops `true` when the shop was deleted and `null` on a
@@ -165,27 +165,7 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: false,
-        titleSpacing: 20,
-        iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
-        // the disc, not a bare chevron. leadingWidth must move with it or flutter keeps its own 56 and
-        // the title sits wrong.
-        leading: const CircleBackButton(),
-        leadingWidth: CircleBackButton.leadingWidth,
-        title: Text(
-          strings.editStoreScreenTitle,
-          style: const TextStyle(
-            color: AppColors.textDark,
-            fontSize: 18,
-            letterSpacing: -0.2,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
+      appBar: AppPageHeader(title: strings.editStoreScreenTitle),
       body: SafeArea(
         child: ListView(
           physics: const BouncingScrollPhysics(),

@@ -40,8 +40,14 @@ class AppLocalizations {
   // deliberately not "back": the group expands in place, so nothing is being navigated away from
   String get closeButton => isRu ? 'Закрыть' : 'Yopish';
   String get favorites => isRu ? 'Избранное' : 'Tanlanganlar';
+  String get favoritesEmptyTitle =>
+      isRu ? 'Здесь пока пусто' : "Bu yerda hozircha bo'sh";
+  String get favoritesEmptyBody => isRu
+      ? 'Нажмите сердечко на товаре, и он появится здесь.'
+      : "Mahsulotdagi yurakchani bosing va u shu yerda paydo bo'ladi.";
+  String get favoritesLoadError =>
+      isRu ? 'Не удалось загрузить избранное' : "Tanlanganlarni yuklab bo'lmadi";
   String get languageSettings => isRu ? 'Язык приложения' : 'Ilova tili';
-  String get support => isRu ? 'Поддержка' : "Qo'llab-quvvatlash";
   String get logout => isRu ? 'Выйти из аккаунта' : 'Akkauntdan chiqish';
 
   // google play requires in-app deletion, and the dialog has to name what disappears
@@ -168,6 +174,64 @@ class AppLocalizations {
       ? 'Что-то пошло не так. Попробуйте ещё раз.'
       : "Nimadir xato ketdi. Qayta urinib ko'ring.";
 
+  /// Every refusal PATCH /api/me and the phone-change steps can answer with. Falls through to
+  /// [authErrorFor], which already covers the code flow those steps share with the login.
+  String profileErrorFor(String? code) => switch (code) {
+        'name_required' => nameRequiredError,
+        'role_locked' => roleLockedNote,
+        'phone_taken' => phoneTakenError,
+        'phone_unchanged' => phoneUnchangedError,
+        'account_deleted' => sessionExpiredBody,
+        _ => authErrorFor(code),
+      };
+
+  // ── the profile, signed out ──
+  String get profileGuestTitle => isRu ? 'Войдите в аккаунт' : 'Hisobga kiring';
+  String get profileGuestBody => isRu
+      ? 'Аккаунт нужен, чтобы сохранять товары, писать магазинам и открыть свой.'
+      : "Mahsulotlarni saqlash, do'konlarga yozish va o'zingiznikini ochish uchun hisob kerak.";
+  String get profileGuestAction => isRu ? 'Войти' : 'Kirish';
+  String get onboardingNoAccount => isRu
+      ? 'Аккаунта ещё нет? Он создастся сам — просто введите номер.'
+      : "Hisobingiz yo'qmi? U o'zi yaratiladi — shunchaki raqamingizni kiriting.";
+
+  // ── editing the profile ──
+  String get editProfileTitle => isRu ? 'Профиль' : 'Profil';
+  String get editProfileSubtitle =>
+      isRu ? 'Имя и роль аккаунта' : 'Hisob ismi va roli';
+  /// The action on the number row, which already shows the number - so the word is the verb alone
+  String get editProfileButton => isRu ? 'Изменить' : "O'zgartirish";
+  String get accountSavedMessage => isRu ? 'Профиль сохранён' : 'Profil saqlandi';
+
+  /// The rule the server enforces too (PATCH /api/me answers `role_locked`): a role goes one way.
+  String get roleLockedNote => isRu
+      ? 'Роль аккаунта изменить нельзя.'
+      : "Hisob rolini o'zgartirib bo'lmaydi.";
+  String get roleChangeWarning => isRu
+      ? 'Роль выбирается один раз — поменять её потом не получится.'
+      : "Rol bir marta tanlanadi — keyin uni o'zgartirib bo'lmaydi.";
+  String get roleChangeConfirmTitle =>
+      isRu ? 'Сменить роль?' : "Rol o'zgartirilsinmi?";
+  String roleChangeConfirmBody(String role) => isRu
+      ? 'Аккаунт станет «$role». Вернуть прежнюю роль будет нельзя.'
+      : "Hisob «$role» bo'ladi. Avvalgi rolni qaytarib bo'lmaydi.";
+  String get roleChangeConfirmAction => isRu ? 'Сменить' : "O'zgartirish";
+
+  // ── moving the account onto another number ──
+  /// Its own step, not a field: the change costs a paid message and a code typed back, so a
+  /// «Сохранить» that sometimes sends one would be a button nobody can predict.
+  String get phoneChangeExplainer => isRu
+      ? 'Мы отправим код на новый номер. Аккаунт перейдёт на него после подтверждения.'
+      : "Yangi raqamga kod yuboramiz. Tasdiqlagandan so'ng hisob unga o'tadi.";
+  String get currentPhoneLabel => isRu ? 'Текущий номер' : 'Joriy raqam';
+  String get newPhoneLabel => isRu ? 'Новый номер' : 'Yangi raqam';
+  String get phoneChangedMessage => isRu ? 'Номер изменён' : "Raqam o'zgartirildi";
+  String get phoneTakenError => isRu
+      ? 'Этот номер уже занят другим аккаунтом.'
+      : "Bu raqam boshqa hisobga biriktirilgan.";
+  String get phoneUnchangedError =>
+      isRu ? 'Это ваш текущий номер.' : 'Bu sizning joriy raqamingiz.';
+
 
   String get registerTitle => isRu ? 'Регистрация' : "Ro'yxatdan o'tish";
   String get registerSubtitle => '';
@@ -230,6 +294,11 @@ class AppLocalizations {
   String get homeTab => isRu ? 'Главная' : 'Asosiy';
   // the search tab became the job-ticket marketplace; search itself lives on the map and home
   String get ticketsTab => isRu ? 'Заявки' : 'Buyurtmalar';
+  String get ticketsComingSoonTitle =>
+      isRu ? 'Скоро здесь будут заявки' : "Tez orada bu yerda buyurtmalar bo'ladi";
+  String get ticketsComingSoonBody => isRu
+      ? 'Сначала мы запускаемся для магазинов и покупателей. Заявки мастерам появятся позже.'
+      : "Avval do'konlar va xaridorlar uchun ishga tushamiz. Ustalarga buyurtmalar keyinroq paydo bo'ladi.";
   String get mapTab => isRu ? 'Карта' : 'Xarita';
   String get messagesTab => isRu ? 'Сообщения' : 'Xabarlar';
   String get profileTab => isRu ? 'Профиль' : 'Profil';
@@ -368,40 +437,14 @@ class AppLocalizations {
       ? 'Здесь появятся новые заказы, ответы магазинов и новости Domix.'
       : "Bu yerda yangi buyurtmalar, do'konlar javoblari va Domix yangiliklari paydo bo'ladi.";
 
-  // the support chat says «мы», not «поддержка ответит» - the second reads like a ticket system. the
-  // tab itself is a list of conversations, so a row's strings stay separate from a screen's.
+  // the Сообщения tab, held open while the feature behind it is rebuilt from nothing
   String get chatsScreenTitle => isRu ? 'Сообщения' : 'Xabarlar';
-  String get chatsScreenSubtitle =>
-      isRu ? 'Ваши переписки' : 'Sizning yozishmalaringiz';
-  /// prefixes the preview when the last word in a thread was the reader's own
-  String get chatPreviewYou => isRu ? 'Вы: ' : 'Siz: ';
-  String get chatNoMessagesYet => isRu ? 'Нет сообщений' : "Xabarlar yo'q";
+  String get chatsComingSoonTitle =>
+      isRu ? 'Скоро здесь будут сообщения' : "Tez orada bu yerda xabarlar bo'ladi";
+  String get chatsComingSoonBody => isRu
+      ? 'Переписка с магазинами и поддержкой Domix появится в одном из ближайших обновлений.'
+      : "Do'konlar va Domix qo'llab-quvvatlash xizmati bilan yozishmalar yaqin yangilanishlarda paydo bo'ladi.";
 
-  String get supportChatTitle => isRu ? 'Поддержка' : "Qo'llab-quvvatlash";
-  String get supportChatSubtitle =>
-      isRu ? 'Отвечаем в рабочее время' : 'Ish vaqtida javob beramiz';
-
-  /// a bubble with no author reads as a system notice; «Поддержка Domix» is a person
-  String get supportSenderLabel => isRu ? 'Поддержка Domix' : "Domix qo'llab-quvvatlash";
-
-  String get supportEmptyTitle => isRu ? 'Напишите нам' : 'Bizga yozing';
-  String get supportEmptyBody => isRu
-      ? 'Вопрос о магазине, ценах или приложении — задайте его здесь, ответим в этой переписке.'
-      : "Do'kon, narxlar yoki ilova haqida savolingizni shu yerda yozing — shu yozishmada javob beramiz.";
-
-  String get supportComposerHint => isRu ? 'Сообщение…' : 'Xabar…';
-  String get supportSendLabel => isRu ? 'Отправить' : 'Yuborish';
-
-  // worth stating rather than hiding behind a disabled field: the answer has to arrive somewhere
-  String get supportGuestTitle =>
-      isRu ? 'Войдите, чтобы написать' : 'Yozish uchun hisobga kiring';
-  String get supportGuestBody => isRu
-      ? 'Ответ придёт в эту переписку, поэтому нужен аккаунт — вход занимает полминуты через Telegram.'
-      : "Javob shu yozishmaga keladi, shuning uchun hisob kerak — Telegram orqali kirish yarim daqiqa oladi.";
-  String get supportGuestAction => isRu ? 'Войти' : 'Kirish';
-
-  String get supportLoadError =>
-      isRu ? 'Не удалось загрузить переписку' : "Yozishmani yuklab bo'lmadi";
   /// The sentence under **every** failed read in the app: an exception is written for whoever fixes
   /// it, never for whoever hit it, so the raw string goes to `debugPrint` and this goes on screen.
   String get loadErrorHint => isRu
@@ -420,33 +463,6 @@ class AppLocalizations {
             ? 'На сервере что-то пошло не так. Попробуйте позже.'
             : "Serverda nimadir noto'g'ri ketdi. Keyinroq urinib ko'ring.",
       };
-
-  /// Localizes a failed send off the backend's stable `code` (see SupportException).
-  String supportSendErrorMessage(String code) {
-    switch (code) {
-      case 'empty_message':
-        return isRu ? 'Сообщение пустое.' : "Xabar bo'sh.";
-      case 'message_too_long':
-        return isRu
-            ? 'Сообщение слишком длинное — сократите его.'
-            : "Xabar juda uzun — qisqartiring.";
-      // a wait, not a refusal, and the words have to say so or it reads as "you have been blocked"
-      case 'too_many_messages':
-        return isRu
-            ? 'Слишком много сообщений подряд. Подождите минуту.'
-            : "Ketma-ket juda ko'p xabar. Bir daqiqa kuting.";
-      case 'timeout':
-        return isRu
-            ? 'Сервер не ответил. Нажмите «Отправить» ещё раз.'
-            : "Server javob bermadi. «Yuborish»ni yana bosing.";
-      case 'unauthorized':
-        return isRu ? 'Войдите, чтобы отправить сообщение.' : 'Xabar yuborish uchun hisobga kiring.';
-      default:
-        return isRu
-            ? 'Не удалось отправить. Проверьте подключение.'
-            : "Yuborib bo'lmadi. Ulanishni tekshiring.";
-    }
-  }
 
   // anything older than yesterday gets its date, which is where "вчера" stops being information
   String get todayLabel => isRu ? 'Сегодня' : 'Bugun';
@@ -486,7 +502,7 @@ class AppLocalizations {
   String get offerSentLabel => isRu ? 'Отправлено' : 'Yuborildi';
   String get contactWorker => isRu ? 'Написать' : 'Yozish';
 
-  /// the client-worker chat genuinely is not built yet - the Сообщения tab holds support only
+  /// the client-worker chat is not built yet, and neither is the Сообщения tab behind it
   String get workerContactSoon => isRu
       ? 'Чат с мастером появится в следующем обновлении.'
       : "Usta bilan chat keyingi yangilanishda paydo bo'ladi.";

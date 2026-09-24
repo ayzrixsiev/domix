@@ -12,24 +12,17 @@ import (
 	"domix/backend/db"
 )
 
-// "may this caller modify that shop?" is asked in four places - edit shop, delete shop, add a
-// product, edit or delete a product - and it was written out inline in the first three. four copies
-// of an authorization check is four chances for one of them to be subtly weaker than the others,
-// which is the kind of bug nobody notices until someone edits a competitor's shop.
-
-// an authorization failure, carrying everything needed to answer the request. nil means "allowed".
-//
-// a struct rather than four return values because every caller does the same thing with it - hand
-// it to write() and return - and because a plain `error` would lose the http status and the stable
-// machine-readable code the flutter app localizes off (see AppLocalizations.shopMutationErrorMessage).
+// an authorization failure carrying everything needed to answer the request; nil means "allowed".
+// a struct rather than an `error` because the http status and the stable machine-readable code the
+// app localizes off (AppLocalizations.shopMutationErrorMessage) both have to survive the return.
 type accessError struct {
 	status  int
 	code    string
 	message string
 }
 
-// every error response from these endpoints is the same shape: {"error": "...", "code": "..."}.
-// the app is ru/uz only and never displays the english message - it switches on the code.
+// every error is the same shape: {"error", "code"}. the app is ru/uz only and never shows the
+// english message - it switches on the code.
 func writeAPIError(w http.ResponseWriter, status int, code, message string) {
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(map[string]string{"error": message, "code": code})
@@ -39,18 +32,9 @@ func (e *accessError) write(w http.ResponseWriter) {
 	writeAPIError(w, e.status, e.code, e.message)
 }
 
-// authorizeShopAccess answers whether userID may modify shopID. it is two questions, not one:
-//
-//  1. is this user a shop_owner (or admin) at all? looked up fresh from the database every time,
-//     because internal/auth/jwt.go deliberately carries no role claim - a token lives a year and a
-//     role can change inside that year, so a claim could assert a role the user no longer has.
-//  2. do they own *this particular* shop? without it, question 1 alone would let any shop owner in
-//     the country edit, restock or delete a competitor's shop.
-//
-// an admin passes the second question by definition, which is what the `role != "admin"` guard on
-// the ownership comparison is doing.
-//
-// returns nil when the caller is allowed.
+// authorizeShopAccess answers whether userID may modify shopID, and it is two questions: is this a
+// shop owner at all (read from the database every time - jwt.go carries no role claim, and a token
+// outlives a role change), and do they own *this* shop. an admin passes the second by definition.
 func authorizeShopAccess(ctx context.Context, q *db.Queries, userID, shopID int64) *accessError {
 	role, err := q.GetUserRole(ctx, userID)
 	if err != nil {
@@ -63,9 +47,8 @@ func authorizeShopAccess(ctx context.Context, q *db.Queries, userID, shopID int6
 
 	ownerID, err := q.GetShopOwner(ctx, shopID)
 	if err != nil {
-		// a genuinely missing shop and a database that just fell over are very different events, and
-		// reporting the second as "shop not found" would send the owner hunting for a problem in
-		// their own data while the real incident goes unlogged
+		// a missing shop and a database that fell over are different events: reporting the second as
+		// "not found" sends the owner hunting through their own data while the incident goes unlogged
 		if errors.Is(err, pgx.ErrNoRows) {
 			return &accessError{http.StatusNotFound, "shop_not_found", "shop not found"}
 		}

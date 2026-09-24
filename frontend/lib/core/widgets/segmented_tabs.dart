@@ -24,8 +24,9 @@ class SegmentedTabs extends StatelessWidget {
   final int selected;
   final ValueChanged<int> onSelected;
 
-  /// 44 is Apple's minimum touch target and still reads as a filter rather than a row of buttons
-  static const double _height = 44;
+  /// 44 is Apple's minimum touch target and still reads as a filter rather than a row of buttons.
+  /// Public because a header that carries this control has to reserve exactly this much room.
+  static const double height = 44;
 
   /// the groove around the pill, and the difference between the two radii below - a concentric inner
   /// corner is `outer - gap`, and getting it wrong is what makes a nested rounded rectangle look melted
@@ -50,7 +51,7 @@ class SegmentedTabs extends StatelessWidget {
             : (constraints.maxWidth - _inset * 2) / labels.length;
 
         final track = Container(
-          height: _height,
+          height: height,
           width: scrolls ? segmentWidth * labels.length + _inset * 2 : null,
           padding: const EdgeInsets.all(_inset),
           decoration: BoxDecoration(
@@ -97,7 +98,7 @@ class SegmentedTabs extends StatelessWidget {
         if (!scrolls) return track;
 
         return SizedBox(
-          height: _height,
+          height: height,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),

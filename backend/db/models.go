@@ -17,6 +17,12 @@ type BasketHistory struct {
 	MaxBasket int64       `json:"max_basket"`
 }
 
+type Favorite struct {
+	UserID    int64              `json:"user_id"`
+	ProductID int64              `json:"product_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type Product struct {
 	ID           int64              `json:"id"`
 	ShopID       int64              `json:"shop_id"`
@@ -49,9 +55,7 @@ type Shop struct {
 	Name              string             `json:"name"`
 	Address           string             `json:"address"`
 	ContactPhone      string             `json:"contact_phone"`
-	ImageUrl          pgtype.Text        `json:"image_url"`
 	Category          string             `json:"category"`
-	Rating            pgtype.Numeric     `json:"rating"`
 	VipUntil          pgtype.Timestamptz `json:"vip_until"`
 	Location          interface{}        `json:"location"`
 	ExcludedFromIndex bool               `json:"excluded_from_index"`
@@ -64,21 +68,6 @@ type ShopBasketIndex struct {
 	ShopCategory string             `json:"shop_category"`
 	BasketPrice  int64              `json:"basket_price"`
 	PriceIndex   int64              `json:"price_index"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-}
-
-type SupportMessage struct {
-	ID          int64              `json:"id"`
-	UserID      int64              `json:"user_id"`
-	FromSupport bool               `json:"from_support"`
-	Body        string             `json:"body"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-}
-
-type SupportThreadRead struct {
-	AdminID      int64              `json:"admin_id"`
-	ThreadUserID int64              `json:"thread_user_id"`
-	LastReadID   int64              `json:"last_read_id"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
 

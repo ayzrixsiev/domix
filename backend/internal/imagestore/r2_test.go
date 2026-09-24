@@ -91,7 +91,7 @@ func TestTheBucketHostIsBuiltFromTheAccountID(t *testing.T) {
 
 func TestTheThumbnailSitsBesideItsMaster(t *testing.T) {
 	for _, tc := range []struct{ in, want string }{
-		{"uploads/3f/3f9cc1.jpg", "uploads/3f/3f9cc1_thumb.jpg"},
+		{"shops/uploads/3f/3f9cc1.jpg", "shops/uploads/3f/3f9cc1_thumb.jpg"},
 		// the curated catalogue takes the same rule: those files are what most tiles in most grids
 		// actually show, so without thumbnails beside them the saving barely happens
 		{"universal/001.jpg", "universal/001_thumb.jpg"},
@@ -112,10 +112,10 @@ func TestAStoredPathBecomesAnAddress(t *testing.T) {
 		if urls.Configured() {
 			t.Error("an empty IMAGE_BASE_URL reads as configured")
 		}
-		if got, want := urls.Master("universal/001.jpg"), "/static/products/universal/001.jpg"; got != want {
+		if got, want := urls.Master("shops/universal/001.jpg"), "/images/shops/universal/001.jpg"; got != want {
 			t.Errorf("got %q, want %q", got, want)
 		}
-		if got, want := urls.Thumb("universal/001.jpg"), "/static/products/universal/001_thumb.jpg"; got != want {
+		if got, want := urls.Thumb("shops/universal/001.jpg"), "/images/shops/universal/001_thumb.jpg"; got != want {
 			t.Errorf("got %q, want %q", got, want)
 		}
 	})
@@ -127,10 +127,10 @@ func TestAStoredPathBecomesAnAddress(t *testing.T) {
 		if !urls.Configured() {
 			t.Error("a set IMAGE_BASE_URL reads as unconfigured")
 		}
-		if got, want := urls.Master("uploads/3f/3f9c.jpg"), "https://img.domix-api.uz/uploads/3f/3f9c.jpg"; got != want {
+		if got, want := urls.Master("shops/uploads/3f/3f9c.jpg"), "https://img.domix-api.uz/shops/uploads/3f/3f9c.jpg"; got != want {
 			t.Errorf("got %q, want %q", got, want)
 		}
-		if got, want := urls.Thumb("uploads/3f/3f9c.jpg"), "https://img.domix-api.uz/uploads/3f/3f9c_thumb.jpg"; got != want {
+		if got, want := urls.Thumb("shops/uploads/3f/3f9c.jpg"), "https://img.domix-api.uz/shops/uploads/3f/3f9c_thumb.jpg"; got != want {
 			t.Errorf("got %q, want %q", got, want)
 		}
 	})
@@ -139,7 +139,7 @@ func TestAStoredPathBecomesAnAddress(t *testing.T) {
 	// the endpoints package included - so it has to be the old behaviour rather than an empty host
 	t.Run("the zero value is the old behaviour", func(t *testing.T) {
 		var urls URLs
-		if got, want := urls.Master("universal/001.jpg"), "/static/products/universal/001.jpg"; got != want {
+		if got, want := urls.Master("shops/universal/001.jpg"), "/images/shops/universal/001.jpg"; got != want {
 			t.Errorf("got %q, want %q", got, want)
 		}
 	})

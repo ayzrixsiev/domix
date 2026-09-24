@@ -13,7 +13,6 @@ class HomeShopPreview {
       : shop = source,
         name = source.name,
         address = source.address,
-        rating = source.rating,
         priceTier = source.priceTier,
         priceDifferencePercent = source.priceDifferencePercent,
         basketPrice = source.basketPrice,
@@ -21,7 +20,6 @@ class HomeShopPreview {
 
   final String name;
   final String address;
-  final double rating;
 
   /// null when there is no honest comparison to make - the rows render no badge rather than a guess
   final PriceTier? priceTier;
@@ -37,11 +35,6 @@ class HomeShopPreview {
   /// the backend row this preview came from - the phone, category and id a shop card needs, all of
   /// which `GET /api/home` already sends
   final Shop shop;
-
-  /// Mirrors [Shop.hasRating] deliberately: a star on the map but not on the home screen would look
-  /// like one of the two was broken. Both are false today - nothing writes `shops.rating`, and
-  /// `⭐ 0.0` claims a bad rating where the truth is no rating. They flip together with a reviews table.
-  bool get hasRating => rating > 0;
 }
 
 /// One tab of "Лучшие предложения". Grouped rather than one flat ranking because the index only

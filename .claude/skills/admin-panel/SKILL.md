@@ -2,11 +2,11 @@
 name: admin-panel
 description: >
   Domix's two web pages, served by the Go API itself — the `/admin` panel (statistics,
-  anomaly report, user/shop/product management, VIP placements, the support inbox, template
+  anomaly report, user/shop/product management, VIP placements, template
   editing and sync) and the `/delete-account` page Google Play requires. Use when working in
   `backend/internal/webui/`, `backend/internal/endpoints/admin.go`,
   `backend/db/queries/admin.sql`, the `RequireAdmin` middleware, the template sync endpoint,
-  or anything about admin roles, the anomaly report, the support inbox, or the panel's
+  or anything about admin roles, the anomaly report, or the panel's
   HTML/CSS/JS.
 ---
 
@@ -32,32 +32,35 @@ page routed through it downloads instead of rendering.
 describing deletion that works *without installing the app*; the in-app path does not satisfy it,
 because the point is that someone who has already uninstalled can still find out how to be forgotten.
 
-**The page performs the deletion; it does not describe where to ask for one.** It used to print an
-email address and a thirty-day promise — a promise a person keeps by hand, which made it the part of
-the product most likely to be quietly broken. It is now the app's own Telegram handshake pointed at
-delete: type the number, confirm it in the bot, the account is gone. Root §7 has the rules that make
-that safe; what follows is the page.
+**The page performs the deletion; it does not describe where to ask for one.** It is the app's own
+code flow pointed at delete: type the number, type the code that arrives in Telegram, the account is
+gone — rather than an email address and a thirty-day promise a person has to keep by hand.
+
+**The answer to `request-code` is identical whether or not the number has an account**, and a code is
+only paid for when one does — otherwise a public page is a way to ask from a browser whether any
+number in the country is registered with Domix. The pending entry is minted either way, so the
+cooldown cannot be used to tell the two apart either.
 
 - **One centred card, and deliberately almost nothing on it**: the field, the button, and what
   disappears. Everything else that was there — the in-app instructions, the email path, the English
-  column — was describing a process that no longer exists.
+  column — described a process that does not exist.
 - **Two languages in one file** (ru/uz), picked by CSS off `<html lang>`, and it **renders correctly
   with javascript disabled** — the audience is a Play reviewer following a URL, and a blank page is a
   rejection. Confirming needs JS, so `<noscript>` points at the support address. Every dynamic string
   is written into the DOM in **both** languages for the same reason the static copy is: switching
   language after an answer has landed must not blank it out.
-- **Three steps in one card**, swapped by the `hidden` attribute: the field, "you are in Telegram now",
-  the answer. `[hidden]{display:none !important}` is load-bearing — `hidden` is styled by the
-  *browser's* stylesheet, which any author rule outranks, so `.btn{display:flex}` silently un-hides
-  every button carrying it.
+- **Three steps in one card**, swapped by the `hidden` attribute: the number, the code, the answer.
+  `[hidden]{display:none !important}` is load-bearing — `hidden` is styled by the *browser's*
+  stylesheet, which any author rule outranks, so `.btn{display:flex}` silently un-hides every button
+  carrying it.
 - **The lede disappears once the form does**, and «Начать заново» is hidden on `success` alone — after
   a successful deletion there is no account left to start again with.
-- **Five outcomes, one sentence each**: `success`, `no_account`, `mismatch`, `error`, and `not_found`
-  for a session that expired. They are the `Deletion*` constants in `internal/auth/session.go`; **a
-  status added there needs a sentence added here** or the page renders the fallback.
-- **A failed poll is not an answer** — only the server ends the flow. The client's own cap is five
-  minutes, half the session's ten-minute life, and `visibilitychange` polls immediately on return from
-  Telegram, where a backgrounded tab's timers have been throttled.
+- **A wrong code is fixed in place, not on a result screen**: the code step prints the refusal under
+  the field and stays. Only a completed deletion and an outright failure reach step three.
+- **Every refusal the api can answer with has a sentence in both languages** (`errors` in the page's
+  JS, keyed by the server's stable `code`), and an unrecognised one falls through to `default`.
+- **Confirm sends the number the server echoed back**, never the digits as typed: the pending codes
+  are keyed by the canonical spelling, and anything else is a lookup miss read as "wrong code".
 - The support address is `{{SUPPORT_EMAIL}}`, substituted once at startup rather than baked into the
   markup — it is the value most likely to be wrong on a deployment. Unset it falls back to
   `support@domix.uz` **and logs a warning at boot**. It is now only the way to reach a person when the
@@ -76,8 +79,10 @@ that safe; what follows is the page.
 Served publicly as HTML — everything privileged is behind the API, and hiding the page would only be
 obscurity.
 
-**Authentication is the app's own Telegram handshake, reused.** The page POSTs `/api/auth/init`,
-shows the `t.me` link, polls `/api/auth/status`, then calls `GET /api/me` to check the role. **No new
+**Authentication is the app's own code flow, reused.** The page POSTs `/api/auth/request-code`, takes
+the six digits back through `/api/auth/verify`, then calls `GET /api/me` to check the role. It
+registers an unknown number as `customer`, because the api maps anything that is not `shop_owner` to
+that and nothing typed on this page can grant anything. **No new
 credential exists** — no admin password, nothing to leak — and `admin` still cannot be requested over
 the network. The role is granted with SQL:
 
@@ -112,7 +117,6 @@ licence to add it to `ShopResponse`.**
 | tab | holds |
 | --- | --- |
 | **Главная** | three KPIs beside the «Категории магазинов» ring, then «Регистрации за 30 дней» beside the «Заполнение каталогов» gauge, then «Кто дешевле» beside «Средний чек». Three rows, and nothing below the fold |
-| **Поддержка** | the support inbox: who wrote in, who is waiting, the reply box, and «Очистить переписку» |
 | **Аномалии** | prices that disagree with the market for the same basket line |
 | **Пользователи** | edit name and role, delete |
 | **Магазины** | edit the four editable fields, grant/revoke VIP, open the catalogue, delete |
@@ -133,8 +137,7 @@ screen nobody looks at, and «Обновить» is a button whose whole value i
 the numbers look stale. `.side-foot` is gone.
 
 **The search moved up here and there is exactly one of it.** A header field that mirrored whichever
-list was open used to stand above a second, identical one inside the section; the fix then was to
-delete the header's copy, and this is the same rule from the other end — the sections no longer carry
+list was open stood above a second, identical one inside the section. The sections do not carry
 their own, so the field under the title is the only search on the page. `SEARCH` maps a section to
 its `state.q` key and its render function, `setView` shows or hides the field and restores the value
 from state, and Главная and Шаблоны hide it outright because they have no list to filter. **A search
@@ -182,7 +185,7 @@ keeps that true by construction.
 
 ### Full power over users — and what it cost
 
-**`admin` used to be unassignable over the API, and is not any more** (changed 2026-08-22). The old
+**`admin` is assignable over the API.** The old
 rule refused three things: granting the role, editing an administrator's row, and deleting one. The
 argument was good and is worth keeping written down, because it is the thing that was traded away:
 the property worth having is not "an attacker cannot reach it" but **"there is no code path at all"**,
@@ -193,7 +196,7 @@ an admin token is now enough to mint another administrator, so a stolen one is a
 rather than one that ends when the token expires.**
 
 - **Nothing unauthenticated may still assign it, and that is the half that must not move.**
-  `/api/auth/init` maps anything that is not `shop_owner` to `customer`; the Telegram handler only
+  the login maps anything that is not `shop_owner` to `customer`, and only ever
   upgrades `customer → shop_owner`. That was the original hole and it stays closed.
   `TestSignupStillCannotAskForAdmin` is the check that notices if `assignableRoles` ever grows a
   fourth entry.
@@ -206,7 +209,7 @@ rather than one that ends when the token expires.**
 - **The count and the write are two statements, not a transaction.** Two administrators demoting each
   other in the same second could both pass; at one machine and one person that is not a race worth a
   lock, and the honest fix if it ever matters is a constraint in the database.
-- Panel-side: both row buttons are enabled on an administrator's row (they used to be disabled with a
+- Panel-side: both row buttons are enabled on an administrator's row (not disabled with a
   tooltip), the role select carries a third option with a note saying what it grants, and the confirm
   dialog names the role when the account being deleted holds it. The `last_admin` refusal arrives as a
   toast rather than a disabled button, because whether it applies depends on how many admins exist,
@@ -227,93 +230,10 @@ UPDATE shops SET vip_until = '2026-09-03T00:00:00Z' WHERE id = 1;  -- grant
 UPDATE shops SET vip_until = NULL WHERE id = 1;                    -- revoke
 ```
 
-### The support inbox
-
-One row per user who has written in (root §7 has the schema and the app's half). **Two counts, two
-questions, and collapsing them into one is the mistake to avoid:**
-
-- **`unanswered`** — messages from the user newer than the last support reply, still derived in SQL and
-  still the queue. Reading a thread does **not** move it: a conversation opened and not replied to is
-  still work, and settling it on read loses it the moment the founder is interrupted.
-- **`unread`** — messages newer than the last time *this admin* opened the thread, from
-  `support_thread_reads` (migration `000002`). This is the one reading clears, and the one the sidebar
-  badge shouts about. Rows with unread carry an orange left edge and a «новых N» tag.
-
-**The sidebar pip counts `unread` and is hidden outright at zero** (`pip.hidden`), with both numbers
-spelled out in the nav button's `title`. It briefly fell back to `awaiting` when nothing was unread —
-so a founder who read five and answered none still saw five — and that was wrong in practice: it is a
-badge that only clears when a reply is *sent*, which is the behaviour the read marker existed to fix.
-Plenty of messages are read and need no answer. **Reading is the action; the badge follows the
-action.** The queue lives in the «Ждёт ответа» column, which still carries `unanswered` per thread.
-
-**Opening a thread is what marks it read** — `GET /api/admin/support/threads/{id}` advances the
-watermark, because in this panel that request *is* the reading. The listing endpoint deliberately does
-not, since it is polled on a timer. Replying marks it read too. **The modal's first successful `pull()`
-calls `loadStats()` and `loadSupport()` outright** rather than resetting the loop's clocks: a badge
-that clears five seconds after you opened the thread still reads as stuck.
-
-- **Threads are addressed by user id.** A thread *is* one user's messages, so there is no row to point
-  at. The handlers check the user exists before reading or replying, so "they deleted their account
-  while you were typing" is a 404 the panel explains rather than a foreign-key 500.
-- **The reply sets `from_support` server-side**, exactly as the app's endpoint hardcodes false.
-- **The conversation is drawn as chat bubbles, not another table** — the founder is answering a person,
-  and it has to look like what the user is looking at on their phone, since both halves of a
-  misunderstanding start here. Support is on the right in orange, the user on the left; the app draws
-  the same thread mirrored. Bubbles carry the **clock only** — the «Сегодня»/«Вчера»/date chip between
-  days carries the date — and they are not signed, because in this panel orange already means "you".
-- **It is the one modal that is a window rather than a form** (`.modal.chatm`), and the layout is what
-  makes that true: a flex column that **does not scroll**, with the conversation scrolling inside it,
-  so the header and the composer keep their full height at any window size. Built the ordinary way —
-  the modal body scrolling with the shared **`.m-acts` row sticky at `bottom: 0`** — that row's opaque
-  background paints over whatever is beneath it, which clipped the textarea's bottom border and read as
-  a field with a missing edge. **If another tall modal grows a composer, it needs this shape, not a
-  taller `.m-acts`.** The floor is `min-height` on `.chatm` and `min-height: 0` on `.chat`: a pixel
-  floor on the conversation would refuse to shrink and push the composer out of an `overflow:hidden`
-  box on a short window.
-- **No «Закрыть» button** — the × in the header closes it (so do Escape and the scrim), and the row it
-  would occupy is the composer's. **The composer has no placeholder either**: the Ctrl+Enter hint sits
-  under the field rather than inside the box the answer is typed into.
-- **Ctrl/⌘+Enter sends, not plain Enter.** These answers run to several lines, and a newline key that
-  sends half of one is how a support reply goes out unfinished.
-- After a reply the inbox and the stats are both reloaded — the row behind the modal still counts the
-  conversation as waiting.
-- **Nothing notifies the user.** The app has no push at all; the reply waits until they open the tab,
-  where a poll of its own picks it up (root §7).
-
-#### «Очистить переписку» — `DELETE /api/admin/support/threads/{id}`
-
-**The founder's way to end a conversation, and "end" means gone from both sides.** A settled thread
-that stays in the list is a thread read again next week, and an inbox with a hundred of them is one
-the queue gets hunted for inside.
-
-- **It is a hard delete, for the reason `DELETE /api/me` is** (root §7): there is one
-  `support_messages` table and the app reads it through its own endpoint, so a `deleted_at` column
-  would have to be honoured identically by four queries forever, and the first one written without it
-  resurrects a conversation somebody was told had been erased. The read watermarks go in the same
-  statement, in a data-modifying CTE — they point at message ids that no longer exist.
-- **The account survives, and the dialog says so.** «Очистить переписку» sits one click from «Удалить
-  пользователя», so the confirm names what does *not* happen as well as what does — and it says out
-  loud that the messages disappear from the user's phone too, which is the only action on this panel
-  whose effect somebody else watches happen on their own screen.
-- **The button is in the conversation's header, not on the inbox row**: you should have the messages
-  in front of you when you decide. It is the `.chat-head .rm`, styled as the × in red, and placed
-  *before* the × because the last position in that row is where closing is expected to be.
-- **Escape closes one modal, not both.** The confirm opens on top of the chat window, and every modal
-  wires its own `keydown`, so one press used to reach all of them — cancelling the confirm also closed
-  the conversation behind it. `shell` keeps an `openModals` stack and only the innermost `shut` runs.
-- **The phone drops it while somebody is sitting on the screen**, which needed a change on the app
-  side: `SupportController._pollOnce` compared lengths only, so a list that got *shorter* was read as
-  a stale response and ignored. It now compares length **and** the last id, guarded by a
-  `_lastLocalChange` stamp that discards a poll started before a local send — which is what made the
-  length-only comparison safe in the first place. Pinned by `TestClearingAThreadEmptiesItForTheUserToo`
-  and `TestAClearedThreadLightsTheBadgeAgainWhenTheUserWritesBack`.
-- Ids are a global `BIGSERIAL`, so a cleared thread's next message still outranks every watermark that
-  ever pointed at it — nothing has to be reset for the badge to light again.
-
 ### The panel refreshes itself — `liveTick`
 
 `«Обновить»` is a button nobody presses at the moment it would matter, so one `setInterval` (5s tick)
-drives everything: the dashboard counts behind the badge every 45s **everywhere**, the inbox every 12s
+drives everything: the dashboard counts every 45s **everywhere**, whatever a modal registered every 8s
 **while its section is open**, and an open conversation every 8s. `liveNow()` forces a round when a
 section is opened or the tab comes back into view.
 
@@ -321,7 +241,7 @@ section is opened or the tab comes back into view.
   `visibilitychange` listener catches up the moment it is looked at again.
 - **`live.busy` skips a round rather than queueing it**, so a slow database stretches the interval
   instead of stacking identical requests on it.
-- **`renderSupport` restores the `.scroll` container's `scrollTop`**, or the table would jump to the
+- **A re-render restores the `.scroll` container's `scrollTop`**, or a table would jump to the
   top every twelve seconds while it was being read. The chat modal does the same, but only follows the
   bottom when the reader is already near it.
 - **The modal hands its `pull()` to `live.thread` and takes it back through `shell({onClose})`**, which
@@ -347,13 +267,13 @@ page either moved behind a number or left.
 
 ### Row 1 — three counts and the shape of the market
 
-- **«Магазины» is the count and nothing else.** It briefly carried «16 в сравнении цен» underneath;
+- **«Магазины» is the count and nothing else.** Not «16 в сравнении цен» underneath:
   the gauge one row down is about that ratio, and a tile that also states it makes the reader compare
   two renderings of the same thing.
 - **«Пользователи»**, with `покупатели N · владельцы M` underneath — the split says how much of the
-  number is demand and how much is supply. It was «Клиенты» for a few hours and is not: the sidebar
-  entry is «Пользователи» and a tile calling the same set something else is a second name for one
-  thing. The `.k-sub` line sits under the whole `.k-bot` row rather than beside the delta, which is
+  number is demand and how much is supply. Named «Пользователи», matching the sidebar: a tile calling
+  the same set something else is a second name for one thing. The `.k-sub` line sits under the whole
+  `.k-bot` row rather than beside the delta, which is
   what stops it truncating to «32 влад…».
 - **«VIP-места» is a fraction, `2 / 5`, because VIP is inventory.** The denominator is
   `shops.vip_slots`, sent by the server from `home.go`'s `vipShopsLimit` — the carousel draws that
@@ -384,7 +304,7 @@ rather than leaving fill under them.
   - **No caption under the title.** «Магазин попадает в сравнение, только когда заполнен целиком» is
     the rule the whole card is about, and printing it on every load is explaining the same thing to
     the same person forever.
-  - **One sentence, and it does not change subject with the answer.** It used to congratulate a
+  - **One sentence, and it does not change subject with the answer.** Not congratulating a
     finished market and report the shortfall the rest of the time; it is `16 из 37 магазинов в
     сравнении цен` at every value. **No plural agreement anywhere in it** — «21 магазин», «22
     магазина» and «25 магазинов» are three endings, so the count sits after a preposition where
@@ -684,7 +604,7 @@ Before editing it:
 - **Everything user-supplied reaches the page through `textContent`, never `innerHTML`.** The admin's
   JWT is in `localStorage`, so a shop named `<img src=x onerror=…>` rendered as HTML would hand away
   administrator access to the whole database. Building nodes is the version of this the next person
-  adding a column cannot get wrong. **Support message bodies are the highest-risk field in the whole
+  adding a column cannot get wrong. **Owner-written shop and product names are the highest-risk field
   database** — a stranger writes them and an admin reads them.
 - **The charts are hand-rolled SVG, measured in real pixels** rather than drawn in a scaled `viewBox` —
   a viewBox that scales also scales the text, so the same chart gets 9px labels on a laptop and 14px on
@@ -708,7 +628,7 @@ Before editing it:
   shops and the two tabs would otherwise disagree until a reload.
 - **Not built, deliberately:** editing anything beyond the fields listed above, and any audit log beyond
   `log.Printf("ADMIN %d deleted user %d …")` — ids and a role, never a name, a phone number, or the text
-  of a support message.
+  of a shop's own name.
 
 ### The map picker
 
@@ -738,13 +658,13 @@ web-mercator arithmetic, a grid of 256px `<img>` tiles positioned by `transform`
 
 **Unseen:** a real browser. Every screen was rendered headless and read back — driven over the devtools
 protocol with a signed token, at 1440px and at 880px, against the live database and against stubbed
-`/api/admin/stats` payloads for the empty market and a half-filled one — plus search, sort, the support
+`/api/admin/stats` payloads for the empty market and a half-filled one — plus search, sort, the
 badge lighting and clearing on read, the templates help modal, the pill's per-frame motion and the focus
 ring. The two 2026-08-22 rebuilds were checked the cheaper way: a copy of `admin.html` with a `<script>`
 injected before `</head>` that stubs `fetch` and `localStorage`, opened as a `file://` URL under
 `chromium --headless --screenshot` and driven by a `?view=` parameter that clicks the nav button. That
 covers layout at both widths, the empty market, the chat modal and the anomaly table — it does **not**
-cover the live loop, the real endpoints or `:focus-visible`. Nobody has logged in through Telegram on
+cover the live loop, the real endpoints or `:focus-visible`. Nobody has logged in with a code on
 this page, the one path a screenshot cannot stand in for.
 
 > **Headless never applies `:focus` unless `Emulation.setFocusEmulationEnabled` is on.** Checking a

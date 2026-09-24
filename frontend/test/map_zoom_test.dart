@@ -44,7 +44,6 @@ class _FakeStoresRepository extends StoresRepository {
             category: ShopCategory.universal,
             latitude: 41.2995 + i * 0.001,
             longitude: 69.2401 + i * 0.001,
-            rating: 4.5,
           ),
       ];
 }

@@ -58,7 +58,7 @@ FROM products p
 JOIN shops s ON s.id = p.shop_id
 WHERE p.category = $1
   AND p.price IS NOT NULL
-ORDER BY (p.availability = 'unavailable'), p.price ASC, s.rating DESC, p.id
+ORDER BY (p.availability = 'unavailable'), p.price ASC, p.id
 LIMIT $2;
 
 -- name: SearchProducts :many
@@ -71,7 +71,7 @@ JOIN shops s ON s.id = p.shop_id
 WHERE p.price IS NOT NULL
   AND translate(lower(p.name), 'ё', 'е') ~ @anchor::text
   AND translate(lower(p.name), 'ё', 'е') ~ ALL (@patterns::text[])
-ORDER BY (p.availability = 'unavailable'), p.price ASC, s.rating DESC, p.id
+ORDER BY (p.availability = 'unavailable'), p.price ASC, p.id
 LIMIT @result_limit;
 
 -- name: SetProductImage :one

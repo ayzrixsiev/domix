@@ -36,14 +36,16 @@ class SearchAndLikeBar extends StatelessWidget {
           child: Ink(
             height: _height,
             padding: const EdgeInsets.symmetric(horizontal: 14),
-            // **a recessed grey field, not a white card**: white with a hairline and a lift is what every
-            // *content* card on this feed wears, so the one control at the top read as the first row of it.
-            //
-            // `trackGrey` and not `surfaceMuted` or `cardGrey`, which are at or above the page - a box filled
-            // with either reads as white sitting on grey. no border and no shadow with it.
+            // **white, with the ring and the lift.** It was a recessed grey well for as long as the
+            // page was a cold grey - a white box on #EFF1F5 read as the first content card of the
+            // feed. On the warm page it is the other way round: a grey well is the one muddy patch
+            // on it, and white is what the eye reads as "type here". Exactly the field it opens on
+            // ProductSearchScreen wears, so pressing it reads as the same control moving up.
             decoration: BoxDecoration(
-              color: AppColors.trackGrey,
+              color: AppColors.surfaceWhite,
               borderRadius: borderRadius,
+              border: Border.all(color: AppColors.trackGrey),
+              boxShadow: AppShadows.card,
             ),
             child: Row(
               children: [
@@ -56,7 +58,6 @@ class SearchAndLikeBar extends StatelessWidget {
                     strings.searchHint,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    // a step darker than the `textFaint` it was: a hint already pale on white is unreadable on a well
                     style: const TextStyle(
                       color: AppColors.textGrey,
                       fontSize: 14.5,

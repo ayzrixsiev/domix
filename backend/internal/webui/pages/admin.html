@@ -91,9 +91,12 @@
   .btn-w{width:100%}
   .btn-s{padding:9px 15px;font-size:13.5px;border-radius:var(--r-1)}
 
-  .copy-row{display:flex;gap:8px;align-items:center;margin-top:13px;background:var(--card);border-radius:var(--r-2);padding:8px 8px 8px 14px}
-  .copy-row code{flex:1;min-width:0;font-size:12.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Menlo,monospace;text-align:left}
-  .copy-row button{flex:none;border:1px solid var(--line-2);background:var(--shell);border-radius:9px;padding:6px 12px;font-size:12.5px;font-weight:650;cursor:pointer}
+  .l-fld{width:100%;height:48px;border:1px solid var(--line-2);background:var(--card);border-radius:var(--r-2);
+         padding:0 15px;font:inherit;font-size:15.5px;color:var(--ink);outline:none;margin-bottom:12px;
+         transition:border-color .16s,box-shadow .16s}
+  .l-fld:focus{border-color:var(--o-300);box-shadow:0 0 0 3px var(--o-50)}
+  /* the code is the whole of the field, so it is centred and spaced out to be read off a screen */
+  .l-fld.code{text-align:center;letter-spacing:.4em;font-size:21px;font-weight:650;padding-left:.4em}
   .waiting{display:flex;align-items:center;justify-content:center;gap:10px;color:var(--ink-2);font-size:13.5px;margin-top:22px}
   .spin{width:15px;height:15px;border:2px solid var(--o-200);border-top-color:var(--o);border-radius:50%;animation:sp .7s linear infinite}
   @keyframes sp{to{transform:rotate(360deg)}}
@@ -531,80 +534,6 @@
   .form .locked{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted);margin-top:5px}
   .form .locked svg{width:13px;height:13px}
 
-  /* ── support thread ──
-     the conversation is drawn as chat bubbles rather than as another table, and that is not
-     decoration: the founder is answering a person, and a table of rows invites the same clipped
-     tone a spreadsheet does. it also has to look like what the user is looking at on their phone,
-     since both halves of a misunderstanding start here.
-
-     **it is a chat window, not a form dialog, and the layout is what makes that true.** the modal
-     is a flex column that does NOT scroll - the conversation scrolls inside it - so the header and
-     the composer are always on screen at their full height. built the other way (the shared modal
-     body scrolling, with the sticky `.m-acts` row at the bottom) that row's opaque background
-     painted over the textarea's bottom border, which read as a field with a missing edge.
-     it also has no «Закрыть» button: the × in the header closes it, and the row it used to occupy
-     is now the composer's. */
-  .modal.chatm{max-width:640px;min-height:min(560px,88vh);max-height:min(88vh,780px);
-               padding:0;overflow:hidden;display:flex;flex-direction:column}
-
-  .chat-head{flex:none;display:flex;align-items:center;gap:13px;padding:17px 22px;
-             border-bottom:1px solid var(--line)}
-  /* initials rather than the message glyph the rest of the panel uses for this section: inside the
-     thread the question is *who*, and the icon already said "support" on the way in */
-  .chat-head .av{flex:none;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;
-                 background:var(--o-100);color:var(--o-600);font-size:15px;font-weight:750}
-  .chat-head .who{flex:1;min-width:0}
-  .chat-head .who b{display:block;font-size:16.5px;font-weight:750;letter-spacing:-.02em;
-                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .chat-head .who span{display:block;margin-top:2px;font-size:12.5px;color:var(--muted)}
-  .chat-head .x{flex:none;width:36px;height:36px;border:0;background:transparent;border-radius:50%;
-                display:grid;place-items:center;cursor:pointer;color:var(--muted);
-                transition:background .16s,color .16s,transform .12s}
-  .chat-head .x:hover{background:var(--card);color:var(--ink)}
-  /* the same control shape as the ×, in the one colour that says what it does. it sits *before* the
-     × rather than after it: closing is the button the hand goes to without looking, and the last
-     position in a row is where it is expected to be. */
-  .chat-head .rm:hover{background:var(--red-bg);color:var(--red)}
-  .chat-head .x:active{transform:scale(.9)}
-  .chat-head .x svg{width:18px;height:18px}
-
-  /* the one recessed surface on the page, and it earns it here: the conversation has to read as a
-     different kind of thing from the chrome above and below it, and a min-height keeps a two-message
-     thread from collapsing into a strip */
-  /* `min-height:0` and not a pixel floor: a flex item refuses to shrink past its content without
-     it, so on a short window the conversation would have pushed the composer out of the bottom of
-     an `overflow:hidden` modal. the floor lives on .chatm above, where shrinking is safe. */
-  .chat{flex:1 1 auto;min-height:0;overflow-y:auto;padding:18px 22px;background:var(--card);
-        display:flex;flex-direction:column;gap:9px}
-  .chat .skel{margin:auto;padding:0}
-  /* a support thread is answered over days, so without this two messages a week apart sit against
-     each other as though they were one exchange */
-  .chat-day{align-self:center;margin:5px 0 3px;padding:3px 11px;border-radius:999px;
-            background:var(--line);color:var(--ink-2);font-size:11px;font-weight:700}
-
-  /* pre-wrap keeps the user's own line breaks - people write support messages as lists - and
-     overflow-wrap is what stops a pasted url from widening the modal past the screen */
-  .msg{max-width:72%;padding:9px 13px 7px;border-radius:var(--r-2);font-size:14px;line-height:1.45;
-       white-space:pre-wrap;overflow-wrap:anywhere}
-  .msg.them{align-self:flex-start;background:var(--shell);border:1px solid var(--line-2);border-bottom-left-radius:6px}
-  .msg.us{align-self:flex-end;background:var(--o);color:#fff;border-bottom-right-radius:6px}
-  /* a run of messages from one side is one turn, so they close up. the gap between turns stays */
-  .msg.seq{margin-top:-5px}
-  /* the day chip carries the date, so a bubble only needs the clock - and right-aligned it reads as
-     the end of the message rather than as a second line of it */
-  .msg .t{display:block;margin-top:3px;text-align:right;font-size:10.5px;font-weight:600;opacity:.55}
-
-  .chat-foot{flex:none;padding:14px 22px 18px;border-top:1px solid var(--line);background:var(--shell)}
-  .reply{display:flex;gap:10px;align-items:flex-end}
-  /* no placeholder on the field itself - the hint below says what Ctrl+Enter does without sitting
-     inside the box the answer is typed into. 92px is four lines: these replies are paragraphs. */
-  .reply textarea{flex:1;resize:none;min-height:92px;max-height:210px;border:1px solid var(--line-2);
-                  background:var(--shell);border-radius:var(--r-2);padding:13px 15px;font-size:14px;
-                  line-height:1.5;outline:none;transition:border-color .16s,box-shadow .16s}
-  .reply textarea:focus{border-color:var(--o-300);box-shadow:0 0 0 3px var(--o-50)}
-  .reply .btn{flex:0 0 auto;height:46px}
-  .reply-hint{margin-top:9px;text-align:right;font-size:11.5px;color:var(--faint)}
-
   /* ── map picker ─────────────────────────────────────────────────────────────
      hand-rolled rather than Leaflet-from-a-CDN, for the same reason every string
      on this page goes through textContent: the admin's JWT is in localStorage,
@@ -683,24 +612,21 @@
       Domix
     </div>
     <h1>Админ-панель</h1>
-    <p>Вход через Telegram — тот же способ, что и в приложении.</p>
+    <p>Код придёт в Telegram — тот же вход, что и в приложении.</p>
 
-    <div id="l-start">
-      <button class="btn btn-p btn-w" id="l-go">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
-        Войти через Telegram
-      </button>
-    </div>
+    <form id="l-start">
+      <input class="l-fld" id="l-phone" type="tel" inputmode="numeric" autocomplete="tel"
+             placeholder="+998 90 123 45 67" maxlength="18" aria-label="Телефон">
+      <button class="btn btn-p btn-w" id="l-go" type="submit" disabled>Получить код</button>
+    </form>
 
-    <div id="l-wait" hidden>
-      <a class="btn btn-p btn-w" id="l-link" target="_blank" rel="noopener">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
-        Открыть Telegram
-      </a>
-      <div class="copy-row"><code id="l-url"></code><button type="button" id="l-copy">Копировать</button></div>
-      <div class="waiting"><span class="spin"></span><span>Ожидание подтверждения…</span></div>
-      <p class="hint">В Telegram нажмите <b>START</b>, затем «Поделиться номером». Ссылка действует 10 минут.</p>
-    </div>
+    <form id="l-wait" hidden>
+      <input class="l-fld code" id="l-code" type="text" inputmode="numeric" autocomplete="one-time-code"
+             placeholder="000000" maxlength="6" aria-label="Код">
+      <button class="btn btn-p btn-w" id="l-confirm" type="submit" disabled>Войти</button>
+      <p class="hint">Код отправлен на <b id="l-sent"></b>. Действует 5 минут.<br>
+        <a href="#" id="l-again">Другой номер</a></p>
+    </form>
 
     <div id="l-err" hidden></div>
   </div>
@@ -760,20 +686,6 @@
           <th class="s r" data-key="median_price" title="Середина цен на тот же товар у остальных магазинов этой категории — половина дороже, половина дешевле">Обычная цена<span class="ar">▼</span></th>
           <th>Связаться</th><th></th>
         </tr></thead><tbody></tbody></table></div><div id="s-anom"></div></div>
-    </section>
-
-    <section id="v-support" hidden>
-      <div class="bar">
-        <div class="count" id="c-support"></div>
-      </div>
-      <div class="tbl"><div class="scroll"><table id="t-support">
-        <thead><tr>
-          <th class="s" data-key="name">Пользователь<span class="ar">▼</span></th>
-          <th>Последнее сообщение</th>
-          <th class="s" data-key="last_at">Когда<span class="ar">▼</span></th>
-          <th class="s" data-key="unanswered">Ждёт ответа<span class="ar">▼</span></th>
-          <th></th>
-        </tr></thead><tbody></tbody></table></div><div id="s-support"></div></div>
     </section>
 
     <section id="v-users" hidden>
@@ -858,17 +770,15 @@ var ROLES = { customer:"Покупатель", shop_owner:"Владелец ма
 var AVAIL = { in_stock:"В наличии", on_order:"Под заказ", unavailable:"Нет в наличии" };
 
 var state = {
-  token:null, me:null, stats:null, users:null, shops:null, anomalies:null, templates:null, support:null,
+  token:null, me:null, stats:null, users:null, shops:null, anomalies:null, templates:null,
   // the orphaned-file scan. null until somebody presses «Проверить» - unlike every other field here
   // it is never fetched on a timer, because answering it means walking the whole photo store.
   storage:null,
   // which market «Кто дешевле» is showing. it survives the 45-second stats poll, and falls back to
   // the busiest category when the one it names stops having anybody in the comparison.
   view:"dash", threshold:0.5, raceCat:null,
-  q:{ users:"", shops:"", anom:"", support:"" },
-  sort:{ users:{key:"created_at",dir:-1}, shops:{key:"created_at",dir:-1}, anom:{key:"deviation_percent",dir:-1},
-         support:{key:"last_at",dir:-1} },
-  poll:null
+  q:{ users:"", shops:"", anom:"" },
+  sort:{ users:{key:"created_at",dir:-1}, shops:{key:"created_at",dir:-1}, anom:{key:"deviation_percent",dir:-1} },
 };
 
 // ── dom helpers. every user-supplied string goes through textContent, never innerHTML: the admin's
@@ -886,8 +796,7 @@ function pct(a,b){ return b>0 ? Math.round(a/b*100) : 0; }
 function sdate(iso){ if(!iso) return "—"; var d=new Date(iso); if(isNaN(d)) return "—";
   return String(d.getDate()).padStart(2,"0")+"."+String(d.getMonth()+1).padStart(2,"0")+"."+d.getFullYear(); }
 function dlab(y){ var p=String(y).split("-"); return p.length===3 ? p[2]+"."+p[1] : y; }
-// a support message needs the clock as well as the day - "сегодня в 14:20" is what tells the
-// founder whether somebody is still sitting there waiting
+// the clock as well as the day - "сегодня в 14:20" reads differently from "сегодня"
 function clock(iso){ var d=new Date(iso); if(isNaN(d)) return "";
   return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
 function stamp(iso){ if(!iso) return "—"; if(isNaN(new Date(iso))) return "—"; return sdate(iso)+" "+clock(iso); }
@@ -928,7 +837,6 @@ var ICONS = {
   ok:["M20 6 9 17l-5-5"],
   lock:["M5 11h14v10H5z","M8 11V7a4 4 0 0 1 8 0v4"],
   search:["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z","m21 21-4.3-4.3"],
-  chat:["M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"],
   x:["M18 6 6 18","m6 6 12 12"],
   send:["m22 2-7 20-4-9-9-4Z","M22 2 11 13"],
   info:["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z","M12 16v-4","M12 8h.01"],
@@ -968,33 +876,74 @@ function loginError(title, detail) {
   a.appendChild(t); box.appendChild(a);
 }
 
-function startLogin() {
+// **the panel signs in exactly as the app does** - a code to the number - and it asks for nothing
+// more. `role:"customer"` is what it registers an unknown number as, because the api maps anything
+// that is not `shop_owner` to `customer` and nothing typed here can grant anything. The role is
+// decided one step later, by `/api/me` against the database.
+var loginPhone = null;
+
+// the codes are keyed by the canonical spelling the server echoes back, so verify sends that and
+// never the digits as typed - anything else is a lookup miss the reader sees as "wrong code"
+function startLogin(event) {
+  if (event) event.preventDefault();
+
+  var typed = $("#l-phone").value.replace(/\D/g, "");
+  if (typed.length < 9) return;
+
   var b = $("#l-go"); b.disabled = true; $("#l-err").hidden = true;
-  // role "customer" deliberately: /api/auth/init maps anything that is not shop_owner to customer,
-  // so nothing sent from here can grant anything. the role check happens against /api/me below.
-  api("/api/auth/init", { method:"POST", body: JSON.stringify({ name:"Domix Admin", role:"customer" }) })
+  api("/api/auth/request-code", {
+    method: "POST",
+    body: JSON.stringify({ phone: typed, name: "Domix Admin", role: "customer" })
+  })
     .then(function (d) {
+      loginPhone = d.phone;
+      $("#l-sent").textContent = "+" + d.phone;
       $("#l-start").hidden = true; $("#l-wait").hidden = false;
-      $("#l-link").href = d.telegram_url; $("#l-url").textContent = d.telegram_url;
-      window.open(d.telegram_url, "_blank", "noopener");
-      poll(d.session_id, 0);
+      $("#l-code").value = ""; $("#l-confirm").disabled = true; $("#l-code").focus();
     })
     .catch(function (e) {
       b.disabled = false;
-      loginError("Не удалось начать вход", e.status === 429 ? "Слишком много попыток. Подождите минуту." : (e.message||""));
+      loginError("Не удалось отправить код", loginProblem(e));
     });
 }
 
-function poll(sid, n) {
-  if (n > 150) { resetLogin(); loginError("Время ожидания вышло","Ссылка больше не действует — начните заново."); return; }
-  api("/api/auth/status?session_id=" + encodeURIComponent(sid)).then(function (d) {
-    if (d.status === "success" && d.token) return adopt(d.token);
-    if (d.status === "not_found") { resetLogin(); loginError("Сессия истекла","Начните вход заново."); return; }
-    state.poll = setTimeout(function(){ poll(sid, n+1); }, 2000);
-  }).catch(function(){ state.poll = setTimeout(function(){ poll(sid, n+1); }, 2500); });
+function finishLogin(event) {
+  if (event) event.preventDefault();
+
+  var code = $("#l-code").value;
+  if (code.length !== 6) return;
+
+  var b = $("#l-confirm"); b.disabled = true; $("#l-err").hidden = true;
+  api("/api/auth/verify", { method:"POST", body: JSON.stringify({ phone: loginPhone, code: code }) })
+    .then(function (d) { return adopt(d.token); })
+    .catch(function (e) {
+      b.disabled = false;
+      loginError("Не удалось войти", loginProblem(e));
+    });
 }
 
-function resetLogin(){ $("#l-wait").hidden = true; $("#l-start").hidden = false; $("#l-go").disabled = false; }
+// the api answers with a stable `code`; this is where it becomes a sentence
+function loginProblem(e) {
+  switch (e && e.code) {
+    case "invalid_phone":           return "Проверьте номер телефона.";
+    case "code_invalid":            return "Неверный код.";
+    case "code_expired":            return "Срок действия кода истёк — запросите новый.";
+    case "code_attempts_exhausted": return "Слишком много попыток — запросите новый код.";
+    case "code_not_found":          return "Код не запрашивался. Начните заново.";
+    case "code_cooldown":           return "Код уже отправлен. Подождите немного.";
+    case "code_quota":              return "Слишком много кодов на этот номер. Попробуйте позже.";
+    case "rate_limited":            return "Слишком много попыток. Подождите минуту.";
+    case "code_not_sent":           return "Telegram не принял сообщение. Попробуйте ещё раз.";
+    default:                        return (e && e.message) || "";
+  }
+}
+
+function resetLogin(){
+  loginPhone = null;
+  $("#l-wait").hidden = true; $("#l-start").hidden = false;
+  $("#l-go").disabled = $("#l-phone").value.replace(/\D/g, "").length < 9;
+  $("#l-confirm").disabled = true;
+}
 
 function adopt(token) {
   state.token = token;
@@ -1014,14 +963,13 @@ function adopt(token) {
 }
 
 function signOut(reason) {
-  if (state.poll) clearTimeout(state.poll);
   // the loop reads state.token and stops on its own, but a timer left running past a sign-out is
   // one nobody restarts correctly on the next login
   if (live.timer) { clearInterval(live.timer); live.timer = null; }
   live.thread = null;
   state.token=null; state.me=null; state.stats=null; state.users=null; state.shops=null;
   // the inbox goes with the rest: it holds phone numbers and what people wrote about their problems
-  state.anomalies=null; state.templates=null; state.support=null;
+  state.anomalies=null; state.templates=null;
   try{ localStorage.removeItem(TOKEN_KEY); }catch(e){}
   $("#app").hidden = true; $("#login").hidden = false; resetLogin(); $("#l-err").hidden = true;
   if (reason==="expired") loginError("Сессия закончилась","Войдите снова.");
@@ -1041,7 +989,6 @@ var NAV = [
   { v:"dash",      label:"Главная",       icon:ICONS.dash,  title:"Главная",       sub:"Всё, что происходит в Domix" },
   // second, above everything else: a person is waiting on the other end of these and nothing
   // else on this panel has somebody's attention held while it goes unread.
-  { v:"support",   label:"Поддержка",     icon:ICONS.chat,  title:"Поддержка",     sub:"Сообщения от пользователей" },
   { v:"anomalies", label:"Аномалии",      icon:ICONS.anom,  title:"Аномалии цен",  sub:"Цены, которые расходятся с рынком" },
   { v:"users",     label:"Пользователи",  icon:ICONS.users, title:"Пользователи",  sub:"Аккаунты и их магазины" },
   { v:"shops",     label:"Магазины",      icon:ICONS.shops, title:"Магазины",      sub:"Каталоги, индексы и размещения" },
@@ -1052,7 +999,6 @@ var NAV = [
 // `render` is what redraws the rows it filters - the two things that used to be hardcoded four
 // times over, once per section's own input.
 var SEARCH = {
-  support:   { q:"support", placeholder:"Имя, телефон или текст сообщения", render:function(){ renderSupport(); } },
   anomalies: { q:"anom",    placeholder:"Товар или магазин",                render:function(){ renderAnomalies(); } },
   users:     { q:"users",   placeholder:"Имя, телефон или ID",              render:function(){ renderUsers(); } },
   shops:     { q:"shops",   placeholder:"Название, адрес, владелец или ID", render:function(){ renderShops(); } }
@@ -1072,12 +1018,9 @@ function buildNav() {
     var b = el("button"); b.dataset.view = item.v;
     b.appendChild(ico(item.icon, 19));
     b.appendChild(el("span","lb2",item.label));
-    // the sentence that used to be printed under the page title. it is the whole of what that line
-    // said, and here it costs no vertical space at all. the support button's title is overwritten
-    // by loadStats with the unread/waiting counts - a live number outranks a fixed description on
-    // the one button that has one.
+    // the sentence that used to be printed under the page title, at no vertical cost
     b.title = item.sub;
-    if (item.v==="users"||item.v==="shops"||item.v==="anomalies"||item.v==="support") { var p=el("span","pip","—"); p.id="pip-"+item.v; b.appendChild(p); }
+    if (item.v==="users"||item.v==="shops"||item.v==="anomalies") { var p=el("span","pip","—"); p.id="pip-"+item.v; b.appendChild(p); }
     b.addEventListener("click", function(){ setView(item.v); });
     nav.appendChild(b);
   });
@@ -1148,21 +1091,19 @@ function setView(v) {
   if (v==="users" && !state.users) loadUsers();
   if (v==="shops" && !state.shops) loadShops();
   if (v==="anomalies" && !state.anomalies) loadAnomalies();
-  if (v==="support" && !state.support) loadSupport();
   if (v==="templates") { drawStorage(); if (!state.templates) loadTemplates(); }
   if (v==="dash" && state.stats) drawDash();
 
   // opening the inbox must show what is there now, not a list cached before the founder walked away
-  if (v === "support" && state.support) liveNow();
 }
 
 // ═══════════════════════ live refresh ═══════════════════════
 //
 // **why the panel polls itself instead of being pushed to.**
 //
-// The founder reads the support inbox with this page open, so a message arriving while they are
-// looking at it has to appear on its own - «Обновить» is a button nobody presses at the moment it
-// would matter. Three ways to do that were on the table:
+// The panel is left open while shops are being set up, so numbers that move have to move on their
+// own - «Обновить» is a button nobody presses at the moment it would matter. Three ways to do that
+// were on the table:
 //
 //   * SSE (`EventSource` over text/event-stream) is the shape that fits "push one small event to an
 //     open page", and it is the one this panel cannot use: **EventSource sends no headers**, and
@@ -1176,9 +1117,8 @@ function setView(v) {
 //     runs at - one admin, one machine - that is free, and it reuses endpoints that already exist.
 //
 // Two things keep it honest rather than a busy loop: **nothing runs while the tab is in the
-// background** (`document.hidden`), and only what is on screen is asked for - the inbox refreshes
-// while its section is open, the open conversation while it is open, and the dashboard numbers
-// behind the sidebar badge slowly, everywhere.
+// background** (`document.hidden`), and only what is on screen is asked for - whatever the open
+// modal registered, and the dashboard numbers slowly, everywhere.
 var LIVE = {
   // how often the loop wakes up. everything below is a multiple of it in practice, so this is the
   // resolution rather than a rate.
@@ -1186,13 +1126,12 @@ var LIVE = {
   // the sidebar badge. slow on purpose: it is a number that only matters when it changes from zero,
   // and it rides on the whole dashboard payload.
   stats: 45000,
-  // the inbox list, while it is the section on screen. this is the one that has to feel live.
-  inbox: 12000,
-  // an open conversation. faster than the list, because somebody is reading it right now.
+  // whatever modal hands the loop a refresher - a shop's catalogue, say. faster than the
+  // dashboard, because somebody is looking straight at it.
   thread: 8000
 };
 
-var live = { timer:null, statsAt:0, inboxAt:0, threadAt:0, busy:false, thread:null };
+var live = { timer:null, statsAt:0, threadAt:0, busy:false, thread:null };
 
 function liveTick() {
   // signed out, or the tab is in the background - a poll nobody can see is a request nobody asked
@@ -1205,9 +1144,6 @@ function liveTick() {
   var now = Date.now(), jobs = [];
 
   if (now - live.statsAt > LIVE.stats) { live.statsAt = now; jobs.push(loadStats()); }
-  if (state.view === "support" && now - live.inboxAt > LIVE.inbox) {
-    live.inboxAt = now; jobs.push(loadSupport());
-  }
   if (live.thread && now - live.threadAt > LIVE.thread) {
     live.threadAt = now; jobs.push(live.thread());
   }
@@ -1220,7 +1156,7 @@ function liveTick() {
 // forces the next tick to do the work now - used when a section is opened, so arriving somewhere
 // shows current data rather than whatever was cached up to twelve seconds ago.
 function liveNow() {
-  live.statsAt = 0; live.inboxAt = 0; live.threadAt = 0;
+  live.statsAt = 0; live.threadAt = 0;
   liveTick();
 }
 
@@ -1230,13 +1166,12 @@ function refresh(o) {
 
   // the manual button and the loop must not both be in flight against the same endpoints, and a
   // press is also a statement that everything on screen is now current
-  live.statsAt = Date.now(); live.inboxAt = Date.now();
+  live.statsAt = Date.now();
 
   var jobs = [loadStats()];
   if (state.users) jobs.push(loadUsers());
   if (state.shops) jobs.push(loadShops());
   if (state.anomalies) jobs.push(loadAnomalies());
-  if (state.support) jobs.push(loadSupport());
   if (state.templates) jobs.push(loadTemplates());
 
   // a floor on how briefly the spinner can exist. against a local database every one of these
@@ -1259,39 +1194,6 @@ function loadStats() {
     state.stats = d;
     if ($("#pip-users")) $("#pip-users").textContent = nf(d.users.total);
     if ($("#pip-shops")) $("#pip-shops").textContent = nf(d.shops.total);
-    // ── the support badge answers two questions with one number, and which one it is showing is
-    // the difference between the hot state and the calm one.
-    //
-    // `unread` is conversations holding something nobody here has opened yet. that is the alarm, and
-    // it is what **reading** clears - which is the whole point of migration 000002: a thread the
-    // founder has already read should stop shouting.
-    //
-    // `awaiting` is conversations still owed an answer. reading does not touch it, so when the
-    // unread count falls to zero the badge does not go blank - it drops to this, quietly. that
-    // matters: a badge that emptied on read would let five people who had been read and not answered
-    // disappear from the sidebar entirely, which is exactly the failure a mark-as-read usually
-    // introduces.
-    if ($("#pip-support") && d.support) {
-      var pip = $("#pip-support"), unread = d.support.unread || 0, waiting = d.support.awaiting || 0;
-
-      // **the badge counts what has not been read, and it goes away entirely at zero.**
-      //
-      // It briefly fell back to `awaiting` when nothing was unread - the idea being that a founder
-      // who read five questions and answered none should still see five. In practice that is a badge
-      // that only clears when a reply is *sent*, which is the thing it was supposed to stop doing:
-      // plenty of messages are read and need no answer, and one that sits there until you type
-      // something is one you stop believing. Reading is the action; the badge follows the action.
-      //
-      // The queue is not lost, it just is not in the sidebar: the inbox's «Ждёт ответа» column still
-      // carries `unanswered` per thread, derived in SQL and unmoved by reading, and the number is on
-      // this button's tooltip below.
-      pip.hidden = unread === 0;
-      pip.textContent = nf(unread);
-      pip.classList.toggle("hot", unread > 0);
-      pip.parentNode.title = unread > 0
-        ? nf(unread) + " новых · " + nf(waiting) + " ждут ответа"
-        : waiting > 0 ? nf(waiting) + " ждут ответа (все прочитаны)" : "Все ответы отправлены";
-    }
     if (state.view === "dash") drawDash();
   }).catch(function(e){ if(!guard(e)) toast("Не удалось загрузить статистику", true); });
 }
@@ -2104,318 +2006,6 @@ function iconBtn(icon, title, cls, onClick) {
   return b;
 }
 
-// ═══════════════════════ support ═══════════════════════
-//
-// one thread per user, and the api addresses a thread by *user* id because that is all a thread is -
-// there is no row of its own.
-//
-// **two counts per row, and they are not the same question.** `unanswered` is derived in SQL exactly
-// as it always was - messages the user sent after the last thing support said - and it is the queue:
-// opening a conversation does not settle it, only replying does. `unread` is messages newer than the
-// last time this admin opened the thread, and that is the one reading clears. Keeping them apart is
-// what lets the badge go quiet on a conversation the founder has read without that conversation
-// quietly leaving the list of work.
-
-function loadSupport() {
-  if (!state.support) { $("#s-support").className="skel"; $("#s-support").textContent="Загрузка…"; }
-  return api("/api/admin/support/threads?limit=500").then(function (d) {
-    state.support = d.threads || []; renderSupport();
-  }).catch(function(e){ if(!guard(e)){ $("#s-support").className="skel"; $("#s-support").textContent="Не удалось загрузить сообщения"; } });
-}
-
-function renderSupport() {
-  var body = $("#t-support tbody"), box = $("#s-support");
-
-  // the list re-renders itself every twelve seconds now, and a table that jumped back to the top
-  // each time would be unreadable while it was being read. the scroller is the `.scroll` div the
-  // table sits in.
-  var scroller = body.closest(".scroll"), keepAt = scroller ? scroller.scrollTop : 0;
-
-  clear(body); clear(box); box.className = "";
-
-  var q = state.q.support.trim().toLowerCase();
-  var rows = (state.support||[]).filter(function (t) {
-    if (!q) return true;
-    return String(t.user_id)===q || (t.name||"").toLowerCase().indexOf(q)>=0
-        || (t.phone||"").toLowerCase().indexOf(q)>=0 || (t.last_body||"").toLowerCase().indexOf(q)>=0;
-  });
-  rows = sortRows(rows, state.sort.support);
-  $("#c-support").textContent = countLabel(q, rows.length, (state.support||[]).length);
-  markSort("#t-support", state.sort.support);
-
-  if (!rows.length) { box.appendChild(emptyBox(q?"Ничего не найдено":"Сообщений пока нет",
-    q?"Попробуйте другой запрос.":"Здесь появится всё, что пользователи напишут в поддержку из приложения.")); return; }
-
-  rows.forEach(function (t) {
-    var tr = el("tr");
-    // an unread conversation is marked on the row itself rather than in a sixth column: the founder
-    // scans this list down the left edge, and "is there anything new" is a glance, not a number to
-    // read.
-    if (t.unread > 0) tr.className = "nw";
-
-    var who = el("td");
-    var nameRow = el("div","b-row");
-    nameRow.appendChild(el("span","b", t.name || "Без имени"));
-    if (t.unread > 0) nameRow.appendChild(el("span","tag o", "новых " + nf(t.unread)));
-    who.appendChild(nameRow);
-    who.appendChild(el("div","d mono", t.phone + " · #" + t.user_id));
-    tr.appendChild(who);
-
-    // "Вы:" rather than the user's name, because the row is read from the founder's side and the
-    // question it answers is "did I already say something". truncated here and not on the server:
-    // the panel is what knows how much fits.
-    var prev = el("td","d");
-    var text = String(t.last_body || "").replace(/\s+/g, " ");
-    prev.textContent = (t.last_from_support ? "Вы: " : "") + (text.length > 90 ? text.slice(0,90)+"…" : text);
-    tr.appendChild(prev);
-
-    tr.appendChild(el("td","d num", stamp(t.last_at)));
-
-    var wait = el("td");
-    if (t.unanswered > 0) wait.appendChild(el("span","tag o", nf(t.unanswered)));
-    else wait.appendChild(el("span","tag gr","отвечено"));
-    tr.appendChild(wait);
-
-    var act = el("td","r"); var wrap = el("div","acts");
-    wrap.appendChild(iconBtn(ICONS.chat, "Открыть переписку", null, function(){ openThread(t); }));
-    act.appendChild(wrap); tr.appendChild(act);
-
-    // the whole row opens the thread, not only the button. this is a list of conversations to read,
-    // and a 4px target on the far right is the wrong way to enter one.
-    tr.style.cursor = "pointer";
-    tr.addEventListener("click", function (e) { if (e.target.closest("button")) return; openThread(t); });
-
-    body.appendChild(tr);
-  });
-
-  if (scroller) scroller.scrollTop = keepAt;
-}
-
-function openThread(thread) {
-  var s = shell({ bare:true, cls:"chatm", onClose: function(){ live.thread = null; } });
-
-  // the whole conversation is held here rather than only appended to the dom, so a reply can be
-  // re-rendered through the same path the first load takes - which is what keeps the day chips
-  // right when an answer is typed after midnight.
-  var messages = [];
-
-  // ── header ──
-  var head = el("div","chat-head");
-  head.appendChild(el("div","av", initials(thread.name)));
-  var who = el("div","who");
-  who.appendChild(el("b", null, thread.name || "Без имени"));
-  who.appendChild(el("span", null, thread.phone + " · " + roleName(thread.role) + " · #" + thread.user_id));
-  head.appendChild(who);
-  // **the one way to end a conversation, and it ends it on both phones.** A settled thread that
-  // stays in the list is a thread read again next week; an inbox with a hundred of them is one the
-  // queue gets hunted for inside. It is in the header of the conversation rather than in the row on
-  // the list on purpose - you should have the messages in front of you when you decide.
-  var rm = el("button","x rm"); rm.type = "button"; rm.title = "Очистить переписку";
-  rm.appendChild(ico(ICONS.trash, 17));
-  rm.addEventListener("click", function () { confirmClearThread(thread, s.close); });
-  head.appendChild(rm);
-
-  var x = el("button","x"); x.type = "button"; x.title = "Закрыть (Esc)";
-  x.appendChild(ico(ICONS.x, 18));
-  x.addEventListener("click", s.close);
-  head.appendChild(x);
-  s.modal.appendChild(head);
-
-  // ── conversation ──
-  var box = el("div","chat");
-  box.appendChild(el("div","skel","Загрузка переписки…"));
-  s.modal.appendChild(box);
-
-  // ── composer ──
-  var foot = el("div","chat-foot");
-  var row = el("div","reply");
-  var input = el("textarea");
-  // the same 2000 the server enforces. the attribute stops the message being typed rather than
-  // refused after it was written - the one case where duplicating a server rule earns its keep,
-  // since the server still checks and the two cannot disagree in the direction that matters.
-  input.maxLength = 2000;
-  var send = el("button","btn btn-p"); send.type = "button";
-  send.appendChild(ico(ICONS.send, 16));
-  var sendLabel = el("span", null, "Отправить");
-  send.appendChild(sendLabel);
-  row.appendChild(input); row.appendChild(send);
-  foot.appendChild(row);
-  foot.appendChild(el("div","reply-hint","Ctrl + Enter — отправить"));
-  s.modal.appendChild(foot);
-
-  // grows with the answer up to the css cap and then scrolls. `height:auto` first, or scrollHeight
-  // reports the box it is already stretched to and the field can only ever get taller.
-  function grow() {
-    input.style.height = "auto";
-    input.style.height = Math.min(input.scrollHeight, 210) + "px";
-  }
-  input.addEventListener("input", grow);
-
-  function draw() {
-    // where the reader is, decided *before* the box is emptied. a conversation that redraws every
-    // eight seconds must not drag somebody back to the newest message while they are scrolled up
-    // reading what was said last week - but it does have to follow the bottom when they are already
-    // there, which is where the reader is 99% of the time.
-    var wasAtBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
-    var wasAt = box.scrollTop;
-
-    clear(box);
-    if (!messages.length) {
-      box.appendChild(el("div","skel","Пока ни одного сообщения."));
-      return;
-    }
-    var lastDay = null, lastSide = null;
-    messages.forEach(function (m) {
-      var key = dayKey(m.created_at);
-      if (key !== lastDay) {
-        box.appendChild(el("div","chat-day", dayLabel(m.created_at)));
-        lastDay = key;
-        lastSide = null;   // a new day starts a new turn even from the same side
-      }
-      var side = m.from_support ? "us" : "them";
-      box.appendChild(bubble(m, side === lastSide));
-      lastSide = side;
-    });
-    box.scrollTop = wasAtBottom ? box.scrollHeight : wasAt;
-  }
-
-  // one fetch, shared by the first load and by the poll below.
-  //
-  // it replaces the whole list rather than asking for "everything after id N": a support thread is a
-  // person's conversation with the founder, a few dozen messages at most, so the payload is smaller
-  // than the endpoint it would take to avoid it. **this request is also what marks the thread read**
-  // (see Admin.SupportThread), which is why a message arriving while the modal is open stops being
-  // unread on its own rather than waiting for a reply.
-  // whether the box has been painted at all yet. **not the same question as "is the list empty"** -
-  // without it, a conversation with no messages in it matches `next.length === messages.length` on
-  // the very first pull and returns early, leaving "Загрузка переписки…" on screen for ever.
-  var drawn = false;
-
-  function pull() {
-    var wasFirst = !drawn;
-    return api("/api/admin/support/threads/" + thread.user_id).then(function (d) {
-      var next = d.messages || [];
-
-      // **this request is also what marks the thread read** (see Admin.SupportThread), so the sidebar
-      // badge and the row behind the modal are both stale the instant it succeeds - and the *first*
-      // one is the important case: opening a conversation is exactly when the founder expects the
-      // badge to clear, and leaving it to the next 45-second stats poll is the difference between a
-      // badge that responds and one that seems stuck.
-      //
-      // Fetched outright rather than by resetting the loop's clocks, because a five-second wait for
-      // something the reader just did still reads as broken.
-      if (wasFirst || next.length > messages.length) {
-        live.inboxAt = Date.now(); live.statsAt = Date.now();
-        loadSupport(); loadStats();
-      }
-
-      // redrawing only when something actually changed keeps a poll from stealing a text selection
-      // or resetting the day chips every eight seconds for no reason. `drawn` and not "is the list
-      // empty": without it a conversation with no messages matches on the very first pull and never
-      // leaves «Загрузка переписки…».
-      if (drawn && next.length === messages.length) return;
-      messages = next;
-      drawn = true;
-      draw();
-    });
-  }
-
-  pull().then(function () {
-    input.focus();
-  }).catch(function (e) {
-    clear(box);
-    if (guard(e)) { s.close(); return; }
-    box.appendChild(el("div","skel","Не удалось загрузить переписку"));
-  });
-
-  // hand the conversation to the live loop for as long as it is on screen; shell's onClose above
-  // takes it back. errors are swallowed rather than passed to `guard`: a poll that fails because the
-  // network blinked would otherwise close the modal from under a half-typed reply.
-  live.thread = function () { return pull().catch(function(){}); };
-  live.threadAt = Date.now();
-
-  function submit() {
-    var text = input.value.trim();
-    if (!text) return;
-
-    send.disabled = true; sendLabel.textContent = "…";
-    api("/api/admin/support/threads/" + thread.user_id, { method:"POST", body: JSON.stringify({ body:text }) })
-      .then(function (m) {
-        input.value = ""; grow(); input.focus();
-        // appended rather than re-fetched: the server just handed back the one thing that changed
-        messages.push(m);
-        draw();
-        toast("Ответ отправлен");
-        // the list behind the modal still counts this conversation as waiting, and so does the
-        // badge - and replying also settles the read marker (see Admin.SupportReply), so both
-        // numbers move. done now rather than left to the loop, because an action the founder just
-        // took should be reflected before they look up.
-        live.inboxAt = Date.now(); live.statsAt = Date.now();
-        loadSupport(); loadStats();
-      })
-      .catch(function (e) {
-        if (guard(e)) { s.close(); return; }
-        toast(e.code === "message_too_long" ? "Сообщение слишком длинное"
-            : e.code === "user_not_found" ? "Пользователь удалил аккаунт" : "Не удалось отправить", true);
-      })
-      .then(function () { send.disabled = false; sendLabel.textContent = "Отправить"; });
-  }
-
-  send.addEventListener("click", submit);
-  // Ctrl/⌘+Enter and not plain Enter: these answers run to several lines, and a newline key that
-  // sends half of one is how a support reply goes out unfinished.
-  input.addEventListener("keydown", function (e) {
-    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); submit(); }
-  });
-}
-
-// **the dialog says out loud that somebody else's screen changes.** Every other destructive action
-// on this panel removes something belonging to an account - a user, a shop, a file nobody can see.
-// This one reaches into an app on somebody's phone and takes a conversation out of it, which is the
-// one thing a confirm dialog here genuinely has to warn about; the rest of the list is what does
-// *not* happen, because the fear a founder has at this button is that «очистить» means «удалить
-// пользователя».
-function confirmClearThread(thread, closeChat) {
-  confirmDialog({
-    title:"Очистить переписку?",
-    body:(thread.name || "Без имени") + " · " + thread.phone + ". Действие необратимо.",
-    names:[
-      "Все сообщения этого разговора — и его, и ваши ответы",
-      "Переписка исчезнет и в приложении у пользователя",
-      "Аккаунт, магазины и товары остаются на месте"
-    ],
-    warn:"Восстановить нечего: сообщения удаляются из базы, а не прячутся.",
-    confirmLabel:"Очистить",
-    onConfirm:function () {
-      return api("/api/admin/support/threads/" + thread.user_id, { method:"DELETE" })
-        .then(function (d) {
-          toast("Переписка очищена" + (d.deleted ? " · " + nf(d.deleted) + " сообщений" : ""));
-          if (closeChat) closeChat();
-          // the row behind the modal is gone from the inbox now, and the badge counted it - both
-          // are fetched outright rather than left to the loop, for the same reason opening a thread
-          // refreshes them: an action the founder just took should be reflected before they look up
-          live.inboxAt = Date.now(); live.statsAt = Date.now();
-          loadSupport(); loadStats();
-        })
-        .catch(function (e) {
-          if (guard(e)) return;
-          toast(e.code === "user_not_found" ? "Пользователь удалил аккаунт"
-              : "Не удалось очистить переписку", true);
-          throw e;
-        });
-    }
-  });
-}
-
-function bubble(m, sameSideAsPrevious) {
-  // textContent, like every other user-supplied string on this page: a message body is the one field
-  // in this whole database that a stranger writes and an admin reads with a token in localStorage,
-  // so it is the last place innerHTML could ever be used.
-  var b = el("div", "msg " + (m.from_support ? "us" : "them") + (sameSideAsPrevious ? " seq" : ""), m.body);
-  b.appendChild(el("span","t", clock(m.created_at)));
-  return b;
-}
-
 // ═══════════════════════ users ═══════════════════════
 
 function loadUsers() {
@@ -2483,9 +2073,9 @@ function editUser(u) {
       // it is given to can then edit and delete every account including this one.
       { name:"role", label:"Роль", type:"select", value:u.role,
         options:[["customer",ROLES.customer],["shop_owner",ROLES.shop_owner],["admin",ROLES.admin]],
-        note:"Администратор получает доступ к этой панели: все пользователи, магазины, цены и переписки." },
+        note:"Администратор получает доступ к этой панели: все пользователи, магазины и цены." },
       { name:"phone", label:"Телефон", value:u.phone, disabled:true,
-        note:"Телефон — это идентификатор аккаунта в Telegram-входе, поэтому он не редактируется." }
+        note:"Телефон — это идентификатор аккаунта, по нему выполняется вход, поэтому он не редактируется." }
     ],
     confirmLabel:"Сохранить",
     onConfirm:function (v) {
@@ -3270,18 +2860,16 @@ function confirmSync(t) {
 // than asking "are you sure", cancel sits first, and the confirming button is on the right. two
 // surfaces disagreeing about which side is safe is how somebody's shop gets deleted by muscle memory.
 
-// every open modal's `shut`, innermost last. **Escape must close one modal, not all of them**: the
-// chat window can put a confirm dialog on top of itself, and a keydown listener per modal means one
-// press reaches every one of them - so cancelling the confirm would also close the conversation
-// behind it. The scrim and the × are already per-modal; this is the only key that is not.
+// every open modal's `shut`, innermost last. **Escape must close one modal, not all of them**: a
+// modal can put a confirm dialog on top of itself, and a keydown listener per modal means one press
+// reaches every one of them - so cancelling the confirm would close what is behind it too.
 var openModals = [];
 
 function shell(opts) {
   var scrim = el("div","scrim");
   var m = el("div","modal" + (opts.size ? " " + opts.size : "") + (opts.cls ? " " + opts.cls : ""));
-  // `bare` skips the icon/title/sub block for a modal that is not a form with a heading - the chat
-  // window builds its own header. everything below it (scrim, escape, click-outside) is the reason
-  // to come through here rather than hand-rolling the shell a second time.
+  // `bare` skips the icon/title/sub block for a modal that builds its own header. everything below
+  // it (scrim, escape, click-outside) is the reason to come through here rather than hand-roll it.
   if (!opts.bare) {
     var g = el("div","m-ico " + (opts.iconClass||"dg"));
     g.appendChild(ico(opts.icon||ICONS.anom,22)); m.appendChild(g);
@@ -3294,9 +2882,8 @@ function shell(opts) {
   // scrim. All three already route through `shut`, so this is the one place that can see all of
   // them; a caller wiring three listeners of its own would eventually wire two.
   //
-  // It exists for the chat window, which hands its open conversation to the live-refresh loop and
-  // has to take it back again. A modal that kept polling after it was closed would be an invisible
-  // request every eight seconds for the rest of the session.
+  // It exists for a modal that hands a refresher to the live loop and has to take it back: one that
+  // kept polling after it was closed would be an invisible request for the rest of the session.
   var closed = false;
   function shut(){
     if (closed) return;
@@ -3661,15 +3248,21 @@ function modal(o) {
 
 // ═══════════════════════ wiring ═══════════════════════
 
-$("#l-go").addEventListener("click", startLogin);
+$("#l-start").addEventListener("submit", startLogin);
+$("#l-wait").addEventListener("submit", finishLogin);
+$("#l-phone").addEventListener("input", function (e) {
+  $("#l-go").disabled = e.target.value.replace(/\D/g, "").length < 9;
+});
+$("#l-code").addEventListener("input", function (e) {
+  e.target.value = e.target.value.replace(/\D/g, "").slice(0, 6);
+  $("#l-confirm").disabled = e.target.value.length !== 6;
+});
+$("#l-again").addEventListener("click", function (e) {
+  e.preventDefault(); $("#l-err").hidden = true; resetLogin(); $("#l-phone").focus();
+});
 $("#l-out").addEventListener("click", function(){ signOut(); });
 $("#refresh").addEventListener("click", function(){ refresh(); });
 $("#tpl-info").addEventListener("click", templateHelp);
-$("#l-copy").addEventListener("click", function () {
-  var url = $("#l-url").textContent;
-  var done = function(){ $("#l-copy").textContent="Скопировано"; setTimeout(function(){ $("#l-copy").textContent="Копировать"; },1600); };
-  if (navigator.clipboard) navigator.clipboard.writeText(url).then(done, function(){}); else done();
-});
 
 // **one field, and it writes into whichever section is open.** There were two at once for a while -
 // a header field mirroring the section's own, one above the other, both searching the same list -
@@ -3696,7 +3289,6 @@ $("#an-th").addEventListener("click", function () {
 wireSort("#t-users", state.sort.users, renderUsers);
 wireSort("#t-shops", state.sort.shops, renderShops);
 wireSort("#t-anom", state.sort.anom, renderAnomalies);
-wireSort("#t-support", state.sort.support, renderSupport);
 
 // coming back to the tab catches up immediately rather than waiting out whichever interval was
 // running when it was hidden. this is the other half of `document.hidden` in liveTick: together they

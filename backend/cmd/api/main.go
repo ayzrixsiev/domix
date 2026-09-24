@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"syscall"
@@ -20,30 +21,20 @@ import (
 	"domix/backend/internal/endpoints"
 	"domix/backend/internal/imagestore"
 	"domix/backend/internal/ratelimit"
-	"domix/backend/internal/telegram"
 	"domix/backend/internal/verify"
 	"domix/backend/internal/webui"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
 
 func main() {
 
-
-
-
-
-
-
 	// 1. loading env attributes
 	if err := godotenv.Load("../.env"); err != nil {
 		log.Println("WARNING: No .env file found")
 	}
 
-	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
-	webhookURL := os.Getenv("WEBHOOK_URL")
 	port := os.Getenv("PORT")
 	jwtSecret := os.Getenv("JWT_SECRET")
 	dbURL := os.Getenv("DB_URL")
@@ -51,18 +42,12 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	if botToken == "" || webhookURL == "" || dbURL == "" {
-		log.Fatal("Critical Error: TELEGRAM_BOT_TOKEN, WEBHOOK_URL, and DB_URL must be configured")
+	if dbURL == "" {
+		log.Fatal("Critical error: DB_URL must be configured")
 	}
 	if jwtSecret == "" {
-		log.Fatal("Critical error: jwtSercet is not configured")
+		log.Fatal("Critical error: JWT_SECRET must be configured")
 	}
-
-
-
-
-
-
 
 	// 2. postgresql connection pool (configured) set up and handed over to the Queries struct
 	dbPool := mustConnectDB(dbURL)
@@ -71,85 +56,90 @@ func main() {
 	// loading templates from the db into golang map for fast look ups
 	mustLoadTemplates(queries)
 
+	// 3. login codes live in ram, never in the database (internal/auth/code.go). the sender is opened
+	// first: it decides whether the send budgets are armed - the console sender is free.
+	codeSender, paidDelivery := mustOpenCodeSender()
+	codeMgr := auth.NewCodeManager(paidDelivery)
 
-
-
-
-
-
-	// 3. initialize telegram bot api
-	bot, err := tgbotapi.NewBotAPI(botToken)
-	if err != nil {
-		log.Fatalf("Failed to connect to the bot: %v", err)
+	// 4. rate limiters.
+	//
+	// **a signed-in caller is bucketed by account, everybody else by address** - see byCaller. every
+	// number below is per bucket, and none of them is the thing protecting the code-sending bill:
+	// that is the per-phone and daily budgets in auth.CodeManager, which no caller can spread around.
+	byCaller := func(r *http.Request) string {
+		if id, ok := auth.UserIDFromRequest(r, jwtSecret); ok {
+			return "user:" + strconv.FormatInt(id, 10)
+		}
+		return "ip:" + ratelimit.ClientIP(r)
 	}
-	log.Printf("Authorized successfully on account: %s", bot.Self.UserName)
 
+	apiLimiter := ratelimit.New(20, 60, 10*time.Minute).Keyed(byCaller)
+	uploadLimiter := ratelimit.New(1, 20, 30*time.Minute) // keyed by account inside Products.allowUpload
 
+	// **the buckets below are by address, and an address is not a person here**: a whole mobile
+	// carrier sits behind one, so anything public has to be loose enough that a crowd of honest
+	// strangers never reaches it. they are floors against a flood, and the real bound on each of
+	// these lives elsewhere - publicCache for the browsing reads, Home.SearchSlots for search, and
+	// the per-phone and daily budgets for codes.
+	publicLimiter := ratelimit.New(50, 200, 10*time.Minute)
+	loginLimiter := ratelimit.New(5, 60, 10*time.Minute)
+	searchLimiter := ratelimit.New(3, 30, 10*time.Minute)
 
+	// the browsing reads - the home screen, the map, a category listing - held in memory for a few
+	// seconds, which is what makes publicLimiter affordable at those numbers. see
+	// endpoints.publicCache for what is in it and what deliberately is not.
+	publicReads := endpoints.NewPublicCache(20 * time.Second)
 
-
-
-
-	// 4. initialize session manager and rate limiters
-	sessionMgr := auth.NewSessionManager()
-
-	// the phone-code login's half of the same idea: codes in ram, swept on a timer, never in the
-	// database. see internal/auth/code.go.
-	codeMgr := auth.NewCodeManager()
-	codeSender := mustOpenCodeSender()
-
-	loginLimiter := ratelimit.New(1, 30, 10*time.Minute)
-	apiLimiter := ratelimit.New(20, 60, 10*time.Minute)
-	uploadLimiter := ratelimit.New(1, 20, 30*time.Minute)
-	searchLimiter := ratelimit.New(1, 10, 10*time.Minute)
-
-	// the per-ip layer in front of the one endpoint that spends money on every call. far tighter
-	// than loginLimiter because this is not about protecting the process - it is about the sms bill.
-	// the per-phone limits live in auth.CodeManager, and neither is enough on its own: this one alone
-	// would let a botnet spread the sends across addresses, that one alone would let a single address
-	// walk through every number in the country a minute apart.
-	codeLimiter := ratelimit.New(0.2, 5, 30*time.Minute)
-
-
-
-
-
-
+	// tighter, because every call here can spend money: one address cannot walk through numbers
+	// faster than this however many it has.
+	codeLimiter := ratelimit.New(0.5, 10, 30*time.Minute)
 
 	// 5. wire up http routes - this section's job is just plugging dependencies into each endpoint
 
-	// the login: a code is delivered to the number, typing it back mints the jwt. see
-	// endpoints.PhoneAuth. request-code sits behind codeLimiter because it spends money; verify sits
-	// behind the general login bucket because it only reads from ram.
+	// the login: a code to the number, typed back, mints the jwt. request-code spends money so it
+	// sits behind codeLimiter; verify only reads ram.
 	phoneAuth := &endpoints.PhoneAuth{Queries: queries, Codes: codeMgr, Sender: codeSender, JWTSecret: jwtSecret}
 	http.HandleFunc("/api/auth/request-code", endpoints.WithJSON(codeLimiter.Wrap(phoneAuth.RequestCode)))
 	http.HandleFunc("/api/auth/verify", endpoints.WithJSON(loginLimiter.Wrap(phoneAuth.Verify)))
 
-	authEndpoints := &endpoints.Auth{Queries: queries, SessionMgr: sessionMgr, BotUsername: bot.Self.UserName}
-	// SUPERSEDED by /api/auth/request-code and /api/auth/verify above. these two are the telegram
-	// contact handshake and are kept only because the apk in the founder's hands still calls them -
-	// delete both lines, endpoints.Auth's Init and Status, and the SessionMgr field, the day the
-	// flutter side is on the code flow. /api/me stays: it is not part of the handshake.
-	http.HandleFunc("/api/auth/init", endpoints.WithJSON(loginLimiter.Wrap(authEndpoints.Init)))
-	http.HandleFunc("/api/auth/status", endpoints.WithJSON(loginLimiter.Wrap(authEndpoints.Status)))
+	// changing the number on an account that already exists: the same two steps and the same two
+	// buckets, with RequireAuth on top because this edits an account rather than opening one.
+	http.HandleFunc("/api/me/phone/request-code", endpoints.WithJSON(codeLimiter.Wrap(
+		auth.RequireAuth(jwtSecret, queries, phoneAuth.RequestPhoneChangeCode))))
+	http.HandleFunc("/api/me/phone/verify", endpoints.WithJSON(loginLimiter.Wrap(
+		auth.RequireAuth(jwtSecret, queries, phoneAuth.VerifyPhoneChange))))
+
+	authEndpoints := &endpoints.Auth{Queries: queries}
 	http.HandleFunc("/api/me", endpoints.WithJSON(apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, authEndpoints.RouteMe))))
 
-	// SUPERSEDED, same handshake: the /delete-account page proves ownership by asking for a contact
-	// in telegram, which is the flow being retired. it goes with the bot, and the page then proves
-	// the number the same way the login does - a code to it. Google Play requires the page itself to
-	// keep working, so this is a rewrite rather than a deletion (CLAUDE.md §3).
-	deletionEndpoints := &endpoints.AccountDeletion{SessionMgr: sessionMgr, BotUsername: bot.Self.UserName}
-	http.HandleFunc("/api/account-deletion/init", endpoints.WithJSON(loginLimiter.Wrap(deletionEndpoints.Init)))
-	http.HandleFunc("/api/account-deletion/status", endpoints.WithJSON(loginLimiter.Wrap(deletionEndpoints.Status)))
+	// the /delete-account page Google Play requires: the same code, typed on a web page. public, so
+	// request-code sits behind the money bucket exactly as the login's does.
+	deletionEndpoints := &endpoints.AccountDeletion{Queries: queries, Codes: codeMgr, Sender: codeSender}
+	http.HandleFunc("/api/account-deletion/request-code", endpoints.WithJSON(codeLimiter.Wrap(deletionEndpoints.RequestCode)))
+	http.HandleFunc("/api/account-deletion/confirm", endpoints.WithJSON(loginLimiter.Wrap(deletionEndpoints.Confirm)))
 
-	shopsEndpoints := &endpoints.Shops{Pool: dbPool, Queries: queries, JWTSecret: jwtSecret}
-	http.HandleFunc("/api/shops", endpoints.WithJSON(apiLimiter.Wrap(shopsEndpoints.Route)))
+	// **a path that answers a public GET and an authenticated write needs two buckets, not one.**
+	// browsing has to survive a carrier's worth of strangers; creating a shop seeds a hundred rows in
+	// a transaction and is metered per account. one limit for both would either throttle the crowd
+	// or hand an account a hundred shops a second.
+	browse := func(handler http.HandlerFunc) http.HandlerFunc {
+		read, write := publicLimiter.Wrap(handler), apiLimiter.Wrap(handler)
+		return func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodGet {
+				read(w, r)
+				return
+			}
+			write(w, r)
+		}
+	}
+
+	shopsEndpoints := &endpoints.Shops{Pool: dbPool, Queries: queries, JWTSecret: jwtSecret, Cache: publicReads}
+	http.HandleFunc("/api/shops", endpoints.WithJSON(browse(shopsEndpoints.Route)))
 	http.HandleFunc("/api/shops/mine", endpoints.WithJSON(apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, shopsEndpoints.ListMine))))
-	http.HandleFunc("/api/shops/{id}", endpoints.WithJSON(apiLimiter.Wrap(shopsEndpoints.RouteByID)))
+	http.HandleFunc("/api/shops/{id}", endpoints.WithJSON(browse(shopsEndpoints.RouteByID)))
 
-	// where product photos are written, and where the app is told to fetch them from. two
-	// independent settings, decided together because getting one without the other is a server that
-	// looks healthy and serves blank tiles - see mustOpenPhotoStorage
+	// where photos are written and where the app fetches them from - two settings that have to
+	// agree, see mustOpenPhotoStorage
 	productImages, imageURLs := mustOpenPhotoStorage()
 
 	productsEndpoints := &endpoints.Products{
@@ -159,43 +149,32 @@ func main() {
 		URLs:      imageURLs,
 		Uploads:   uploadLimiter,
 	}
-	http.HandleFunc("/api/shops/{id}/products", endpoints.WithJSON(apiLimiter.Wrap(productsEndpoints.RouteByShop)))
+	http.HandleFunc("/api/shops/{id}/products", endpoints.WithJSON(browse(productsEndpoints.RouteByShop)))
 	http.HandleFunc("/api/products/{id}", endpoints.WithJSON(apiLimiter.Wrap(productsEndpoints.RouteByID)))
-	// registered as its own pattern rather than folded into RouteByID: go's mux matches the more
-	// specific pattern, and the two carry different bodies (multipart here, json there) and
-	// different limits.
+	// its own pattern rather than folded into RouteByID: a different body (multipart) and a
+	// different limit
 	http.HandleFunc("/api/products/{id}/image", endpoints.WithJSON(apiLimiter.Wrap(productsEndpoints.RouteImage)))
 
 	homeEndpoints := &endpoints.Home{
 		Queries: queries,
 		URLs:    imageURLs,
+		Cache:   publicReads,
 		// four in ten pool connections may be searching at once - see Home.SearchSlots
 		SearchSlots: make(chan struct{}, max(1, int(dbPool.Config().MaxConns)*2/5)),
 	}
-	http.HandleFunc("/api/home", endpoints.WithJSON(apiLimiter.Wrap(homeEndpoints.Get)))
-	http.HandleFunc("/api/categories/{code}/products", endpoints.WithJSON(apiLimiter.Wrap(homeEndpoints.ProductsByCategory)))
-	// the home screen's search field: public, and behind both buckets - the shared one and its own.
-	http.HandleFunc("/api/products/search", endpoints.WithJSON(apiLimiter.Wrap(searchLimiter.Wrap(homeEndpoints.SearchProducts))))
+	http.HandleFunc("/api/home", endpoints.WithJSON(publicLimiter.Wrap(homeEndpoints.Get)))
+	http.HandleFunc("/api/categories/{code}/products", endpoints.WithJSON(publicLimiter.Wrap(homeEndpoints.ProductsByCategory)))
+	// the one public read whose cost the caller chooses, so it is the one that is not cached: its own
+	// bucket on top of the public one, and Home.SearchSlots underneath both.
+	http.HandleFunc("/api/products/search", endpoints.WithJSON(publicLimiter.Wrap(searchLimiter.Wrap(homeEndpoints.SearchProducts))))
 
-	// the support inbox, the app's half. one path for both verbs because both act on the same thing
-	// - the caller's own conversation - and neither takes an id: the thread is whoever RequireAuth
-	// says is calling, so there is no parameter that could name somebody else's messages.
-	supportEndpoints := &endpoints.Support{Queries: queries}
-	http.HandleFunc("/api/support/messages", endpoints.WithJSON(apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, supportEndpoints.Route))))
+	// the heart on a product tile. authenticated throughout - a favourite belongs to an account.
+	favoritesEndpoints := &endpoints.Favorites{Queries: queries, URLs: imageURLs}
+	http.HandleFunc("/api/favorites", endpoints.WithJSON(apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, favoritesEndpoints.Route))))
+	http.HandleFunc("/api/favorites/{id}", endpoints.WithJSON(apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, favoritesEndpoints.RouteByID))))
 
-	// the admin panel's api. every route here is the same three-layer chain, so it is built once
-	// rather than typed five times - and building it once is also what stops the fourth route from
-	// being the one that quietly forgets RequireAdmin.
-	//
-	// the order of the layers is load-bearing. RequireAuth proves who the caller is and puts their
-	// id on the context; RequireAdmin reads that id and asks the database what role it holds *now*.
-	// swapping them would have RequireAdmin looking for a user id nothing has put there yet, which
-	// fails closed with a 401 rather than opening a hole - but only by luck, so keep the order.
-	//
-	// granting a VIP placement is still not an endpoint. that decision (§7 of CLAUDE.md) was about
-	// the shape of the thing being granted, not about admin apis in general: a placement is sold,
-	// and an api that can grant it is an api somebody will eventually ask to have pointed at their
-	// own shop. deleting a user and deleting a shop are moderation, which is what a panel is for.
+	// the admin api. one chain built once, so no route can quietly forget RequireAdmin. the order is
+	// load-bearing: RequireAuth puts the caller's id on the context, RequireAdmin reads it.
 	adminEndpoints := &endpoints.Admin{Pool: dbPool, Queries: queries, URLs: imageURLs, Images: productImages}
 	adminRoute := func(handler http.HandlerFunc) http.HandlerFunc {
 		return endpoints.WithJSON(apiLimiter.Wrap(
@@ -215,45 +194,24 @@ func main() {
 	http.HandleFunc("/api/admin/shops/{id}/products", adminRoute(adminEndpoints.ListShopProducts))
 	http.HandleFunc("/api/admin/products/{id}", adminRoute(adminEndpoints.UpdateProduct))
 
-	// the support inbox, the privileged half. `{id}` is a *user* id and not a thread id - a thread is
-	// exactly one user's messages, so there is no separate row to address.
-	http.HandleFunc("/api/admin/support/threads", adminRoute(adminEndpoints.SupportThreads))
-	// DELETE erases the conversation from both sides at once - see Admin.DeleteSupportThread.
-	http.HandleFunc("/api/admin/support/threads/{id}", adminRoute(adminEndpoints.RouteSupportThread))
-
-	// the templates themselves, editable since migration 000014 moved them out of Go and into
-	// product_templates. every write here reloads internal/catalog's in-memory copy before it
-	// answers, or the process would keep seeding shops from the list it started with.
+	// the templates themselves, in product_templates. every write reloads internal/catalog's
+	// in-memory copy, or the process keeps seeding shops from the list it booted with.
 	http.HandleFunc("/api/admin/templates", adminRoute(adminEndpoints.Templates))
 	http.HandleFunc("/api/admin/templates/{category}/items", adminRoute(adminEndpoints.RouteTemplateItems))
-	// a separate path rather than /api/admin/templates/items/{id}: go's mux refuses to register that
-	// alongside /templates/{category}/items, because "/templates/items/items" matches both - and it
-	// refuses at startup rather than at request time, which is the right moment to find out.
+	// a separate path: go's mux refuses /templates/items/{id} alongside /templates/{category}/items
 	http.HandleFunc("/api/admin/template-items/{id}", adminRoute(adminEndpoints.RouteTemplateItem))
-	// the sync is the second, louder half: editing a template above decides what the *next* shop is
-	// created with, this pushes it into the shops that already exist.
+	// editing a template decides what the next shop gets; the sync pushes it into existing shops
 	http.HandleFunc("/api/admin/templates/{category}/sync", adminRoute(adminEndpoints.SyncTemplate))
 
-	// uploaded photos whose products row went away with a deleted shop. GET counts and measures,
-	// DELETE sweeps - two verbs on one path because they are one question asked twice, and the
-	// DELETE re-runs the whole scan rather than trusting a list the browser sent back.
+	// uploaded photos whose products row went with a deleted shop. GET measures, DELETE sweeps.
 	http.HandleFunc("/api/admin/storage/orphans", adminRoute(adminEndpoints.RouteOrphans))
 
-	http.Handle("/static/products/", staticFiles("/static/products/", productImagesDir()))
+	http.Handle(imagestore.DefaultURLPrefix, staticFiles(imagestore.DefaultURLPrefix, productImagesDir()))
 	http.HandleFunc("/health", healthCheck(dbPool))
 
-	// the two web pages. neither goes through WithJSON - that wrapper sets Content-Type to
-	// application/json on everything it touches, which would make a browser download these instead
-	// of rendering them.
-	//
-	// /delete-account is a Google Play requirement rather than a feature: an app that creates
-	// accounts must publish a page describing deletion that works *without installing the app*, and
-	// a listing without one is rejected at review. its url goes into the Play Console and into
-	// support replies, so the aliases exist because those copies cannot be corrected later.
-	//
-	// the page *performs* the deletion rather than describing where to ask for one - see
-	// endpoints.AccountDeletion. the address below is now only the way to reach a person when that
-	// flow itself fails, which is the one thing a self-service page cannot cover.
+	// the two web pages, deliberately not behind WithJSON - a json content type would make a browser
+	// download them instead of rendering them. /delete-account is a Google Play requirement: its url
+	// goes into the Play Console and into support replies, which is why the aliases exist.
 	supportEmail := os.Getenv("SUPPORT_EMAIL")
 	if supportEmail == "" {
 		supportEmail = "support@domix.uz"
@@ -267,64 +225,17 @@ func main() {
 	http.HandleFunc("/admin", webui.Page("admin.html", nil))
 	http.HandleFunc("/admin/", webui.Redirect("/admin"))
 
-
-
-
-
-
-
-	// 6. webhook setup for telegram to talk
-	wh, err := tgbotapi.NewWebhook(webhookURL)
-	if err != nil {
-		log.Fatalf("Failed to parse Webhook URL structure: %v", err)
-	}
-
-	if _, err = bot.Request(wh); err != nil {
-		log.Fatalf("Telegram rejected setting this webhook endpoint: %v", err)
-	}
-
-	info, err := bot.GetWebhookInfo()
-	if err != nil {
-		log.Fatalf("Failed to pull webhook diagnostic info: %v", err)
-	}
-	if info.LastErrorDate != 0 {
-		log.Printf("Warning: Telegram reported a previous webhook delivery failure: %s", info.LastErrorMessage)
-	}
-
-	// store here whatever we got from telegram webhook
-	updates := bot.ListenForWebhook("/webhook")
-
-
-
-
-
-
-
-	// 7. run the http server and the telegram update loop concurrently, each in its own
-	// goroutine, so main() itself is free to just wait for a shutdown signal (step 8)
+	// 6. run the http server in its own goroutine, so main() is free to wait for a shutdown signal
 	//
-	// every timeout field on http.Server defaults to zero, and zero means wait forever. exactly two
-	// of the four are set here, and which two is the whole point:
+	// ReadHeaderTimeout is the slowloris guard: a connection that dribbles its headers one byte at a
+	// time holds a goroutine forever, and the log stays empty because no request ever finishes.
 	//
-	// ReadHeaderTimeout is the slowloris guard. a connection that opens and then dribbles its headers
-	// one byte at a time holds a goroutine and a file descriptor for as long as it likes; a few
-	// thousand of them from one laptop take the server down at a few bytes per second, and the log
-	// stays empty throughout because no request ever finished. a real client's headers are 200-400
-	// bytes - a fraction of a second even on 2G - so ten seconds is twenty times the room an honest
-	// phone needs and there is no grey area in between. ngrok happens to absorb this today, which
-	// only means the mine goes off on the day we move to domix-api.uz (see the shipping-to-play skill).
+	// **ReadTimeout and WriteTimeout are deliberately absent - do not add them.** both budget the
+	// whole request, body included, and a 6 MiB photo is over five minutes on 3G: a whole-request
+	// limit would break upload for exactly the owners with the worst connection. nginx bounds the
+	// body instead (client_body_timeout, deploy/nginx.conf).
 	//
-	// ReadTimeout and WriteTimeout are deliberately absent, and this comment matters more than the
-	// code: both budget the *whole* request, body included. POST /api/products/{id}/image accepts up
-	// to 6 MiB, which is over five minutes on 3G, so a whole-request limit would cut off photo upload
-	// for precisely the owners with the worst connection and would never reproduce on a good one.
-	// don't add them "for completeness" - that breaks photo upload.
-	//
-	// IdleTimeout only counts silence on an already-open keep-alive connection, so it cannot interrupt
-	// a request in flight. the app's shared client (core/network/api_client.dart) drops a quiet
-	// connection after 15 seconds, before this does, and apiGet retries once for what slips through.
-	//
-	// behind a proxy the api listens on loopback only: otherwise anybody could skip the proxy, write
+	// behind a proxy the api listens on loopback only, or anybody could skip the proxy, write
 	// X-Forwarded-For themselves and hand the rate limiter any address they liked.
 	addr := ":" + port
 	if ratelimit.TrustProxy() {
@@ -342,60 +253,33 @@ func main() {
 		}
 	}()
 
-	// SUPERSEDED by the phone-code login (step 5). this goroutine, the webhook setup in step 6, the
-	// bot in step 3 and the whole internal/telegram package exist only to serve /api/auth/init and
-	// the deletion page's handshake - all of which go together once flutter is on the code flow.
-	// TELEGRAM_BOT_TOKEN and WEBHOOK_URL stop being required at that point too.
-	telegramHandler := &telegram.Handler{Bot: bot, SessionMgr: sessionMgr, Queries: queries, JWTSecret: jwtSecret}
-	go telegramHandler.ProcessUpdates(updates)
-
-	// the third goroutine: one row per market per day, so the admin panel can draw what a basket
+	// the second goroutine: one row per market per day, so the admin panel can draw what a basket
 	// cost last week. see startBasketHistory.
 	go startBasketHistory(queries)
 
-
-
-
-
-
-
-	// 8. block here until the os asks us to stop (ctrl+c locally, or however this
+	// 7. block here until the os asks us to stop (ctrl+c locally, or however this
 	// gets stopped in production), then shut down cleanly instead of being killed mid-request
 	waitForShutdown(srv, dbPool)
-
-
-
-
-
-
 
 }
 
 // startBasketHistory keeps `basket_history` current: one row per shop category per day.
 //
-// **It exists because the basket price is the one number in this product that cannot be recomputed.**
-// `shop_basket_index` is kept in step with `products.price` on every write (migration `000006`), so
-// it always answers about *now* - the moment an owner retypes a price, what their basket cost
-// yesterday is overwritten and nothing anywhere remembers it. Every other figure on the admin dashboard is derived from current rows; "средний чек по
-// категории за месяц" needs something to have been written down at the time.
+// **the basket price is the one number here that cannot be recomputed.** shop_basket_index always
+// answers about *now*, so yesterday's total is gone the moment an owner retypes a price.
 //
-// **Hourly, not nightly.** A daily job is one `time.Ticker` firing at whatever moment the process
-// happened to start, so a server restarted around that time skips whole days and a laptop that is
-// only on during the afternoon records nothing at all. The statement is an idempotent upsert keyed
-// by (day, category), so running it twenty-four times a day writes the same rows the last of those
-// runs would have written on its own - and today's point stays current to within the hour instead of
-// being yesterday's until midnight.
-//
-// **The whole aggregate runs in the database** (RecordBasketHistory) - one statement over the index
-// table, nothing travelling through Go - which is what makes it cheap enough to put on a timer at
-// all.
-//
-// A failure is logged and the loop continues: this is a chart, and a missing hour costs nothing that
-// the next hour does not fix. It also deliberately does *not* take the shutdown path - there is no
-// state to flush, and `dbPool.Close()` ending an in-flight upsert loses at most one hour of a
-// number that is rewritten every hour anyway.
+// hourly rather than nightly, because the upsert is idempotent per (day, category) and a server
+// restarted at the wrong moment would otherwise skip whole days. a failure is logged and ignored.
 func startBasketHistory(queries *db.Queries) {
 	record := func() {
+		// an unrecovered panic in a goroutine takes the *whole process* with it, api included. a
+		// chart is not worth that, so this one dies alone and the next hour tries again.
+		defer func() {
+			if problem := recover(); problem != nil {
+				log.Printf("CRITICAL: panic recording basket history: %v\n%s", problem, debug.Stack())
+			}
+		}()
+
 		ctx, cancel := dbctx.WithTimeout(context.Background())
 		defer cancel()
 		if err := queries.RecordBasketHistory(ctx); err != nil {
@@ -415,16 +299,12 @@ func startBasketHistory(queries *db.Queries) {
 
 // mustOpenCodeSender picks who delivers login codes, from the environment.
 //
-// **The default is the console, and it says so loudly.** An api whose .env has no provider in it
-// still has a working login - the code is printed into this log - which is what lets the flutter
-// side be built and tested before there is a Telegram Gateway balance or a moderated Eskiz
-// template. The alternative, refusing to boot without a provider, would make a local server
-// something only the founder can run.
+// the default is the console - a laptop with an empty .env still has a working login, printed into
+// this log. a *half-filled* provider is fatal (verify.New), because quietly printing everybody's
+// codes into a production log is the worst outcome available here.
 //
-// A half-filled provider *is* fatal, though: see verify.New. Three of the four Eskiz settings is
-// somebody midway through a .env, and answering that by quietly printing everybody's login codes
-// into a production log is the worst outcome this function can produce.
-func mustOpenCodeSender() verify.Sender {
+// the second return is whether a send costs money, which is what arms the per-phone budget.
+func mustOpenCodeSender() (verify.Sender, bool) {
 	sender, kind, err := verify.New(verify.SettingsFromEnv())
 	if err != nil {
 		log.Fatalf("Cannot configure the login code sender: %v", err)
@@ -433,13 +313,12 @@ func mustOpenCodeSender() verify.Sender {
 	switch kind {
 	case verify.KindConsole:
 		log.Printf("WARNING: login codes are NOT being delivered - they are printed into this log. "+
-			"Set %s (telegram gateway) or %s + %s + %s (eskiz sms) before anyone outside this machine tries to sign in.",
-			verify.EnvTelegramToken, verify.EnvEskizEmail, verify.EnvEskizPassword, verify.EnvEskizTemplate)
+			"Set %s before anyone outside this machine tries to sign in.", verify.EnvTelegramToken)
+		return sender, false
 	default:
 		log.Printf("Login codes: %s", kind)
+		return sender, true
 	}
-
-	return sender
 }
 
 // reads product_templates into internal/catalog's in-memory copy, or dies trying.
@@ -488,11 +367,8 @@ func mustConnectDB(dbURL string) *pgxpool.Pool {
 	config.MaxConnIdleTime = 30 * time.Minute    // every connection that was not used at all gets cleaned
 	config.HealthCheckPeriod = time.Minute       // every minute check on the connections and remove "bad" ones
 
-	// create an empty ctx - context.Background(), use it as parent for the WithTimeout function
-	// so the whole line means: "make a new context, based on the empty root context, that will automatically mark itself cancelled 5 seconds from now
-	// and hand me both that context, and a way to cancel it myself early if I want to."
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel() // cancel the ctx if pool was created successfully
+	defer cancel()
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
@@ -507,8 +383,7 @@ func mustConnectDB(dbURL string) *pgxpool.Pool {
 	return pool
 }
 
-// it called twice in mustConnetcDB func, and provided twice with a key (string) and value (def int32)
-// we check whether we have these two keys foncifgured inside env, if no we use the ones inside mustConnectDB
+// an int32 setting read from the environment, or the default when it is missing or unparseable
 func envInt(key string, def int32) int32 {
 	raw := os.Getenv(key)
 	if raw == "" {
@@ -522,38 +397,29 @@ func envInt(key string, def int32) int32 {
 }
 
 func productImagesDir() string {
-	if dir := os.Getenv("PRODUCT_IMAGES_DIR"); dir != "" {
+	if dir := os.Getenv("IMAGES_DIR"); dir != "" {
 		return dir
 	}
-	return filepath.Join("..", "photos")
+	return filepath.Join("..", "images")
 }
 
 // where product photos are stored, and what address the api tells the app to fetch them from.
 //
-// **Two settings, and they have to be decided together.** Storage is chosen by whether the R2 keys
-// are in the environment; the address comes from IMAGE_BASE_URL. Neither can see the other's
-// mistake, and the combination that is always wrong - photos written to a bucket while the api
-// hands out urls pointing at its own disk - produces a server whose /health is green, whose uploads
-// return 200, and whose every product tile is blank. That is a log line nobody reads at 2am, so it
-// is a refusal to boot instead.
-//
-// The disk is not a fallback for a missing deployment: it is what runs on the founder's laptop and
-// in every test, which is the whole argument for imagestore.Storage being an interface.
+// **two settings that have to agree.** storage follows the R2 keys, the address follows
+// IMAGE_BASE_URL, and the wrong pairing - photos in a bucket, urls pointing at local disk - is a
+// server whose /health is green and whose every product tile is blank. so it refuses to boot.
 func mustOpenPhotoStorage() (imagestore.Storage, imagestore.URLs) {
 	urls := imagestore.NewURLs(os.Getenv("IMAGE_BASE_URL"))
 
 	r2cfg, wanted, err := imagestore.R2ConfigFromEnv()
 	if err != nil {
-		// a partly-filled .env. answering it by quietly writing photos onto the machine's disk gives
-		// a server that works perfectly until it is redeployed, at which point every photo uploaded
-		// since is gone - so this is fatal too.
+		// a partly-filled .env: falling back to local disk would lose every photo on the next redeploy
 		log.Fatalf("Cannot configure photo storage: %v", err)
 	}
 
 	if !wanted {
-		// the uploads directory is created here rather than on the first upload: a directory the
-		// process cannot write is a misconfigured deployment, and the right time to find that out is
-		// at boot rather than from the first shop owner who presses "добавить фото".
+		// created at boot, not on the first upload: a directory the process cannot write is a
+		// misconfigured deployment, and this is the right moment to find out
 		disk, err := imagestore.NewDisk(productImagesDir())
 		if err != nil {
 			log.Fatalf("Cannot prepare the product photo directory: %v", err)
@@ -568,7 +434,7 @@ func mustOpenPhotoStorage() (imagestore.Storage, imagestore.URLs) {
 
 	if !urls.Configured() {
 		log.Fatalf("R2 is configured but IMAGE_BASE_URL is not - photos would be written to the "+
-			"bucket %q and served from this api's own /static/products/, which does not have them. "+
+			"bucket %q and served from this api's own /images/, which does not have them. "+
 			"Set IMAGE_BASE_URL to the bucket's public hostname (https://img.domix-api.uz).", r2cfg.Bucket)
 	}
 
@@ -591,21 +457,16 @@ func staticFiles(prefix, dir string) http.Handler {
 
 	files := http.StripPrefix(prefix, http.FileServer(noListing{http.Dir(dir)}))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// **load-bearing, not a nicety.** without it a 100-tile grid re-downloads roughly 4 MB every
-		// time it is scrolled back to. safe because a photo's url is never reused: a replaced upload
-		// gets a new random name (see imagestore.Save).
+		// load-bearing: without it a 100-tile grid re-downloads ~4 MB every time it is scrolled back
+		// to. safe because a replaced upload gets a new random name (imagestore.Save).
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		files.ServeHTTP(w, r)
 	})
 }
 
-// noListing is http.Dir with directories hidden.
-//
-// http.FileServer renders an index page for any directory it can open, which was harmless while
-// this served only catalogue photos and is not once owner uploads live under the same root: it would
-// hand anybody who guessed the path a browsable index of every photo in the market. Returning
-// "does not exist" for a directory is what turns that into a 404 - the file handling itself is
-// untouched, including http.Dir's own refusal to serve a path that climbs out of the root.
+// noListing is http.Dir with directories hidden: http.FileServer renders an index page for any
+// directory it can open, which would hand anybody who guessed the path a browsable index of every
+// uploaded photo in the market.
 type noListing struct{ dir http.Dir }
 
 func (n noListing) Open(name string) (http.File, error) {
@@ -642,10 +503,8 @@ func healthCheck(dbPool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-// when main func runs it creates a channel and starts listening to an interrupt/terminate signal,
-// and stops there, see: <-stop. it means no further code (http server and db pool shutdown), once it receives a signal
-// it shuts the http server down cleanly (finishing in-flight requests instead of dropping them) and closes the db pool. without
-// this, ctrl+c (or however this gets stopped in production) just kills everything mid-request.
+// blocks until the os asks us to stop, then finishes the in-flight requests and closes the pool
+// instead of everything being killed mid-request.
 func waitForShutdown(srv *http.Server, dbPool *pgxpool.Pool) {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)

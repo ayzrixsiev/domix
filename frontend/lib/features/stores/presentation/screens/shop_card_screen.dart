@@ -10,6 +10,9 @@ import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
 import 'package:frontend/core/widgets/price_tier_badge.dart';
 import 'package:frontend/core/widgets/primary_action_button.dart';
+import 'package:frontend/features/favorites/presentation/controllers/favorites_controller.dart';
+import 'package:frontend/features/favorites/presentation/favorite_action.dart';
+import 'package:frontend/features/home/data/category_product.dart';
 import 'package:frontend/features/products/data/product_model.dart';
 import 'package:frontend/features/products/presentation/controllers/products_controller.dart';
 import 'package:frontend/features/products/presentation/widgets/product_grid.dart';
@@ -18,7 +21,8 @@ import 'package:frontend/features/stores/data/price_tier.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 import 'package:frontend/features/stores/data/stores_repository.dart';
 import 'package:frontend/features/stores/presentation/widgets/shop_category_banner.dart';
-import 'package:frontend/core/widgets/circle_back_button.dart';
+import 'package:frontend/core/widgets/app_page_header.dart';
+import 'package:frontend/core/widgets/circle_icon_button.dart';
 
 // one shop, in full. every route into a shop ends here - a map pin, a VIP card, a Лучшие
 // предложения row.
@@ -123,13 +127,9 @@ class _ShopByIdScreenState extends State<ShopByIdScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        leading: const CircleBackButton(),
-        leadingWidth: CircleBackButton.leadingWidth,
-      ),
+      // back and nothing else: this screen has nothing to title itself with until the shop arrives,
+      // and by then it has been replaced
+      appBar: const AppPageHeader.custom(),
       body: Center(
         child: _isLoading
             ? const CircularProgressIndicator(color: AppColors.primaryOrange)
@@ -379,6 +379,7 @@ class _ShopCardViewState extends State<ShopCardView> {
           padding: gutter.add(const EdgeInsets.only(top: 14)),
           sliver: _ProductsSliver(
             products: matches,
+            shopName: shop.name,
             strings: strings,
             isFirstLoad: isFirstLoad,
             // three empty states, and telling them apart is the point: the request failed, the shop has priced
@@ -413,8 +414,8 @@ class _ShopCardViewState extends State<ShopCardView> {
             // clear of the status bar the cover now runs under
             Positioned(
               top: MediaQuery.paddingOf(context).top + 8,
-              // 0, because CircleBackButton carries the gutter inset itself
-              left: 0,
+              // the page gutter, which is where every other back disc in the app starts
+              left: CircleIconButton.gutterInset,
               // floating: it hovers over the cover rather than sitting in a bar
               child: const CircleBackButton(floating: true),
             ),
@@ -969,6 +970,7 @@ class _CatalogueSearchField extends StatelessWidget {
 class _ProductsSliver extends StatelessWidget {
   const _ProductsSliver({
     required this.products,
+    required this.shopName,
     required this.strings,
     required this.isFirstLoad,
     required this.hasFailed,
@@ -976,6 +978,11 @@ class _ProductsSliver extends StatelessWidget {
   });
 
   final List<Product> products;
+
+  /// the tiles here carry no shop of their own, so a saved one is given this shop's name - that is
+  /// what a favourite is shown with everywhere else
+  final String shopName;
+
   final AppLocalizations strings;
   final bool isFirstLoad;
   final bool hasFailed;
@@ -1023,12 +1030,23 @@ class _ProductsSliver extends StatelessWidget {
       );
     }
 
+    final favorites = context.watch<FavoritesController>();
+
     // a sliver grid, so a hundred-product catalogue builds one screenful of tiles - see the note at the
     // top of this file
     return ProductSliverGrid(
       tiles: [
         for (final Product product in products)
-          ProductTile(product: product, strings: strings, showBuyerActions: true),
+          ProductTile(
+            product: product,
+            strings: strings,
+            showBuyerActions: true,
+            isFavorite: favorites.contains(product.id),
+            onFavoriteToggle: () => toggleFavorite(
+              context,
+              CategoryProduct(product: product, shopName: shopName),
+            ),
+          ),
       ],
     );
   }

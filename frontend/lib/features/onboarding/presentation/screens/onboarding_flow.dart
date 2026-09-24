@@ -10,13 +10,15 @@ import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/role_option_tile.dart';
-import 'package:frontend/core/widgets/screen_header.dart';
+import 'package:frontend/core/widgets/app_form.dart';
+import 'package:frontend/core/widgets/app_page_header.dart';
+import 'package:frontend/core/widgets/circle_icon_button.dart';
 import 'package:frontend/features/onboarding/data/privacy_policy.dart';
+import 'package:frontend/core/widgets/code_input_field.dart';
 import 'package:frontend/features/onboarding/presentation/widgets/step_progress_bar.dart';
 import 'package:frontend/features/profile/data/auth_service.dart';
 import 'package:frontend/features/profile/presentation/controllers/auth_controller.dart';
-import 'package:frontend/features/tickets/data/job_role.dart';
-import 'package:frontend/features/tickets/presentation/controllers/tickets_controller.dart';
+import 'package:frontend/features/profile/data/account_role.dart';
 
 /// The five screens between opening Domix for the first time and having an account.
 ///
@@ -29,16 +31,30 @@ import 'package:frontend/features/tickets/presentation/controllers/tickets_contr
 /// **Nothing is persisted until the code verifies.** The account does not exist until then - the
 /// server keeps the pending code in RAM for the same reason - so abandoning this flow at any step
 /// leaves nothing behind but the language, which is a device preference rather than an account.
+///
+/// **A route over the shell, not a tab inside it.** Registering with the nav bar still on screen
+/// read as a half-open door: the app was offering four other places to be while asking for a phone
+/// number. This is pushed full screen instead, so the only things on it are the step and its two
+/// controls - and the X in the header, which is the one way out that does not walk back through
+/// every step.
+/// **One flow for both, because the server has one path.** `/verify` finds the account or creates
+/// it - see `upsertUser` - so signing in and registering are the same five steps and the same two
+/// requests. There is no shorter door to offer.
 enum _Step { language, policy, profile, phone, code }
 
-/// Clear air between the footer's lowest control and the top of the shell's floating nav bar.
-const double _footerGap = 30;
+/// Clear air under the footer's lowest control, over the system inset.
+const double _footerGap = 24;
 
 class OnboardingFlow extends StatefulWidget {
-  const OnboardingFlow({super.key, this.bottomPadding = 36});
+  const OnboardingFlow({super.key});
 
-  /// Room under the footer for the shell's floating nav bar.
-  final double bottomPadding;
+  /// Opens the flow over whatever is on screen, and answers whether an account came out of it.
+  static Future<bool> open(BuildContext context) async {
+    final signedIn = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const OnboardingFlow(), fullscreenDialog: true),
+    );
+    return signedIn ?? false;
+  }
 
   @override
   State<OnboardingFlow> createState() => _OnboardingFlowState();
@@ -51,7 +67,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   final _phoneController = TextEditingController();
   final _codeController = TextEditingController();
 
-  JobRole _role = JobRole.client;
+  AccountRole _role = AccountRole.client;
 
   bool _policyAccepted = false;
 
@@ -89,9 +105,10 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     });
   }
 
-  /// The back control. Null on the first step, and on [_Step.code] it goes back to the number
-  /// rather than one step in the enum - "изменить номер" is the only sensible retreat from a code
-  /// that went to the wrong phone.
+  /// The back control: one step, never the whole flow - the X in the header is what abandons it.
+  /// Null on the first step, and on [_Step.code] it goes back to the number rather than one step in
+  /// the enum - "изменить номер" is the only sensible retreat from a code that went to the wrong
+  /// phone.
   VoidCallback? get _onBack => switch (_step) {
         _Step.language => null,
         _Step.policy => () => _goTo(_Step.language),
@@ -160,6 +177,22 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       _goTo(_Step.code);
     } catch (error) {
       if (!mounted) return;
+
+      // **a cooldown is not a refusal, and drawing it as one is what made this a dead end.** The
+      // server only answers it while the previous code for this number is still live, so the
+      // sms is already in the reader's hands - «Изменить номер» and back onto the same number was
+      // being told "слишком много запросов" about a code sitting in their messages. The answer is
+      // the code screen with the countdown running, and no second message paid for.
+      if (error is AuthApiException && error.code == 'code_cooldown') {
+        // the server echoes the canonical spelling only on success; for nine typed digits this is
+        // the same string auth.CanonicalPhone would have produced
+        _canonicalPhone = '998$digits';
+        setState(() => _busy = false);
+        _startResendCountdown(error.retryAfter ?? 0);
+        _goTo(_Step.code);
+        return;
+      }
+
       setState(() {
         _busy = false;
         _error = _messageFor(error);
@@ -184,28 +217,30 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       _error = null;
     });
 
-    // read before the await: a successful verify rebuilds the tree out from under this widget, and
-    // a Provider lookup on a deactivated context asserts
-    final ticketsController = context.read<TicketsController>();
-
     try {
       await context.read<AuthController>().verifyCode(phone: _canonicalPhone, code: code);
 
-      // **the role is remembered on the phone, not only sent to the server.** the backend has no
-      // worker role - it maps everything that is not shop_owner down to customer - so this is what
-      // keeps a worker a worker when `/api/me` answers "customer" on the next foreground.
-      ticketsController.setRole(_role);
-
-      // nothing else to do: AuthController has flipped out of the guest state, so the screen that
-      // hosts this flow has already rebuilt into the signed-in profile underneath us
+      if (!mounted) return;
+      // the flow is a route now, so it has to take itself off the screen - the profile it was opened
+      // from has already rebuilt into the signed-in one underneath
+      Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _busy = false;
         _error = _messageFor(error);
+        // the server threw the entry away on these three, so there is nothing left for the digits on
+        // screen to match. empty boxes are what «запросите новый код» looks like - leaving them
+        // filled invites another tap on «Подтвердить» against a code that no longer exists.
+        if (error is AuthApiException && _deadCodeErrors.contains(error.code)) {
+          _codeController.clear();
+        }
       });
     }
   }
+
+  /// The refusals that mean the pending code is gone rather than mistyped - see CodeManager.Verify.
+  static const _deadCodeErrors = {'code_attempts_exhausted', 'code_expired', 'code_not_found'};
 
   Future<void> _resendCode() async {
     if (_resendIn > 0 || _busy) return;
@@ -250,32 +285,54 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     final strings = context.watch<LanguageProvider>().strings;
     final stepIndex = _Step.values.indexOf(_step);
 
-    return SafeArea(
-      bottom: false,
-      child: Column(
+    final counter = strings.stepCounter(stepIndex + 1, _Step.values.length);
+
+    // no SafeArea around the column: AppPageHeader consumes the status bar itself, which is what
+    // lets its surface run up under it instead of leaving a strip of page colour above the title
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ScreenHeader(
+          AppPageHeader(
             title: strings.onboardingTitle,
             subtitle: strings.onboardingSubtitle,
-            // no rule: the progress bar immediately below is already a horizontal line, and two of
-            // them stacked read as a mistake
-            showRule: false,
-            trailing: Text(
-              strings.stepCounter(stepIndex + 1, _Step.values.length),
-              style: const TextStyle(
-                color: AppColors.textMuted,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
-              ),
+            // the left disc is a chevron and this is not a step back - «Назад» in the footer is.
+            // the X abandons the whole flow from whichever step it is on.
+            showBack: false,
+            action: CircleIconButton(
+              icon: LucideIcons.x,
+              tooltip: strings.closeButton,
+              onTap: () => Navigator.of(context).pop(false),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-            child: StepProgressBar(
-              currentStep: stepIndex,
-              totalSteps: _Step.values.length,
-              semanticsLabel: strings.stepCounter(stepIndex + 1, _Step.values.length),
+            // the bar rides on the header's own surface: how far through the flow you are is part of
+            // navigating it, not part of the step being filled in
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(_progressExtent),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                // the counter moved down here off the action slot, which the X now holds
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: StepProgressBar(
+                        currentStep: stepIndex,
+                        totalSteps: _Step.values.length,
+                        semanticsLabel: counter,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      counter,
+                      style: const TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
           Expanded(
@@ -296,6 +353,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     );
   }
 
+  /// The counter's line box, plus the 12 that separates the row from the header's bottom edge.
+  static const double _progressExtent = 18 + 12;
+
   Widget _stepBody(AppLocalizations strings) => switch (_step) {
         _Step.language => _languageStep(strings),
         _Step.policy => _policyStep(strings),
@@ -311,27 +371,43 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   /// height, which moved «Далее» up and down between steps; here it pushes content that was already
   /// scrollable and the buttons do not move at all.
   ///
-  /// [body] is for the one step that has something to say - which number the code went to. The
-  /// others are a title and the controls, because "выберите язык" above a list of two languages
-  /// explains nothing that the list does not.
+  /// [body] is for the two steps that have something to say - that there is no account yet, and
+  /// which number the code went to. The others are the controls alone, because "выберите язык" above
+  /// a list of two languages explains nothing that the list does not.
+  ///
+  /// **Centred when it fits, scrolled when it does not.** Every step but the policy is two or three
+  /// controls, and against a whole screen of its own they hung off the top edge with the rest of the
+  /// page empty under them. The minimum height is the viewport's, so the same column centres itself
+  /// on the short steps and falls back to an ordinary scroll on the long one and under a keyboard.
   Widget _scrollableStep({String? body, required List<Widget> children}) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-      physics: const BouncingScrollPhysics(),
-      children: [
-        if (_error != null) ...[
-          _ErrorLine(_error!),
-          const SizedBox(height: 16),
-        ],
-        if (body != null) ...[
-          Text(
-            body,
-            style: const TextStyle(color: AppColors.textMuted, fontSize: 13.5, height: 1.45),
+    const padding = EdgeInsets.fromLTRB(20, 20, 20, 8);
+
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        padding: padding,
+        physics: const BouncingScrollPhysics(),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight - padding.vertical),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_error != null) ...[
+                AppErrorLine(_error!),
+                const SizedBox(height: 16),
+              ],
+              if (body != null) ...[
+                Text(
+                  body,
+                  style: const TextStyle(color: AppColors.textMuted, fontSize: 13.5, height: 1.45),
+                ),
+                const SizedBox(height: 18),
+              ],
+              ...children,
+            ],
           ),
-          const SizedBox(height: 18),
-        ],
-        ...children,
-      ],
+        ),
+      ),
     );
   }
 
@@ -339,6 +415,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     final current = context.watch<LanguageProvider>().language;
 
     return _scrollableStep(
+      // the one step that has to say what it is: somebody who opened Профиль expecting an account
+      // is looking at two language tiles and no explanation of why
+      body: strings.onboardingNoAccount,
       children: [
         for (final language in AppLanguage.values) ...[
           RoleOptionTile(
@@ -519,21 +598,21 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   Widget _profileStep(AppLocalizations strings) {
     return _scrollableStep(
       children: [
-        _FieldLabel(strings.nameInputLabel),
+        AppFieldLabel(strings.nameInputLabel),
         const SizedBox(height: 8),
         TextField(
           controller: _nameController,
           textCapitalization: TextCapitalization.words,
           textInputAction: TextInputAction.done,
-          decoration: _fieldDecoration(hint: strings.nameInputLabel),
+          decoration: appFieldDecoration(hint: strings.nameInputLabel),
           onChanged: (_) {
             if (_error != null) setState(() => _error = null);
           },
         ),
         const SizedBox(height: 22),
-        _FieldLabel(strings.registerRolePrompt),
+        AppFieldLabel(strings.registerRolePrompt),
         const SizedBox(height: 8),
-        for (final role in JobRole.values) ...[
+        for (final role in AccountRole.values) ...[
           RoleOptionTile(
             icon: role.icon,
             title: role.label(strings),
@@ -550,7 +629,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   Widget _phoneStep(AppLocalizations strings) {
     return _scrollableStep(
       children: [
-        _FieldLabel(strings.phoneInputLabel),
+        AppFieldLabel(strings.phoneInputLabel),
         const SizedBox(height: 8),
         TextField(
           controller: _phoneController,
@@ -560,28 +639,8 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
             FilteringTextInputFormatter.digitsOnly,
             LengthLimitingTextInputFormatter(9),
           ],
-          style: const TextStyle(
-            color: AppColors.textDark,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.4,
-          ),
-          decoration: _fieldDecoration(hint: '90 123 45 67').copyWith(
-            // a fixed country code rather than a picker: Domix is one country, and a picker is a
-            // way to send a code to a number no Uzbek operator will deliver
-            prefixIcon: const Padding(
-              padding: EdgeInsets.fromLTRB(14, 0, 8, 0),
-              child: Text(
-                '+998',
-                style: TextStyle(
-                  color: AppColors.textDark,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-          ),
+          style: appPhoneTextStyle,
+          decoration: appFieldDecoration(hint: '90 123 45 67', prefix: appPhonePrefix),
           onChanged: (_) {
             if (_error != null) setState(() => _error = null);
           },
@@ -590,33 +649,18 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     );
   }
 
+  /// The code, and under it the one thing to do when it never arrives.
+  ///
+  /// **No label over the boxes.** The line above already says a six-digit code went to this number,
+  /// and six empty boxes are not something a reader needs told what they are.
   Widget _codeStep(AppLocalizations strings) {
     return _scrollableStep(
-      body: strings.codeSentTo(_displayPhone),
+      body: strings.codeSentTo(formatUzPhone(_canonicalPhone)),
       children: [
-        _FieldLabel(strings.codeInputLabel),
-        const SizedBox(height: 8),
-        TextField(
+        CodeInputField(
           controller: _codeController,
-          keyboardType: TextInputType.number,
-          textInputAction: TextInputAction.done,
-          autofocus: true,
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(6),
-          ],
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: AppColors.textDark,
-            fontSize: 26,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 10,
-          ),
-          decoration: _fieldDecoration(hint: '– – – – – –'),
-          onChanged: (value) {
+          onChanged: (_) {
             if (_error != null) setState(() => _error = null);
-            // six digits is the whole code, so there is nothing to press "done" for
-            if (value.length == 6 && !_busy) _verifyCode();
           },
         ),
         const SizedBox(height: 18),
@@ -642,14 +686,6 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     );
   }
 
-  /// `998901234567` as `+998 90 123 45 67`. Grouped rather than raw: a twelve-digit run is not
-  /// something a reader can check their own number against at a glance.
-  String get _displayPhone {
-    final digits = _canonicalPhone.replaceAll(RegExp(r'\D'), '');
-    if (digits.length != 12) return _canonicalPhone;
-    return '+${digits.substring(0, 3)} ${digits.substring(3, 5)} '
-        '${digits.substring(5, 8)} ${digits.substring(8, 10)} ${digits.substring(10)}';
-  }
 
   /// The two controls, at the same height on every step.
   ///
@@ -657,11 +693,8 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   /// of here into the scrolling content - otherwise the footer was three different heights across
   /// five steps and «Далее» walked up and down the screen as you advanced.
   ///
-  /// The bottom inset is the shell's floating nav bar, *plus the system inset under it*, *plus a
-  /// gap*. The bar pads itself by the home-indicator height, so on a gesture-navigation phone its
-  /// top edge sits higher than the padding the shell hands down and the buttons were behind it -
-  /// and clearing it by a hair still looked wrong, because the back button then sat in the 12px
-  /// crack between the two. [_footerGap] is what lifts the pair clear of the bar entirely.
+  /// The bottom inset is the system's own - the home indicator on a gesture-navigation phone -
+  /// plus [_footerGap], so the back button is not sitting on the bar the phone draws over it.
   Widget _footer(AppLocalizations strings) {
     final label = switch (_step) {
       _Step.phone => strings.sendCodeButton,
@@ -671,12 +704,12 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     final systemInset = MediaQuery.viewPaddingOf(context).bottom;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(20, 10, 20, widget.bottomPadding + systemInset + _footerGap),
+      padding: EdgeInsets.fromLTRB(20, 10, 20, systemInset + _footerGap),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          _WizardButton(label: label, busy: _busy, onTap: _busy ? null : _onPrimaryAction),
+          AppWideButton(label: label, busy: _busy, onTap: _busy ? null : _onPrimaryAction),
           // the two were touching: a TextButton's own padding is the only thing that was between
           // them, which read as one control with a caption stuck under it
           const SizedBox(height: 12),
@@ -702,41 +735,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   }
 }
 
-InputDecoration _fieldDecoration({required String hint}) {
-  OutlineInputBorder border(Color color) => OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        borderSide: BorderSide(color: color),
-      );
 
-  return InputDecoration(
-    hintText: hint,
-    hintStyle: const TextStyle(color: AppColors.textFaint, fontWeight: FontWeight.w500),
-    filled: true,
-    fillColor: AppColors.surfaceMuted,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-    border: border(AppColors.hairline),
-    enabledBorder: border(AppColors.hairline),
-    focusedBorder: border(AppColors.primaryOrange),
-  );
-}
-
-class _FieldLabel extends StatelessWidget {
-  const _FieldLabel(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        color: AppColors.textDark,
-        fontSize: 13,
-        fontWeight: FontWeight.w700,
-      ),
-    );
-  }
-}
 
 /// The consent tick. A whole tappable row rather than a bare `Checkbox`, because a 20px box is
 /// below every touch-target guideline there is and this is the one control that has to be
@@ -800,94 +799,4 @@ class _ConsentCheckbox extends StatelessWidget {
   }
 }
 
-/// The step's refusal, in danger colours on a tinted strip. Not a SnackBar: it answers the button
-/// directly above it and has to stay on screen while the user fixes the field.
-class _ErrorLine extends StatelessWidget {
-  const _ErrorLine(this.message);
 
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppColors.dangerSoft,
-        borderRadius: BorderRadius.circular(AppRadius.xs),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(LucideIcons.circle_alert, size: 16, color: AppColors.danger),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(
-                  color: AppColors.danger,
-                  fontSize: 12.5,
-                  height: 1.35,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// The footer's primary button: full width, and it holds its own spinner.
-///
-/// Full width rather than [PrimaryActionButton], which sizes to its label - a wizard's "Далее" is
-/// the one thing on the step that is always in the same place, and a button that changes width with
-/// its caption moves under the thumb between steps.
-class _WizardButton extends StatelessWidget {
-  const _WizardButton({required this.label, required this.busy, required this.onTap});
-
-  final String label;
-  final bool busy;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = onTap != null;
-    final radius = BorderRadius.circular(AppRadius.sm);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: radius,
-        boxShadow: enabled ? AppShadows.accent(AppColors.primaryOrange) : null,
-      ),
-      child: Material(
-        color: enabled ? AppColors.primaryOrange : AppColors.trackGrey,
-        borderRadius: radius,
-        child: InkWell(
-          borderRadius: radius,
-          onTap: onTap,
-          child: SizedBox(
-            height: 52,
-            child: Center(
-              child: busy
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
-                    )
-                  : Text(
-                      label,
-                      style: TextStyle(
-                        color: enabled ? Colors.white : AppColors.textFaint,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}

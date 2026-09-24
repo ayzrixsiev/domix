@@ -108,7 +108,8 @@ void main() {
     expect(AuthController().profileState.isVendor, isTrue);
     // the entry point into the shops. its absence was the whole reported symptom.
     expect(find.text(_strings.manageShops), findsOneWidget);
-    expect(find.text(_strings.vendorBadge), findsOneWidget);
+    // the badge is set in capitals - see _RoleBadge
+    expect(find.text(_strings.vendorBadge.toUpperCase()), findsOneWidget);
   });
 
   testWidgets('a customer keeps the customer profile', (tester) async {
@@ -120,40 +121,40 @@ void main() {
     expect(find.text(_strings.deleteAccount), findsOneWidget);
   });
 
-  testWidgets('a guest gets the onboarding flow, not a profile', (tester) async {
+  testWidgets('a guest gets the door into registration, not a profile', (tester) async {
     await _signOut();
     await _pumpProfile(tester);
 
     expect(AuthController().profileState.isGuest, isTrue);
 
-    // step one of OnboardingFlow - the language choice, and the counter saying how many steps
-    // there are. the step carries no title of its own: two language tiles do not need a sentence
-    // above them saying they are language tiles.
-    expect(find.text(_strings.onboardingTitle), findsOneWidget);
-    expect(find.text(AppLanguage.ru.displayName), findsOneWidget);
-    expect(find.text(AppLanguage.uz.displayName), findsOneWidget);
-    expect(find.text(_strings.stepCounter(1, 5)), findsOneWidget);
+    // the tab itself is the gate: registration is a full-screen route, so nothing of the flow is on
+    // this screen until the button is pressed
+    expect(find.text(_strings.profileGuestTitle), findsOneWidget);
+    expect(find.text(_strings.profileGuestAction), findsOneWidget);
+    expect(find.text(_strings.onboardingTitle), findsNothing);
 
-    // the three rows a guest used to be handed. favourites and language mean nothing without an
-    // account, and support is its own tab in the nav bar - so all three were a menu that either did
-    // nothing or sent the visitor back to this same screen to log in first.
+    // the rows a guest used to be handed: favourites and language mean nothing without an account,
+    // so the menu either did nothing or sent the visitor back here to log in first.
     expect(find.text(_strings.favorites), findsNothing);
-    expect(find.text(_strings.support), findsNothing);
 
     // and none of the signed-in screen leaks through
     expect(find.text(_strings.logout), findsNothing);
     expect(find.text(_strings.deleteAccount), findsNothing);
   });
 
-  testWidgets('«Поддержка» is gone from the signed-in menu too, it lives in the nav bar', (tester) async {
-    await _signIn(role: 'customer');
+  testWidgets('the guest door opens the flow over the tab', (tester) async {
+    await _signOut();
     await _pumpProfile(tester);
 
-    expect(find.text(_strings.support), findsNothing);
-    // the rows either side of where it sat are still there, so this is a removal and not a
-    // collapsed menu
-    expect(find.text(_strings.favorites), findsOneWidget);
-    expect(find.textContaining(_strings.languageSettings), findsOneWidget);
+    await tester.tap(find.text(_strings.profileGuestAction));
+    await tester.pumpAndSettle();
+
+    // step one: the flow says why it is there, and offers the language
+    expect(find.text(_strings.onboardingTitle), findsOneWidget);
+    expect(find.text(_strings.onboardingNoAccount), findsOneWidget);
+    expect(find.text(AppLanguage.ru.displayName), findsOneWidget);
+    expect(find.text(AppLanguage.uz.displayName), findsOneWidget);
+    expect(find.text(_strings.stepCounter(1, 5)), findsOneWidget);
   });
 
   testWidgets('tapping «Удалить аккаунт» opens the confirmation', (tester) async {

@@ -78,8 +78,13 @@ flutter:
   # the product shots behind the home screen's category tiles. one file per category that has one -
   # see ProductCategory.photo - cut to 384x296 webp, which is the tile's slot on a 3x screen and the
   # reason the whole set is under 80KB.
+  # bundled, not served: these are the first thing on the home screen, so they have to be there
+  # before the network is. product photos are the opposite and come from the api - see images/shops.
   assets:
-    - assets/categories/
+    - assets/decorations/categories/
+    # the five storefronts behind the VIP carousel - see _SlotPhoto. cut to 1024x512 webp, which is
+    # the card's photo strip on a 3x screen, and the reason the whole set is under 400KB.
+    - assets/decorations/vip/
 
   # To add custom fonts to your application, add a fonts section here,
   # in this "flutter" section. Each entry in this list should have a

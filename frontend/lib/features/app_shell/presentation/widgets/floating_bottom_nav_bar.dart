@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/core/constants/app_colors.dart';
+import 'package:frontend/core/constants/app_theme.dart';
 
 class ShellNavItem {
   const ShellNavItem({required this.icon, required this.label});
@@ -33,25 +34,27 @@ class FloatingBottomNavBar extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(22, 0, 22, 8 + systemInset),
       child: Container(
         height: 76,
+        // **not white.** a pure white bar over a warm page reads as a rectangle cut out of a
+        // different material; `surfaceRaised` is a hair off it, which is enough to make the bar look
+        // like the same paper lifted off the page. the shadow is warm-black rather than neutral
+        // black for the same reason - a grey shadow on a warm ground is the cheapest-looking thing
+        // an interface can do.
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(28),
+          color: AppColors.surfaceRaised,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
           // uniform single-colour border - a per-side one is illegal with borderRadius
-          border: Border.all(
-            color: const Color(0xFFEDEEF1),
-            width: 1,
-          ),
-          boxShadow: [
+          border: Border.all(color: AppColors.hairline, width: 1),
+          boxShadow: const [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 24,
-              offset: const Offset(0, 10),
+              color: Color(0x1F2A2018),
+              blurRadius: 28,
+              offset: Offset(0, 12),
             ),
             // a tight second layer, so the bar does not read as floating too high
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
+              color: Color(0x0F2A2018),
               blurRadius: 4,
-              offset: const Offset(0, 1),
+              offset: Offset(0, 1),
             ),
           ],
         ),
@@ -130,7 +133,7 @@ class _NavButtonState extends State<_NavButton> {
 
   @override
   Widget build(BuildContext context) {
-    final itemColor = widget.isActive ? Colors.white : const Color(0xFF98A2B3);
+    final itemColor = widget.isActive ? AppColors.textLight : AppColors.textGrey;
 
     return Expanded(
       child: GestureDetector(

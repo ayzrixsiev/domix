@@ -72,6 +72,17 @@
   .btn:disabled{opacity:.4; cursor:default; transform:none}
   .btn svg{width:18px;height:18px;flex:none}
   .btn.ghost{background:transparent; color:var(--grey); font-weight:600; font-size:14.5px; height:40px; margin-top:6px}
+  /* the one button on this page that destroys something wears the colour that says so */
+  .btn.danger{background:var(--danger)}
+
+  /* the same box as the phone field, but the value is the whole of it: centred, spaced out, and
+     big enough to check against an sms at a glance */
+  .field.code input{text-align:center; letter-spacing:.42em; font-size:22px; font-weight:650; padding-left:.42em}
+
+  /* an answer the reader can act on, under the field it is about. it is not a result screen: a
+     mistyped digit has to be fixable without starting over. */
+  .err{margin:10px 0 0; font-size:14px; color:var(--danger); min-height:1px}
+  .hint{margin:12px 0 0; text-align:center; font-size:13.5px; color:var(--faint)}
 
   .status{display:flex; gap:11px; align-items:flex-start; font-size:15px; color:var(--grey); margin:0 0 18px}
   .status .dot{width:9px;height:9px;border-radius:50%;background:var(--orange);flex:none;margin-top:6px;animation:pulse 1.4s ease-in-out infinite}
@@ -129,8 +140,8 @@
       <span data-lang="uz">Hisobni o‘chirish</span>
     </h1>
     <p class="lede" id="lede">
-      <span data-lang="ru">Введите номер телефона и подтвердите его в Telegram. Аккаунт будет удалён сразу.</span>
-      <span data-lang="uz">Telefon raqamingizni kiriting va uni Telegramda tasdiqlang. Hisob darhol o‘chiriladi.</span>
+      <span data-lang="ru">Введите номер телефона. Мы отправим код в Telegram — подтвердите им удаление.</span>
+      <span data-lang="uz">Telefon raqamingizni kiriting. Telegramga kod yuboramiz — u bilan o‘chirishni tasdiqlang.</span>
     </p>
 
     <!-- step 1: the number -->
@@ -145,30 +156,37 @@
                placeholder="90 123 45 67" maxlength="12" aria-label="Telefon">
       </label>
       <button class="btn" id="submit" type="submit" disabled>
-        <span data-lang="ru">Продолжить в Telegram</span>
-        <span data-lang="uz">Telegramda davom etish</span>
+        <span data-lang="ru">Отправить код</span>
+        <span data-lang="uz">Kod yuborish</span>
       </button>
+      <p class="err" id="phone-err"></p>
     </form>
 
-    <!-- step 2: away in telegram -->
-    <div id="step-wait" hidden>
+    <!-- step 2: the code -->
+    <form id="step-code" novalidate hidden>
       <p class="status">
         <span class="dot" aria-hidden="true"></span>
-        <span>
-          <span data-lang="ru">Откройте Telegram и нажмите кнопку подтверждения. Эта страница обновится сама.</span>
-          <span data-lang="uz">Telegramni oching va tasdiqlash tugmasini bosing. Bu sahifa o‘zi yangilanadi.</span>
-        </span>
+        <span id="sent-to"></span>
       </p>
-      <a class="btn" id="tg" href="#" target="_blank" rel="noopener">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21.9 4.3 18.7 19.4c-.2 1-.9 1.3-1.7.8l-4.7-3.5-2.3 2.2c-.3.3-.5.5-1 .5l.3-4.9L18.2 6c.4-.3-.1-.5-.6-.2L6.6 12.7l-4.7-1.5c-1-.3-1-1 .2-1.5l18.4-7.1c.9-.3 1.6.2 1.4 1.7Z"/></svg>
-        <span data-lang="ru">Открыть Telegram</span>
-        <span data-lang="uz">Telegramni ochish</span>
-      </a>
+      <span class="lbl">
+        <span data-lang="ru">Код из Telegram</span>
+        <span data-lang="uz">Telegramdagi kod</span>
+      </span>
+      <label class="field code">
+        <input id="code" type="text" inputmode="numeric" autocomplete="one-time-code"
+               placeholder="000000" maxlength="6" aria-label="Kod">
+      </label>
+      <button class="btn danger" id="confirm" type="submit" disabled>
+        <span data-lang="ru">Удалить аккаунт</span>
+        <span data-lang="uz">Hisobni o‘chirish</span>
+      </button>
+      <p class="err" id="code-err"></p>
+      <button class="btn ghost" type="button" id="resend" disabled></button>
       <button class="btn ghost" type="button" data-restart>
         <span data-lang="ru">Ввести другой номер</span>
         <span data-lang="uz">Boshqa raqam kiritish</span>
       </button>
-    </div>
+    </form>
 
     <!-- step 3: the answer -->
     <div id="step-done" hidden>
@@ -275,7 +293,7 @@
   // ── steps ───────────────────────────────────────────────────────────────────
   var steps = {
     form: document.getElementById('step-form'),
-    wait: document.getElementById('step-wait'),
+    code: document.getElementById('step-code'),
     done: document.getElementById('step-done')
   };
   var lede = document.getElementById('lede');
@@ -286,40 +304,9 @@
     lede.hidden = name !== 'form';
   }
 
-  // ── the outcome, one entry per status the server can report ─────────────────
-  // both languages are written into the dom for the same reason the static copy is: switching
-  // language after an answer has landed must not blank it out.
-  var icons = {
-    ok:   'M20 6 9 17l-5-5',
-    bad:  'M18 6 6 18M6 6l12 12',
-    warn: 'M12 8v5M12 16h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z'
-  };
-  var outcomes = {
-    success: { tone: 'ok', icon: 'ok',
-      ru: ['Аккаунт удалён', 'Данные аккаунта, магазины и товары удалены безвозвратно.'],
-      uz: ['Hisob o‘chirildi', 'Hisob ma’lumotlari, do‘konlar va mahsulotlar butunlay o‘chirildi.'] },
-    no_account: { tone: '', icon: 'warn',
-      ru: ['Аккаунт не найден', 'На этот номер аккаунт Domix не зарегистрирован — удалять нечего.'],
-      uz: ['Hisob topilmadi', 'Bu raqamga Domix hisobi ro‘yxatdan o‘tkazilmagan — o‘chiradigan narsa yo‘q.'] },
-    mismatch: { tone: 'bad', icon: 'bad',
-      ru: ['Номера не совпадают', 'В Telegram подтверждён другой номер. Аккаунт не удалён.'],
-      uz: ['Raqamlar mos kelmadi', 'Telegramda boshqa raqam tasdiqlandi. Hisob o‘chirilmadi.'] },
-    error: { tone: 'bad', icon: 'bad',
-      ru: ['Не получилось', 'Аккаунт не удалён. Попробуйте позже.'],
-      uz: ['Bajarilmadi', 'Hisob o‘chirilmadi. Keyinroq urinib ko‘ring.'] },
-    not_found: { tone: '', icon: 'warn',
-      ru: ['Время вышло', 'Подтверждение не пришло. Начните заново.'],
-      uz: ['Vaqt tugadi', 'Tasdiqlash kelmadi. Qaytadan boshlang.'] }
-  };
-
-  var result = document.getElementById('result');
-  var markIcon = document.getElementById('mark-icon');
-  var resultTitle = document.getElementById('result-title');
-  var resultBody = document.getElementById('result-body');
-
-  // textContent rather than innerHTML for every string that reaches the page. none of these are
-  // user-supplied today, and building nodes is the version of that rule the next person to add a
-  // line cannot get wrong.
+  // ── bilingual text ──────────────────────────────────────────────────────────
+  // textContent rather than innerHTML for every string that reaches the page, and both languages
+  // are written into the dom so switching language after an answer has landed does not blank it.
   function bilingual(target, ru, uz) {
     target.textContent = '';
     [['ru', ru], ['uz', uz]].forEach(function (pair) {
@@ -329,8 +316,65 @@
       target.appendChild(span);
     });
   }
+
+  // **every refusal the api can answer with, in both languages.** the server sends a stable `code`
+  // and an english sentence it never expects anyone to read - this is where the code becomes words.
+  // an unrecognised one falls through to `default`, so a new code added on the server degrades to a
+  // vague message rather than to a blank line.
+  var errors = {
+    invalid_phone:           ['Проверьте номер телефона.', 'Telefon raqamini tekshiring.'],
+    code_invalid:            ['Неверный код. Проверьте и попробуйте ещё раз.', 'Kod noto‘g‘ri. Tekshirib, qayta urinib ko‘ring.'],
+    code_expired:            ['Срок действия кода истёк. Запросите новый.', 'Kod muddati tugadi. Yangisini so‘rang.'],
+    code_attempts_exhausted: ['Слишком много попыток. Запросите новый код.', 'Juda ko‘p urinish. Yangi kod so‘rang.'],
+    code_not_found:          ['Код не запрашивался. Начните заново.', 'Kod so‘ralmagan. Qaytadan boshlang.'],
+    code_cooldown:           ['Код уже отправлен. Подождите немного.', 'Kod allaqachon yuborilgan. Biroz kuting.'],
+    code_quota:              ['На этот номер отправлено слишком много кодов. Попробуйте позже.', 'Bu raqamga juda ko‘p kod yuborilgan. Keyinroq urinib ko‘ring.'],
+    rate_limited:            ['Слишком много запросов. Подождите немного.', 'Juda ko‘p so‘rov. Biroz kuting.'],
+    code_not_sent:           ['Не удалось отправить код. Попробуйте ещё раз.', 'Kodni yuborib bo‘lmadi. Qayta urinib ko‘ring.'],
+    "default":               ['Что-то пошло не так. Попробуйте ещё раз.', 'Nimadir noto‘g‘ri ketdi. Qayta urinib ko‘ring.']
+  };
+  function fail(target, code) {
+    var words = errors[code] || errors["default"];
+    bilingual(target, words[0], words[1]);
+  }
+  function clearError(target) { target.textContent = ''; }
+
+  // one shape for every answer: the parsed body, plus whether the server was happy with it. a
+  // response that is not json at all (a proxy's error page) still arrives here as a refusal rather
+  // than as an exception nobody catches.
+  function post(url, body) {
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (data) {
+        return { ok: r.ok, data: data };
+      });
+    });
+  }
+
+  // ── the outcome ─────────────────────────────────────────────────────────────
+  var icons = {
+    ok:  'M20 6 9 17l-5-5',
+    bad: 'M18 6 6 18M6 6l12 12'
+  };
+  var outcomes = {
+    success: { tone: 'ok', icon: 'ok',
+      ru: ['Аккаунт удалён', 'Данные аккаунта, магазины и товары удалены безвозвратно.'],
+      uz: ['Hisob o‘chirildi', 'Hisob ma’lumotlari, do‘konlar va mahsulotlar butunlay o‘chirildi.'] },
+    error: { tone: 'bad', icon: 'bad',
+      ru: ['Не получилось', 'Аккаунт не удалён. Попробуйте позже.'],
+      uz: ['Bajarilmadi', 'Hisob o‘chirilmadi. Keyinroq urinib ko‘ring.'] }
+  };
+
+  var result = document.getElementById('result');
+  var markIcon = document.getElementById('mark-icon');
+  var resultTitle = document.getElementById('result-title');
+  var resultBody = document.getElementById('result-body');
+
   function finish(status) {
-    stopPolling();
+    stopCountdown();
     var out = outcomes[status] || outcomes.error;
     result.className = 'result ' + out.tone;
     markIcon.innerHTML = '';
@@ -339,74 +383,128 @@
     markIcon.appendChild(path);
     bilingual(resultTitle, out.ru[0], out.uz[0]);
     bilingual(resultBody, out.ru[1], out.uz[1]);
-    // every outcome except one leaves something to retry. after a successful deletion there is no
-    // account left to start again with, and offering it invites a second pointless round trip.
+    // after a successful deletion there is no account left to start again with
     document.getElementById('done-restart').hidden = status === 'success';
     show('done');
   }
 
-  // ── the handshake ───────────────────────────────────────────────────────────
-  var sessionID = null;
-  var timer = null;
-  var polls = 0;
-  var maxPolls = 150; // 2s apart, so five minutes - half the session's own ten-minute life
+  // ── step 2: the code ────────────────────────────────────────────────────────
+  var codeForm = document.getElementById('step-code');
+  var codeInput = document.getElementById('code');
+  var confirm = document.getElementById('confirm');
+  var codeErr = document.getElementById('code-err');
+  var phoneErr = document.getElementById('phone-err');
+  var sentTo = document.getElementById('sent-to');
+  var resend = document.getElementById('resend');
 
-  function stopPolling() {
-    if (timer) { clearInterval(timer); timer = null; }
+  // the number the code was keyed by, exactly as the server echoed it back. sending back anything
+  // else - the digits as typed, say - is a lookup miss the user reads as "wrong code".
+  var canonical = null;
+  var ticker = null;
+  var waitUntil = 0;
+
+  function stopCountdown() {
+    if (ticker) { clearInterval(ticker); ticker = null; }
   }
 
-  function poll() {
-    if (!sessionID) return;
-    if (++polls > maxPolls) { finish('not_found'); return; }
+  // the resend button doubles as the countdown, so there is never a disabled control with no
+  // explanation next to it
+  function paintResend() {
+    var left = Math.max(0, Math.ceil((waitUntil - Date.now()) / 1000));
+    if (left > 0) {
+      resend.disabled = true;
+      bilingual(resend, 'Отправить ещё раз · ' + left + ' с', 'Qayta yuborish · ' + left + ' s');
+      return;
+    }
+    stopCountdown();
+    resend.disabled = false;
+    bilingual(resend, 'Отправить ещё раз', 'Qayta yuborish');
+  }
+  function startCountdown(seconds) {
+    stopCountdown();
+    waitUntil = Date.now() + (seconds || 0) * 1000;
+    paintResend();
+    if (seconds > 0) { ticker = setInterval(paintResend, 1000); }
+  }
 
-    fetch('/api/account-deletion/status?session_id=' + encodeURIComponent(sessionID))
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (data && data.status && data.status !== 'pending') { finish(data.status); }
+  codeInput.addEventListener('input', function () {
+    codeInput.value = codeInput.value.replace(/\D/g, '').slice(0, 6);
+    confirm.disabled = codeInput.value.length !== 6;
+    clearError(codeErr);
+  });
+
+  // ── step 1: the number ──────────────────────────────────────────────────────
+  function requestCode(onDone) {
+    clearError(phoneErr);
+    clearError(codeErr);
+
+    var digits = localDigits(input.value);
+    if (digits.length !== 9) return;
+
+    post('/api/account-deletion/request-code', { phone: '998' + digits })
+      .then(function (answer) {
+        if (!answer.ok) { onDone(answer.data.code || 'default'); return; }
+        canonical = answer.data.phone;
+        startCountdown(answer.data.resend_after);
+        bilingual(sentTo,
+          'Код отправлен в Telegram на +' + canonical + '.',
+          'Kod Telegramga +' + canonical + ' raqamiga yuborildi.');
+        onDone(null);
       })
-      // a poll that failed to reach the server is not an answer about the account - the next tick
-      // asks again. only the server ends this flow.
-      .catch(function () {});
+      // a request that never reached the server says nothing about the account, so it is reported as
+      // a retryable failure rather than as an outcome
+      .catch(function () { onDone('default'); });
   }
 
   form.addEventListener('submit', function (event) {
     event.preventDefault();
-    var digits = localDigits(input.value);
-    if (digits.length !== 9) return;
-
     submit.disabled = true;
-    fetch('/api/account-deletion/init', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: '998' + digits })
-    })
-      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
-      .then(function (data) {
-        sessionID = data.session_id;
-        document.getElementById('tg').href = data.telegram_url;
-        polls = 0;
-        show('wait');
-        stopPolling();
-        timer = setInterval(poll, 2000);
-      })
-      .catch(function () {
-        submit.disabled = false;
-        finish('error');
-      });
+    requestCode(function (problem) {
+      submit.disabled = false;
+      if (problem) { fail(phoneErr, problem); return; }
+      show('code');
+      codeInput.value = '';
+      confirm.disabled = true;
+      codeInput.focus();
+    });
   });
 
-  // coming back from telegram is the moment the answer is most likely to be waiting, and a tab that
-  // was in the background may have had its timers throttled to a crawl.
-  document.addEventListener('visibilitychange', function () {
-    if (!document.hidden && timer) { poll(); }
+  resend.addEventListener('click', function () {
+    resend.disabled = true;
+    requestCode(function (problem) {
+      if (problem) { fail(codeErr, problem); paintResend(); }
+    });
+  });
+
+  codeForm.addEventListener('submit', function (event) {
+    event.preventDefault();
+    if (codeInput.value.length !== 6) return;
+
+    confirm.disabled = true;
+    post('/api/account-deletion/confirm', { phone: canonical, code: codeInput.value })
+      .then(function (answer) {
+        if (answer.ok && answer.data.deleted) { finish('success'); return; }
+        // a wrong digit is fixable where an expired code is not, so the page stays here and says
+        // which it was rather than throwing the reader onto a result screen either way
+        confirm.disabled = false;
+        fail(codeErr, answer.data.code || 'default');
+      })
+      .catch(function () {
+        confirm.disabled = false;
+        fail(codeErr, 'default');
+      });
   });
 
   document.querySelectorAll('[data-restart]').forEach(function (b) {
     b.addEventListener('click', function () {
-      stopPolling();
-      sessionID = null;
+      stopCountdown();
+      canonical = null;
       input.value = '';
+      codeInput.value = '';
       submit.disabled = true;
+      confirm.disabled = true;
+      clearError(phoneErr);
+      clearError(codeErr);
       show('form');
       input.focus();
     });

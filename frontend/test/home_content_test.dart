@@ -118,7 +118,7 @@ void main() {
       {"vip_shops":[],
        "best_offers":[{"category":"universal","shops":[
          {"id":1,"name":"Х","contact_phone":"+998","address":"А","category":"universal",
-          "rating":0,"is_vip":false,"price_tier":null,"price_difference_percent":null,
+          "is_vip":false,"price_tier":null,"price_difference_percent":null,
           "basket_price":null,"latitude":41.3,"longitude":69.2}]}]}
       ''';
       final content = HomeContent.fromJson(jsonDecode(unpriced) as Map<String, dynamic>);
@@ -161,7 +161,6 @@ void main() {
           category: ShopCategory.universal,
           latitude: 41.3,
           longitude: 69.2,
-          rating: 0,
           isVip: true,
         ));
 
@@ -204,7 +203,6 @@ void main() {
           category: ShopCategory.universal,
           latitude: 41.3,
           longitude: 69.2,
-          rating: 0,
         ));
 
     test('keeps the server ordering and pads the tail', () {

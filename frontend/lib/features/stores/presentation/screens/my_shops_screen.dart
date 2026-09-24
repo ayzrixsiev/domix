@@ -5,6 +5,8 @@ import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
+import 'package:frontend/core/widgets/app_page_header.dart';
+import 'package:frontend/core/widgets/circle_icon_button.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
 import 'package:frontend/core/widgets/price_tier_badge.dart';
 import 'package:frontend/core/widgets/primary_action_button.dart';
@@ -12,7 +14,6 @@ import 'package:frontend/features/stores/data/shop_model.dart';
 import 'add_store_screen.dart';
 import 'shop_settings_screen.dart';
 import '../controllers/stores_controller.dart';
-import 'package:frontend/core/widgets/circle_back_button.dart';
 
 // the shops the current owner owns, opened from Profile > Управление магазинами. tapping one opens
 // ShopSettingsScreen for it.
@@ -61,38 +62,22 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: false,
-        titleSpacing: 20,
-        iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
-        // the disc, not a bare chevron. leadingWidth must move with it or flutter keeps its own 56 and
-        // the title sits wrong.
-        leading: const CircleBackButton(),
-        leadingWidth: CircleBackButton.leadingWidth,
-        title: Text(
-          strings.myShopsScreenTitle,
-          style: const TextStyle(
-            color: AppColors.textDark,
-            fontSize: 18,
-            letterSpacing: -0.2,
-            fontWeight: FontWeight.w700,
-          ),
+      appBar: AppPageHeader(
+        title: strings.myShopsScreenTitle,
+        // the count used to be a line of grey text above the first card, which is a row of the list
+        // that is not a shop. on the header it is what the title is *about*, and it costs no space.
+        subtitle: controller.myShops.isEmpty
+            ? null
+            : strings.shopsCountLabel(controller.myShops.length),
+        // reachable straight from here, so adding a second shop does not mean backing out to profile.
+        // orange only on the glyph: the disc is the same white one the back button wears, so the two
+        // ends of the header are the same control at the same weight.
+        action: CircleIconButton(
+          icon: CupertinoIcons.add,
+          iconColor: AppColors.primaryOrange,
+          tooltip: strings.addStore,
+          onTap: _openAddStore,
         ),
-        actions: [
-          // reachable straight from here, so adding a second shop does not mean backing out to profile. a
-          // tinted round button reads as an affordance without another block of solid orange in the bar.
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: _AppBarActionButton(
-              icon: CupertinoIcons.add,
-              tooltip: strings.addStore,
-              onTap: _openAddStore,
-            ),
-          ),
-        ],
       ),
       body: SafeArea(child: _buildBody(controller, strings)),
     );
@@ -138,60 +123,17 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
       onRefresh: () => controller.loadMyShops(),
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
-        itemCount: controller.myShops.length + 1,
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
+        itemCount: controller.myShops.length,
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
-          if (index == 0) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
-              child: Text(
-                strings.shopsCountLabel(controller.myShops.length),
-                style: const TextStyle(
-                  color: AppColors.textFaint,
-                  fontSize: 12.5,
-                  letterSpacing: 0.2,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            );
-          }
-
-          final shop = controller.myShops[index - 1];
+          final shop = controller.myShops[index];
           return _ShopCard(
             shop: shop,
             strings: strings,
             onTap: () => _openShop(shop),
           );
         },
-      ),
-    );
-  }
-}
-
-class _AppBarActionButton extends StatelessWidget {
-  const _AppBarActionButton({required this.icon, required this.tooltip, required this.onTap});
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: AppColors.primarySoft,
-        shape: const CircleBorder(),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: SizedBox(
-            width: 36,
-            height: 36,
-            child: Icon(icon, color: AppColors.primaryOrange, size: 19),
-          ),
-        ),
       ),
     );
   }

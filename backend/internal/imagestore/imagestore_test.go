@@ -378,7 +378,7 @@ func TestRemoveRefusesAnythingOutsideUploads(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	for _, path := range []string{"universal/001.jpg", "uploads/../universal/001.jpg", "", "uploads"} {
+	for _, path := range []string{"shops/universal/001.jpg", "shops/uploads/../universal/001.jpg", "", "shops/uploads"} {
 		if err := store.Remove(ctx, path); !errors.Is(err, ErrOutsideUploads) {
 			t.Errorf("Remove(%q) returned %v, expected ErrOutsideUploads", path, err)
 		}

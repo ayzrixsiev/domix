@@ -12,23 +12,15 @@ type ShopResponse struct {
 	ID                     int64   `json:"id"`
 	Name                   string  `json:"name"`
 	ContactPhone           string  `json:"contact_phone"`
-	ImageURL               string  `json:"image_url,omitempty"`
 	Address                string  `json:"address"`
-	Category     		   string  `json:"category"`
-	Rating 		 		   float64 `json:"rating"`
-	IsVIP  		 		   bool    `json:"is_vip"`
-	BasketPrice  		   *int64  `json:"basket_price"`			// int: sum of the shop's basket
-	PriceTier    		   *string `json:"price_tier"`				// string: cheaper, avrg, dearer
-	PriceDifferencePercent *int64  `json:"price_difference_percent"`// int: e.g 4 percent (cheaper or dearer)
-	Latitude  			   float64 `json:"latitude"`
-	Longitude 			   float64 `json:"longitude"`
-	ProductCount 		   int64   `json:"product_count,omitempty"`
-}
-
-// helper functions
-func ratingOf(n pgtype.Numeric) float64 {
-	f, _ := n.Float64Value()
-	return f.Float64
+	Category               string  `json:"category"`
+	IsVIP                  bool    `json:"is_vip"`
+	BasketPrice            *int64  `json:"basket_price"`             // int: sum of the shop's basket
+	PriceTier              *string `json:"price_tier"`               // string: cheaper, avrg, dearer
+	PriceDifferencePercent *int64  `json:"price_difference_percent"` // int: e.g 4 percent (cheaper or dearer)
+	Latitude               float64 `json:"latitude"`
+	Longitude              float64 `json:"longitude"`
+	ProductCount           int64   `json:"product_count,omitempty"`
 }
 
 func ptr(v int64) *int64 {
@@ -62,10 +54,8 @@ func shopFromList(r db.ListShopsRow) ShopResponse {
 		ID:           r.ID,
 		Name:         r.Name,
 		ContactPhone: r.ContactPhone,
-		ImageURL:     r.ImageUrl.String,
 		Address:      r.Address,
 		Category:     r.Category,
-		Rating:       ratingOf(r.Rating),
 		IsVIP:        r.IsVip,
 		Latitude:     r.Latitude,
 		Longitude:    r.Longitude,
@@ -79,10 +69,8 @@ func shopFromOwned(r db.ListShopsByOwnerRow) ShopResponse {
 		ID:           r.ID,
 		Name:         r.Name,
 		ContactPhone: r.ContactPhone,
-		ImageURL:     r.ImageUrl.String,
 		Address:      r.Address,
 		Category:     r.Category,
-		Rating:       ratingOf(r.Rating),
 		IsVIP:        r.IsVip,
 		Latitude:     r.Latitude,
 		Longitude:    r.Longitude,
@@ -97,10 +85,8 @@ func shopFromVip(r db.ListVipShopsRow) ShopResponse {
 		ID:           r.ID,
 		Name:         r.Name,
 		ContactPhone: r.ContactPhone,
-		ImageURL:     r.ImageUrl.String,
 		Address:      r.Address,
 		Category:     r.Category,
-		Rating:       ratingOf(r.Rating),
 		IsVIP:        r.IsVip,
 		Latitude:     r.Latitude,
 		Longitude:    r.Longitude,
@@ -114,10 +100,8 @@ func shopFromRanked(r db.ListBestOffersInCategoryRow) ShopResponse {
 		ID:           r.ID,
 		Name:         r.Name,
 		ContactPhone: r.ContactPhone,
-		ImageURL:     r.ImageUrl.String,
 		Address:      r.Address,
 		Category:     r.Category,
-		Rating:       ratingOf(r.Rating),
 		IsVIP:        r.IsVip,
 		Latitude:     r.Latitude,
 		Longitude:    r.Longitude,
@@ -131,10 +115,8 @@ func shopFromCreate(r db.CreateShopRow, productCount int64) ShopResponse {
 		ID:           r.ID,
 		Name:         r.Name,
 		ContactPhone: r.ContactPhone,
-		ImageURL:     r.ImageUrl.String,
 		Address:      r.Address,
 		Category:     r.Category,
-		Rating:       ratingOf(r.Rating),
 		IsVIP:        r.IsVip,
 		Latitude:     r.Latitude,
 		Longitude:    r.Longitude,
@@ -147,10 +129,8 @@ func shopFromUpdate(r db.UpdateShopRow) ShopResponse {
 		ID:           r.ID,
 		Name:         r.Name,
 		ContactPhone: r.ContactPhone,
-		ImageURL:     r.ImageUrl.String,
 		Address:      r.Address,
 		Category:     r.Category,
-		Rating:       ratingOf(r.Rating),
 		IsVIP:        r.IsVip,
 		Latitude:     r.Latitude,
 		Longitude:    r.Longitude,

@@ -23,12 +23,9 @@ CREATE TABLE shops (
     vip_until TIMESTAMP WITH TIME ZONE,
     location GEOMETRY(Point, 4326),
 
-    -- an admin lever separate from the shop's own catalogue: a shop can be pulled out of its
-    -- market's price comparison without touching a single price, and put back the same way. Not
-    -- the same fact as "does this shop have a row in shop_basket_index" - that row's existence
-    -- already answers "is every template product priced", and is derived from products. This
-    -- column is for a market being suspended for a reason products.price knows nothing about: a
-    -- rules violation under review, a seller asked to pause while a dispute is resolved.
+    -- an admin lever, separate from catalogue completeness: shop_basket_index already answers "is
+    -- every template product priced" and is derived from products, where this is for a shop
+    -- suspended for a reason prices know nothing about - a rules violation, a dispute.
     excluded_from_index BOOLEAN NOT NULL DEFAULT FALSE,
 
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -71,10 +68,8 @@ CREATE TABLE product_templates (
 
 CREATE INDEX idx_product_templates_category ON product_templates (shop_category, id);
 
--- Seed data below is the current, final catalogue for each of the four shop categories. Order
--- matters: a shop's catalogue is sorted by template id, so insertion order here is the order an
--- owner prices things in, and (for plumbing/wood) matches the numbering of the photos in
--- photos/<category>/.
+-- the catalogue for each of the four shop categories. **order matters**: a shop's catalogue sorts by
+-- template id, so this is the order an owner prices things in, and it matches photos/<category>/.
 
 INSERT INTO product_templates (shop_category, template_key, name, category, unit, image_path) VALUES
   ('universal', 'universal.tape_45x50', 'Скотч упаковочный 4,5х50', 'tools', 'шт', 'universal/001.jpg'),
@@ -280,12 +275,8 @@ INSERT INTO product_templates (shop_category, template_key, name, category, unit
   ('plumbing', 'plumbing.mixer_electric_alfa', 'Электрический смеситель ALFA', 'plumbing', 'шт', 'plumbing/099.jpg'),
   ('plumbing', 'plumbing.boou_mixer_bidet_b8246', 'BOOU Смеситель «тахорат» B8246-4AH-F805 (Ж)', 'plumbing', 'шт', 'plumbing/100.jpg');
 
--- Only five slots, deliberately: an owner must price EVERY row in a category's template to be
--- ranked at all (see refresh_basket_index below), so a template with items a shop doesn't stock
--- would guarantee that shop never appears. Five items every wood shop actually carries produces a
--- ranking that fills in; ten "textbook" items would not have. batten_30x40 is priced per metre
--- rather than per piece because its name carries no length, unlike plywood_18 where the sheet
--- format is in the name and a per-sheet price is already comparable.
+-- **only five, deliberately**: an owner must price EVERY row to be ranked at all, so a template
+-- holding an item a shop does not stock guarantees that shop never appears.
 INSERT INTO product_templates (shop_category, template_key, name, category, unit, image_path) VALUES
   ('wood', 'wood.beam_50x100', 'Брус 50х100х6000', 'lumber', 'шт', 'wood/001.jpg'),
   ('wood', 'wood.board_25x150', 'Доска 25х150х6000', 'lumber', 'шт', 'wood/002.jpg'),
@@ -315,26 +306,17 @@ CREATE TABLE support_messages (
 
 CREATE INDEX idx_support_messages_thread ON support_messages (user_id, id);
 
--- Which support conversations an admin has already looked at.
+-- Which support conversations an admin has already looked at. Nothing to do with `unanswered`,
+-- which is derived in SQL: reading a thread does not answer anybody.
 --
--- `unanswered` (messages from a user newer than the last thing support said) is derived in SQL and
--- has nothing to do with this table - a thread that was opened and read but not answered still
--- shows as waiting, which is the whole reason that number exists. This table answers the *other*
--- question: has anybody here seen the new message yet. Opening a thread clears it; opening a
--- thread does not answer anybody.
---
--- It stores a **watermark, not a flag**: `last_read_id` is the id of the newest message that had
--- been written when the thread was opened. Message ids only ever go up, so "unread" stays derived
--- - `COUNT(*) WHERE id > last_read_id` - and a message arriving one second later is unread by
--- arithmetic rather than by something remembering to set a bit.
---
--- Keyed per admin because "seen" is a fact about a person, not about the conversation.
+-- **a watermark, not a flag.** message ids only go up, so "unread" stays derived - COUNT(*) WHERE
+-- id > last_read_id - and a message arriving a second later is unread by arithmetic rather than by
+-- something remembering to set a bit. keyed per admin, because "seen" is a fact about a person.
 CREATE TABLE IF NOT EXISTS support_thread_reads (
     -- who did the reading
     admin_id       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 
-    -- whose thread was read. a thread *is* one user's messages, so it is addressed by user id here
-    -- exactly as it is in the api - there is no thread row to point at.
+    -- a thread *is* one user's messages, so it is addressed by user id here as it is in the api
     thread_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 
     last_read_id   BIGINT      NOT NULL,
@@ -343,24 +325,16 @@ CREATE TABLE IF NOT EXISTS support_thread_reads (
     PRIMARY KEY (admin_id, thread_user_id)
 );
 
--- the inbox reads every row belonging to one admin on each load, and the primary key's leading
--- column already serves that, so there is no second index here on purpose.
+-- no second index on purpose: the primary key's leading column already serves the inbox's read
 
 -- What a category's basket cost, one row per market per day.
 --
--- **The only fact in this product that cannot be recomputed.** `shop_basket_index` (below) always
--- answers about *now*: the moment an owner retypes a price, what the basket cost yesterday is
--- gone, and no column anywhere remembers it. "Средний чек по категории за месяц" is the one
--- question that needs something to have been written down at the time.
+-- **the only fact in this product that cannot be recomputed**: shop_basket_index always answers
+-- about *now*, so the moment an owner retypes a price, what the basket cost yesterday is gone.
 --
--- **Keyed by (day, category) so writing it is idempotent.** The job behind it (startBasketHistory
--- in cmd/api/main.go) upserts every hour rather than once at midnight: a server restarted daily at
--- the wrong moment would otherwise skip whole days. `day` is a DATE and not a timestamp for the
--- same reason - the row *is* the day, and a time component would let two rows exist for one.
---
--- **A day with no row is a day the server was not running**, and the chart draws the gap rather
--- than interpolating it. That is also why nothing here is NOT NULL DEFAULT 0: a zero would be a
--- claim that the market was free.
+-- keyed by (day, category) so the hourly upsert is idempotent - a server restarted at the wrong
+-- moment would otherwise skip whole days. a day with no row is a day the server was not running,
+-- and the chart draws the gap: a zero would claim the market was free.
 CREATE TABLE IF NOT EXISTS basket_history (
     day        DATE   NOT NULL,
     category   TEXT   NOT NULL,
@@ -376,25 +350,17 @@ CREATE TABLE IF NOT EXISTS basket_history (
     PRIMARY KEY (day, category)
 );
 
--- the dashboard reads the last 30 days across every category at once, and the primary key's
--- leading column already serves a range scan on `day`, so there is no second index here on
--- purpose.
+-- no second index on purpose: the primary key's leading column serves the range scan on `day`
 
 -- One row per shop that has priced its entire category template - the Basket Price Index.
 --
--- **A table kept current by triggers, not a view recomputed on every read.** The read side is
--- `GET /api/home` and friends, which is every customer opening the map; the write side is an owner
--- retyping a price, which is orders of magnitude rarer. Recomputing the whole comparison (sum each
--- shop's template rows, average per market, divide) on every read means paying a write-shaped cost
--- on the far more common path. So the arithmetic moves to the write, and the read becomes what it
--- always wanted to be: a primary-key lookup of a number somebody already worked out.
+-- **a table kept current by triggers, not a view recomputed on every read.** the read side is every
+-- customer opening the map; the write side is an owner retyping a price. so the arithmetic moves to
+-- the write and the read becomes a primary-key lookup.
 --
--- Triggers rather than a materialized view or Go-side recomputation: the write paths that can
--- change this table's answer are spread across shop creation, product update/delete, admin
--- product edits, three template-sync statements, and two ON DELETE CASCADE chains that no Go code
--- runs at all. An invariant that many call sites have to remember to maintain is one that breaks
--- the first time a new call site is added. Triggers put the rule where the data is, so it holds
--- for anything that writes - including psql.
+-- triggers rather than Go, because the writes that can move this number are spread across shop
+-- creation, product edits, three template-sync statements and two cascade chains no Go code runs at
+-- all. an invariant that many call sites must remember is one the next call site breaks.
 CREATE TABLE shop_basket_index (
     shop_id       BIGINT PRIMARY KEY REFERENCES shops(id) ON DELETE CASCADE,
 
@@ -412,31 +378,19 @@ CREATE TABLE shop_basket_index (
     updated_at    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- a refresh works one market at a time and touches only that market's rows; without this it would
--- scan the whole table to find them.
+-- a refresh works one market at a time; without this it would scan the whole table to find them
 CREATE INDEX idx_shop_basket_index_category ON shop_basket_index (shop_category);
 
--- A row exists only for a shop that has priced its entire template (HAVING COUNT(p.price) =
--- COUNT(*) below), and is not excluded by an admin. That is why every read joins this LEFT (a shop
--- with an unpriced row still has to open, it just opens without a badge) except
--- ListBestOffersInCategory and AdminCategoryBaskets, which are rankings and have nothing to say
--- about a shop that is not in the comparison.
+-- **a row exists only for a shop that has priced its entire template** and is not excluded by an
+-- admin, which is why every read LEFT JOINs this - a shop with an unpriced row still has to open, it
+-- just opens without a badge. the rankings are the exception and INNER JOIN.
 --
--- Recomputes one market from products, which stay the only source of truth. Whole-market and not
--- per-shop, because the index is a *comparison*: `price_index` divides a shop's basket by the
--- average basket of its market, so one owner retyping one price moves the divisor and therefore
--- every other shop's index in that market. There is no such thing as refreshing one row.
+-- whole-market and never per-shop: price_index divides a shop's basket by its market's average, so
+-- one owner retyping one price moves the divisor and every competitor's score with it.
 --
--- **The advisory lock is not decoration.** Two owners pricing at the same moment would otherwise
--- both compute an average from a snapshot taken before the other committed, and the second writer
--- would overwrite the first's contribution with a number that no longer included it - a wrong
--- index that survives until the next unrelated write. Taking the lock first means the second
--- transaction waits, then takes a fresh snapshot and sees the first one's price. It also removes
--- the deadlock the two upserts would otherwise race into.
---
--- `NOT s.excluded_from_index` keeps an admin-suspended shop's basket out of the market average too
--- - excluding a shop is supposed to mean it stops moving everyone else's index, not just that its
--- own badge disappears.
+-- **the advisory lock is not decoration.** two owners pricing at the same moment would otherwise
+-- both average a snapshot taken before the other committed, and the second writer would overwrite
+-- the first with a number that no longer included it - wrong until the next unrelated write.
 CREATE OR REPLACE FUNCTION refresh_basket_index(p_category text) RETURNS void
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -492,20 +446,12 @@ $$;
 
 -- rows appeared or disappeared in products.
 --
--- **Statement-level with a transition table, not FOR EACH ROW.** Seeding a shop writes a hundred
--- template rows and a template sync writes them into every shop of a market at once; a row trigger
--- would recompute the market once per row. This fires once per statement and asks the whole batch
--- which markets it touched.
+-- **statement-level with a transition table, not FOR EACH ROW**: seeding a shop writes a hundred
+-- rows at once, and a row trigger would recompute the market a hundred times.
 --
--- `template_key IS NOT NULL` is the filter that makes this affordable at all: a shop's own custom
--- products are not in the comparison, so writing one must cost nothing.
---
--- **The `EXISTS` guard is what keeps shop creation cheap.** Inserting an *unpriced* template row
--- can only ever take a shop out of the comparison or leave it out - it can never put one in. So if
--- the shop has no row here yet, there is nothing to recompute, and Shops.Create's hundred seeding
--- inserts do a hundred index probes instead of a hundred market recomputes inside one transaction.
--- The guard is only sound for INSERT: *deleting* an unpriced row is exactly how a basket becomes
--- complete, so a delete always recomputes.
+-- **the EXISTS guard is what keeps shop creation cheap**: inserting an *unpriced* template row can
+-- only ever take a shop out of the comparison, never put one in, so a shop with no row here yet has
+-- nothing to recompute. only sound for INSERT - deleting an unpriced row is how a basket completes.
 CREATE OR REPLACE FUNCTION basket_index_after_products() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -529,17 +475,12 @@ BEGIN
 END;
 $$;
 
--- an existing product row changed.
+-- an existing product row changed. separate from the function above because it needs *both*
+-- transition tables: the index is a function of exactly three columns, so an update that leaves
+-- shop_id, template_key and price alone cannot move it.
 --
--- Separate from the function above because it needs *both* transition tables, and the answer to
--- "does this update matter" is only in the pair. The index is a function of exactly three columns
--- - shop_id, template_key, price - so an update that leaves all three alone cannot move it. That
--- is not a hypothetical saving: AdminSyncTemplateUpdate rewrites names, units and photos across
--- every shop in a market at once, and an owner photographing an обои slot writes `image_path` on a
--- template row. Neither is a price, and neither should cost a market recomputation.
---
--- shop_id is compared for completeness even though nothing updates it - no statement in db/queries
--- moves a product between shops, and if one ever does, this line is already right.
+-- not a hypothetical saving - AdminSyncTemplateUpdate rewrites names and photos across a whole
+-- market at once, and photographing an обои slot writes image_path on a template row.
 CREATE OR REPLACE FUNCTION basket_index_after_product_update() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -563,20 +504,11 @@ BEGIN
 END;
 $$;
 
--- a shop left a market, or an admin flipped excluded_from_index.
+-- a shop left a market, or an admin flipped excluded_from_index. the cascade takes its own row, but
+-- the shop was one of the numbers in its market's average, so every *remaining* index moved too.
 --
--- Deleting a shop deletes its own row here by cascade, but that is the easy half: the shop was one
--- of the numbers in its market's average, so every *remaining* shop's index moved when it left.
--- Reused for the excluded_from_index toggle too, rather than a dedicated function for it: toggling
--- it is rare, four categories is nothing to recompute, and working out which one category a shop
--- belongs to right now is not worth a function of its own for this.
---
--- It refreshes every market rather than working out which one, and that is deliberate: there are
--- four categories, both events are rare, and the alternative needs a different transition table
--- for a delete than for an update - two more functions to keep in step for no measurable gain.
--- Reading the current list of categories also means the market a shop just vacated entirely is
--- skipped, and correctly so: with no shops left in it there is nothing to compare and nothing left
--- to update.
+-- it refreshes every market rather than working out which: four categories, both events rare, and
+-- the alternative needs a different transition table for a delete than for an update.
 CREATE OR REPLACE FUNCTION basket_index_refresh_all() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -590,8 +522,7 @@ BEGIN
 END;
 $$;
 
--- three separate triggers on products because postgres allows a trigger with transition tables to
--- name exactly one event.
+-- three triggers because a trigger with transition tables may name exactly one event
 CREATE TRIGGER products_basket_index_insert
     AFTER INSERT ON products
     REFERENCING NEW TABLE AS changed
@@ -607,9 +538,8 @@ CREATE TRIGGER products_basket_index_update
     REFERENCING OLD TABLE AS changed_old NEW TABLE AS changed_new
     FOR EACH STATEMENT EXECUTE FUNCTION basket_index_after_product_update();
 
--- after, not before, so that the products these cascade into are already gone when the markets are
--- recomputed. Statement triggers fire after every row trigger of the same statement, and a foreign
--- key cascade *is* a row trigger, so the ordering is guaranteed rather than hoped for.
+-- AFTER, so the cascaded products are already gone when the markets recompute. a foreign key
+-- cascade *is* a row trigger, and statement triggers fire after every row trigger of the statement.
 CREATE TRIGGER shops_basket_index_delete
     AFTER DELETE ON shops
     FOR EACH STATEMENT EXECUTE FUNCTION basket_index_refresh_all();
@@ -619,11 +549,9 @@ CREATE TRIGGER shops_basket_index_excluded
     AFTER UPDATE OF excluded_from_index ON shops
     FOR EACH STATEMENT EXECUTE FUNCTION basket_index_refresh_all();
 
--- TRUNCATE is not a DELETE and fires none of the triggers above, so without this one line
--- `TRUNCATE products` would leave a full index describing baskets that no longer exist. Nothing in
--- the app truncates anything; it is here because the entire argument for putting this rule in the
--- database rather than in Go is that it holds for every writer, and a hole that only opens in psql
--- is still a hole.
+-- TRUNCATE fires none of the triggers above, so without this `TRUNCATE products` would leave a full
+-- index describing baskets that no longer exist. the whole argument for putting this rule in the
+-- database is that it holds for every writer, and a hole that only opens in psql is still a hole.
 CREATE TRIGGER products_basket_index_truncate
     AFTER TRUNCATE ON products
     FOR EACH STATEMENT EXECUTE FUNCTION basket_index_refresh_all();

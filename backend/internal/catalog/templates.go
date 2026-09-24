@@ -12,10 +12,10 @@ const (
 )
 
 type Item struct {
-	Key  string
-	Name string
-	Category ProductCategory
-	Unit string
+	Key       string
+	Name      string
+	Category  ProductCategory
+	Unit      string
 	ImagePath string
 }
 

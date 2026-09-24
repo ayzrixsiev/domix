@@ -297,7 +297,7 @@ func TestSeededProductsCarryTheirPhoto(t *testing.T) {
 		if product.ImageURL == nil {
 			t.Fatalf("%q came back with no photo", product.Name)
 		}
-		if !strings.HasPrefix(*product.ImageURL, "/static/products/universal/") {
+		if !strings.HasPrefix(*product.ImageURL, "/images/shops/universal/") {
 			t.Fatalf("want a root-relative url the app can prepend a host to, got %q", *product.ImageURL)
 		}
 	}

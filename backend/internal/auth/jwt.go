@@ -7,7 +7,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// what jwt token will consists of
+// **no role claim, deliberately**: a token lives four months and a role can change inside that, so
+// every check reads the role from the database instead
 type TokenClaims struct {
 	UserID int64  `json:"user_id"`
 	Phone  string `json:"phone"`
@@ -27,10 +28,8 @@ func GenerateJWT(userID int64, phone string, secretKey string) (string, error) {
 		},
 	}
 
-	// we use HMAC SHA-256 signing algorithm to generate jwt token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	// server's secret key to mix it with existing jwt token
 	signedToken, err := token.SignedString([]byte(secretKey))
 	if err != nil {
 		return "", err
@@ -39,7 +38,7 @@ func GenerateJWT(userID int64, phone string, secretKey string) (string, error) {
 	return signedToken, nil
 }
 
-// func is used to validate a user from incoming api requests
+// the signing method is checked, not just the signature: without it a token could name "none"
 func ValidateJWT(tokenString string, secretKey string) (*TokenClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {

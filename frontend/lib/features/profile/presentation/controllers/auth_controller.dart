@@ -69,6 +69,10 @@ class AuthController extends ChangeNotifier {
   /// deletion takes them off the map for everybody.
   void Function(bool accountDeleted)? onSessionEnded;
 
+  /// Called whenever an account becomes the current one - a cold boot onto a stored session, and a
+  /// fresh sign-in. The mirror of [onSessionEnded], and wired the same way in `main()`.
+  void Function()? onSessionStarted;
+
   // cold boot: read hardware storage to restore user state with no network round trip
   Future<void> checkExistingLogin() async {
     try {
@@ -133,6 +137,7 @@ class AuthController extends ChangeNotifier {
   static bool canManageShops(String role) => role == 'shop_owner' || role == 'admin';
 
   void _applyAccount({required String role, required String name, required String phone}) {
+    final wasGuest = _profileState.isGuest;
     _profileState = canManageShops(role)
         ? ProfileViewState.vendor(
             initials: _getInitials(name),
@@ -144,6 +149,9 @@ class AuthController extends ChangeNotifier {
             fullName: name,
             phoneNumber: phone,
           );
+    // only on the edge: this also runs on every profile refresh, and re-fetching what belongs to a
+    // session that never ended would be a request per rename
+    if (wasGuest) onSessionStarted?.call();
     notifyListeners();
   }
 
@@ -169,6 +177,31 @@ class AuthController extends ChangeNotifier {
     final me = await _authService.verifyCode(phone: phone, code: code);
     // the same mapping the cached and /api/me paths use, rather than a second copy of the role
     // comparison - it was a second copy once, and only one of the two learned about `admin`
+    _applyAccount(role: me.role, name: me.name, phone: me.phone);
+  }
+
+  /// Saves an edited profile: the display name, and the one role change the server allows
+  /// (`customer -> shop_owner`).
+  ///
+  /// **The server's answer is what the app then believes**, not what was typed: a role refused as
+  /// `role_locked` comes back as an exception, and a role the server quietly kept comes back as the
+  /// role it kept. Throws [AuthApiException] with the refusal code, which the screen localizes.
+  Future<void> updateProfile({String? name, String? role}) async {
+    final me = await _authService.updateProfile(name: name, role: role);
+    _applyAccount(role: me.role, name: me.name, phone: me.phone);
+  }
+
+  /// Step one of moving this account onto another number: a code to the *new* one.
+  ///
+  /// Nothing changes here - the number is not the account's until the code comes back verified,
+  /// which is why this returns the server's canonical spelling for [verifyPhoneChange] to use.
+  Future<CodeRequestResult> requestPhoneChangeCode(String phone) {
+    return _authService.requestPhoneChangeCode(phone);
+  }
+
+  /// Step two: the code was right, so the account is on the new number and the profile says so.
+  Future<void> verifyPhoneChange({required String phone, required String code}) async {
+    final me = await _authService.verifyPhoneChange(phone: phone, code: code);
     _applyAccount(role: me.role, name: me.name, phone: me.phone);
   }
 

@@ -12,9 +12,9 @@ import (
 )
 
 const createShop = `-- name: CreateShop :one
-INSERT INTO shops (user_id, name, contact_phone, image_url, address, category, location)
-VALUES ($1, $2, $3, $4, $5, $6, ST_SetSRID(ST_MakePoint($7, $8), 4326))
-RETURNING id, user_id, name, contact_phone, image_url, address, category, rating,
+INSERT INTO shops (user_id, name, contact_phone, address, category, location)
+VALUES ($1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($6, $7), 4326))
+RETURNING id, user_id, name, contact_phone, address, category,
           COALESCE(vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip,
           ST_Y(location)::float8 AS latitude, ST_X(location)::float8 AS longitude, created_at, updated_at
 `
@@ -23,7 +23,6 @@ type CreateShopParams struct {
 	UserID        int64       `json:"user_id"`
 	Name          string      `json:"name"`
 	ContactPhone  string      `json:"contact_phone"`
-	ImageUrl      pgtype.Text `json:"image_url"`
 	Address       string      `json:"address"`
 	Category      string      `json:"category"`
 	StMakepoint   interface{} `json:"st_makepoint"`
@@ -35,10 +34,8 @@ type CreateShopRow struct {
 	UserID       int64              `json:"user_id"`
 	Name         string             `json:"name"`
 	ContactPhone string             `json:"contact_phone"`
-	ImageUrl     pgtype.Text        `json:"image_url"`
 	Address      string             `json:"address"`
 	Category     string             `json:"category"`
-	Rating       pgtype.Numeric     `json:"rating"`
 	IsVip        bool               `json:"is_vip"`
 	Latitude     float64            `json:"latitude"`
 	Longitude    float64            `json:"longitude"`
@@ -51,7 +48,6 @@ func (q *Queries) CreateShop(ctx context.Context, arg CreateShopParams) (CreateS
 		arg.UserID,
 		arg.Name,
 		arg.ContactPhone,
-		arg.ImageUrl,
 		arg.Address,
 		arg.Category,
 		arg.StMakepoint,
@@ -63,10 +59,8 @@ func (q *Queries) CreateShop(ctx context.Context, arg CreateShopParams) (CreateS
 		&i.UserID,
 		&i.Name,
 		&i.ContactPhone,
-		&i.ImageUrl,
 		&i.Address,
 		&i.Category,
-		&i.Rating,
 		&i.IsVip,
 		&i.Latitude,
 		&i.Longitude,
@@ -89,7 +83,7 @@ func (q *Queries) DeleteShop(ctx context.Context, id int64) (int64, error) {
 }
 
 const getShop = `-- name: GetShop :one
-SELECT s.id, s.user_id, s.name, s.contact_phone, s.image_url, s.address, s.category, s.rating,
+SELECT s.id, s.user_id, s.name, s.contact_phone, s.address, s.category,
        COALESCE(s.vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip,
        ST_Y(s.location)::float8 AS latitude, ST_X(s.location)::float8 AS longitude,
        s.created_at, s.updated_at,
@@ -104,10 +98,8 @@ type GetShopRow struct {
 	UserID       int64              `json:"user_id"`
 	Name         string             `json:"name"`
 	ContactPhone string             `json:"contact_phone"`
-	ImageUrl     pgtype.Text        `json:"image_url"`
 	Address      string             `json:"address"`
 	Category     string             `json:"category"`
-	Rating       pgtype.Numeric     `json:"rating"`
 	IsVip        bool               `json:"is_vip"`
 	Latitude     float64            `json:"latitude"`
 	Longitude    float64            `json:"longitude"`
@@ -125,10 +117,8 @@ func (q *Queries) GetShop(ctx context.Context, id int64) (GetShopRow, error) {
 		&i.UserID,
 		&i.Name,
 		&i.ContactPhone,
-		&i.ImageUrl,
 		&i.Address,
 		&i.Category,
-		&i.Rating,
 		&i.IsVip,
 		&i.Latitude,
 		&i.Longitude,
@@ -152,7 +142,7 @@ func (q *Queries) GetShopOwner(ctx context.Context, id int64) (int64, error) {
 }
 
 const listBestOffersInCategory = `-- name: ListBestOffersInCategory :many
-SELECT s.id, s.user_id, s.name, s.contact_phone, s.image_url, s.address, s.category, s.rating,
+SELECT s.id, s.user_id, s.name, s.contact_phone, s.address, s.category,
        COALESCE(s.vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip,
        ST_Y(s.location)::float8 AS latitude, ST_X(s.location)::float8 AS longitude,
        s.created_at, s.updated_at,
@@ -160,7 +150,7 @@ SELECT s.id, s.user_id, s.name, s.contact_phone, s.image_url, s.address, s.categ
 FROM shops s
 JOIN shop_basket_index bi ON bi.shop_id = s.id
 WHERE s.category = $1
-ORDER BY bi.price_index ASC, s.rating DESC
+ORDER BY bi.price_index ASC, s.id
 LIMIT $2
 `
 
@@ -174,10 +164,8 @@ type ListBestOffersInCategoryRow struct {
 	UserID       int64              `json:"user_id"`
 	Name         string             `json:"name"`
 	ContactPhone string             `json:"contact_phone"`
-	ImageUrl     pgtype.Text        `json:"image_url"`
 	Address      string             `json:"address"`
 	Category     string             `json:"category"`
-	Rating       pgtype.Numeric     `json:"rating"`
 	IsVip        bool               `json:"is_vip"`
 	Latitude     float64            `json:"latitude"`
 	Longitude    float64            `json:"longitude"`
@@ -201,10 +189,8 @@ func (q *Queries) ListBestOffersInCategory(ctx context.Context, arg ListBestOffe
 			&i.UserID,
 			&i.Name,
 			&i.ContactPhone,
-			&i.ImageUrl,
 			&i.Address,
 			&i.Category,
-			&i.Rating,
 			&i.IsVip,
 			&i.Latitude,
 			&i.Longitude,
@@ -224,7 +210,7 @@ func (q *Queries) ListBestOffersInCategory(ctx context.Context, arg ListBestOffe
 }
 
 const listShops = `-- name: ListShops :many
-SELECT s.id, s.user_id, s.name, s.contact_phone, s.image_url, s.address, s.category, s.rating,
+SELECT s.id, s.user_id, s.name, s.contact_phone, s.address, s.category,
        COALESCE(s.vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip,
        ST_Y(s.location)::float8 AS latitude, ST_X(s.location)::float8 AS longitude,
        s.created_at, s.updated_at,
@@ -239,10 +225,8 @@ type ListShopsRow struct {
 	UserID       int64              `json:"user_id"`
 	Name         string             `json:"name"`
 	ContactPhone string             `json:"contact_phone"`
-	ImageUrl     pgtype.Text        `json:"image_url"`
 	Address      string             `json:"address"`
 	Category     string             `json:"category"`
-	Rating       pgtype.Numeric     `json:"rating"`
 	IsVip        bool               `json:"is_vip"`
 	Latitude     float64            `json:"latitude"`
 	Longitude    float64            `json:"longitude"`
@@ -266,10 +250,8 @@ func (q *Queries) ListShops(ctx context.Context) ([]ListShopsRow, error) {
 			&i.UserID,
 			&i.Name,
 			&i.ContactPhone,
-			&i.ImageUrl,
 			&i.Address,
 			&i.Category,
-			&i.Rating,
 			&i.IsVip,
 			&i.Latitude,
 			&i.Longitude,
@@ -289,7 +271,7 @@ func (q *Queries) ListShops(ctx context.Context) ([]ListShopsRow, error) {
 }
 
 const listShopsByOwner = `-- name: ListShopsByOwner :many
-SELECT s.id, s.user_id, s.name, s.contact_phone, s.image_url, s.address, s.category, s.rating,
+SELECT s.id, s.user_id, s.name, s.contact_phone, s.address, s.category,
        COALESCE(s.vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip,
        ST_Y(s.location)::float8 AS latitude, ST_X(s.location)::float8 AS longitude,
        s.created_at, s.updated_at,
@@ -306,10 +288,8 @@ type ListShopsByOwnerRow struct {
 	UserID       int64              `json:"user_id"`
 	Name         string             `json:"name"`
 	ContactPhone string             `json:"contact_phone"`
-	ImageUrl     pgtype.Text        `json:"image_url"`
 	Address      string             `json:"address"`
 	Category     string             `json:"category"`
-	Rating       pgtype.Numeric     `json:"rating"`
 	IsVip        bool               `json:"is_vip"`
 	Latitude     float64            `json:"latitude"`
 	Longitude    float64            `json:"longitude"`
@@ -334,10 +314,8 @@ func (q *Queries) ListShopsByOwner(ctx context.Context, userID int64) ([]ListSho
 			&i.UserID,
 			&i.Name,
 			&i.ContactPhone,
-			&i.ImageUrl,
 			&i.Address,
 			&i.Category,
-			&i.Rating,
 			&i.IsVip,
 			&i.Latitude,
 			&i.Longitude,
@@ -358,7 +336,7 @@ func (q *Queries) ListShopsByOwner(ctx context.Context, userID int64) ([]ListSho
 }
 
 const listVipShops = `-- name: ListVipShops :many
-SELECT s.id, s.user_id, s.name, s.contact_phone, s.image_url, s.address, s.category, s.rating,
+SELECT s.id, s.user_id, s.name, s.contact_phone, s.address, s.category,
        true AS is_vip,
        ST_Y(s.location)::float8 AS latitude, ST_X(s.location)::float8 AS longitude,
        s.created_at, s.updated_at,
@@ -375,10 +353,8 @@ type ListVipShopsRow struct {
 	UserID       int64              `json:"user_id"`
 	Name         string             `json:"name"`
 	ContactPhone string             `json:"contact_phone"`
-	ImageUrl     pgtype.Text        `json:"image_url"`
 	Address      string             `json:"address"`
 	Category     string             `json:"category"`
-	Rating       pgtype.Numeric     `json:"rating"`
 	IsVip        bool               `json:"is_vip"`
 	Latitude     float64            `json:"latitude"`
 	Longitude    float64            `json:"longitude"`
@@ -402,10 +378,8 @@ func (q *Queries) ListVipShops(ctx context.Context, limit int32) ([]ListVipShops
 			&i.UserID,
 			&i.Name,
 			&i.ContactPhone,
-			&i.ImageUrl,
 			&i.Address,
 			&i.Category,
-			&i.Rating,
 			&i.IsVip,
 			&i.Latitude,
 			&i.Longitude,
@@ -466,12 +440,12 @@ WITH updated AS (
         location = ST_SetSRID(ST_MakePoint($5, $6), 4326),
         updated_at = CURRENT_TIMESTAMP
     WHERE id = $1
-    RETURNING id, user_id, name, contact_phone, image_url, address, category, rating,
+    RETURNING id, user_id, name, contact_phone, address, category,
               COALESCE(vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip,
               ST_Y(location)::float8 AS latitude, ST_X(location)::float8 AS longitude,
               created_at, updated_at
 )
-SELECT u.id, u.user_id, u.name, u.contact_phone, u.image_url, u.address, u.category, u.rating, u.is_vip,
+SELECT u.id, u.user_id, u.name, u.contact_phone, u.address, u.category, u.is_vip,
        u.latitude, u.longitude, u.created_at, u.updated_at,
        bi.price_index, bi.basket_price
 FROM updated u
@@ -492,10 +466,8 @@ type UpdateShopRow struct {
 	UserID       int64              `json:"user_id"`
 	Name         string             `json:"name"`
 	ContactPhone string             `json:"contact_phone"`
-	ImageUrl     pgtype.Text        `json:"image_url"`
 	Address      string             `json:"address"`
 	Category     string             `json:"category"`
-	Rating       pgtype.Numeric     `json:"rating"`
 	IsVip        bool               `json:"is_vip"`
 	Latitude     float64            `json:"latitude"`
 	Longitude    float64            `json:"longitude"`
@@ -520,10 +492,8 @@ func (q *Queries) UpdateShop(ctx context.Context, arg UpdateShopParams) (UpdateS
 		&i.UserID,
 		&i.Name,
 		&i.ContactPhone,
-		&i.ImageUrl,
 		&i.Address,
 		&i.Category,
-		&i.Rating,
 		&i.IsVip,
 		&i.Latitude,
 		&i.Longitude,

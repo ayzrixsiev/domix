@@ -133,9 +133,8 @@ func TestOnlyAnAdminReachesTheAdminAPI(t *testing.T) {
 		{"stats", http.MethodGet, "/api/admin/stats", adminEndpoints.Stats},
 		{"users", http.MethodGet, "/api/admin/users", adminEndpoints.ListUsers},
 		{"shops", http.MethodGet, "/api/admin/shops", adminEndpoints.ListShops},
-		// the support inbox is the one route here that reads what a *user* wrote in confidence, so
-		// it is also the one whose leak would be worst
-		{"support inbox", http.MethodGet, "/api/admin/support/threads", adminEndpoints.SupportThreads},
+		// the anomaly report carries owners' phone numbers, so its leak would be the worst of these
+		{"anomalies", http.MethodGet, "/api/admin/anomalies", adminEndpoints.Anomalies},
 	}
 
 	for _, route := range routes {

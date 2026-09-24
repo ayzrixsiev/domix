@@ -1,17 +1,13 @@
 -- Product search: an index it can use, over one spelling of every name.
 --
--- A leading wildcard ("%кабель%") cannot use an ordinary index, so every search read every priced
--- product. A trigram index (pg_trgm) stores every three-letter run of a name, which is what a
--- substring needs to be looked up rather than scanned for - and why a query needs one word of three
--- letters (minSearchWordLen).
+-- a leading wildcard cannot use an ordinary index, so every search read every priced product. a
+-- trigram index stores every three-letter run, which is why a query needs one word of three letters.
 --
--- It indexes the name as SearchProducts compares it: lowercased, ё written as е (19 catalogue names
--- are spelled with ё and nobody types it). **The query's expression must match this one character for
--- character**, or postgres stops using the index. Partial on `price IS NOT NULL`: unpriced rows are
--- never searched.
+-- **the query's expression must match this one character for character**, or postgres silently stops
+-- using the index and every search becomes a sequential scan.
 
--- lower() folds case by the database's locale, and under the C locale it leaves Cyrillic alone -
--- "цемент" would stop finding "Цемент" with nothing to report it. Refused here rather than in prod.
+-- under the C locale lower() leaves Cyrillic alone, so "цемент" would stop finding "Цемент" with
+-- nothing to report it. refused here rather than in production.
 DO $$
 BEGIN
     IF lower('ЦЁ') <> 'цё' THEN

@@ -24,56 +24,32 @@ import (
 //
 //	GET    /api/shops/{id}/products  - public, the catalogue grid on a shop's card
 //	POST   /api/shops/{id}/products  - owner adds one of their own products
-//	PUT    /api/products/{id}        - owner edits one product (price/stock always; the name also on
-//	                                   a обои slot; everything only on their own products)
+//	PUT    /api/products/{id}        - owner edits one (price/stock always; the name on a обои slot)
 //	DELETE /api/products/{id}        - owner removes one of their own products
 //
-// most rows in a shop are not created here at all: picking a category when the shop is created
-// seeds its catalogue from internal/catalog (see Shops.Create), and these endpoints are how the
-// owner then fills in prices and adds the handful of products unique to their shop.
-//
-// there used to be a fifth endpoint here, POST /api/products/upload, which bulk-loaded a shop's
-// catalogue from an .xlsx. it is gone: the spreadsheet existed so an owner wouldn't have to type a
-// catalogue from nothing, and a shop no longer starts from nothing.
+// most rows are not created here: picking a category at shop creation seeds the catalogue from
+// internal/catalog, and these endpoints are how the owner then fills in prices.
 type Products struct {
 	Queries   *db.Queries
 	JWTSecret string
 
-	// where an owner's uploaded product photos are written. an interface with two implementations
-	// (a local directory, a Cloudflare R2 bucket) chosen once in main.go by whether the R2 keys are
-	// in the environment - see internal/imagestore for why that abstraction earns its place and for
-	// why the catalogue's own shots and these share one namespace without being able to delete each
-	// other.
+	// where uploaded photos are written: local disk or a Cloudflare R2 bucket, picked in main.go
 	Images imagestore.Storage
 
-	// how a stored path becomes an address the app can fetch. the zero value serves from this api's
-	// own /static/products/, which is the laptop and every test; IMAGE_BASE_URL points it at
-	// img.domix-api.uz in production.
+	// how a stored path becomes a fetchable address. zero value = this api's own /images/
 	URLs imagestore.URLs
 
-	// the per-account ceiling on uploads, which the per-IP limiter in front of every route cannot
-	// express. nil in the tests, which call the handlers directly.
+	// the per-account ceiling the per-IP limiter cannot express. nil in tests.
 	Uploads *ratelimit.Limiter
 }
 
-// how many products an owner may add on top of the category template. the template is what makes
-// two shops comparable - same products, different prices - so this cap is what stops a shop from
-// turning into an arbitrary catalogue that no longer lines up with anyone else's.
-//
-// it counts *only* the owner's own rows (CountCustomProducts, `template_key IS NULL`). the seeded
-// rows are not part of the allowance - they are the same in every shop of the category, so charging
-// an owner for them would leave a brand-new universal shop 100 products past its whole budget
-// before the owner had touched anything.
-//
-// the same number for every shop category, deliberately: the allowance is "how far off the shared
-// basket may a shop drift", which is the same question whether the template under it is 100 rows or
-// 10. it is sent to the app in the `limit` field of the product_limit_reached error, so raising it
-// is a backend deploy - the dart copy only greys a tile out early.
+// how many products an owner may add on top of the category template - the cap that stops a shop
+// drifting into a catalogue nobody else's lines up with. counts only `template_key IS NULL` rows,
+// since seeded ones are identical in every shop. sent to the app in the product_limit_reached error.
 const maxCustomProducts = 30
 
-// these mirror the varchar widths in db/migrations (000001 + 000004). a value wider than its column
-// makes postgres reject the statement, which would surface to the owner as an unexplained "failed
-// to save" rather than as "this name is too long".
+// the varchar widths in db/migrations. a value wider than its column makes postgres reject the
+// statement, which reaches the owner as an unexplained "failed to save".
 const (
 	maxNameLen = 150
 	maxUnitLen = 20
@@ -82,8 +58,8 @@ const (
 	maxProductPrice = 1e15
 )
 
-// what we send back to flutter for one product. a clean shape independent of sqlc's four
-// near-identical generated row types, so their pgtype wrappers never leak over the wire.
+// one product on the wire, independent of sqlc's near-identical row types so their pgtype wrappers
+// never leak into json
 type ProductResponse struct {
 	ID       int64  `json:"id"`
 	ShopID   int64  `json:"shop_id"`
@@ -91,69 +67,38 @@ type ProductResponse struct {
 	Category string `json:"category"`
 	Unit     string `json:"unit"`
 
-	// a *pointer*, so a product whose price the owner hasn't set yet serializes as `price: null`
-	// rather than `price: 0`. those are different facts - "we haven't priced this" versus "this is
-	// free" - and the whole seeded-catalogue flow depends on the app being able to tell them apart
-	// to show its "укажите цену" prompt.
+	// a pointer, so an unpriced product is `null` and not `0` - "not priced yet" and "free" are
+	// different facts, and the whole seeded-catalogue flow turns on the app telling them apart
 	Price *int64 `json:"price"`
 
 	Availability string `json:"availability"`
 
-	// true for a row seeded from the category template. the app uses it for the "ваш товар" badge
-	// and to keep template rows undeletable; the key itself stays server-side.
+	// seeded from the category template: the "ваш товар" badge, and undeletable
 	IsTemplate bool `json:"is_template"`
 
-	// whether the owner may write this product's name. two booleans rather than one, because the
-	// edit form asks two independent questions and a обои slot answers them differently: it *is* a
-	// template row (locked category and unit, no delete button) whose name is nonetheless the
-	// owner's to write - that is what a slot is. for every other row the two agree.
+	// whether the owner may write the name. separate from IsTemplate because a обои slot is a
+	// template row (locked category and unit) whose name is nonetheless the owner's to write.
 	NameEditable bool `json:"name_editable"`
 
-	// the full-size copy: "/static/products/universal/001.jpg" on a laptop, an absolute
-	// "https://img.domix-api.uz/universal/001.jpg" once IMAGE_BASE_URL is set. null for a product
-	// with no photo, which the app draws as the placeholder banner it drew for every product before
-	// this existed.
-	//
-	// What the *edit screen* loads. A grid loads [ProductResponse.ImageThumbURL].
+	// the full-size copy, what the edit screen loads; null for a product with no photo
 	ImageURL *string `json:"image_url"`
 
-	// the 400px copy of the same photo, and null exactly when ImageURL is.
-	//
-	// **Sent ready-made rather than derived in the app, and that is the whole reason it is a second
-	// field instead of a documented suffix.** An apk that appended "_thumb" itself would freeze the
-	// naming convention inside every build already on a phone, so changing it would mean a release
-	// in Play rather than a deploy - and there is no way to fix an old build that guessed wrong.
-	// The app's only rule is "prefer this one, fall back to image_url if it is absent", which is
-	// what a build talking to a backend from before thumbnails existed does by itself.
+	// the 400px copy a grid loads, null exactly when ImageURL is. **sent ready-made rather than
+	// derived**: an apk that appended "_thumb" itself would freeze the convention in every build
+	// already on a phone, so changing it would mean a Play release rather than a deploy.
 	ImageThumbURL *string `json:"image_thumb_url"`
 
-	// whether that photo is this shop's own upload rather than the shared catalogue shot the row was
-	// seeded with. the third derived boolean on this struct, and it is here for the same reason the
-	// other two are: it answers a question the app has to ask before drawing a control.
-	//
-	// **"удалить фото" means two different things and only this tells them apart.** On an owner's own
-	// upload it removes the photo, and on a seeded row it puts the catalogue's shot back. On a row
-	// still showing the catalogue's shot it would do nothing at all - so without this the app draws a
-	// delete button that is dead on most of a fresh shop's catalogue.
+	// whether that photo is this shop's own upload rather than the shared catalogue shot. without
+	// it "удалить фото" is a button that does nothing on most of a fresh shop's catalogue.
 	OwnImage bool `json:"own_image"`
 
-	// whether the owner may put their own photograph on this row at all. see templateFlags, which
-	// derives it - and product_image.go, which is what actually refuses.
-	//
-	// sent rather than re-derived in the app for the reason `name_editable` is: the rule is about
-	// what the *catalogue* holds, which is a fact only the server has, and a Flutter build that
-	// worked it out for itself would go stale the day a catalogue is photographed.
+	// whether the owner may put their own photograph on this row at all - see templateFlags
 	PhotoEditable bool `json:"photo_editable"`
 }
 
-// the three photo fields, filled from the one column that carries the fact. together rather than
-// one each, so a response can never leave with a url and the wrong answer beside it - the same
-// reason templateFlags derives its trio in one place.
-//
-// **The database stores only the path inside the images namespace** ("universal/001.jpg"), never a
-// full url, because the host differs between the ngrok tunnel, a laptop and img.domix-api.uz - a
-// stored absolute url would be wrong in two of the three, changing the host would mean rewriting
-// every row, and a dump taken from production would point every local tile at production.
+// the three photo fields, derived together so a response cannot carry a url with the wrong answer
+// beside it. **the database stores only the relative path**, never a full url: the host differs
+// between a laptop, the tunnel and img.domix-api.uz, and a dump would carry the wrong one.
 func productImage(urls imagestore.URLs, path pgtype.Text) (url, thumb *string, own bool) {
 	if !path.Valid || path.String == "" {
 		return nil, nil, false
@@ -162,25 +107,12 @@ func productImage(urls imagestore.URLs, path pgtype.Text) (url, thumb *string, o
 	return &full, &small, imagestore.IsUpload(path.String)
 }
 
-// the three flags above, all derived from the one column that carries the fact. kept in a single
-// function so the five response sites and the Update branch can never disagree about what a slot is.
+// the three flags, in one function so the five response sites and the Update branch cannot disagree
+// about what a slot is. an invalid key is the owner's own row: (false, true, true).
 //
-// an invalid pgtype.Text is a row the owner added themselves, and it comes out (false, true, true):
-// not a template row, the name is theirs, the photograph is theirs.
-//
-// **photoEditable is asked of the catalogue, not of the shop's category, and that is the whole
-// design.** The rule is "an owner may photograph what we have not photographed" - which today means
-// обои and nothing else, whose slots name a *kind* of wallpaper and so have nothing to shoot.
-// Everywhere else the picture is the catalogue's: one file on disk shared by every shop of that
-// category, and an owner replacing it makes their tile disagree with the identical row in the shop
-// across the road while the basket index says the two are the same product.
-//
-// Written as `TemplateImage(key) == ""` rather than as a list of category codes because a hand-kept
-// list of "the unphotographed categories" is a second copy of a fact the template already holds -
-// the same argument that keeps the обои slot keys derived rather than written down (see
-// catalog.IsOwnerNamedSlot). **That has now been collected on**: migration 000005 photographed
-// пиломатериалы, and those five rows locked themselves - shooting the catalogue was the whole
-// change, with nothing to remember here afterwards.
+// **photoEditable asks the catalogue, not the shop's category**: the rule is "an owner may
+// photograph what we have not photographed". Everywhere else the picture is one file shared by every
+// shop of the category, and replacing it would make two rows the index calls identical look different.
 func templateFlags(key pgtype.Text) (isTemplate, nameEditable, photoEditable bool) {
 	if !key.Valid {
 		return false, true, true
@@ -188,16 +120,14 @@ func templateFlags(key pgtype.Text) (isTemplate, nameEditable, photoEditable boo
 	return true, catalog.IsOwnerNamedSlot(key.String), catalog.TemplateImage(key.String) == ""
 }
 
-// the availability values the database CHECK constraint accepts (db/migrations/000004). the app
-// sends a picker's value rather than something the owner typed, so these arrive already normalized.
+// what the database CHECK constraint accepts. the app sends a picker's value, already normalized.
 var validAvailability = map[string]bool{
 	"in_stock":    true,
 	"on_order":    true,
 	"unavailable": true,
 }
 
-// GET and POST on /api/shops/{id}/products. listing is public - a customer browsing the map has no
-// account - while adding a product is an owner-only mutation, hence the split.
+// GET and POST on /api/shops/{id}/products. listing is public, adding is owner-only.
 func (p *Products) RouteByShop(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -209,8 +139,7 @@ func (p *Products) RouteByShop(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// PUT and DELETE on /api/products/{id}. both mutate one existing product, so both need the same
-// ownership check and neither has a public variant.
+// PUT and DELETE on /api/products/{id}: both mutate one product, both need the ownership check
 func (p *Products) RouteByID(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPut:
@@ -222,9 +151,8 @@ func (p *Products) RouteByID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// public: every product in one shop, for the grid on the shop's card and for the owner's own
-// management screen. no pagination - a shop holds at most 50 template rows plus 20 of its own, so
-// the whole catalogue is one small response by construction.
+// public: every product in one shop. no pagination - a shop's catalogue is bounded by the template
+// plus maxCustomProducts, so the whole thing is one small response by construction.
 func (p *Products) ListByShop(w http.ResponseWriter, r *http.Request) {
 	shopID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -270,8 +198,7 @@ func (p *Products) ListByShop(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// authenticated: the owner adds a product of their own, on top of whatever the category template
-// already gave them. capped at maxCustomProducts.
+// authenticated: the owner adds a product of their own, capped at maxCustomProducts
 func (p *Products) Create(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.UserIDFromContext(r.Context())
 	if !ok {
@@ -304,10 +231,8 @@ func (p *Products) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// checked here rather than by a database constraint because "at most 20 rows matching a
-	// predicate" isn't something a CHECK can express. it is therefore racy in principle - two
-	// requests could both read 19 - but the two requests would have to be the same owner tapping
-	// "save" twice in the same instant, and the worst outcome is a 21st product.
+	// not a CHECK constraint, because "at most N rows matching a predicate" is not one. racy in
+	// principle; the worst outcome is one product over the cap.
 	customCount, err := p.Queries.CountCustomProducts(ctx, shopID)
 	if err != nil {
 		log.Printf("CRITICAL: failed to count custom products for shop %d: %v", shopID, err)
@@ -359,21 +284,14 @@ func (p *Products) Create(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// authenticated: edit one product. this is the endpoint that fills in the prices a freshly seeded
-// catalogue is missing, so it is by far the most-used of the four.
+// authenticated: edit one product. the endpoint that fills in a seeded catalogue's missing prices,
+// so by far the most-used of the four. how much may change depends on where the row came from, and
+// the rule is enforced here rather than trusted to the app:
 //
-// how much of the product may change depends on where it came from, and the split is enforced here
-// rather than trusted to the app:
-//
-//   - a template row: price and availability only. those are the two facts that genuinely differ
-//     between two shops stocking the same item, and they are the entire reason the seeded catalogue
-//     arrives unpriced. its name, category and unit are what make it the *same* product as the one
-//     in the shop down the road - let one owner reword them and the shared basket the map's average
-//     check is computed over stops being shared.
-//   - a slot: name, price and availability. a обои slot names a *kind* of product ("премиальные
-//     российские обои") rather than a product, precisely because no two обои shops stock the same
-//     rolls - so writing in the collection the shop actually sells is the point of the row, not an
-//     attack on it. category and unit stay locked, which is what keeps the ten slots a basket.
+//   - a template row: price and availability only. name, category and unit are what make it the
+//     *same* product as the one down the road, which is what the shared basket rests on.
+//   - a slot: the name too. a обои slot names a *kind* of product, so writing in what the shop
+//     actually sells is the point of the row. category and unit stay locked.
 //   - the owner's own row: everything, since nothing outside this shop refers to it.
 func (p *Products) Update(w http.ResponseWriter, r *http.Request) {
 	existing, ok := p.authorizeProductAccess(w, r)
@@ -386,8 +304,7 @@ func (p *Products) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// a fresh timeout, not the one authorizeProductAccess used: that one's cancel() already fired
-	// when the helper returned, so reusing its context would hit an already-cancelled deadline
+	// a fresh timeout: authorizeProductAccess's cancel() already fired when it returned
 	ctx, cancel := dbctx.WithTimeout(r.Context())
 	defer cancel()
 
@@ -400,9 +317,8 @@ func (p *Products) Update(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case isTemplate && nameEditable:
-		// a slot. the name is validated the same way a custom product's is - the owner typed it, so
-		// it can be blank or over-long in exactly the same ways - while category and unit are left
-		// out of the statement entirely, same as the plain template path below.
+		// a slot: the name is validated as a custom product's is, category and unit are left out of
+		// the statement entirely
 		fields, accessErr := req.validateSlot()
 		if accessErr != nil {
 			accessErr.write(w)
@@ -418,10 +334,8 @@ func (p *Products) Update(w http.ResponseWriter, r *http.Request) {
 		product = db.UpdateProductRow(slot)
 
 	case isTemplate:
-		// the name/category/unit the app sent are ignored rather than rejected: the edit form shows
-		// them read-only and submits them back unchanged, so a 400 here would only punish an honest
-		// client for being consistent. UpdateProductPricing has no column for them at all, which is
-		// what makes ignoring them safe.
+		// name/category/unit are ignored rather than rejected: the form submits them back read-only,
+		// and UpdateProductPricing has no column for them, which is what makes ignoring them safe
 		fields, accessErr := req.validatePricing()
 		if accessErr != nil {
 			accessErr.write(w)
@@ -433,8 +347,7 @@ func (p *Products) Update(w http.ResponseWriter, r *http.Request) {
 			Price:        fields.price,
 			Availability: fields.availability,
 		})
-		// the two generated row types have identical fields but are distinct named types, so the
-		// conversion has to be written out; sqlc emits one struct per query by design
+		// identical fields, distinct named types - sqlc emits one struct per query
 		product = db.UpdateProductRow(priced)
 
 	default:
@@ -454,8 +367,7 @@ func (p *Products) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		// it existed a moment ago (we just read it to authorize), so no-rows here means it was
-		// deleted in between - a real race, not a client mistake
+		// it existed when we read it to authorize, so no-rows is a real race and not a client mistake
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeAPIError(w, http.StatusNotFound, "product_not_found", "product not found")
 			return
@@ -485,13 +397,9 @@ func (p *Products) Update(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// authenticated: remove one of the owner's own products. template rows are refused - they are the
-// shared basket every shop of this category is measured on, and a shop that deleted half of them
-// would look cheap by simply not stocking the expensive items.
-//
-// slots are refused on the same rule and by the same line, which is why this branches on
-// TemplateKey rather than on templateFlags: an обои shop is ranked on ten slots, so deleting the
-// премиум ones would be the same trick with the same payoff.
+// authenticated: remove one of the owner's own products. template rows are refused, slots included
+// (hence the branch on TemplateKey rather than templateFlags): they are the shared basket, and a
+// shop that deleted half of them would look cheap by simply not stocking the expensive items.
 func (p *Products) Delete(w http.ResponseWriter, r *http.Request) {
 	existing, ok := p.authorizeProductAccess(w, r)
 	if !ok {
@@ -513,7 +421,7 @@ func (p *Products) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if rows == 0 {
-		// same race as Update above: it was there when we read it and is gone now
+		// same race as Update: it was there when we read it and is gone now
 		writeAPIError(w, http.StatusNotFound, "product_not_found", "product not found")
 		return
 	}
@@ -522,12 +430,9 @@ func (p *Products) Delete(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]bool{"deleted": true})
 }
 
-// the shared gate in front of Update and Delete. it reads the product first and authorizes against
-// the shop_id stored on that row - never a shop_id the client sent - so a caller can't pair their
-// own shop's id with someone else's product id and have the ownership check pass.
-//
-// on failure it has already written the response, so callers just return. the product it returns is
-// the *current* row, which Delete then uses to refuse template products.
+// the shared gate in front of Update and Delete. it authorizes against the shop_id stored on the
+// row, never one the client sent, so a caller cannot pair their own shop with somebody else's
+// product id. on failure it has already written the response, so callers just return.
 func (p *Products) authorizeProductAccess(w http.ResponseWriter, r *http.Request) (db.GetProductRow, bool) {
 	userID, ok := auth.UserIDFromContext(r.Context())
 	if !ok {
@@ -563,11 +468,8 @@ func (p *Products) authorizeProductAccess(w http.ResponseWriter, r *http.Request
 	return product, true
 }
 
-// the json body of both Create and Update - the edit form always submits every field, so the two
-// endpoints take the same shape and a product is fully replaced rather than patched.
-//
-// Price is *int64 for the same reason ProductResponse's is: the app sends `null` for a product it
-// hasn't priced yet, and a plain int64 would silently turn that into a real price of zero.
+// the body of both Create and Update - the form always submits every field, so a product is fully
+// replaced rather than patched. Price is a pointer so `null` stays "not priced" and not zero.
 type productRequest struct {
 	Name         string `json:"name"`
 	Category     string `json:"category"`
@@ -582,9 +484,8 @@ type productFields struct {
 	price                              pgtype.Int8
 }
 
-// the full check, for a product the owner owns outright. the three checks nest - pricing, then
-// pricing plus the name, then everything - so a field can never be validated one way on one path
-// and another way on the next.
+// the full check, for a row the owner owns outright. the three nest - pricing, then the name, then
+// everything - so a field cannot be validated one way on one path and another on the next.
 func (req productRequest) validate() (productFields, *accessError) {
 	f, accessErr := req.validateSlot()
 	if accessErr != nil {
@@ -598,16 +499,12 @@ func (req productRequest) validate() (productFields, *accessError) {
 		return f, &accessError{http.StatusBadRequest, "missing_fields", "name, category and unit are required"}
 	}
 
-	// rune count, not len(): these are cyrillic strings, where one character is two bytes, and
-	// postgres counts varchar limits in characters
+	// runes, not bytes: cyrillic is two bytes a character and postgres counts varchar in characters
 	if utf8.RuneCountInString(f.unit) > maxUnitLen {
 		return f, &accessError{http.StatusBadRequest, "field_too_long", "a field is longer than allowed"}
 	}
 
-	// a code from internal/catalog, not free text. the app sends the value of a fixed dropdown, so
-	// anything else is a client that has gone wrong rather than an owner mistyping - but this is the
-	// only thing standing between the column and free text, since there is no CHECK constraint
-	// behind it (see IsValidProductCategory for why).
+	// the only thing between this column and free text - there is no CHECK constraint behind it
 	if !catalog.IsValidProductCategory(f.category) {
 		return f, &accessError{http.StatusBadRequest, "invalid_category", "unknown product category"}
 	}
@@ -615,13 +512,9 @@ func (req productRequest) validate() (productFields, *accessError) {
 	return f, nil
 }
 
-// a slot: the two pricing fields plus the name the owner writes in, and nothing else.
-//
-// the name check is lifted out of validate() rather than repeated, so a name that would be refused
-// on a custom product is refused here too - the column it lands in is the same one, with the same
-// 150-character limit. what it deliberately does *not* do is validate category and unit: the app
-// draws those as locked text and submits them back unchanged, and UpdateProductSlot has no column
-// for either, so validating them would only turn a truthful client into a 400.
+// a slot: the two pricing fields plus the owner's name, and nothing else. category and unit are
+// deliberately not validated - the form submits them back read-only and UpdateProductSlot has no
+// column for either, so checking them would only turn a truthful client into a 400.
 func (req productRequest) validateSlot() (productFields, *accessError) {
 	f, accessErr := req.validatePricing()
 	if accessErr != nil {
@@ -639,9 +532,7 @@ func (req productRequest) validateSlot() (productFields, *accessError) {
 	return f, nil
 }
 
-// the two fields a template product is allowed to change, and the shared prefix of the full check
-// above - so price and availability can never end up validated one way on one path and another way
-// on the other.
+// the two fields a template product may change, and the shared prefix of the checks above
 func (req productRequest) validatePricing() (productFields, *accessError) {
 	f := productFields{availability: strings.TrimSpace(req.Availability)}
 
@@ -649,9 +540,8 @@ func (req productRequest) validatePricing() (productFields, *accessError) {
 		return f, &accessError{http.StatusBadRequest, "invalid_availability", "invalid availability value"}
 	}
 
-	// a missing price is legal and means "not priced yet" - that is the state every template row
-	// starts in, and clearing the field is how an owner puts one back into it. a *negative* price is
-	// not legal, and neither is one large enough to be a typo.
+	// a missing price is legal and means "not priced yet" - the state every template row starts in.
+	// a negative one is not, and neither is one large enough to be a typo.
 	if req.Price != nil {
 		if *req.Price < 0 || float64(*req.Price) > maxProductPrice {
 			return f, &accessError{http.StatusBadRequest, "invalid_price", "invalid price"}
@@ -662,14 +552,12 @@ func (req productRequest) validatePricing() (productFields, *accessError) {
 	return f, nil
 }
 
-// pgtype.Int8 -> *int64. pgx models a nullable bigint as a struct with a Valid flag rather than a
-// pointer, so this is the one place that translation happens on the way out to json.
+// pgtype.Int8 -> *int64, the one place a nullable bigint becomes json's null
 func nullableInt64(v pgtype.Int8) *int64 {
 	if !v.Valid {
 		return nil
 	}
-	// the address of the loop-independent local, not of v.Int64 - taking the field's address would
-	// alias the caller's struct
+	// a local, not &v.Int64 - taking the field's address would alias the caller's struct
 	price := v.Int64
 	return &price
 }

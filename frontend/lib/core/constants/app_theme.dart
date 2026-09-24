@@ -35,6 +35,14 @@ class AppShadows {
     BoxShadow(color: Color(0x0A0D1220), blurRadius: 4, offset: Offset(0, 1)),
   ];
 
+  // what holds a header surface off the page scrolling under it. two layers and no line: the tight
+  // one is the edge itself, the wide one is the fall-off that stops it reading as a rule. weaker
+  // than `card` on purpose - the tonal step between the two surfaces does most of the work.
+  static const List<BoxShadow> header = [
+    BoxShadow(color: Color(0x0F101828), blurRadius: 1, offset: Offset(0, 1)),
+    BoxShadow(color: Color(0x0D101828), blurRadius: 14, offset: Offset(0, 4)),
+  ];
+
   // for things that genuinely hover over other content: the nav bar, map overlays
   static const List<BoxShadow> floating = [
     BoxShadow(color: Color(0x14101828), blurRadius: 30, offset: Offset(0, 10)),

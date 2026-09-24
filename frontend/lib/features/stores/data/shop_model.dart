@@ -1,4 +1,3 @@
-import 'package:frontend/core/constants/api_config.dart';
 import 'price_tier.dart';
 import 'shop_category.dart';
 
@@ -12,12 +11,10 @@ class Shop {
     required this.category,
     required this.latitude,
     required this.longitude,
-    required this.rating,
     this.priceTier,
     this.priceDifferencePercent,
     this.basketPrice,
     this.isVip = false,
-    this.imageUrl,
     this.productCount = 0,
   });
 
@@ -32,7 +29,6 @@ class Shop {
 
   final double latitude;
   final double longitude;
-  final double rating;
 
   /// How this shop's basket compares to its market, already decided by the backend.
   ///
@@ -58,20 +54,6 @@ class Shop {
   // narrower: how many products this shop prices *in that category*.
   final int productCount;
 
-  // relative path returned by the backend (e.g. "/uploads/shops/xxx.jpg"), or null if no photo was set
-  final String? imageUrl;
-
-  // full, directly-loadable url for Image.network, built from the relative path above
-  String? get imageFullUrl =>
-      imageUrl == null ? null : '${ApiConfig.serverRoot}$imageUrl';
-
-  /// Whether this shop has a rating worth showing at all.
-  ///
-  /// **Today this is always false, and that is the point**: nothing writes `shops.rating`, so every
-  /// shop reads 0.0 and `⭐ 0.0` says "customers rated us zero" where the truth is "nobody has rated
-  /// us". When a reviews table lands, this getter is the only thing that changes.
-  bool get hasRating => rating > 0;
-
   factory Shop.fromJson(Map<String, dynamic> json) {
     return Shop(
       id: json['id'] as int,
@@ -81,14 +63,12 @@ class Shop {
       category: ShopCategory.fromCode(json['category'] as String?),
       latitude: (json['latitude'] as num).toDouble(),
       longitude: (json['longitude'] as num).toDouble(),
-      rating: (json['rating'] as num).toDouble(),
       // `as int?` and no `?? 0`: the backend sends an explicit null for a shop with no published index,
       // and a 0 index would render as "100% cheaper than the market"
       priceTier: PriceTier.tryFromCode(json['price_tier'] as String?),
       priceDifferencePercent: json['price_difference_percent'] as int?,
       basketPrice: json['basket_price'] as int?,
       isVip: json['is_vip'] as bool? ?? false,
-      imageUrl: json['image_url'] as String?,
       productCount: json['product_count'] as int? ?? 0,
     );
   }
@@ -103,12 +83,10 @@ class Shop {
         category: category,
         latitude: latitude,
         longitude: longitude,
-        rating: rating,
         priceTier: priceTier,
         priceDifferencePercent: priceDifferencePercent,
         basketPrice: basketPrice,
         isVip: isVip,
-        imageUrl: imageUrl,
         productCount: productCount ?? this.productCount,
       );
 }

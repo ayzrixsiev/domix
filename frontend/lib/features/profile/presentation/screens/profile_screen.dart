@@ -1,23 +1,20 @@
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:provider/provider.dart';
+import 'package:frontend/core/constants/app_colors.dart';
+import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
+import 'package:frontend/core/widgets/app_form.dart';
 import 'package:frontend/core/widgets/destructive_confirm_dialog.dart';
+import 'package:frontend/core/widgets/empty_state_view.dart';
+import 'package:frontend/core/widgets/primary_action_button.dart';
 import 'package:frontend/features/onboarding/presentation/screens/onboarding_flow.dart';
+import 'package:frontend/features/profile/data/account_role.dart';
 import '../controllers/auth_controller.dart';
-
-const Color _kPrimaryOrange = Color(0xFFFF6F00);
-const Color _kPrimaryOrangeDark = Color(0xFFE65D00);
-const Color _kTextPrimary = Color(0xFF111827);
-const Color _kTextMuted = Color(0xFF64748B);
-const Color _kDivider = Color(0xFFEEF0F2);
-const Color _kSoftSurface = Color(0xFFF8FAFC);
-const Color _kDanger = Color(0xFFB42318);
-const Color _kDangerSoft = Color(0xFFFEF0EE);
-const Color _kCardBorder = Color(0xFFF2F4F7);
-
+import 'profile_edit_screen.dart';
 
 // 2. profile state and account type models
 enum ProfileAccountState {
@@ -114,7 +111,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: _kDivider,
+                      color: AppColors.hairline,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -123,7 +120,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Text(
                   _strings.selectLanguage,
                   style: const TextStyle(
-                    color: _kTextPrimary,
+                    color: AppColors.textDark,
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                   ),
@@ -156,16 +153,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final authController = Provider.of<AuthController>(context);
     final currentProfile = authController.profileState;
 
-    // **A guest gets the onboarding flow, not a card.** Language, the privacy policy, name and
-    // role, then the phone code - see OnboardingFlow, which owns all four and every error they can
-    // produce. This screen is the signed-in profile and the host of that flow, nothing else.
+    // **A guest gets a door, not the flow.** Registration is a full-screen route over the shell -
+    // see OnboardingFlow - because signing up with the nav bar still on screen read as a half-open
+    // door. The tab itself only has to explain why there is nothing here and lead into that route;
+    // tapping Профиль from the nav bar opens it directly, so this is the way back in after the flow
+    // was closed or the account signed out of.
     final body = currentProfile.isGuest
-        ? OnboardingFlow(bottomPadding: widget.bottomPadding)
+        ? _guestGate(_strings)
         : _buildAccountBody(currentProfile, authController);
 
     return widget.showScaffold
-        ? Scaffold(backgroundColor: _kSoftSurface, body: body)
-        : ColoredBox(color: _kSoftSurface, child: body);
+        ? Scaffold(backgroundColor: AppColors.background, body: body)
+        : ColoredBox(color: AppColors.background, child: body);
+  }
+
+  /// **One button for both, because the server decides.** `/verify` finds the account or creates it,
+  /// so "войти" and "зарегистрироваться" are the same five steps and the same request - two controls
+  /// here would be two labels on one door.
+  Widget _guestGate(AppLocalizations strings) {
+    return EmptyStateView(
+      icon: LucideIcons.user,
+      title: strings.profileGuestTitle,
+      subtitle: strings.profileGuestBody,
+      bottomInset: widget.bottomPadding,
+      action: PrimaryActionButton(
+        label: strings.profileGuestAction,
+        icon: LucideIcons.log_in,
+        onTap: () => OnboardingFlow.open(context),
+      ),
+    );
   }
 
   /// Asks once, then destroys the account on the server and signs out locally. The confirmation lives
@@ -233,12 +249,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 width: 56,
                 height: 56,
                 decoration: const BoxDecoration(
-                  color: _kDangerSoft,
+                  color: AppColors.dangerSoft,
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
                   CupertinoIcons.exclamationmark_triangle_fill,
-                  color: _kDanger,
+                  color: AppColors.danger,
                   size: 28,
                 ),
               ),
@@ -247,7 +263,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 title,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  color: _kTextPrimary,
+                  color: AppColors.textDark,
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
                 ),
@@ -257,7 +273,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 body,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  color: _kTextPrimary,
+                  color: AppColors.textDark,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   height: 1.4,
@@ -278,9 +294,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  /// The signed-in profile: account header, the shop accordion for owners, the settings menu and
-  /// the deletion card. Only ever reached with a real account - [build] sends a guest to the login
-  /// card instead - so nothing in here re-checks for one.
+  /// Opens the editor and, when it changed something, says so.
+  ///
+  /// **A route rather than a sheet**, like the registration flow it shares its steps with: editing
+  /// the number is a two-step code flow, and half of it under the nav bar with four other places to
+  /// be would read as a half-open door. Nothing here has to reload the profile - both writes go
+  /// through [AuthController], which has already notified this screen by the time the route pops.
+  Future<void> _openEditor() async {
+    final outcome = await ProfileEditScreen.open(context);
+    if (outcome == null || !mounted) return;
+
+    final strings = _strings;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          switch (outcome) {
+            ProfileEditOutcome.profileSaved => strings.accountSavedMessage,
+            ProfileEditOutcome.phoneChanged => strings.phoneChangedMessage,
+          },
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  /// The signed-in profile: account header, the shop accordion for owners, and the settings menu.
+  /// Only ever reached with a real account - [build] sends a guest to the login card instead - so
+  /// nothing in here re-checks for one.
   Widget _buildAccountBody(ProfileViewState currentProfile, AuthController authController) {
     return SafeArea(
       child: ListView(
@@ -323,11 +363,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 16),
           ],
 
-          // standard operations card showing basic options for customers.
+          // every account operation in one card, ending with the two that close it.
           //
           // **No «Поддержка» row.** Support is a tab in the nav bar, always one tap away from
           // anywhere; a second door to the same screen buried in a settings list is one more thing
           // to keep in step for no reach it does not already have.
+          //
+          // **Only «Удалить аккаунт» is red.** Signing out is undone by signing back in, so danger
+          // colours on it spent the alarm the list has on the one row that is not alarming - which
+          // left the row below it, the one that is genuinely irreversible, looking like more of the
+          // same. Deletion still asks before it acts; the colour is the only warning the other one
+          // needs to not have.
           _MenuGroupCard(
             rows: [
               _MenuRowData(
@@ -343,38 +389,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _MenuRowData(
                 icon: CupertinoIcons.square_arrow_right,
                 title: _strings.logout,
-                textColor: _kDanger,
-                iconColor: _kDanger,
-                iconBackground: _kDangerSoft,
                 onTap: () {
                   setState(() => _showShopsSubMenu = false);
                   Provider.of<AuthController>(context, listen: false).logout();
                 },
               ),
-            ],
-          ),
-
-          // account deletion, in a card of its own below the menu: an irreversible action sharing a list with
-          // "Язык приложения" is one somebody eventually taps on the way to something else.
-          //
-          // **This exists because Google Play requires it** - an app that lets a user create an account must
-          // let them delete it from inside the app, or the listing is rejected at review.
-          const SizedBox(height: 16),
-          _MenuGroupCard(
-            rows: [
+              // **This exists because Google Play requires it** - an app that lets a user create an
+              // account must let them delete it from inside the app, or the listing is rejected at
+              // review.
               _MenuRowData(
                 icon: CupertinoIcons.trash,
                 title: _strings.deleteAccount,
-                textColor: _kDanger,
-                iconColor: _kDanger,
-                iconBackground: _kDangerSoft,
+                textColor: AppColors.danger,
+                iconColor: AppColors.danger,
+                iconBackground: AppColors.dangerSoft,
                 // a spinner in the trailing slot rather than a disabled row: the request is a round trip a shop
                 // owner with a large catalogue will notice, and a row that stops responding reads as a freeze
                 trailing: authController.isDeletingAccount
                     ? const SizedBox(
                         width: 18,
                         height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: _kDanger),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.danger),
                       )
                     : null,
                 onTap: authController.isDeletingAccount ? null : _confirmDeleteAccount,
@@ -387,7 +422,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Text(
               _strings.version,
               style: TextStyle(
-                color: _kTextMuted.withValues(alpha: 0.6),
+                color: AppColors.textMuted.withValues(alpha: 0.6),
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
@@ -397,81 +432,96 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+  /// Who this account is, in three lines that read downward.
+  ///
+  /// **Stacked rather than laid beside the avatar.** The avatar and the way in to editing take the
+  /// top row between them, and the name then gets the card's whole width underneath - which is what
+  /// lets it be set at a size that reads as the subject of the screen rather than as a label on a
+  /// picture. The old arrangement put a 20px name in the ~200px left beside a 76px disc, where a
+  /// two-part Uzbek name ellipsed on any phone narrower than a Pixel.
+  ///
+  /// The role and the number share the last line because they answer the same question - which
+  /// account this is - and neither needs a line of its own to do it.
   Widget _buildAccountHeaderCard(ProfileViewState profile) {
+    final role = AccountRole.of(isVendor: profile.isVendor);
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _kCardBorder),
+        borderRadius: BorderRadius.circular(AppRadius.md + 4),
+        border: Border.all(color: AppColors.hairline),
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFFFFF8F2), Colors.white],
+          colors: [AppColors.primarySoft, Colors.white],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        boxShadow: AppShadows.card,
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(AppRadius.md + 4),
         child: Stack(
           clipBehavior: Clip.none,
           children: [
             Positioned(
-              top: -60,
-              right: -40,
-              child: _decorativeBlob(180, _kPrimaryOrange.withValues(alpha: 0.08)),
+              top: -70,
+              right: -50,
+              child: _decorativeBlob(190, AppColors.primaryOrange.withValues(alpha: 0.08)),
             ),
             Padding(
-              padding: const EdgeInsets.all(24),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
+              padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 76, not 68: with the vendor badge stacked above the name and phone the text column measures
-                  // ~71px, so the old avatar was shorter than the text beside it and the outer lines hung past it
-                  _ProfileAvatar(
-                    initials: profile.initials,
-                    size: 76,
-                    backgroundColor: const Color(0xFFFFEEDD),
-                    textColor: _kPrimaryOrangeDark,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _ProfileAvatar(
+                        initials: profile.initials,
+                        size: 66,
+                        backgroundColor: AppColors.primaryTint,
+                        textColor: AppColors.primaryDeep,
+                      ),
+                      const Spacer(),
+                      _EditProfileButton(
+                        label: _strings.editProfileButton,
+                        onTap: _openEditor,
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 18),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (profile.isVendor) ...[
-                          _buildVendorBadge(),
-                          const SizedBox(height: 6),
-                        ],
-                        // single line keeps the column's height predictable against the avatar
-                        Text(
-                          profile.fullName,
+                  const SizedBox(height: 18),
+                  Text(
+                    profile.fullName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.textDark,
+                      fontSize: 25,
+                      height: 1.15,
+                      letterSpacing: -0.6,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      _RoleBadge(role: role, label: role.badgeLabel(_strings)),
+                      const SizedBox(width: 10),
+                      // Flexible, not a bare Text: a long role label and a twelve-digit number
+                      // together overrun a narrow phone, and the number is the half that may clip
+                      Flexible(
+                        child: Text(
+                          formatUzPhone(profile.phoneNumber),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            color: _kTextPrimary,
-                            fontSize: 20,
-                            height: 1.2,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          profile.phoneNumber,
-                          style: const TextStyle(
-                            color: _kTextMuted,
+                            color: AppColors.textMuted,
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -482,42 +532,89 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildVendorBadge() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: _kPrimaryOrange,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            CupertinoIcons.checkmark_seal_fill,
-            color: Colors.white,
-            size: 12,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            _strings.vendorBadge,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 11,
-              height: 1.1,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _decorativeBlob(double size, Color color) {
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+    );
+  }
+}
+
+/// The way in to the editor, opposite the avatar. A white pill on the header's tinted gradient
+/// rather than a [CircleIconButton]: this one is labelled, because a bare pencil over a name and a
+/// phone number does not say which of them it edits.
+class _EditProfileButton extends StatelessWidget {
+  const _EditProfileButton({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surfaceWhite,
+      borderRadius: BorderRadius.circular(999),
+      elevation: 0,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(LucideIcons.pencil, size: 13, color: AppColors.primaryOrange),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.primaryOrange,
+                  fontSize: 13,
+                  height: 1.1,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Which side of the marketplace this account stands on, as a pill beside the number.
+///
+/// **Brand orange only for the roles that are a standing in it.** A shop owner and a worker are
+/// offering something to everyone else; a customer is the default every account starts as, and
+/// painting that in the one colour reserved for primary actions spends it on a word nobody chose.
+class _RoleBadge extends StatelessWidget {
+  const _RoleBadge({required this.role, required this.label});
+
+  final AccountRole role;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final professional = role != AccountRole.client;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4.5),
+      decoration: BoxDecoration(
+        color: professional ? AppColors.primaryOrange : AppColors.surfaceWhite,
+        borderRadius: BorderRadius.circular(999),
+        border: professional ? null : Border.all(color: AppColors.hairline),
+      ),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          color: professional ? Colors.white : AppColors.textMuted,
+          fontSize: 10.5,
+          height: 1.1,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.4,
+        ),
+      ),
     );
   }
 }
@@ -544,10 +641,10 @@ class _LanguageOptionTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           margin: const EdgeInsets.only(bottom: 8),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFFFFF0E3) : _kSoftSurface,
+            color: isSelected ? AppColors.primarySoft : AppColors.background,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isSelected ? _kPrimaryOrangeDark : Colors.transparent,
+              color: isSelected ? AppColors.primaryDeep : Colors.transparent,
               width: 1.5,
             ),
           ),
@@ -557,7 +654,7 @@ class _LanguageOptionTile extends StatelessWidget {
               Text(
                 language.displayName,
                 style: TextStyle(
-                  color: isSelected ? _kPrimaryOrangeDark : _kTextPrimary,
+                  color: isSelected ? AppColors.primaryDeep : AppColors.textDark,
                   fontSize: 16,
                   fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                 ),
@@ -565,7 +662,7 @@ class _LanguageOptionTile extends StatelessWidget {
               if (isSelected)
                 const Icon(
                   CupertinoIcons.checkmark_alt_circle_fill,
-                  color: _kPrimaryOrangeDark,
+                  color: AppColors.primaryDeep,
                   size: 22,
                 ),
             ],
@@ -614,7 +711,7 @@ class _MenuGroupCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _kCardBorder),
+        border: Border.all(color: AppColors.hairline),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -669,8 +766,8 @@ class _ExpandableMenuSection extends StatelessWidget {
             title: header.title,
             onTap: onToggle,
             textColor: header.textColor,
-            iconColor: isExpanded ? _kPrimaryOrangeDark : header.iconColor,
-            iconBackground: isExpanded ? const Color(0xFFFFF0E3) : header.iconBackground,
+            iconColor: isExpanded ? AppColors.primaryDeep : header.iconColor,
+            iconBackground: isExpanded ? AppColors.primarySoft : header.iconBackground,
             // 0.25 turns = 90 degrees, so the forward chevron ends up pointing down at the rows it revealed
             trailing: AnimatedRotation(
               turns: isExpanded ? 0.25 : 0,
@@ -679,8 +776,8 @@ class _ExpandableMenuSection extends StatelessWidget {
               child: Icon(
                 CupertinoIcons.chevron_forward,
                 color: isExpanded
-                    ? _kPrimaryOrangeDark
-                    : (header.textColor ?? _kTextPrimary).withValues(alpha: 0.3),
+                    ? AppColors.primaryDeep
+                    : (header.textColor ?? AppColors.textDark).withValues(alpha: 0.3),
                 size: 16,
               ),
             ),
@@ -715,9 +812,9 @@ class _MenuRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolvedTextColor = data.textColor ?? _kTextPrimary;
-    final resolvedIconColor = data.iconColor ?? _kTextMuted;
-    final resolvedIconBg = data.iconBackground ?? _kSoftSurface;
+    final resolvedTextColor = data.textColor ?? AppColors.textDark;
+    final resolvedIconColor = data.iconColor ?? AppColors.textMuted;
+    final resolvedIconBg = data.iconBackground ?? AppColors.background;
 
     return Material(
       color: Colors.transparent,
@@ -729,7 +826,7 @@ class _MenuRow extends StatelessWidget {
           decoration: BoxDecoration(
             border: isLast
                 ? null
-                : const Border(bottom: BorderSide(color: _kDivider)),
+                : const Border(bottom: BorderSide(color: AppColors.hairline)),
           ),
           child: Row(
             children: [
@@ -819,7 +916,7 @@ class _ProfileButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: _kPrimaryOrange,
+      color: AppColors.primaryOrange,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,

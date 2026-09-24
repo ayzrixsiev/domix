@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"domix/backend/db"
 	"domix/backend/internal/auth"
@@ -17,70 +18,13 @@ import (
 
 const maxUserNameLen = 150
 
-// the telegram-login handshake's endpoints - kicking off a login attempt, polling for whether it has
-// completed - plus the one that tells an already-logged-in app whether its session is still real.
-//
-// **Init and Status are SUPERSEDED by endpoints.PhoneAuth** (POST /api/auth/request-code and
-// /api/auth/verify). They are still registered only because the apk currently installed on the
-// founder's phone calls them; once the flutter side is on the code flow, delete them, the
-// SessionMgr and BotUsername fields, and internal/telegram with them. RouteMe/Me/DeleteMe stay -
-// they were never part of the handshake.
+// /api/me: the caller reading, editing or destroying their own account. Signing in lives in
+// endpoints.PhoneAuth, and moving an account onto a new number in phone_change.go.
 type Auth struct {
-	Queries     *db.Queries
-	SessionMgr  *auth.SessionManager
-	BotUsername string
+	Queries *db.Queries
 }
 
-// POST /api/auth/init - flutter calls this to start a login session and get a telegram deep link with sessID back
-func (a *Auth) Init(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Name string `json:"name"`
-		Role string `json:"role"`
-	}
-	if !decodeJSONBody(w, r, &req) {
-		return
-	}
-
-	if req.Role != "shop_owner" {
-		req.Role = "customer"
-	}
-
-	req.Name = strings.TrimSpace(req.Name)
-	if req.Name == "" {
-		req.Name = defaultUserName
-	}
-	if utf8.RuneCountInString(req.Name) > maxUserNameLen {
-		writeAPIError(w, http.StatusBadRequest, "name_too_long",
-			"name is longer than the maximum allowed length")
-		return
-	}
-
-	// create session ticket with name, role and session id
-	sessionID := a.SessionMgr.InitSession(req.Name, req.Role)
-
-	w.WriteHeader(http.StatusOK)
-	// send back to flutter the link to telegram with the session id embedded inside it
-	json.NewEncoder(w).Encode(map[string]string{
-		"session_id":   sessionID,
-		"telegram_url": "https://t.me/" + a.BotUsername + "?start=" + sessionID,
-	})
-}
-
-// GET /api/auth/status - flutter polls this every ~2s to see whether login completed and get the jwt
-func (a *Auth) Status(w http.ResponseWriter, r *http.Request) {
-	sessionID := r.URL.Query().Get("session_id")
-	if sessionID == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "missing session_id"})
-		return
-	}
-
-	statusData := a.SessionMgr.GetStatus(sessionID)
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(statusData)
-}
-
-// what we are returning to the flutter after user validation
+// the account, as GET /api/me and the login both answer with it
 type MeResponse struct {
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`
@@ -88,19 +32,96 @@ type MeResponse struct {
 	Role  string `json:"role"`
 }
 
-
-// dispatches /api/me by method. both read or destroy the caller's own account, so both sit behind
-// the same RequireAuth - which is applied once where the route is registered, rather than twice
-// here.
+// dispatches /api/me by method - all three act on the caller's own account, behind one RequireAuth
+// applied where the route is registered. the number is not editable here: moving an account onto a
+// different phone needs that phone proven first (PhoneAuth.RequestPhoneChangeCode).
 func (a *Auth) RouteMe(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		a.Me(w, r)
+	case http.MethodPatch:
+		a.UpdateMe(w, r)
 	case http.MethodDelete:
 		a.DeleteMe(w, r)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
+}
+
+// PATCH /api/me - rename the caller, and let a customer become a shop owner.
+//
+// **a role only ever goes up, and only from `customer`** (the same rule PhoneAuth.upsertUser
+// applies): a shop owner who demoted themselves would keep every shop while losing the right to
+// edit any of them. `admin` is refused by the same branch - an admin is made in the database.
+func (a *Auth) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.UserIDFromContext(r.Context())
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "not signed in")
+		return
+	}
+
+	// pointers, so an omitted field is distinguishable from one deliberately set to empty
+	var req struct {
+		Name *string `json:"name"`
+		Role *string `json:"role"`
+	}
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+
+	ctx, cancel := dbctx.WithTimeout(r.Context())
+	defer cancel()
+
+	current, err := a.Queries.GetUserByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeAPIError(w, http.StatusUnauthorized, "account_deleted", "this account no longer exists")
+			return
+		}
+		log.Printf("CRITICAL: failed to load user %d before a profile edit: %v", userID, err)
+		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not load the account")
+		return
+	}
+
+	name := current.Name.String
+	if req.Name != nil {
+		name = strings.TrimSpace(*req.Name)
+		if name == "" {
+			writeAPIError(w, http.StatusBadRequest, "name_required", "a name is required")
+			return
+		}
+		if utf8.RuneCountInString(name) > maxUserNameLen {
+			writeAPIError(w, http.StatusBadRequest, "name_too_long", "name is longer than the maximum allowed length")
+			return
+		}
+	}
+
+	role := current.Role
+	if req.Role != nil && *req.Role != current.Role {
+		if current.Role != "customer" || *req.Role != "shop_owner" {
+			writeAPIError(w, http.StatusForbidden, "role_locked", "this role cannot be changed")
+			return
+		}
+		role = "shop_owner"
+	}
+
+	updated, err := a.Queries.UpdateUserProfile(ctx, db.UpdateUserProfileParams{
+		ID:   userID,
+		Name: pgtype.Text{String: name, Valid: name != ""},
+		Role: role,
+	})
+	if err != nil {
+		log.Printf("CRITICAL: failed to update the profile of user %d: %v", userID, err)
+		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not save the profile")
+		return
+	}
+
+	if role != current.Role {
+		log.Printf("User %d became a %s", userID, role)
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(meResponseOf(updated))
 }
 
 // decides which screen to show and what to shop in profile page: user and its credentials or guest

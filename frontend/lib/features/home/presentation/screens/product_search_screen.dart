@@ -10,7 +10,7 @@ import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
 import 'package:frontend/features/home/presentation/controllers/home_controller.dart';
 import 'package:frontend/features/home/presentation/widgets/product_results_view.dart';
-import 'package:frontend/core/widgets/circle_back_button.dart';
+import 'package:frontend/core/widgets/app_page_header.dart';
 
 /// The screen the home search bar opens: a field, and below it every priced product whose name
 /// contains every word of the query.
@@ -88,26 +88,15 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        // the field wants the whole bar, so the default title padding goes and the Row spaces itself
-        titleSpacing: 0,
-        leading: const CircleBackButton(),
-        leadingWidth: CircleBackButton.leadingWidth,
-        title: Padding(
-          // 12 on the left, where it used to be 0: `leadingWidth` ends 2px past the back disc, so with
-          // no padding the field started hard against it and the two read as one broken-up control.
-          // 16 on the right is the page gutter, which is also where the disc's left edge sits.
-          padding: const EdgeInsets.only(left: 12, right: 16),
-          child: _SearchField(
-            controller: _controller,
-            focusNode: _focusNode,
-            hintText: strings.searchHint,
-            onSubmitted: _run,
-            onClear: _clear,
-          ),
+      appBar: AppPageHeader.custom(
+        // the field *is* the title here - there is nothing to call this screen that the field does
+        // not already say
+        child: _SearchField(
+          controller: _controller,
+          focusNode: _focusNode,
+          hintText: strings.searchHint,
+          onSubmitted: _run,
+          onClear: _clear,
         ),
       ),
       body: SafeArea(top: false, child: _body(strings)),

@@ -23,81 +23,51 @@ import (
 	"domix/backend/internal/imagestore"
 )
 
-// the admin panel's api - statistics for the dashboard, and the two destructive operations the
-// founder runs by hand today: deleting a user and deleting a shop.
+// the admin panel's api: the dashboard's statistics, moderation, the template editor and the
+// orphaned-photo sweep.
 //
-// **there used to be an admin.go here and it was deleted on purpose.** it held
-// PUT /api/admin/shops/{id}/vip, and the argument for removing it was not that admin endpoints are
-// bad - it was that the api had no way to tell an admin from anybody else. /api/auth/init accepted
-// {"role":"admin"} and passed it straight to CreateUser, so the "admin-only" endpoint was open to
-// whoever asked. that hole is closed (auth.go maps everything that is not shop_owner to customer,
-// and the telegram handler only ever upgrades customer -> shop_owner), which is what makes this
-// file safe to write now where it was not before.
-//
-// the whole admin surface is deliberately in one file, middleware included. it is the only place in
-// the api where one caller acts on another user's data, so "read this file and you have read the
-// entire privileged path" is worth more here than tidy layering.
-//
-// granting VIP is still not here. it was not asked for, and it is a different kind of decision from
-// the two below - see §7 of CLAUDE.md for the SQL that does it.
+// **the whole privileged surface is deliberately in one file, middleware included.** it is the only
+// place in the api where one caller acts on another user's data, so "read this file and you have
+// read the entire privileged path" is worth more here than tidy layering.
 type Admin struct {
 	// the pool, not just Queries, because the template sync is three statements that must land
-	// together: a shop left with rows inserted but the stale ones not yet deleted is a shop holding
-	// two versions of its own basket, and the index would read it as neither.
+	// together - see SyncTemplate
 	Pool    *pgxpool.Pool
 	Queries *db.Queries
 
-	// how a stored image path becomes an address the app can fetch, shared with the app-facing
-	// endpoints so the panel's catalogue view shows the same urls the phone does.
+	// shared with the app-facing endpoints, so the panel shows the same urls the phone does
 	URLs imagestore.URLs
 
-	// where uploaded photos live, for the orphan sweep at the bottom of this file. the panel is the
-	// only caller that lists and deletes files without a products row in front of it.
+	// where uploaded photos live, for the orphan sweep at the bottom of this file
 	Images imagestore.Storage
 }
 
-// the ceiling on how many rows one list request may return, and the default when the caller does
-// not ask. an admin screen must not be the one endpoint in the api that can pull the whole database
-// into memory, and a client that asks for a million rows is more likely a mistake than a need.
-//
-// 500 is chosen against the launch cohort of 50-70 shops with room to spare. the panel filters and
-// sorts client-side, so it wants the whole set in one request; the day that stops being reasonable,
-// offset is already wired through and the panel grows a pager.
+// how many rows one list request may return. the panel filters and sorts client-side so it wants
+// the whole set in one request; offset is wired through for the day it needs a pager.
 const (
 	adminListDefaultLimit = 200
 	adminListMaxLimit     = 500
 
-	// how many unfinished catalogues the dashboard payload carries. it is a ceiling, not a page: the
-	// panel lists them all in one modal, and a market where more than a hundred shops are mid-
-	// catalogue is one where the founder needs a different tool, not a longer list.
+	// a ceiling, not a page: the panel lists every unfinished catalogue in one modal
 	adminAttentionLimit = 100
 
-	// how many shops deep each market's ranking goes. **Five is a design number, not a page size**:
-	// the card is about whether anybody is competing for the cheapest place, and that is answered by
-	// the top of the list - the sixth shop in a market says nothing the fifth did not. It also keeps
-	// the payload flat at four categories × five rows however large the market grows.
+	// **a design number, not a page size**: the card asks whether anybody is competing for the
+	// cheapest place, and the sixth shop in a market says nothing the fifth did not
 	adminRankingDepth = 5
 )
 
-// RequireAdmin refuses anyone whose role is not `admin`, and it is the only thing standing between
-// a logged-in shop owner and everybody else's account.
+// RequireAdmin refuses anyone whose role is not `admin` - the only thing between a logged-in shop
+// owner and everybody else's account. it must be composed *inside* auth.RequireAuth, which is what
+// puts the caller's id on the context.
 //
-// it must be composed *inside* auth.RequireAuth, which is what proves the caller is who they say
-// and puts their user id on the context. this layer answers the second question, and asking it
-// separately is the same split authorizeShopAccess makes: "who are you" and "what may you do" are
-// different questions with different failure modes.
-//
-// **the role is read from the database on every request and never from the token.** jwt.go carries
-// no role claim by design - a token lives four months and a role can change inside that window, so
-// a claim would let a demoted admin keep administering until their token expired. the extra query
-// is a primary-key lookup, and auth.RequireAuth has just done the same one; merging them would save
-// a round trip and cost the ability to read this file and see the check.
+// **the role is read from the database on every request and never from the token**: jwt.go carries
+// no role claim, so a demoted admin stops administering immediately rather than when their token
+// expires.
 func (a *Admin) RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := auth.UserIDFromContext(r.Context())
 		if !ok {
-			// unreachable unless this was wired without RequireAuth above it. failing closed with a
-			// 401 is the only safe answer to "the middleware chain is not what I think it is".
+			// unreachable unless this was wired without RequireAuth above it - fail closed
 			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "not signed in")
 			return
 		}
@@ -111,19 +81,15 @@ func (a *Admin) RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
 				writeAPIError(w, http.StatusUnauthorized, "account_deleted", "this account no longer exists")
 				return
 			}
-			// the database is unreachable, which is not the caller's fault. 503 rather than 403 for
-			// the same reason RequireAuth answers 503 rather than 401: a minute of database trouble
-			// must not read as "you are not allowed", which is a message that sends someone
-			// hunting for a permissions problem that does not exist.
+			// 503 rather than 403: a minute of database trouble must not read as "you are not
+			// allowed", which sends somebody hunting for a permissions problem that does not exist
 			log.Printf("CRITICAL: cannot verify admin role for user %d: %v", userID, err)
 			writeAPIError(w, http.StatusServiceUnavailable, "service_unavailable", "could not verify permissions")
 			return
 		}
 
 		if role != "admin" {
-			// deliberately the same response for a customer and for a shop owner. the panel's login
-			// screen turns this into "этот аккаунт не администратор", and there is nothing to be
-			// gained by telling a caller which non-admin role they hold.
+			// the same answer for a customer and for a shop owner - nothing is gained by saying which
 			writeAPIError(w, http.StatusForbidden, "forbidden_role", "administrator access required")
 			return
 		}
@@ -138,23 +104,20 @@ type adminStatsResponse struct {
 	Users          adminUserCounts     `json:"users"`
 	Shops          adminShopCounts     `json:"shops"`
 	Products       adminProductCounts  `json:"products"`
-	Support        adminSupportCounts  `json:"support"`
 	Signups        []adminSignupDay    `json:"signups"`
 	ShopCategories []adminShopCategory `json:"shop_categories"`
 
-	// where every shop sits on the way from "created" to "publishing prices". the one thing on this
-	// dashboard that says where the product is losing people rather than how much of it exists.
+	// where every shop sits between "created" and "publishing prices" - the one figure here that
+	// says where the product is losing people rather than how much of it exists
 	Funnel adminFunnel `json:"funnel"`
 
 	// the shops worth phoning, nearest to finishing first
 	Attention []adminAttentionShop `json:"attention"`
 
-	// the cheapest few shops in each market, in order - the only place on the dashboard that reports
-	// what the product actually tells a customer rather than how much of it exists
+	// the cheapest few shops in each market, in order
 	Rankings []adminRankedShop `json:"rankings"`
 
-	// what a basket costs in each market today, and the last 30 days of the same number. Two shapes
-	// of one subject: the panel prints the first as a figure and draws the second under it.
+	// what a basket costs in each market today, and the last 30 days of it
 	Baskets       []adminCategoryBasket `json:"baskets"`
 	BasketHistory []adminBasketDay      `json:"basket_history"`
 
@@ -164,11 +127,8 @@ type adminStatsResponse struct {
 	GeneratedAt string `json:"generated_at"`
 }
 
-// three buckets, not five - see AdminCatalogueFunnel in db/queries/admin.sql for why «больше
-// половины» and «почти готово» were the wrong things to count.
-// The panel draws two of these, summing `empty` and `started` into "not in the comparison", which is
-// the only distinction the all-or-nothing rule (§5) actually makes. They are kept apart here because
-// the query is the honest place to hold them.
+// three buckets. the panel sums `empty` and `started` into "not in the comparison", which is the
+// only distinction the all-or-nothing rule makes - they stay apart here because the query holds them.
 type adminFunnel struct {
 	Shops    int64 `json:"shops"`
 	Empty    int64 `json:"empty"`
@@ -176,8 +136,8 @@ type adminFunnel struct {
 	Complete int64 `json:"complete"`
 }
 
-// one unfinished catalogue, and everything needed to do something about it in one row: when the shop
-// was made, how many prices are still missing, and the number to ring.
+// one unfinished catalogue plus everything needed to act on it: the age, what is missing, and the
+// number to ring
 type adminAttentionShop struct {
 	ID           int64  `json:"id"`
 	Name         string `json:"name"`
@@ -191,13 +151,10 @@ type adminAttentionShop struct {
 	Remaining    int64  `json:"remaining"`
 }
 
-// one shop inside one market's ranking, cheapest first. The panel groups them by category and the
-// position in the slice is the rank - nothing numbers them on the wire, because the order is the
-// fact and a stored rank could disagree with it.
+// one shop inside one market's ranking, cheapest first - the position in the slice is the rank.
 //
-// **the raw price index is in here, and this is the one surface allowed to carry it** (§5) - an
-// administrator is the reader who has been taught that 100 is the market price. It must not travel
-// to the app, where the badge exists precisely so nobody has to perform that arithmetic.
+// **the raw price index is here, and the panel is the one surface allowed to carry it**: an admin is
+// the reader who has been taught that 100 is the market price. the app gets a tier and a percentage.
 type adminRankedShop struct {
 	Category    string `json:"category"`
 	ShopID      int64  `json:"shop_id"`
@@ -206,9 +163,8 @@ type adminRankedShop struct {
 	BasketPrice int64  `json:"basket_price"`
 }
 
-// what one market costs today. `shops` is how many baskets went into the average, and it is not
-// decoration: an average that moved because three shops became nine is a different event from one
-// that moved because somebody changed their prices.
+// what one market costs today. `shops` is how many baskets went into the average: a figure that
+// moved because three shops became nine is a different event from one that moved on a price change.
 type adminCategoryBasket struct {
 	Category  string `json:"category"`
 	Shops     int64  `json:"shops"`
@@ -217,8 +173,8 @@ type adminCategoryBasket struct {
 	MaxBasket int64  `json:"max_basket"`
 }
 
-// one day of one market, from `basket_history`. Days with no row are days the server was not
-// running; the panel draws the gap rather than inventing a point.
+// one day of one market. a day with no row is a day the server was not running, and the panel draws
+// the gap rather than inventing a point.
 type adminBasketDay struct {
 	Day       string `json:"day"`
 	Category  string `json:"category"`
@@ -247,13 +203,11 @@ type adminShopCounts struct {
 	Total int64 `json:"total"`
 	New7d int64 `json:"new_7d"`
 	VIP   int64 `json:"vip"`
-	// how many placements exist to sell, sent rather than written into the panel because the number
-	// is *inventory*: home.go draws exactly this many slots whether or not they are sold (§7), and a
-	// panel with its own copy of it would keep reporting «3 из 5» the day the carousel grew to six.
+	// inventory, sent rather than written into the panel: a panel with its own copy would keep
+	// reporting «3 из 5» the day the carousel grew to six
 	VipSlots int64 `json:"vip_slots"`
-	// how many shops have priced their entire template and therefore appear in the price
-	// comparison at all. after migration 000013 this is the number that decides whether the home
-	// screen has anything on it.
+	// shops that have priced their whole template and so appear in the comparison - the number that
+	// decides whether the home screen has anything on it
 	Ranked int64 `json:"ranked"`
 }
 
@@ -261,22 +215,6 @@ type adminProductCounts struct {
 	Total  int64 `json:"total"`
 	Priced int64 `json:"priced"`
 	Custom int64 `json:"custom"`
-}
-
-// the support inbox, carried on the dashboard request rather than fetched by the inbox screen, so
-// the sidebar can say how many people are waiting before anybody opens it.
-type adminSupportCounts struct {
-	Threads int64 `json:"threads"`
-	// conversations whose newest message came from the user - the count of people waiting for an
-	// answer, not the count of unanswered messages
-	Awaiting int64 `json:"awaiting"`
-	// conversations holding something *this admin* has not opened yet. the badge's loud state, and
-	// the only one of the three counts that reading clears - see migration 000002.
-	//
-	// both are sent because the panel shows both: unread is the alarm, awaiting is the queue behind
-	// it, and a sidebar that only knew about unread would go quiet on a founder who had read five
-	// questions and answered none.
-	Unread int64 `json:"unread"`
 }
 
 type adminSignupDay struct {
@@ -294,20 +232,9 @@ type adminShopCategory struct {
 
 // GET /api/admin/stats - everything the dashboard draws, in one request.
 //
-// eight queries run sequentially on one context, the same shape Home.Get uses and for the same
-// reason: fanning them into goroutines would take eight connections out of a pool of ten to serve
-// one screen, which starves the pool faster than the serial version is slow. the whole handler
-// shares one deadline rather than giving each query its own, because the caller's question is "draw
-// the dashboard" and half a dashboard is not a useful answer.
-//
-// what is deliberately *not* here any more: the product-category breakdown, which was a picture of
-// the catalogue rather than a fact about the business, and the anomaly teaser, which was a worse
-// version of a page one click away.
+// the queries run sequentially on one shared deadline, the same shape Home.Get uses: fanning them
+// out would take most of the pool to serve one screen, and half a dashboard is not a useful answer.
 func (a *Admin) Stats(w http.ResponseWriter, r *http.Request) {
-	// the unread count is per-admin, so it cannot ride along inside AdminOverview - that query takes
-	// no parameters and answers questions about the whole database, where this one is about a person.
-	adminID, _ := auth.UserIDFromContext(r.Context())
-
 	ctx, cancel := dbctx.WithTimeout(r.Context())
 	defer cancel()
 
@@ -336,8 +263,7 @@ func (a *Admin) Stats(w http.ResponseWriter, r *http.Request) {
 		fail("funnel", err)
 		return
 	}
-	// every unfinished shop rather than a top 8: the panel lists them in full behind the gauge's
-	// «Не заполнены» box, and the ceiling is there so one broken market cannot make this unbounded.
+	// every unfinished shop, not a top 8 - the ceiling is only so one broken market cannot unbound it
 	attention, err := a.Queries.AdminShopsNeedingAttention(ctx, adminAttentionLimit)
 	if err != nil {
 		fail("attention", err)
@@ -363,14 +289,7 @@ func (a *Admin) Stats(w http.ResponseWriter, r *http.Request) {
 		fail("basket history", err)
 		return
 	}
-	unreadThreads, err := a.Queries.AdminUnreadSupportThreads(ctx, adminID)
-	if err != nil {
-		fail("support unread", err)
-		return
-	}
-
-	// every slice is built with make(..., 0, n) rather than left nil: a nil slice encodes as `null`
-	// and the panel iterates what it is given, so `[]` is the honest answer to "no rows".
+	// make(..., 0, n) rather than nil: a nil encodes as `null` and the panel iterates what it gets
 	response := adminStatsResponse{
 		Users: adminUserCounts{
 			Total: overview.UsersTotal, Customers: overview.UsersCustomers,
@@ -383,10 +302,6 @@ func (a *Admin) Stats(w http.ResponseWriter, r *http.Request) {
 		},
 		Products: adminProductCounts{
 			Total: overview.ProductsTotal, Priced: overview.ProductsPriced, Custom: overview.ProductsCustom,
-		},
-		Support: adminSupportCounts{
-			Threads: overview.SupportThreads, Awaiting: overview.SupportAwaiting,
-			Unread: unreadThreads,
 		},
 		Funnel: adminFunnel{
 			Shops: funnel.Shops, Empty: funnel.Empty, Started: funnel.Started,
@@ -489,16 +404,9 @@ func (a *Admin) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/admin/users/{id} - an admin destroying somebody else's account.
 //
-// the same cascade DELETE /api/me runs: the user's shops go, and each shop takes its products. it is
-// a hard delete for the same reason that one is - keeping a row nobody can reach is keeping the
-// phone number somebody asked to have erased.
-//
-// **it used to refuse any account whose role is admin, and now refuses only the last one.** The old
-// rule rested on an argument that no longer holds: an admin account was the only kind whose deletion
-// could not be undone by the person it happened to, because everyone else can register again with
-// the same phone number where an admin could not re-grant themselves a role only SQL could set. The
-// panel grants that role now (see assignableRoles), so a deleted administrator can be made one again
-// by any remaining administrator - and what is left is the state that genuinely has no way back.
+// the same cascade DELETE /api/me runs: the shops go, and each takes its products. a hard delete for
+// the same reason - a row nobody can reach is still a phone number somebody asked to have erased.
+// the only account it refuses is the last admin, which is the one state with no way back.
 func (a *Admin) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	adminID, _ := auth.UserIDFromContext(r.Context())
 
@@ -511,8 +419,8 @@ func (a *Admin) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := dbctx.WithTimeout(r.Context())
 	defer cancel()
 
-	// read the role before deleting rather than after, because after there is nothing left to read.
-	// this is also what turns "no such user" into a 404 instead of a silent success.
+	// read before deleting - afterwards there is nothing left to read, and this is what turns "no
+	// such user" into a 404 rather than a silent success
 	role, err := a.Queries.GetUserRole(ctx, targetID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -535,15 +443,13 @@ func (a *Admin) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if deleted == 0 {
-		// the row existed a moment ago when we read its role, so it was deleted between the two
-		// statements. the admin is looking at a stale list either way.
+		// it existed when we read its role, so it went between the two statements
 		writeAPIError(w, http.StatusNotFound, "user_not_found", "no user with that id")
 		return
 	}
 
-	// ids and a role, and nothing else. this is an audit line - it has to say who did what to whom -
-	// and the name and phone number of the account just erased are exactly the data that must not be
-	// copied into a log file on the way out.
+	// ids and a role only: an audit line says who did what to whom, and the name and number of the
+	// account just erased are exactly what must not be copied into a log on the way out
 	log.Printf("ADMIN %d deleted user %d (role=%s)", adminID, targetID, role)
 
 	w.WriteHeader(http.StatusOK)
@@ -560,7 +466,7 @@ type adminShopResponse struct {
 	ContactPhone string `json:"contact_phone"`
 	IsVIP        bool   `json:"is_vip"`
 	VipUntil     string `json:"vip_until,omitempty"`
-	// suspended by an admin, independent of catalogue completeness - see AdminSetShopExcluded.
+	// suspended by an admin, independent of catalogue completeness - see AdminSetShopExcluded
 	ExcludedFromIndex bool `json:"excluded_from_index"`
 
 	OwnerID    int64  `json:"owner_id"`
@@ -568,26 +474,20 @@ type adminShopResponse struct {
 	OwnerPhone string `json:"owner_phone"`
 
 	ProductsTotal int64 `json:"products_total"`
-	// the catalogue progress bar, counted over template rows only - the same rule
-	// ShopProductsScreen's card uses, because the owner's own products are not in the shared basket.
+	// the catalogue progress bar, over template rows only - the owner's own products are not in the
+	// shared basket
 	TemplateTotal  int64 `json:"template_total"`
 	TemplatePriced int64 `json:"template_priced"`
 
-	// null together or present together: the basket index view has no partial state, so a panel
-	// branching on one having checked the other is handling something the backend cannot send.
+	// null together or present together - the index row has no partial state
 	PriceIndex  *int64 `json:"price_index"`
 	BasketPrice *int64 `json:"basket_price"`
 
 	CreatedAt string `json:"created_at"`
 }
 
-// GET /api/admin/shops
-//
-// this is the one place in the api where the raw price index leaves the server. everywhere else it
-// is deliberately withheld - ShopResponse carries a tier and a percentage instead, because "96" is
-// a comparison the reader has to be taught to perform. an administrator is the reader who has been
-// taught it, and the panel's job is to show what the system actually computed rather than a
-// rendering of it.
+// GET /api/admin/shops - one of the two places the raw price index leaves the server. everywhere
+// else ShopResponse carries a tier and a percentage instead.
 func (a *Admin) ListShops(w http.ResponseWriter, r *http.Request) {
 	limit, offset := adminPaging(r)
 
@@ -635,11 +535,8 @@ func (a *Admin) ListShops(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"shops": shops, "limit": limit, "offset": offset})
 }
 
-// DELETE /api/admin/shops/{id} - the shop and its products, leaving the owner's account alone.
-//
-// there is no role or ownership check beyond RequireAdmin, which is the whole point of the endpoint:
-// authorizeShopAccess would refuse an admin acting on a shop they do not own, and an administrator
-// acting on other people's shops is what this panel is for.
+// DELETE /api/admin/shops/{id} - the shop and its products, leaving the owner's account alone. no
+// ownership check beyond RequireAdmin: acting on other people's shops is what this panel is for.
 func (a *Admin) DeleteShop(w http.ResponseWriter, r *http.Request) {
 	adminID, _ := auth.UserIDFromContext(r.Context())
 
@@ -671,10 +568,8 @@ func (a *Admin) DeleteShop(w http.ResponseWriter, r *http.Request) {
 
 // ─────────────────────────────── helpers ───────────────────────────────
 
-// adminPaging reads ?limit= and ?offset=, clamping both into a sane range rather than rejecting a
-// bad one. a list endpoint answering 400 because someone typed limit=0 in a url bar is a worse
-// experience than one that quietly gives them the default, and there is no ambiguity about intent
-// to preserve here.
+// ?limit= and ?offset=, clamped rather than rejected - a 400 because somebody typed limit=0 in a
+// url bar is worse than quietly giving them the default
 func adminPaging(r *http.Request) (limit, offset int32) {
 	limit = adminListDefaultLimit
 	if raw := r.URL.Query().Get("limit"); raw != "" {
@@ -690,11 +585,8 @@ func adminPaging(r *http.Request) (limit, offset int32) {
 	return limit, offset
 }
 
-// timestampString renders a nullable postgres timestamp as RFC3339, or "" when it is null.
-//
-// the empty string rather than a zero time, because every field using this is `omitempty` on the
-// wire and the panel checks for absence. a zero time would arrive as "0001-01-01T00:00:00Z" and
-// render as a date in the year one.
+// a nullable postgres timestamp as RFC3339, or "" when null - a zero time would arrive as
+// "0001-01-01T00:00:00Z" and render as a date in the year one
 func timestampString(ts pgtype.Timestamptz) string {
 	if !ts.Valid {
 		return ""
@@ -706,35 +598,19 @@ func timestampString(ts pgtype.Timestamptz) string {
 
 // the roles an admin may assign through the panel.
 //
-// **`admin` is in this set as of 2026-08-22, and that is a deliberate reversal.** It used to be
-// absent, along with a matching refusal to edit or delete an existing administrator, on the argument
-// that the property worth keeping is not "an attacker cannot reach it" but "there is no code path at
-// all" - one that survives a mistake in the middleware wiring, a stolen admin token and an XSS bug
-// in the panel. The founder asked for the power, which is his call to make on his own product, and
-// the trade is real and worth stating plainly: **an admin token is now enough to mint another
-// administrator**, where before it was not, so a stolen token is a permanent compromise rather than
-// one that ends when the token expires.
+// **`admin` is in this set, which means a stolen admin token is a permanent compromise** rather than
+// one that ends when the token expires. the founder asked for the power; this is the cost of it.
 //
-// What has NOT changed, and must not: **nothing unauthenticated can assign it.** `/api/auth/init`
-// still maps anything that is not `shop_owner` to `customer`, and the Telegram handler still only
-// upgrades `customer -> shop_owner`. The original hole was that one, and it stays closed.
-//
-// The one refusal left is not a policy at all - see AdminCountAdmins: an account may be demoted or
-// deleted unless it is the last administrator, because from zero the only way back is SQL on
-// production.
+// what must not change: **nothing unauthenticated can assign it.** the login maps anything that is
+// not shop_owner to customer, and only ever upgrades customer -> shop_owner.
 var assignableRoles = map[string]bool{"customer": true, "shop_owner": true, "admin": true}
 
-// anotherAdminRemains answers "is there an administrator other than this one", writing its own 409
-// when there is not. It is the whole of what stops the panel destroying its own access.
+// anotherAdminRemains is the whole of what stops the panel destroying its own access. **409 rather
+// than 403 on purpose**: the panel signs itself out on a 403, and this is not a revoked admin - it
+// is a request that was understood, allowed and impossible in the current state.
 //
-// **409 rather than 403 on purpose**: the panel signs itself out on a 403, because that is what a
-// revoked admin looks like, and being refused this is not that - it is a request that was understood,
-// allowed, and impossible in the current state.
-//
-// The count and the write are two statements and not one transaction. Two administrators demoting
-// each other in the same second could in principle both pass; at one machine and one person that is
-// not a race worth a lock, and if it ever is, the honest fix is a constraint in the database rather
-// than a bigger check here.
+// the count and the write are not one transaction: two admins demoting each other in the same second
+// could both pass, which at one machine is not a race worth a lock.
 func (a *Admin) anotherAdminRemains(w http.ResponseWriter, adminID, targetID int64, ctx context.Context) bool {
 	admins, err := a.Queries.AdminCountAdmins(ctx)
 	if err != nil {
@@ -751,10 +627,8 @@ func (a *Admin) anotherAdminRemains(w http.ResponseWriter, adminID, targetID int
 	return true
 }
 
-// PUT /api/admin/users/{id} - name and role.
-//
-// phone is not editable and that is not an oversight: it is the identity key the telegram handshake
-// looks users up by, so retyping it would silently orphan the account from its own login.
+// PUT /api/admin/users/{id} - name and role. phone is not editable: it is the identity key every
+// login looks an account up by, so retyping it would orphan the account from its own login.
 func (a *Admin) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	adminID, _ := auth.UserIDFromContext(r.Context())
 
@@ -798,10 +672,8 @@ func (a *Admin) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not update the user")
 		return
 	}
-	// **the only thing this endpoint still refuses, and it is arithmetic rather than policy.** Zero
-	// administrators is the one state with no way back through any screen: the panel needs an admin
-	// to sign in, and the role can then only be granted with SQL against production. Demoting the
-	// second-to-last is fine, including yourself.
+	// the one refusal left, and it is arithmetic rather than policy: zero administrators is the one
+	// state with no way back through any screen. demoting the second-to-last is fine, yourself included.
 	if current == "admin" && req.Role != "admin" && !a.anotherAdminRemains(w, adminID, targetID, ctx) {
 		return
 	}
@@ -829,13 +701,9 @@ func (a *Admin) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// PUT /api/admin/shops/{id} - the same four fields the owner's own edit form submits.
-//
-// it reuses UpdateShop rather than getting its own statement, which is what keeps `category` and
-// `vip_until` out of reach by construction. category decided which template seeded this shop's
-// catalogue, so changing it would leave the shop stocked from the wrong list with no way back;
-// vip_until is a paid placement and has its own endpoint below, where it can be logged as the
-// commercial decision it is.
+// PUT /api/admin/shops/{id} - the same fields the owner's own edit form submits. it reuses
+// UpdateShop, which keeps `category` and `vip_until` out of reach by construction: category decided
+// which template seeded this catalogue, and vip_until is a paid placement with its own endpoint.
 func (a *Admin) UpdateShop(w http.ResponseWriter, r *http.Request) {
 	adminID, _ := auth.UserIDFromContext(r.Context())
 
@@ -900,19 +768,9 @@ func (a *Admin) UpdateShop(w http.ResponseWriter, r *http.Request) {
 
 // PUT /api/admin/shops/{id}/vip - grant or revoke a paid placement.
 //
-// **§7 said adding this back needed a conversation, and this is that conversation's outcome** - the
-// founder asked for it directly. What the old objection was about is worth keeping straight: the
-// endpoint was deleted because the api could not tell an admin from anybody else, not because the
-// operation is wrong. That hole is closed, and this route sits behind RequireAdmin.
-//
-// The narrower objection - a placement is *sold*, so an endpoint that grants it is one somebody will
-// ask to have pointed at their own shop - is answered by who can reach it rather than by the
-// endpoint not existing. It is logged like a deletion, for the same reason: it is a commercial
-// decision with money behind it, and "when did this shop become VIP" is a question somebody will ask.
-//
-// `days` rather than an absolute date, because the panel's realistic input is "sold them a month".
-// Zero or a missing value revokes - one statement for both, since they are the same fact with
-// different values (see SetShopVIP).
+// logged like a deletion, because it is a commercial decision with money behind it and "when did
+// this shop become VIP" is a question somebody will ask. `days` rather than an absolute date,
+// because the panel's realistic input is "sold them a month"; zero or missing revokes.
 func (a *Admin) SetVIP(w http.ResponseWriter, r *http.Request) {
 	adminID, _ := auth.UserIDFromContext(r.Context())
 
@@ -927,8 +785,7 @@ func (a *Admin) SetVIP(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
-	// two years, because the input is a number in a box and a slipped keypress should not sell
-	// somebody a placement until 2at190. revoking is days <= 0.
+	// a slipped keypress in a number box should not sell a placement until the year 2190
 	if req.Days > 730 {
 		writeAPIError(w, http.StatusBadRequest, "invalid_period", "a placement cannot be granted for more than 730 days")
 		return
@@ -969,12 +826,9 @@ func (a *Admin) SetVIP(w http.ResponseWriter, r *http.Request) {
 
 // PUT /api/admin/shops/{id}/exclude - pull a shop out of its market's comparison, or put it back.
 //
-// separate from catalogue completeness (shop_basket_index) on purpose: that row answers "is every
-// template product priced", derived from products and unable to disagree with them. This flag is an
-// admin's own decision - a rules violation under review, a seller asked to pause - and it must win
-// even when every price is filled in. refresh_basket_index (migration 000007) already excludes a
-// flagged shop from the average; this handler only flips the column and lets the trigger it wires
-// recompute the category.
+// separate from catalogue completeness on purpose: shop_basket_index answers "is every product
+// priced" and is derived from products, where this flag is an admin's own decision and has to win
+// even when every price is filled in. flipping the column is all this does - a trigger recomputes.
 func (a *Admin) SetExcluded(w http.ResponseWriter, r *http.Request) {
 	adminID, _ := auth.UserIDFromContext(r.Context())
 
@@ -1019,10 +873,8 @@ func (a *Admin) SetExcluded(w http.ResponseWriter, r *http.Request) {
 
 // ─────────────────────────── products ───────────────────────────
 
-// GET /api/admin/shops/{id}/products - one shop's whole catalogue, unfiltered.
-//
-// deliberately unlike the customer-facing grid, which shows only priced rows: an admin's reason for
-// opening this is usually the unpriced ones, or a price that looks wrong.
+// GET /api/admin/shops/{id}/products - one shop's whole catalogue, unfiltered. unlike the
+// customer-facing grid: an admin opens this for the unpriced rows, or a price that looks wrong.
 func (a *Admin) ListShopProducts(w http.ResponseWriter, r *http.Request) {
 	shopID, ok := adminPathID(w, r, "shop")
 	if !ok {
@@ -1066,15 +918,10 @@ func (a *Admin) ListShopProducts(w http.ResponseWriter, r *http.Request) {
 
 // PUT /api/admin/products/{id}
 //
-// **an admin gets the same three-way rule the owner gets, not a bypass of it**, and that is the whole
-// design decision in this handler. the rule exists for data integrity rather than for permissions: a
-// renamed template row silently stops being the same product as its counterpart down the road, and
-// the Basket Price Index is built entirely on those rows meaning the same thing everywhere. an admin
-// renaming one breaks the comparison exactly as thoroughly as an owner would, so the statements they
-// go through are the same statements - UpdateProductPricing has no SET for name at all.
-//
-// what an admin actually needs here is the price, which is the field the anomaly report sends them
-// to fix. that is available on every row.
+// **an admin gets the same three-way rule the owner gets, not a bypass of it.** the rule is data
+// integrity rather than permissions: a renamed template row stops being the same product as its
+// counterpart down the road, and an admin breaks the comparison exactly as thoroughly as an owner.
+// what an admin actually needs here is the price, and that is editable on every row.
 func (a *Admin) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	adminID, _ := auth.UserIDFromContext(r.Context())
 
@@ -1091,8 +938,7 @@ func (a *Admin) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := dbctx.WithTimeout(r.Context())
 	defer cancel()
 
-	// read the row first so the branch is decided by the database's own template_key, never by
-	// anything the client sent - the same reason Products.authorizeProductAccess reads it first.
+	// read first, so the branch is decided by the database's template_key and never by the client
 	existing, err := a.Queries.GetProduct(ctx, productID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -1104,10 +950,8 @@ func (a *Admin) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// a local shape rather than db.Product: the three UPDATE statements each generate their own row
-	// type (sqlc emits one per query by design) and none of them is convertible to another, since
-	// they omit created_at/updated_at that the table struct has. one struct assigned in three places
-	// is what lets the response be built once below.
+	// a local shape: the three UPDATE statements each get their own sqlc row type and none converts
+	// to another, so one struct assigned in three places is what lets the response be built once
 	var updated struct {
 		ID, ShopID                         int64
 		Name, Category, Unit, Availability string
@@ -1187,12 +1031,9 @@ func (a *Admin) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 // ─────────────────────────── anomalies ───────────────────────────
 
 // how far off the market a price has to be before the report mentions it, and how many shops must
-// have priced a line before "the market" means anything.
-//
-// both are query parameters with these as defaults, because the right numbers are unknown until
-// there is real data - the same reason internal/pricing's ±2 band is documented as a guess. 50% is
-// deliberately loose: at launch a genuinely cheap shop and a typo look similar, and a report nobody
-// can get through is a report nobody reads.
+// have priced a line before "the market" means anything. both are query parameters and these are
+// guesses until there is real data - 50% is deliberately loose, since at launch a genuinely cheap
+// shop and a typo look alike.
 const (
 	anomalyDefaultThreshold = 0.5
 	anomalyMinShops         = 3
@@ -1206,10 +1047,8 @@ type adminAnomaly struct {
 	ShopCategory string `json:"shop_category"`
 	Name         string `json:"name"`
 	TemplateKey  string `json:"template_key"`
-	// **how to ring them about it.** a row on this report is not information, it is a phone call
-	// waiting to be made, and a report that makes you open another tab to find the number is one
-	// that gets read and not acted on. both numbers travel: contact_phone is the line the shop
-	// publishes to customers, owner_phone is the account the price was typed from.
+	// a row here is a phone call waiting to be made. both numbers travel: contact_phone is what the
+	// shop publishes, owner_phone is the account the price was typed from.
 	ContactPhone string `json:"contact_phone"`
 	OwnerName    string `json:"owner_name"`
 	OwnerPhone   string `json:"owner_phone"`
@@ -1291,13 +1130,6 @@ type adminTemplateCategory struct {
 
 // GET /api/admin/templates - what each category's template holds, and how far the shops seeded from
 // it have drifted.
-//
-// **the template is read-only here, and that is a real limitation rather than an oversight.** the
-// lists live in Go (internal/catalog/templates.go) and are compiled into the binary; making them
-// editable from this page means moving them into a table, which changes how every shop is seeded and
-// what templates_test.go can still guarantee. that is a migration to do deliberately, not a checkbox
-// to add to a styling pass. what this endpoint plus Sync below gives today is the half that was
-// actually blocking: edit the Go file, restart, then press one button instead of deleting shops.
 func (a *Admin) Templates(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := dbctx.WithTimeout(r.Context())
 	defer cancel()
@@ -1306,9 +1138,8 @@ func (a *Admin) Templates(w http.ResponseWriter, r *http.Request) {
 	for _, category := range catalog.AllShopCategories {
 		code := string(category)
 
-		// read from the table rather than from the in-memory copy, because the editor needs each
-		// row's id to edit or delete it and internal/catalog deliberately does not carry one - it
-		// holds what seeding needs, which is the product, not the record.
+		// from the table rather than the in-memory copy: the editor needs each row's id, and
+		// internal/catalog holds what seeding needs - the product, not the record
 		stored, err := a.Queries.AdminListTemplateItems(ctx, code)
 		if err != nil {
 			log.Printf("CRITICAL: template items for %s failed: %v", code, err)
@@ -1342,8 +1173,8 @@ func (a *Admin) Templates(w http.ResponseWriter, r *http.Request) {
 			OwnerNamed: catalog.IsOwnerNamedCategory(code),
 			Items:      wire,
 			Shops:      status.Shops,
-			// what every shop of this category *should* hold, minus what they do hold. a shop created
-			// before a product was added to the template is missing that row and nothing tells it.
+			// what every shop of this category should hold minus what they do: a shop created before a
+			// product was added to the template is missing that row and nothing tells it
 			MissingRows: status.Shops*int64(len(stored)) - status.PresentRows,
 			StaleRows:   status.StaleRows,
 		})
@@ -1354,24 +1185,18 @@ func (a *Admin) Templates(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/admin/templates/{category}/sync - push the current template into every existing shop of
-// that category.
-//
-// **this is the button that replaces "delete the shop and make it again".** seeding happens once, at
-// creation, so until now a template edited afterwards reached nobody: every existing shop kept the
-// list it was born with. Three statements, in one transaction, in this order:
+// that category. seeding happens once at creation, so without this a template edit reaches nobody.
 //
 //	insert  - rows the template has and the shop does not, unpriced
 //	update  - names/units/categories/photos for rows both have, prices untouched
 //	delete  - rows the shop has and the template no longer does
 //
-// the transaction is not decoration. a shop left with the new rows inserted but the stale ones not
-// yet deleted holds two versions of its own basket, and shop_basket_index would count both - so it
-// would publish a total for goods it does not sell, under a badge claiming that is what it costs.
+// **the transaction is not decoration**: a shop left with the new rows inserted but the stale ones
+// still there holds two versions of its own basket, and the index would total both.
 //
-// **two things it will do that are worth knowing before pressing it.** Adding a product to a
-// template drops every shop of that category out of the price comparison until its owner prices the
-// new row - one unpriced template row is enough (migration 000013), and that is the rule working.
-// And deleting one takes whatever price the owner had typed for it, with no undo.
+// **two consequences worth knowing before pressing it**: adding a product drops every shop of the
+// category out of the comparison until its owner prices the new row, and deleting one takes whatever
+// price the owner had typed, with no undo.
 func (a *Admin) SyncTemplate(w http.ResponseWriter, r *http.Request) {
 	adminID, _ := auth.UserIDFromContext(r.Context())
 
@@ -1406,9 +1231,8 @@ func (a *Admin) SyncTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// names are rewritten for a template of products and left alone for a template of slots. an обои
-	// row's name is the owner's own wallpaper; the template's is a placeholder saying what belongs
-	// there, and writing it back would replace every обои shop's catalogue with ten placeholders.
+	// names are rewritten for a template of products and left alone for one of slots: an обои row's
+	// name is the owner's own wallpaper, and writing the placeholder back would erase all of them
 	syncNames := !catalog.IsOwnerNamedCategory(code)
 
 	ctx, cancel := dbctx.WithTimeout(r.Context())
@@ -1465,9 +1289,8 @@ func (a *Admin) SyncTemplate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// the json shape jsonb_to_recordset expands back into rows. the field names are the recordset's
-// column names in db/queries/admin.sql, so renaming one here silently stops the sync from matching
-// anything - they are a contract, not a serialization detail.
+// the shape jsonb_to_recordset expands back into rows. **the field names are the recordset's column
+// names in db/queries/admin.sql** - renaming one here silently stops the sync matching anything.
 type adminTemplateSyncRow struct {
 	TemplateKey string `json:"template_key"`
 	Name        string `json:"name"`
@@ -1476,235 +1299,9 @@ type adminTemplateSyncRow struct {
 	ImagePath   string `json:"image_path"`
 }
 
-// ─────────────────────────── support inbox ───────────────────────────
-//
-// the privileged half of internal/endpoints/support.go. it is here rather than there for the reason
-// this whole file exists: every route below reads or writes a conversation belonging to somebody
-// else, and "read admin.go and you have read the entire privileged path" is worth more than keeping
-// a feature's two halves adjacent.
-//
-// **a thread is addressed by user id, not by a thread id**, because a thread is exactly one user's
-// messages - there is no row to point at. that also means the id in the url is the id of a `users`
-// row, which is why the handlers below check that the user exists rather than trusting a lookup to
-// fail: replying into a thread whose owner was deleted a second ago would otherwise insert a message
-// nobody can ever read, or fail on a foreign key with a 500.
-
-type adminSupportThreadSummary struct {
-	UserID int64  `json:"user_id"`
-	Name   string `json:"name"`
-	Phone  string `json:"phone"`
-	Role   string `json:"role"`
-	Total  int64  `json:"total"`
-
-	// **two counts, two questions, and the panel shows both.**
-	//
-	// `unanswered` is the queue: messages from this user newer than the last thing support said. it
-	// is derived in SQL and reading a thread does not move it, which is deliberate - a conversation
-	// opened and not replied to is still work, and the alternative loses it the moment the founder
-	// gets distracted between reading and typing.
-	//
-	// `unread` is the notification: messages newer than the last time this admin opened the thread.
-	// this is the one that clears on read, and it is what the sidebar badge counts.
-	Unanswered int64 `json:"unanswered"`
-	Unread     int64 `json:"unread"`
-
-	// enough of the last message to recognise the conversation in a list. sent whole rather than
-	// truncated here: the panel decides how much of it fits, and a server that pre-truncates makes
-	// that decision permanently for every future layout.
-	LastBody        string `json:"last_body"`
-	LastFromSupport bool   `json:"last_from_support"`
-	LastAt          string `json:"last_at"`
-}
-
-// GET /api/admin/support/threads - the inbox.
-//
-// **this is a read and only a read.** the panel polls it every few seconds while the section is open,
-// so anything with a side effect here would fire on a timer; marking a thread read belongs to the
-// request that actually opens one (SupportThread below).
-func (a *Admin) SupportThreads(w http.ResponseWriter, r *http.Request) {
-	// whose "read" marks to compare against. RequireAdmin has already proved this id is an admin, so
-	// the only way the lookup fails is a middleware chain that is not what this file assumes - and
-	// the zero value would then silently mean "has read nothing", which is the safe direction.
-	adminID, _ := auth.UserIDFromContext(r.Context())
-
-	limit, offset := adminPaging(r)
-
-	ctx, cancel := dbctx.WithTimeout(r.Context())
-	defer cancel()
-
-	rows, err := a.Queries.AdminSupportThreads(ctx, db.AdminSupportThreadsParams{
-		AdminID: adminID, Limit: limit, Offset: offset,
-	})
-	if err != nil {
-		log.Printf("CRITICAL: admin support inbox failed to load: %v", err)
-		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not load the inbox")
-		return
-	}
-
-	threads := make([]adminSupportThreadSummary, 0, len(rows))
-	for _, row := range rows {
-		threads = append(threads, adminSupportThreadSummary{
-			UserID: row.UserID, Name: row.Name.String, Phone: row.Phone, Role: row.Role,
-			Total: row.Total, Unanswered: row.Unanswered, Unread: row.Unread,
-			LastBody: row.LastBody, LastFromSupport: row.LastFromSupport,
-			LastAt: timestampString(row.LastAt),
-		})
-	}
-
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]any{"threads": threads, "limit": limit, "offset": offset})
-}
-
-// GET /api/admin/support/threads/{id} - one conversation in full, with whoever it belongs to.
-//
-// the user is returned alongside the messages rather than being looked up from the already-loaded
-// inbox, so the page works when it is opened directly and so a thread with no messages in it still
-// names somebody.
-//
-// **this GET writes, and that is a considered trade rather than an oversight.** it advances the
-// caller's read watermark, because in this panel opening a conversation *is* this request - there is
-// no other way to have read one. the honest alternative is POST /api/admin/support/threads/{id}/read
-// as a second round trip, and a second round trip is a second thing that can fail on its own: a
-// thread would then be read on screen and unread in the database, and the badge would keep pointing
-// at a message the founder is looking at.
-//
-// what makes it safe to put on a GET is that the write is a *watermark* and idempotent - running it
-// twice, or on every poll while the thread sits open, lands on the same row with the same value. it
-// is also why the inbox listing above deliberately does not do it: that one is polled on a timer,
-// where this one is a person opening something.
-func (a *Admin) SupportThread(w http.ResponseWriter, r *http.Request) {
-	adminID, _ := auth.UserIDFromContext(r.Context())
-
-	userID, ok := adminPathID(w, r, "user")
-	if !ok {
-		return
-	}
-
-	ctx, cancel := dbctx.WithTimeout(r.Context())
-	defer cancel()
-
-	user, err := a.Queries.GetUserByID(ctx, userID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			writeAPIError(w, http.StatusNotFound, "user_not_found", "no user with that id")
-			return
-		}
-		log.Printf("CRITICAL: admin could not read user %d for their support thread: %v", userID, err)
-		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not load the conversation")
-		return
-	}
-
-	rows, err := a.Queries.ListSupportThread(ctx, userID)
-	if err != nil {
-		log.Printf("CRITICAL: admin could not load the support thread of user %d: %v", userID, err)
-		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not load the conversation")
-		return
-	}
-
-	messages := make([]supportMessageResponse, 0, len(rows))
-	for _, row := range rows {
-		messages = append(messages, supportMessageDTO(row))
-	}
-
-	// after the read succeeded, and a failure here is logged rather than returned: the founder asked
-	// to see a conversation, and refusing to show it because a bookkeeping row would not save would
-	// be answering the wrong question. the cost of the failure is a badge that stays lit.
-	if err := a.Queries.AdminMarkSupportThreadRead(ctx, db.AdminMarkSupportThreadReadParams{
-		AdminID: adminID, ThreadUserID: userID,
-	}); err != nil {
-		log.Printf("WARNING: admin %d read user %d's thread but the read marker did not save: %v",
-			adminID, userID, err)
-	}
-
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]any{
-		"user": map[string]any{
-			"id": user.ID, "name": user.Name.String, "phone": user.Phone, "role": user.Role,
-		},
-		"messages": messages,
-	})
-}
-
-// POST /api/admin/support/threads/{id} - the answer.
-//
-// `from_support: true` is set here and nowhere else, exactly as the app's endpoint hardcodes false.
-// neither side reads that flag off a request body, which is what stops a message from claiming to
-// have come from the other end of the conversation.
-//
-// there is deliberately no notification. the reply waits in the app's Сообщения tab until the user
-// opens it - the app has no push notifications of any kind, and the obvious fix (the bot already
-// knows every user's chat id) is a separate piece of work.
-func (a *Admin) SupportReply(w http.ResponseWriter, r *http.Request) {
-	adminID, _ := auth.UserIDFromContext(r.Context())
-
-	userID, ok := adminPathID(w, r, "user")
-	if !ok {
-		return
-	}
-
-	var req supportSendRequest
-	if !decodeJSONBody(w, r, &req) {
-		return
-	}
-
-	body, fail := cleanSupportBody(req.Body)
-	if fail != nil {
-		fail.write(w)
-		return
-	}
-
-	ctx, cancel := dbctx.WithTimeout(r.Context())
-	defer cancel()
-
-	// checked before the insert rather than left to the foreign key, so "this person deleted their
-	// account while you were typing" reads as a 404 the panel can explain instead of a 500.
-	if _, err := a.Queries.GetUserByID(ctx, userID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			writeAPIError(w, http.StatusNotFound, "user_not_found", "no user with that id")
-			return
-		}
-		log.Printf("CRITICAL: admin %d could not verify user %d before replying: %v", adminID, userID, err)
-		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not send the reply")
-		return
-	}
-
-	message, err := a.Queries.CreateSupportMessage(ctx, db.CreateSupportMessageParams{
-		UserID:      userID,
-		FromSupport: true,
-		Body:        body,
-	})
-	if err != nil {
-		log.Printf("CRITICAL: admin %d could not reply to user %d: %v", adminID, userID, err)
-		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not send the reply")
-		return
-	}
-
-	// **answering something is a stronger claim than having read it**, so the reply advances the read
-	// watermark too. without this the badge stays lit on a conversation the founder has just replied
-	// to - which is the exact complaint the read marker exists to fix, reappearing one step later.
-	//
-	// the case it actually covers: a message that arrived *while* the reply was being typed. the GET
-	// that opened the thread marked it read up to that moment, and anything after it would otherwise
-	// still be counted. answering the conversation settles all of it.
-	if err := a.Queries.AdminMarkSupportThreadRead(ctx, db.AdminMarkSupportThreadReadParams{
-		AdminID: adminID, ThreadUserID: userID,
-	}); err != nil {
-		log.Printf("WARNING: admin %d replied to user %d but the read marker did not save: %v",
-			adminID, userID, err)
-	}
-
-	// ids only, like every other line in this file: the message body is the user's own words about
-	// their own problem, and a log file is not where it belongs.
-	log.Printf("ADMIN %d replied to user %d (message %d)", adminID, userID, message.ID)
-
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(supportMessageDTO(message))
-}
-
 // ─────────────────────────── routing ───────────────────────────
 
-// one path carries two verbs in both cases, so the method split lives here rather than as two mux
-// patterns - the same shape Auth.RouteMe and Shops.RouteByID use.
+// one path, two verbs - the method split lives here rather than in two mux patterns
 func (a *Admin) RouteUser(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPut:
@@ -1727,78 +1324,7 @@ func (a *Admin) RouteShop(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// DELETE /api/admin/support/threads/{id} - the conversation, erased from both sides.
-//
-// **the founder's half of the inbox needs a way to end a conversation, and "end" here means gone.**
-// A resolved thread that stays in the list is a thread read again next week; a support inbox with a
-// hundred settled conversations in it is one the queue is hunted for inside. Everything else on this
-// panel that removes something removes a user or a shop, and this is deliberately neither: the
-// account, its shops and its prices are all untouched, only the messages go.
-//
-// **It deletes the user's copy too, and that is the point rather than a side effect.** There is one
-// `support_messages` table and both endpoints read it, so the app's Сообщения tab is looking at the
-// same rows - the phone drops the thread on its next fetch. That is worth being deliberate about,
-// because it is the one destructive action in this file whose effect somebody else sees on their own
-// screen: the panel's confirm dialog says so in as many words.
-//
-// A soft delete was rejected for the reason `DELETE /api/me` is a hard one (§7): a `deleted_at`
-// column would have to be honoured identically by the app's endpoint, this one, the inbox listing and
-// the unread count forever, and the first query written without it resurrects a conversation
-// somebody was told had been erased.
-//
-// The user is checked first, exactly as the reply path does it, so "they deleted their account while
-// you were reading" is a 404 the panel explains rather than a delete that silently affects nothing.
-func (a *Admin) DeleteSupportThread(w http.ResponseWriter, r *http.Request) {
-	adminID, _ := auth.UserIDFromContext(r.Context())
-
-	userID, ok := adminPathID(w, r, "user")
-	if !ok {
-		return
-	}
-
-	ctx, cancel := dbctx.WithTimeout(r.Context())
-	defer cancel()
-
-	if _, err := a.Queries.GetUserByID(ctx, userID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			writeAPIError(w, http.StatusNotFound, "user_not_found", "no user with that id")
-			return
-		}
-		log.Printf("CRITICAL: admin %d could not verify user %d before clearing their thread: %v", adminID, userID, err)
-		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not clear the conversation")
-		return
-	}
-
-	deleted, err := a.Queries.AdminDeleteSupportThread(ctx, userID)
-	if err != nil {
-		log.Printf("CRITICAL: admin %d could not clear user %d's support thread: %v", adminID, userID, err)
-		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not clear the conversation")
-		return
-	}
-
-	// ids and a count, never a name or a line of what was said - the same rule the rest of this
-	// file's audit lines follow.
-	log.Printf("ADMIN %d cleared the support thread of user %d (%d messages)", adminID, userID, deleted)
-
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]any{"deleted": deleted})
-}
-
-func (a *Admin) RouteSupportThread(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		a.SupportThread(w, r)
-	case http.MethodPost:
-		a.SupportReply(w, r)
-	case http.MethodDelete:
-		a.DeleteSupportThread(w, r)
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
-	}
-}
-
-// adminPathID parses the {id} wildcard, writing its own 400 on failure. `noun` only shapes the
-// message - "user id must be…" reads better in a panel toast than a generic one.
+// parses the {id} wildcard, writing its own 400. `noun` only shapes the message.
 func adminPathID(w http.ResponseWriter, r *http.Request, noun string) (int64, bool) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil || id <= 0 {
@@ -1812,10 +1338,9 @@ func adminPathID(w http.ResponseWriter, r *http.Request, noun string) (int64, bo
 
 // reloadTemplates re-reads product_templates into internal/catalog's in-memory copy.
 //
-// **every handler that writes to that table must call this before responding.** the whole api reads
-// templates out of memory - seeding, IsOwnerNamedSlot, the sync payload - so a write that skips the
-// reload leaves the process serving the old list until it restarts. the founder would edit a
-// template, press sync, and watch nothing change.
+// **every handler that writes that table must call this before responding.** seeding,
+// IsOwnerNamedSlot and the sync payload all read from memory, so a write that skips the reload
+// leaves the process serving the old list until it restarts.
 func (a *Admin) reloadTemplates(ctx context.Context) error {
 	rows, err := a.Queries.ListProductTemplates(ctx)
 	if err != nil {
@@ -1845,9 +1370,8 @@ type templateItemRequest struct {
 	ImagePath    string `json:"image_path"`
 }
 
-// the column widths of `products`, which every one of these values is copied into at seeding. a
-// template row that fits product_templates but not products would fail at shop creation, which is
-// the worst possible moment to discover it.
+// the column widths of `products`, which these are copied into at seeding: a row that fits
+// product_templates but not products would fail at shop creation
 const (
 	maxTemplateKeyLen  = 60
 	maxTemplateNameLen = 150
@@ -1864,8 +1388,7 @@ func (req templateItemRequest) clean() (templateItemRequest, *accessError) {
 	if req.Name == "" || req.Unit == "" {
 		return req, &accessError{http.StatusBadRequest, "missing_fields", "name and unit are required"}
 	}
-	// rune counts, not len(): every cyrillic character is two bytes and postgres counts varchar
-	// limits in characters, so a byte check would reject names that fit and accept ones that do not
+	// runes, not bytes: postgres counts varchar limits in characters
 	if utf8.RuneCountInString(req.Name) > maxTemplateNameLen || utf8.RuneCountInString(req.Unit) > maxTemplateUnitLen {
 		return req, &accessError{http.StatusBadRequest, "field_too_long", "a field is longer than allowed"}
 	}
@@ -1907,10 +1430,8 @@ func (a *Admin) ListTemplateItems(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/admin/templates/{category}/items - add a product to a category's template.
 //
-// **it does not touch a single existing shop, and that separation is the design.** adding a row here
-// decides what the *next* shop is created with; pushing it into shops that already exist is the sync
-// button, which is louder because it has consequences - every shop of the category drops out of the
-// price comparison until its owner prices the new line (migration 000013).
+// **it touches no existing shop, and that separation is the design**: this decides what the *next*
+// shop is created with, and the sync button is what pushes it into the ones that already exist.
 func (a *Admin) CreateTemplateItem(w http.ResponseWriter, r *http.Request) {
 	adminID, _ := auth.UserIDFromContext(r.Context())
 
@@ -1947,8 +1468,7 @@ func (a *Admin) CreateTemplateItem(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := dbctx.WithTimeout(r.Context())
 	defer cancel()
 
-	// checked before inserting so the answer is a readable 409 rather than a unique-violation 500.
-	// the constraint is still what actually guarantees it - this is the message, not the guard.
+	// for a readable 409 rather than a unique-violation 500. the constraint is still the guarantee.
 	taken, err := a.Queries.AdminTemplateKeyExists(ctx, req.TemplateKey)
 	if err != nil {
 		log.Printf("CRITICAL: template key check failed: %v", err)
@@ -1987,15 +1507,11 @@ func (a *Admin) CreateTemplateItem(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// the shape a key may take. latin only, because it is an identifier rather than display text and it
-// ends up in urls, logs and this file's own prose; and no spaces, because a key with one is a key
-// somebody will eventually mistype.
+// latin only and no spaces: this is an identifier that ends up in urls and logs, not display text
 var templateKeyPattern = regexp.MustCompile(`^[a-z0-9]+(?:[._][a-z0-9]+)*$`)
 
-// PUT /api/admin/templates/items/{id} - edit a template product.
-//
-// name, product category, unit and photo. **not the key** - see AdminUpdateTemplateItem for why
-// changing it would silently destroy prices rather than rename anything.
+// PUT /api/admin/templates/items/{id} - name, category, unit and photo. **not the key**: changing
+// it would silently destroy prices rather than rename anything (AdminUpdateTemplateItem).
 func (a *Admin) UpdateTemplateItem(w http.ResponseWriter, r *http.Request) {
 	adminID, _ := auth.UserIDFromContext(r.Context())
 
@@ -2047,10 +1563,8 @@ func (a *Admin) UpdateTemplateItem(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// DELETE /api/admin/templates/items/{id}
-//
-// removes the product from the template only. every existing shop keeps its copy - and its price -
-// until somebody presses sync, which is where the destructive half lives and where the warning is.
+// DELETE /api/admin/templates/items/{id} - the template only. every existing shop keeps its copy,
+// and its price, until somebody presses sync.
 func (a *Admin) DeleteTemplateItem(w http.ResponseWriter, r *http.Request) {
 	adminID, _ := auth.UserIDFromContext(r.Context())
 
@@ -2108,76 +1622,61 @@ func (a *Admin) RouteTemplateItem(w http.ResponseWriter, r *http.Request) {
 
 // ─────────────────────────── orphaned photo files ───────────────────────────
 
-// Files with no product behind them, and the button that clears them.
+// Files with no product behind them, and the button that clears them. They come from a deleted shop
+// - the schema cascades, the products go, and the uploaded files are not in Postgres to go with them.
 //
-// **Where they come from.** Deleting a shop is one statement: the schema cascades, so the shop's
-// products go with it and the owner's uploaded photos are left on disk pointing at nothing. Nothing
-// in that path could do better - the delete is a transaction in Postgres and the files are not in
-// Postgres - so the files are collected afterwards rather than during. Replacing a photo and
-// removing one both unlink correctly; a shop deletion and a crash between "write the file" and
-// "point the row at it" are what feed this.
+// **Three rules, and each is a way this could eat a live photo:**
 //
-// **Three rules, and each of them is a way this can eat a live photo.**
+//  1. **files are listed first, the database second.** In that order a row committed between the two
+//     reads is seen, so its file is protected. Reversed, the sweep would delete a live photo.
+//  2. **nothing younger than [orphanMinAge] is touched**, because the window between "the file
+//     exists" and "the row exists" is one upload request.
+//  3. **a referenced master claims its thumbnail.** Only the master's path is in the database, so a
+//     literal path match would find every `_thumb` unreferenced and delete the whole market's grid.
 //
-//  1. **The files are listed first and the database second.** In that order a row committed between
-//     the two reads is *seen*, so its file is protected. Reversed - paths first, files second - a
-//     row written after the query but whose file was already on disk would look unreferenced, and
-//     the sweep would delete a photo that a product is pointing at right now.
-//  2. **Nothing younger than [orphanMinAge] is touched.** The real window between "the file exists"
-//     and "the row exists" is the length of one upload request, bounded by dbctx's 5-second
-//     deadline. An hour is that with several orders of magnitude of headroom, and it costs nothing:
-//     the files this is for have been dead since a shop was deleted.
-//  3. **A referenced master claims its thumbnail.** Only the master's path is in the database - the
-//     thumbnail's is derived (imagestore.ThumbPath) - so a sweep that matched paths literally would
-//     find every `_thumb` file unreferenced and delete the entire market's grid on its first run.
-//
-// And the one that is not a rule but a property: nothing outside uploads/ is ever listed or
-// deleted. imagestore.Storage.List only walks that prefix and RemoveFile refuses anything else, so
-// the curated catalogue - one file per row shared by every shop of a category - is not reachable
-// from here even by a bug in this file.
+// And a property rather than a rule: imagestore only lists and deletes under uploads/, so the
+// curated catalogue is unreachable from here even by a bug in this file.
 const (
-	// how long a file must have been sitting there before it may be deleted. see rule 2.
 	orphanMinAge = time.Hour
 
-	// how many files one press of the button may delete.
-	//
-	// On R2 each deletion is a network round trip, so an unbounded loop here is an http handler that
-	// could run for an hour holding a connection. The cap makes a large backlog take several presses
-	// instead, and the response says how many are left so the panel can say so too. At the scale
-	// this launches at the number is zero or single digits and the cap never comes up.
+	// **how long one press may spend deleting, and it is a deadline rather than a count.** each
+	// deletion on R2 is a network round trip of unpredictable length, so a count alone cannot bound
+	// the wall clock - and nginx cuts a proxied request off at 60s, which would leave the panel
+	// showing a network error on a sweep that was working. a large backlog takes several presses
+	// instead, and the response says how many are left so the panel can say so too.
+	orphanSweepBudget = 30 * time.Second
+
+	// a ceiling underneath the deadline, so a local disk store (where deletions are instant) does
+	// not turn one press into an unbounded loop either.
 	orphanSweepLimit = 2000
 )
 
-// what the panel is told, for both the scan and the sweep. one shape for both, because the scan is
-// "what would happen" and the sweep is "what happened", and a reader comparing them should not have
-// to translate between two vocabularies.
+// one shape for both the scan ("what would happen") and the sweep ("what happened"), so a reader
+// comparing them does not have to translate between two vocabularies.
 type orphanReport struct {
-	// unreferenced files old enough to delete: what GET would remove, what DELETE did remove
+	// unreferenced and old enough: what GET would remove, what DELETE did remove
 	Files int64 `json:"files"`
 	Bytes int64 `json:"bytes"`
 
-	// everything under uploads/, so the number above can be read as a proportion
+	// everything under uploads/, so the number above reads as a proportion
 	TotalFiles int64 `json:"total_files"`
 	TotalBytes int64 `json:"total_bytes"`
 
-	// unreferenced but younger than orphanMinAge - held back by rule 2 rather than kept. usually 0,
-	// and worth showing because otherwise "12 files, 0 deleted" looks like a broken button.
+	// held back by rule 2 - shown because otherwise "12 files, 0 deleted" looks like a broken button
 	TooRecent int64 `json:"too_recent"`
 
-	// left over after the cap, on a DELETE. 0 on a GET.
+	// left when the deadline or the cap stopped the sweep early, on a DELETE
 	Remaining int64 `json:"remaining"`
 
-	// deletions that failed, on a DELETE. logged in full; counted here.
+	// deletions that failed, on a DELETE - logged in full, counted here
 	Failed int64 `json:"failed"`
 }
 
 // GET  /api/admin/storage/orphans - count and measure, change nothing
 // DELETE /api/admin/storage/orphans - do it
 //
-// **The DELETE re-runs the whole scan rather than taking a list of paths from the browser.** A
-// client-supplied list would be a request that names files to delete, behind one middleware check,
-// with a shop's live photo one typo away - and it would be operating on a scan that could be minutes
-// old. Re-deriving costs one directory walk and one query.
+// **the DELETE re-runs the whole scan rather than taking a list of paths from the browser**: a
+// client-supplied list would name files to delete with a live photo one typo away.
 func (a *Admin) RouteOrphans(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -2205,15 +1704,22 @@ func (a *Admin) SweepOrphans(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-
 	if int64(len(orphans)) > orphanSweepLimit {
-		report.Remaining = int64(len(orphans)) - orphanSweepLimit
 		orphans = orphans[:orphanSweepLimit]
 	}
 
+	ctx, cancel := context.WithTimeout(r.Context(), orphanSweepBudget)
+	defer cancel()
+
 	var deleted, bytes int64
-	for _, file := range orphans {
-		if err := a.Images.RemoveFile(r.Context(), file.Path); err != nil {
+	for i, file := range orphans {
+		// checked before each deletion rather than relied on inside it: a store that ignores the
+		// context (the local disk one does) would otherwise run the whole list anyway
+		if ctx.Err() != nil {
+			report.Remaining = int64(len(orphans) - i)
+			break
+		}
+		if err := a.Images.RemoveFile(ctx, file.Path); err != nil {
 			// keep going: one unwritable file must not leave the other four hundred behind
 			log.Printf("WARNING: could not sweep orphaned photo %q: %v", file.Path, err)
 			report.Failed++
@@ -2231,8 +1737,7 @@ func (a *Admin) SweepOrphans(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(report)
 }
 
-// the scan both handlers run. Returns the files that may be deleted, plus the numbers describing
-// what it looked at. The rules it enforces are the three at the top of this section.
+// the scan both handlers run, enforcing the three rules at the top of this section
 func (a *Admin) findOrphans(w http.ResponseWriter, r *http.Request) ([]imagestore.Object, orphanReport, bool) {
 	var report orphanReport
 
@@ -2260,7 +1765,7 @@ func (a *Admin) findOrphans(w http.ResponseWriter, r *http.Request) ([]imagestor
 	claimed := make(map[string]struct{}, len(paths)*2)
 	for _, rel := range paths {
 		if !imagestore.IsUpload(rel) {
-			continue // the LIKE already refused these; the check is free and the cost of being wrong is a photo
+			continue // the LIKE already refused these; the cost of being wrong is somebody's photo
 		}
 		claimed[rel] = struct{}{}
 		claimed[imagestore.ThumbPath(rel)] = struct{}{}

@@ -5,9 +5,8 @@ import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/language_provider.dart';
-import 'package:frontend/core/widgets/circle_back_button.dart';
+import 'package:frontend/core/widgets/app_page_header.dart';
 import 'package:frontend/core/widgets/pressable_scale.dart';
-import 'package:frontend/core/widgets/screen_header.dart';
 import 'package:frontend/features/products/data/product_category.dart';
 
 /// Every category there is, which is what the home grid's eight photographed ones are a front for.
@@ -29,23 +28,7 @@ class AllCategoriesScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        leading: const CircleBackButton(),
-        leadingWidth: CircleBackButton.leadingWidth,
-        title: Text(
-          strings.allCategories,
-          style: const TextStyle(
-            color: AppColors.textDark,
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.2,
-          ),
-        ),
-        bottom: ScreenHeader.appBarRule(),
-      ),
+      appBar: AppPageHeader(title: strings.allCategories),
       body: SafeArea(
         top: false,
         child: ListView.separated(
@@ -101,7 +84,7 @@ class _CategoryRow extends StatelessWidget {
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [Color(0xFFEBEEF3), Color(0xFFD5DBE4)],
+                  colors: [Color(0xFFF3EFE8), Color(0xFFE0D8CB)],
                 ),
                 borderRadius: BorderRadius.circular(AppRadius.xs),
                 border: Border.all(color: Colors.white, width: 1),

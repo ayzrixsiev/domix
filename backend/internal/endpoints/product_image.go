@@ -24,27 +24,13 @@ import (
 //	POST   /api/products/{id}/image  - owner uploads or replaces one photo (multipart, field "image")
 //	DELETE /api/products/{id}/image  - owner removes it
 //
-// **An owner may photograph anything we have not photographed, and nothing we have.** That means
-// their own products always, and обои slots (a slot names a *kind* of wallpaper, so there is nothing
-// to shoot) - everything else is ours. Пиломатериалы used to be on the permissive side too, simply
-// because nobody had shot it; migration 000005 shot it, and the rows moved over on their own. That
-// is the point of asking the template rather than the shop's category, so the answer is
-// `templateFlags`'s third return value; that function's comment has why.
+// **an owner may photograph anything we have not photographed, and nothing we have** - their own
+// products always, and обои slots, which name a *kind* of wallpaper and have nothing to shoot. the
+// answer comes from the template rather than the shop's category, so photographing a catalogue
+// locks its rows by itself: see templateFlags.
 //
-// The rule used to be the opposite - every row, template ones included - on the reasoning that a
-// photograph is not one of the three things (key, name, unit) that make two baskets comparable, and
-// that a shop stocking a different brand of the same seeded item describes itself more honestly with
-// its own picture. What that reasoning missed is what the shared catalogue *is*: one file on disk,
-// shot and chosen by us, that every shop of the category draws. An owner replacing it puts a photo
-// of a different object on a row the index insists is the same product as the one across the road,
-// and it is the customer comparing two shops who is misled. Moderation was the answer offered, and
-// moderating a hundred rows in every shop by hand is not an answer.
-//
-// A separate endpoint rather than a field on PUT /api/products/{id}, for two reasons that both point
-// the same way: a photo arrives as multipart bytes and everything else on that form is json, and a
-// photo is saved the instant it is picked while the rest of the form is saved when the owner presses
-// "сохранить". Folding them together would mean either making the whole product form multipart or
-// base64-ing a megabyte of jpeg through a json field.
+// a separate endpoint rather than a field on PUT: a photo arrives as multipart bytes while the rest
+// of the form is json, and it saves the instant it is picked rather than on "сохранить".
 func (p *Products) RouteImage(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
@@ -56,31 +42,20 @@ func (p *Products) RouteImage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// the multipart field the photo arrives in. one field, one file - there is exactly one photo per
-// product, and a gallery would be a different feature with a different table.
+// one field, one file: there is exactly one photo per product
 const imageFormField = "image"
 
-// UploadImage stores one photo against one product and points the row at it.
-//
-// The ordering is the whole design, and it is chosen so that every way this can fail leaves the
-// database true:
-//
-//  1. write the new file, under a name nothing yet refers to;
-//  2. point the row at it;
-//  3. unlink whatever the row pointed at before.
-//
-// Fail at 1 and nothing changed. Fail at 2 and there is an unused file on disk, which costs a
-// hundred kilobytes and shows up nowhere. The opposite order - unlink first, then write - has a
-// window where the row names a file that is gone, which is a broken tile in every grid the product
-// appears in and is not recoverable by retrying.
+// UploadImage stores one photo and points the row at it. **the ordering is the design**: write the
+// new file under a name nothing refers to, point the row at it, then unlink the old one. every
+// failure leaves the database true, where unlinking first leaves a row naming a file that is gone.
 func (p *Products) UploadImage(w http.ResponseWriter, r *http.Request) {
 	existing, ok := p.authorizeProductAccess(w, r)
 	if !ok {
 		return
 	}
 
-	// checked before the rate limiter and before a single byte is read: refusing a six-megabyte
-	// upload after receiving it would spend the bandwidth this answer exists to save.
+	// before the limiter and before a byte is read: refusing 6 MiB after receiving it spends the
+	// bandwidth this answer exists to save
 	if _, _, photoEditable := templateFlags(existing.TemplateKey); !photoEditable {
 		writeAPIError(w, http.StatusForbidden, "template_photo",
 			"the catalogue photo of a template product cannot be replaced")
@@ -96,9 +71,8 @@ func (p *Products) UploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// one decode, two files: a 1000px master and a 400px thumbnail. they travel as one value so
-	// that no path through this handler can store a master whose thumbnail is missing - which would
-	// be a product with a working edit screen and a blank tile in every grid.
+	// one decode, two files: a 1000px master and a 400px thumbnail, carried as one value so no path
+	// can store a master whose thumbnail is missing
 	normalized, err := imagestore.Normalize(raw)
 	if err != nil {
 		writeImageError(w, err)
@@ -125,27 +99,19 @@ func (p *Products) UploadImage(w http.ResponseWriter, r *http.Request) {
 	p.writeProductResponse(w, http.StatusOK, updated)
 }
 
-// RemoveImage takes the owner's photo off a product.
+// RemoveImage takes the owner's photo off a product. **on a seeded row it restores the catalogue
+// shot rather than clearing the column** - that file is still on disk and shared by every shop of
+// the category.
 //
-// **On a seeded row this restores the catalogue photo rather than clearing the column.** The shot
-// under photos/<category>/ is what that row arrived with and is still on disk - it is shared by
-// every shop of the category - so putting the path back is both correct and free, where clearing it
-// would leave the owner with no way to get back to the state they started in.
-//
-// **Deliberately not gated by the rule UploadImage enforces**, even though the two are the same
-// question one step apart. Removal can only ever move a row *towards* the catalogue, so refusing it
-// protects nothing - and the case it would break has since happened: owners photographed древесные
-// rows while that catalogue had no pictures, migration 000005 shot пиломатериалы, and those uploads
-// are now the one thing on the row the rule says should not be there. With removal open they can put
-// the catalogue's shot back; gated, they would be stuck with their own picture forever.
+// deliberately not gated by the rule UploadImage enforces: removal can only move a row *towards* the
+// catalogue, and gating it would strand an owner who uploaded before we photographed that category.
 func (p *Products) RemoveImage(w http.ResponseWriter, r *http.Request) {
 	existing, ok := p.authorizeProductAccess(w, r)
 	if !ok {
 		return
 	}
 
-	// "" for a product of the owner's own, and for a template row whose catalogue has no photo -
-	// which since 000005 shot пиломатериалы means every обои slot and nothing else
+	// "" for the owner's own row, and for a template row whose catalogue has no photo
 	restored := pgtype.Text{}
 	if existing.TemplateKey.Valid {
 		if fallback := catalog.TemplateImage(existing.TemplateKey.String); fallback != "" {
@@ -164,8 +130,7 @@ func (p *Products) RemoveImage(w http.ResponseWriter, r *http.Request) {
 
 // the shared tail of both handlers: write the column, or report why not.
 func (p *Products) pointProductAt(w http.ResponseWriter, r *http.Request, productID int64, path pgtype.Text) (db.SetProductImageRow, bool) {
-	// a fresh timeout rather than the one authorizeProductAccess used, whose cancel() has already
-	// fired - the same reason Update takes one
+	// a fresh timeout: authorizeProductAccess's cancel() already fired when it returned
 	ctx, cancel := dbctx.WithTimeout(r.Context())
 	defer cancel()
 
@@ -183,13 +148,9 @@ func (p *Products) pointProductAt(w http.ResponseWriter, r *http.Request, produc
 	return updated, true
 }
 
-// unlink the photo the row used to name - both files - now that nothing points at it.
-//
-// **Guarded by IsUpload, which is the line that protects the catalogue.** products.image_path holds
-// curated shots as well as uploads, and those are shared by every shop seeded from the same
-// template - deleting one because a single owner replaced their photo would blank the tile in every
-// other shop of that category. A failure here is logged and swallowed: the row is already correct,
-// and the cost of the leak is two files the admin panel's sweep will collect.
+// unlink both files of the photo the row used to name. **IsUpload is the line that protects the
+// catalogue**: image_path holds curated shots too, and deleting one because a single owner replaced
+// their photo would blank that tile in every other shop of the category.
 func (p *Products) forgetPreviousUpload(r *http.Request, previous pgtype.Text) {
 	if !previous.Valid || !imagestore.IsUpload(previous.String) {
 		return
@@ -199,12 +160,9 @@ func (p *Products) forgetPreviousUpload(r *http.Request, previous pgtype.Text) {
 	}
 }
 
-// reads the uploaded file out of the multipart body, bounded.
-//
-// **MaxBytesReader is what makes the bound real.** ParseMultipartForm's own argument only decides
-// how much it keeps in memory before spilling to a temp file, so without this a request could stream
-// gigabytes onto the server's disk and be refused afterwards, having already cost the thing the
-// limit exists to protect.
+// reads the uploaded file out of the multipart body. **MaxBytesReader is what makes the bound
+// real**: ParseMultipartForm's own argument only decides how much it holds in memory before
+// spilling to a temp file, so without this a request could stream gigabytes onto disk first.
 func readUploadedImage(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, imagestore.MaxUploadBytes)
 
@@ -240,8 +198,8 @@ func readUploadedImage(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 	return raw, true
 }
 
-// turns Normalize's sentinel errors into codes the app localizes. anything unrecognised is a 400
-// rather than a 500: Normalize only fails on what it was given.
+// Normalize's sentinels as codes the app localizes. anything unrecognised is a 400, not a 500:
+// Normalize only fails on what it was given.
 func writeImageError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, imagestore.ErrTooSmall):
@@ -256,23 +214,16 @@ func writeImageError(w http.ResponseWriter, err error) {
 	}
 }
 
-// the per-account ceiling on uploads.
-//
-// The general limiter in front of every route is per-IP at 20 requests a second, which is the right
-// shape for reads and no protection at all for an endpoint where one request means decoding and
-// re-encoding an image. This one is asked per *account*, which the IP limiter cannot do: a shop's
-// staff on one office wifi share an address, and one phone changes address between cells.
-//
-// One a second sustained with a burst of twenty is deliberately far above the workflow it has to
-// allow - an owner photographing a hundred products still picks each one by hand - and far below
-// what a script would want.
+// the per-account ceiling on uploads, which the per-IP limiter cannot express: a shop's staff share
+// one office address, and one phone changes address between cells. one request here means decoding
+// and re-encoding an image, so it is a far more expensive call than a read.
 func (p *Products) allowUpload(w http.ResponseWriter, r *http.Request) bool {
 	if p.Uploads == nil {
-		return true // no limiter configured: the endpoint tests, which exercise the handler directly
+		return true // no limiter configured: the tests, which call the handler directly
 	}
 	userID, ok := auth.UserIDFromContext(r.Context())
 	if !ok {
-		return true // RequireAuth ran before this; unreachable, and failing open here changes nothing
+		return true // unreachable behind RequireAuth, and failing open here changes nothing
 	}
 
 	if !p.Uploads.Allow("user:" + strconv.FormatInt(userID, 10)) {
@@ -283,8 +234,7 @@ func (p *Products) allowUpload(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-// the SetProductImage row shares every field the other four product statements return, so it maps
-// through the same shape - one response type for a product, whichever statement produced it.
+// one response shape for a product, whichever statement produced it
 func (p *Products) writeProductResponse(w http.ResponseWriter, status int, row db.SetProductImageRow) {
 	isTemplate, nameEditable, photoEditable := templateFlags(row.TemplateKey)
 	imageURL, thumbURL, ownImage := productImage(p.URLs, row.ImagePath)

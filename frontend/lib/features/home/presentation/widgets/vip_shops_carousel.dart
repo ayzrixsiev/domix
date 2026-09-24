@@ -174,7 +174,10 @@ class _VipShopsCarouselState extends State<VipShopsCarousel> {
           // and below the strip, which is where a lift lives.
           clipBehavior: Clip.none,
           itemBuilder: (context, index) {
-            final slot = widget.slots[index % widget.slots.length];
+            // the position in the ring, not the virtual page: the same slot keeps the same photo
+            // however many times the loop comes back round to it
+            final slotIndex = index % widget.slots.length;
+            final slot = widget.slots[slotIndex];
 
             // rebuilds on every scroll tick, so the off-centre cards settle back as the swipe moves
             return AnimatedBuilder(
@@ -197,9 +200,7 @@ class _VipShopsCarouselState extends State<VipShopsCarousel> {
                   // moves. its onTapCancel matters here - the PageView claims the gesture the moment a swipe starts,
                   // and without it the card would stay shrunk after every failed tap.
                   onTap: _tapHandlerFor(slot),
-                  child: slot == null
-                      ? _EmptySlotCard(strings: strings)
-                      : _VipShopCard(shop: slot, strings: strings),
+                  child: _SlotCard(shop: slot, slotIndex: slotIndex, strings: strings),
                 ),
               ),
             );
@@ -211,89 +212,202 @@ class _VipShopsCarouselState extends State<VipShopsCarousel> {
 }
 
 
-// ── the cards: a sold slot and an unsold one are **the same card**, and only their text differs.
-// the unsold one was drawn recessed for a while and rejected on sight - four faded frames around one
-// real card made the strip look broken rather than available. ──
+// ── the card: **a sold slot and an unsold one are one widget**, and only their text and its colour
+// differ. the unsold one was drawn recessed for a while and rejected on sight - four faded frames
+// around one real card made the strip look broken rather than available. ──
 
-/// The chrome every card wears, sold or not. One `const` rather than two identical `BoxDecoration`s,
-/// because the moment they are two, one of them grows a different shadow. `floating` with no border:
-/// an outline round an already-lifted shape flattens it again.
+/// One VIP slot: a photo with the paid tag on it, and a white sheet of facts riding over its bottom
+/// edge.
+///
+/// **The sheet's top corners are round and the card's are not** - that curve is the whole separation
+/// between the photo and the text, in place of a rule or a colour change, and it is what makes the
+/// photo read as being *behind* the card rather than as its first row.
+///
+/// The facts run in the order a buyer checks them: who, where, then what the basket costs and how
+/// that compares to the market - the comparison sitting on the price's own line because it only
+/// means anything next to the number it qualifies.
+class _SlotCard extends StatelessWidget {
+  const _SlotCard({required this.shop, required this.slotIndex, required this.strings});
+
+  /// **Null is an unsold placement**, not missing data: the card is drawn in full with the names of
+  /// its fields where the values go. Nothing here may become a plausible value - the one section of
+  /// the app that is sold is the last place an invented shop belongs.
+  final HomeShopPreview? shop;
+
+  /// Which of the five photos this card wears - see [_SlotPhoto].
+  final int slotIndex;
+
+  final AppLocalizations strings;
+
+  /// How much of the card the photo gets before the sheet starts. The sheet takes the rest exactly,
+  /// so this and [VipShopsCarousel.cardHeight] are the only two numbers that decide the split -
+  /// adding a line to the sheet means moving this one down, not stretching the card.
+  static const double photoHeight = 132;
+
+  /// how far the sheet's rounded shoulders climb back over the photo
+  static const double sheetOverlap = 14;
+
+  @override
+  Widget build(BuildContext context) {
+    final shop = this.shop;
+    final isPlaceholder = shop == null;
+
+    // **the empty slot is the only card that shows a rating.** there is no reviews table, so a real
+    // shop has no rating to show - on the slot the pill is part of what a placement is being sold as.
+    final ratingLabel = shop == null ? kSlotRating : null;
+
+    return DecoratedBox(
+      decoration: _cardSurface,
+      // the shadow is on the DecoratedBox outside and the clip inside it: clipping a shape that casts
+      // a shadow would cut the shadow off at the same edge
+      child: ClipRRect(
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
+        child: Stack(
+          children: [
+            // the strip plus the sheet's own corner radius, not the whole card: the sheet is opaque
+            // below its shoulders, so those extra points are exactly what the rounded corners cut
+            // away from it - stopping at [photoHeight] would show two white notches instead of photo
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              height: photoHeight + AppRadius.md,
+              child: _SlotPhoto(slotIndex: slotIndex),
+            ),
+
+            // the tag rides on the photo, where a paid placement announces itself before anything is read
+            const Positioned(top: 12, left: 12, child: _VipTag()),
+
+            if (ratingLabel case final rating?)
+              Positioned(top: 12, right: 12, child: _RatingPill(rating: rating)),
+
+            Positioned(
+              left: 0,
+              right: 0,
+              top: photoHeight - sheetOverlap,
+              bottom: 0,
+              child: _FactsSheet(shop: shop, isPlaceholder: isPlaceholder, strings: strings),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The chrome the card wears. `floating` with no border: an outline round an already-lifted shape
+/// flattens it again.
 const BoxDecoration _cardSurface = BoxDecoration(
   color: AppColors.surfaceWhite,
   borderRadius: BorderRadius.all(Radius.circular(AppRadius.md)),
   boxShadow: AppShadows.floating,
 );
 
-/// 14 all round, 16 at the bottom: the badge is the last thing on the card and has to sit clear of
-/// the edge rather than tucked against it.
-const EdgeInsets _cardContentPadding = EdgeInsets.fromLTRB(14, 12, 14, 16);
+/// The storefront behind the card.
+///
+/// **Five files, chosen by slot position rather than by shop**, because a shop has no photo of its
+/// own yet: the section is what VIP is *sold as*, so it has to look like the placement a buyer is
+/// paying for rather than like an empty frame. An unsold slot gets one too - its text already says
+/// «Название магазина» in grey, and a photo is the part of the advert being demonstrated.
+/// **Swapping this for a real upload means one field on [HomeShopPreview] and this widget**, nothing
+/// around it.
+///
+/// Each file is already cut to this box (1024x512 for a ~305x152dp slot, which is 3x on a phone),
+/// so `cover` is a no-op crop rather than a decision made at runtime.
+class _SlotPhoto extends StatelessWidget {
+  const _SlotPhoto({required this.slotIndex});
 
-// white, with the shop's identity carried by a soft branded banner rather than by an inverted
-// colour scheme - and that banner is where a real shop photo will go once upload exists
-class _VipShopCard extends StatelessWidget {
-  const _VipShopCard({required this.shop, required this.strings});
+  static const List<String> _photos = [
+    'assets/decorations/vip/vip1.webp',
+    'assets/decorations/vip/vip2.webp',
+    'assets/decorations/vip/vip3.webp',
+    'assets/decorations/vip/vip4.webp',
+    'assets/decorations/vip/vip5.webp',
+  ];
 
-  final HomeShopPreview shop;
-  final AppLocalizations strings;
-
-  /// moves with [VipShopsCarousel.cardHeight] rather than independently - it is the largest element
-  /// on the card, so leaving it alone would read as the proportions shifting
-  static const double bannerHeight = 120;
+  /// the position in the ring - modulo'd below, because the ring grows past five when more
+  /// placements arrive than there are slots
+  final int slotIndex;
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: _cardSurface,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      // under the photo for the frame or two the bundle takes to decode: a branded wash rather than
+      // the card's white, which would read as a flash on every card the carousel builds
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.primarySoft, AppColors.surfaceMuted],
+        ),
+      ),
+      child: Image.asset(
+        _photos[slotIndex % _photos.length],
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+      ),
+    );
+  }
+}
+
+/// «VIP» stays latin and untranslated: it is the name of the paid tier, not a word. White on the
+/// photo rather than orange - brand orange is for something you can press.
+class _VipTag extends StatelessWidget {
+  const _VipTag();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceWhite,
+        borderRadius: BorderRadius.circular(AppRadius.xs),
+        boxShadow: AppShadows.card,
+      ),
+      child: const Text(
+        'VIP',
+        style: TextStyle(
+          color: AppColors.textDark,
+          fontSize: 11,
+          height: 1.1,
+          letterSpacing: 0.6,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+/// The rating, opposite the tag. A white pill because it sits on an image: once a real photo is
+/// behind it, the pill is what keeps the number readable over anything.
+class _RatingPill extends StatelessWidget {
+  const _RatingPill({required this.rating});
+
+  /// already formatted by the caller
+  final String rating;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceWhite,
+        borderRadius: BorderRadius.circular(AppRadius.xs),
+        boxShadow: AppShadows.card,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // the shop's name lives on the banner, opposite its rating. it used to head the content block, so
-          // the tallest, boldest thing on the card sat *under* a large empty image - this pairs the two facts
-          // that identify a shop and leaves the block one job: what it costs.
-          _Banner(
-            name: shop.name,
-            // hidden entirely until there are reviews - with no reviews table every shop reads 0.0
-            ratingLabel: shop.hasRating ? shop.rating.toStringAsFixed(1) : null,
-          ),
-          Expanded(
-            child: Padding(
-              padding: _cardContentPadding,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _AddressLine(
-                    text: shop.address,
-                    color: AppColors.textGrey,
-                  ),
-
-                  // real gaps rather than `spaceBetween`: distributed slack changed the spacing with the content, so
-                  // the block read as compressed at the top and stranded at the bottom
-                  const SizedBox(height: 12),
-
-                  // **a card here can legitimately have no price**: ListVipShops left-joins the basket index, so a
-                  // shop that has not finished pricing shows its name, its address and no comparison. it used to
-                  // inner-join, which meant somebody paid for a placement and saw nothing.
-                  if (shop.basketPrice case final basket?)
-                    Text(
-                      strings.somAmount(basket),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: _priceStyle,
-                    ),
-
-                  if (shop.priceTier case final tier?) ...[
-                    const SizedBox(height: 10),
-                    PriceTierBadge(
-                      tier: tier,
-                      differencePercent: shop.priceDifferencePercent,
-                      strings: strings,
-                    ),
-                  ],
-
-                  // soaks up the leftover, so the block stays top-aligned and the bottom padding is the real distance
-                  const Spacer(),
-                ],
-              ),
+          const Icon(CupertinoIcons.star_fill, color: AppColors.starYellow, size: 11),
+          const SizedBox(width: 4),
+          Text(
+            rating,
+            style: const TextStyle(
+              color: AppColors.textDark,
+              fontSize: 11.5,
+              height: 1.1,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -302,51 +416,97 @@ class _VipShopCard extends StatelessWidget {
   }
 }
 
-/// An unsold placement: the real card, with field names where its values would be.
+/// The white block: identity on top, money at the bottom, a hairline between them.
 ///
-/// **A piece of the product, not a loading state** - a skeleton says "wait", a faded frame says
-/// "broken", and this has to say "this space is for sale". **No invented shop anywhere in it**; the
-/// rating is the one exception ([kSlotRating], a fixed 5) and describes the field.
-class _EmptySlotCard extends StatelessWidget {
-  const _EmptySlotCard({required this.strings});
+/// Only the **top** corners are rounded - the bottom two are the card's own, already cut by its clip,
+/// and rounding them twice would pull the sheet away from the card's edge.
+class _FactsSheet extends StatelessWidget {
+  const _FactsSheet({
+    required this.shop,
+    required this.isPlaceholder,
+    required this.strings,
+  });
 
+  final HomeShopPreview? shop;
+  final bool isPlaceholder;
   final AppLocalizations strings;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: _cardSurface,
+    final shop = this.shop;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceWhite,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.md)),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Banner(
-            name: strings.slotShopNameLabel,
-            // shown in full here, unlike a real card: on this one the pill is part of what is being described,
-            // and a gap where it goes would leave the layout half-explained
-            ratingLabel: kSlotRating,
-            isPlaceholder: true,
+          Text(
+            shop?.name ?? strings.slotShopNameLabel,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              // a field name, drawn so «Название магазина» cannot be mistaken for a shop called that
+              color: isPlaceholder ? AppColors.textGrey : AppColors.textDark,
+              fontSize: 17,
+              height: 1.15,
+              letterSpacing: -0.3,
+              fontWeight: isPlaceholder ? FontWeight.w600 : FontWeight.w700,
+            ),
           ),
-          Expanded(
-            child: Padding(
-              padding: _cardContentPadding,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _AddressLine(
-                    text: strings.slotAddressLabel,
-                    color: AppColors.textFaint,
+          const SizedBox(height: 5),
+          _AddressLine(
+            text: shop?.address ?? strings.slotAddressLabel,
+            color: isPlaceholder ? AppColors.textFaint : AppColors.textGrey,
+          ),
+
+          // real gaps rather than `spaceBetween`: distributed slack changed the spacing with the content,
+          // so the block read as compressed at the top and stranded at the bottom
+          const SizedBox(height: 10),
+          const Divider(height: 1, thickness: 1, color: AppColors.hairline),
+          const Spacer(),
+
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // **a card here can legitimately have no price**: ListVipShops left-joins the basket index, so
+              // a shop that has not finished pricing shows its name, its address and no comparison. it used
+              // to inner-join, which meant somebody paid for a placement and saw nothing.
+              Expanded(
+                child: Text(
+                  switch (shop?.basketPrice) {
+                    final basket? => strings.somAmount(basket),
+                    // sits where the total does, at the same size and weight - that is the point being made.
+                    // the grey is the only difference, so it reads as the name of a figure, not a figure.
+                    null => strings.slotBasketLabel,
+                  },
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: shop?.basketPrice == null ? AppColors.textGrey : AppColors.textDark,
+                    fontSize: 19,
+                    height: 1.1,
+                    letterSpacing: -0.5,
+                    fontWeight: FontWeight.w700,
                   ),
-                  const SizedBox(height: 12),
-                  // sits where the basket total does, at the same size and weight - that is the point being made.
-                  // `textGrey` is the only difference, so it reads as the name of a figure rather than as a figure.
-                  Text(
-                    strings.slotBasketLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _priceStyle.copyWith(color: AppColors.textGrey),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
+                ),
+              ),
+              const SizedBox(width: 10),
+
+              // the comparison already says «рынка» in words - see `priceTierCheaper`. it is the reason the
+              // price above it is worth reading, so it shares the line rather than sitting under it.
+              if (shop?.priceTier case final tier?)
+                PriceTierBadge(
+                  tier: tier,
+                  differencePercent: shop?.priceDifferencePercent,
+                  strings: strings,
+                )
+              else if (isPlaceholder)
+                Flexible(
+                  child: Text(
                     strings.slotComparisonLabel,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -357,10 +517,8 @@ class _EmptySlotCard extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const Spacer(),
-                ],
-              ),
-            ),
+                ),
+            ],
           ),
         ],
       ),
@@ -368,16 +526,7 @@ class _EmptySlotCard extends StatelessWidget {
   }
 }
 
-/// shared, so the empty card's caption sits on exactly the same baseline as the figure it replaces
-const TextStyle _priceStyle = TextStyle(
-  color: AppColors.textDark,
-  fontSize: 17,
-  height: 1.15,
-  letterSpacing: -0.4,
-  fontWeight: FontWeight.w700,
-);
-
-/// shared, so the two cards cannot end up with different gaps or a different icon size
+/// its own widget so the pin, its gap and the type cannot drift apart from one card to the next
 class _AddressLine extends StatelessWidget {
   const _AddressLine({required this.text, required this.color});
 
@@ -404,111 +553,6 @@ class _AddressLine extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// The card's cover: a placeholder where a shop photo will go, the name at top-left and the rating
-/// at top-right. **Sold and unsold slots share this widget outright**, which is what makes the two
-/// line up pixel for pixel as the carousel snaps.
-///
-/// The name is brand orange with no scrim - over a pale peach placeholder there is nothing to
-/// protect text from. When photo upload lands, the fix is the white pill the rating badge uses.
-class _Banner extends StatelessWidget {
-  const _Banner({
-    required this.name,
-    required this.ratingLabel,
-    this.isPlaceholder = false,
-  });
-
-  final String name;
-
-  /// Already formatted by the caller, and **null when there is nothing to show** - which drops the
-  /// whole pill rather than just its number, since an empty white badge reads as a failed load.
-  final String? ratingLabel;
-
-  /// Draws the name as a field label rather than as an identity, so «Название магазина» cannot be
-  /// mistaken for a shop actually called that. Brand orange is reserved for a real name.
-  final bool isPlaceholder;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.md - 1)),
-      child: Container(
-        height: _VipShopCard.bannerHeight,
-        width: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [AppColors.primarySoft, AppColors.surfaceMuted],
-          ),
-        ),
-        child: Stack(
-          children: [
-            Center(
-              child: Icon(
-                CupertinoIcons.building_2_fill,
-                color: AppColors.primaryOrange.withValues(alpha: 0.38),
-                size: 34,
-              ),
-            ),
-
-            // identity on the left, quality on the right, the way a listing card is read
-            Positioned(
-              top: 10,
-              left: 12,
-              right: 10,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: isPlaceholder ? AppColors.textGrey : AppColors.primaryOrange,
-                        fontSize: 16,
-                        height: 1.2,
-                        letterSpacing: -0.2,
-                        fontWeight: isPlaceholder ? FontWeight.w600 : FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  if (ratingLabel case final rating?) ...[
-                    const SizedBox(width: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(AppRadius.xs),
-                        boxShadow: AppShadows.card,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(CupertinoIcons.star_fill, color: AppColors.starYellow, size: 11),
-                          const SizedBox(width: 4),
-                          Text(
-                            rating,
-                            style: const TextStyle(
-                              color: AppColors.textDark,
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

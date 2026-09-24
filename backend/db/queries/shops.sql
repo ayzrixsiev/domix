@@ -1,12 +1,12 @@
 -- name: CreateShop :one
-INSERT INTO shops (user_id, name, contact_phone, image_url, address, category, location)
-VALUES ($1, $2, $3, $4, $5, $6, ST_SetSRID(ST_MakePoint($7, $8), 4326))
-RETURNING id, user_id, name, contact_phone, image_url, address, category, rating,
+INSERT INTO shops (user_id, name, contact_phone, address, category, location)
+VALUES ($1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($6, $7), 4326))
+RETURNING id, user_id, name, contact_phone, address, category,
           COALESCE(vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip,
           ST_Y(location)::float8 AS latitude, ST_X(location)::float8 AS longitude, created_at, updated_at;
 
 -- name: ListShops :many
-SELECT s.id, s.user_id, s.name, s.contact_phone, s.image_url, s.address, s.category, s.rating,
+SELECT s.id, s.user_id, s.name, s.contact_phone, s.address, s.category,
        COALESCE(s.vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip,
        ST_Y(s.location)::float8 AS latitude, ST_X(s.location)::float8 AS longitude,
        s.created_at, s.updated_at,
@@ -16,7 +16,7 @@ LEFT JOIN shop_basket_index bi ON bi.shop_id = s.id
 ORDER BY s.created_at DESC;
 
 -- name: GetShop :one
-SELECT s.id, s.user_id, s.name, s.contact_phone, s.image_url, s.address, s.category, s.rating,
+SELECT s.id, s.user_id, s.name, s.contact_phone, s.address, s.category,
        COALESCE(s.vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip,
        ST_Y(s.location)::float8 AS latitude, ST_X(s.location)::float8 AS longitude,
        s.created_at, s.updated_at,
@@ -37,12 +37,12 @@ WITH updated AS (
         location = ST_SetSRID(ST_MakePoint($5, $6), 4326),
         updated_at = CURRENT_TIMESTAMP
     WHERE id = $1
-    RETURNING id, user_id, name, contact_phone, image_url, address, category, rating,
+    RETURNING id, user_id, name, contact_phone, address, category,
               COALESCE(vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip,
               ST_Y(location)::float8 AS latitude, ST_X(location)::float8 AS longitude,
               created_at, updated_at
 )
-SELECT u.id, u.user_id, u.name, u.contact_phone, u.image_url, u.address, u.category, u.rating, u.is_vip,
+SELECT u.id, u.user_id, u.name, u.contact_phone, u.address, u.category, u.is_vip,
        u.latitude, u.longitude, u.created_at, u.updated_at,
        bi.price_index, bi.basket_price
 FROM updated u
@@ -60,7 +60,7 @@ RETURNING id, name, vip_until,
 DELETE FROM shops WHERE id = $1;
 
 -- name: ListShopsByOwner :many
-SELECT s.id, s.user_id, s.name, s.contact_phone, s.image_url, s.address, s.category, s.rating,
+SELECT s.id, s.user_id, s.name, s.contact_phone, s.address, s.category,
        COALESCE(s.vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip,
        ST_Y(s.location)::float8 AS latitude, ST_X(s.location)::float8 AS longitude,
        s.created_at, s.updated_at,
@@ -72,7 +72,7 @@ WHERE s.user_id = $1
 ORDER BY s.created_at DESC;
 
 -- name: ListVipShops :many
-SELECT s.id, s.user_id, s.name, s.contact_phone, s.image_url, s.address, s.category, s.rating,
+SELECT s.id, s.user_id, s.name, s.contact_phone, s.address, s.category,
        true AS is_vip,
        ST_Y(s.location)::float8 AS latitude, ST_X(s.location)::float8 AS longitude,
        s.created_at, s.updated_at,
@@ -84,7 +84,7 @@ ORDER BY bi.basket_price ASC NULLS LAST, s.vip_until DESC, s.id ASC
 LIMIT $1;
 
 -- name: ListBestOffersInCategory :many
-SELECT s.id, s.user_id, s.name, s.contact_phone, s.image_url, s.address, s.category, s.rating,
+SELECT s.id, s.user_id, s.name, s.contact_phone, s.address, s.category,
        COALESCE(s.vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip,
        ST_Y(s.location)::float8 AS latitude, ST_X(s.location)::float8 AS longitude,
        s.created_at, s.updated_at,
@@ -92,5 +92,5 @@ SELECT s.id, s.user_id, s.name, s.contact_phone, s.image_url, s.address, s.categ
 FROM shops s
 JOIN shop_basket_index bi ON bi.shop_id = s.id
 WHERE s.category = $1
-ORDER BY bi.price_index ASC, s.rating DESC
+ORDER BY bi.price_index ASC, s.id
 LIMIT $2;

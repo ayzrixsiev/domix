@@ -39,7 +39,6 @@ HomeShopPreview _shop(
     category: ShopCategory.universal,
     latitude: 41.3,
     longitude: 69.2,
-    rating: 4.5,
     priceTier: tier,
     priceDifferencePercent: percent,
     basketPrice: basket,

@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"domix/backend/db"
 	"domix/backend/internal/auth"
@@ -65,7 +64,7 @@ func (f *fakeSender) refuse(err error) {
 // tested this way, which is most of them.
 func codeUnderTest() (*PhoneAuth, *fakeSender) {
 	sender := &fakeSender{}
-	return &PhoneAuth{Codes: auth.NewCodeManager(), Sender: sender, JWTSecret: testJWTSecret}, sender
+	return &PhoneAuth{Codes: auth.NewCodeManager(true), Sender: sender, JWTSecret: testJWTSecret}, sender
 }
 
 func postAuth(t *testing.T, handler http.HandlerFunc, target string, body map[string]string) *httptest.ResponseRecorder {
@@ -345,7 +344,7 @@ func phoneAuthUnderTest(t *testing.T) (*PhoneAuth, *fakeSender, context.Context,
 
 	return &PhoneAuth{
 		Queries:   queries,
-		Codes:     auth.NewCodeManager(),
+		Codes:     auth.NewCodeManager(true),
 		Sender:    sender,
 		JWTSecret: testJWTSecret,
 	}, sender, ctx, tx, queries
@@ -364,7 +363,7 @@ func signInWithACode(t *testing.T, ctx context.Context, p *PhoneAuth, sender *fa
 
 	// a fresh manager per sign-in: the resend cooldown is real, and a test that signs the same
 	// number in twice would otherwise be refused the second code
-	p.Codes = auth.NewCodeManager()
+	p.Codes = auth.NewCodeManager(true)
 
 	rec := postAuthWithContext(t, ctx, p.RequestCode, "/api/auth/request-code",
 		map[string]string{"phone": phone, "name": name, "role": role})
@@ -461,33 +460,23 @@ func TestSigningInAgainFindsTheSameAccount(t *testing.T) {
 	}
 }
 
-// **The migration's sharp edge.** users.phone holds whatever telegram reported at registration, and
-// some clients' numbers arrive with a leading '+'. Looking a proven number up under only the
-// canonical spelling would register an existing user a second time - on a row that owns none of
-// their shops, while the original keeps the name they are known by.
-func TestAnAccountRegisteredThroughTelegramIsNotDuplicated(t *testing.T) {
-	phoneAuth, sender, ctx, tx, queries := phoneAuthUnderTest(t)
+// **users.phone is the identity column and it holds exactly one spelling.** Migration 000003
+// normalized the rows the retired telegram handshake had written with a leading '+', and this is
+// what stops a second spelling creeping back in: two spellings of one number in a UNIQUE column are
+// two accounts, and the second owns none of the first one's shops.
+func TestSigningInStoresTheCanonicalSpellingOfTheNumber(t *testing.T) {
+	phoneAuth, sender, ctx, tx, _ := phoneAuthUnderTest(t)
 	phone := unusedPhone()
 
-	// exactly how the telegram handler wrote it
-	old, err := queries.CreateUser(ctx, db.CreateUserParams{
-		Name:  pgtype.Text{String: "Аброр", Valid: true},
-		Phone: "+" + phone,
-		Role:  "shop_owner",
-	})
-	if err != nil {
-		t.Fatalf("seeding the old-style row: %v", err)
+	// every shape a person types, ending on the same row
+	for _, typed := range []string{"+" + phone, phone[3:], "+998 " + phone[3:5] + " " + phone[5:8] + " " + phone[8:10] + " " + phone[10:]} {
+		answer := signInWithACode(t, ctx, phoneAuth, sender, typed, "Аброр", "customer")
+		if answer.User.Phone != phone {
+			t.Fatalf("typing %q stored %q, want the canonical %q", typed, answer.User.Phone, phone)
+		}
 	}
 
-	answer := signInWithACode(t, ctx, phoneAuth, sender, phone, "Аброр", "customer")
-
-	if answer.User.ID != old.ID {
-		t.Fatalf("signed in as user %d, want the existing %d", answer.User.ID, old.ID)
-	}
-	if answer.User.Role != "shop_owner" {
-		t.Fatalf("the existing role was lost, now %q", answer.User.Role)
-	}
-	if n := countRows(t, ctx, tx, "SELECT COUNT(*) FROM users WHERE phone IN ($1, $2)", phone, "+"+phone); n != 1 {
-		t.Fatalf("%d rows for one number after signing in", n)
+	if n := countRows(t, ctx, tx, "SELECT COUNT(*) FROM users WHERE phone = $1", phone); n != 1 {
+		t.Fatalf("%d rows for one number", n)
 	}
 }

@@ -12,7 +12,7 @@ import '../controllers/products_controller.dart';
 import '../widgets/product_grid.dart';
 import '../widgets/product_tile.dart';
 import 'product_edit_screen.dart';
-import 'package:frontend/core/widgets/circle_back_button.dart';
+import 'package:frontend/core/widgets/app_page_header.dart';
 
 /// mirrors maxCustomProducts in backend/internal/endpoints/product_crud.go, which is what actually
 /// enforces it - this copy only greys the add tile out before a doomed round trip
@@ -83,27 +83,7 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: false,
-        titleSpacing: 20,
-        iconTheme: const IconThemeData(color: AppColors.textDark, size: 22),
-        // the disc, not a bare chevron. leadingWidth must move with it or flutter keeps its own 56 and
-        // the title sits wrong.
-        leading: const CircleBackButton(),
-        leadingWidth: CircleBackButton.leadingWidth,
-        title: Text(
-          strings.productsScreenTitle,
-          style: const TextStyle(
-            color: AppColors.textDark,
-            fontSize: 18,
-            letterSpacing: -0.2,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
+      appBar: AppPageHeader(title: strings.productsScreenTitle),
       body: SafeArea(
         child: RefreshIndicator(
           color: AppColors.primaryOrange,

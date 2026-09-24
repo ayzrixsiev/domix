@@ -16,26 +16,19 @@ const (
 	dirPerm  = 0o755
 )
 
-// Disk writes into `root`/uploads, where root is the same directory the api serves
-// /static/products/ from (PRODUCT_IMAGES_DIR).
-//
-// **It is not the legacy implementation and does not go away when R2 arrives.** It is what runs on
-// the founder's laptop, in `go test ./...`, and on any machine with no credentials and no network -
-// which is the argument for [Storage] being an interface at all. An abstraction with one real
-// implementation and one stub is architecture; this one has two implementations that both run every
-// day.
+// Disk writes into `root`/shops/uploads, under the same images root the api serves /images/ from.
+// **not the legacy implementation**: it is what runs on the laptop and in `go test ./...`, which is
+// the argument for [Storage] being an interface at all.
 type Disk struct {
 	root string
 }
 
-// compile-time proof that this satisfies the interface. cheaper than finding out from main.go.
+// compile-time proof that this satisfies the interface
 var _ Storage = (*Disk)(nil)
 
-// NewDisk makes sure the uploads directory exists and hands back a store writing into it.
-//
-// Creating it at startup rather than lazily on the first upload is deliberate: a directory the
-// process cannot create is a misconfigured deployment, and finding that out when the first shop
-// owner presses "добавить фото" means finding out from them.
+// creates the uploads directory at startup rather than on the first upload: a directory the process
+// cannot write is a misconfigured deployment, and the first shop owner should not be the one to find
+// that out
 func NewDisk(root string) (*Disk, error) {
 	dir := filepath.Join(root, UploadDir)
 	if err := os.MkdirAll(dir, dirPerm); err != nil {
@@ -44,18 +37,13 @@ func NewDisk(root string) (*Disk, error) {
 	return &Disk{root: root}, nil
 }
 
-// Dir is the path uploads are written under. For the startup log and for tests.
+// where uploads are written, for the startup log and for tests
 func (d *Disk) Dir() string { return filepath.Join(d.root, UploadDir) }
 
 func (d *Disk) Describe() string { return "local disk at " + d.Dir() }
 
-// Save writes both copies and returns the master's relative path.
-//
-// **The master goes down last.** Both files are written under names nothing yet refers to, so the
-// order cannot leave a row pointing at a missing file - but a thumbnail written after its master
-// leaves a window where a *concurrent* reader of the row (there is none today; there will be when a
-// second process serves these) could ask for a thumbnail that is not there yet. Writing the small
-// one first costs nothing and closes it.
+// writes both copies and returns the master's relative path. **the master goes down last**, so no
+// reader can ever find a master whose thumbnail has not landed yet.
 func (d *Disk) Save(_ context.Context, photo Photo) (string, error) {
 	master, thumb, err := newPaths()
 	if err != nil {
@@ -66,9 +54,7 @@ func (d *Disk) Save(_ context.Context, photo Photo) (string, error) {
 		return "", err
 	}
 	if err := d.write(master, photo.Master); err != nil {
-		// the thumbnail is referenced by nothing - the caller never learned its name - so it would
-		// sit on disk forever. cleaned up here rather than left to the sweep, which is for files
-		// whose row went away rather than for ones we know are dead the moment we write them.
+		// the caller never learned the thumbnail's name, so nothing else would ever collect it
 		_ = d.removeAt(thumb)
 		return "", err
 	}
@@ -79,9 +65,7 @@ func (d *Disk) Remove(ctx context.Context, rel string) error {
 	if !IsUpload(rel) {
 		return fmt.Errorf("%w: %q", ErrOutsideUploads, rel)
 	}
-	// the mirror of Save: thumbnail first, master second. Either half failing leaves a file the
-	// admin panel's sweep will collect, so what the order buys is only that the two operations read
-	// the same way round in both directions.
+	// the mirror of Save. either half failing leaves a file the admin panel's sweep collects.
 	if err := d.removeAt(ThumbPath(rel)); err != nil {
 		return err
 	}
@@ -95,8 +79,8 @@ func (d *Disk) RemoveFile(_ context.Context, rel string) error {
 	return d.removeAt(rel)
 }
 
-// List walks `root`/uploads. Returns relative, forward-slashed paths, so what comes out is directly
-// comparable with what is in products.image_path on either backend.
+// walks `root`/uploads, returning relative forward-slashed paths - directly comparable with
+// products.image_path on either backend
 func (d *Disk) List(_ context.Context) ([]Object, error) {
 	dir := d.Dir()
 	var out []Object
@@ -108,16 +92,14 @@ func (d *Disk) List(_ context.Context) ([]Object, error) {
 		if entry.IsDir() {
 			return nil
 		}
-		// the half-written temp files CreateTemp leaves behind if the process dies mid-save. they
-		// are not photos and nothing will ever reference them; skipping keeps them out of a report
-		// that is about files whose product is gone.
+		// half-written temp files from a process that died mid-save: not photos, and not what a
+		// report about files whose product is gone is asking about
 		if strings.HasPrefix(entry.Name(), ".upload-") {
 			return nil
 		}
 		info, err := entry.Info()
 		if err != nil {
-			// vanished between the walk and the stat - somebody replaced a photo while we were
-			// listing, which is exactly the race the sweep's one-hour floor exists for
+			// vanished between the walk and the stat - the race the sweep's one-hour floor exists for
 			if errors.Is(err, fs.ErrNotExist) {
 				return nil
 			}
@@ -140,9 +122,8 @@ func (d *Disk) List(_ context.Context) ([]Object, error) {
 	return out, nil
 }
 
-// write puts one file down atomically: a temp file in the *same* directory, then a rename. Rename is
-// atomic within one filesystem, so the static handler either does not see the path at all or sees a
-// complete file - never the half of it that had been flushed when the process was killed.
+// one file down atomically: a temp file in the *same* directory, then a rename. the static handler
+// either does not see the path at all or sees a complete file, never a half-flushed one.
 func (d *Disk) write(rel string, content []byte) error {
 	full := filepath.Join(d.root, filepath.FromSlash(rel))
 	if err := os.MkdirAll(filepath.Dir(full), dirPerm); err != nil {
@@ -176,7 +157,7 @@ func (d *Disk) write(rel string, content []byte) error {
 	return nil
 }
 
-// unlink one path that has already been checked. A file that is not there is a success.
+// unlink one already-checked path. a file that is not there is a success.
 func (d *Disk) removeAt(rel string) error {
 	err := os.Remove(filepath.Join(d.root, filepath.FromSlash(path.Clean(rel))))
 	if err != nil && !errors.Is(err, os.ErrNotExist) {

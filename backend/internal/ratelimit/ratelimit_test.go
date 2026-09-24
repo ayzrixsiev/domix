@@ -23,7 +23,7 @@ func TestWithoutTrustProxyTheHeaderIsIgnored(t *testing.T) {
 	t.Setenv("TRUST_PROXY", "")
 
 	// nothing sits in front, so the header can only have been written by the caller
-	if got := clientIP(requestFrom("203.0.113.7:51000", "198.51.100.1")); got != "203.0.113.7" {
+	if got := ClientIP(requestFrom("203.0.113.7:51000", "198.51.100.1")); got != "203.0.113.7" {
 		t.Fatalf("want the socket's own address, got %q", got)
 	}
 }
@@ -40,7 +40,7 @@ func TestBehindAProxyTheLastEntryIsTheCaller(t *testing.T) {
 		"single": requestFrom("127.0.0.1:40000", "203.0.113.7"),
 	}
 	for name, r := range cases {
-		if got := clientIP(r); got != "203.0.113.7" {
+		if got := ClientIP(r); got != "203.0.113.7" {
 			t.Errorf("%s: want 203.0.113.7, got %q", name, got)
 		}
 	}
@@ -49,7 +49,7 @@ func TestBehindAProxyTheLastEntryIsTheCaller(t *testing.T) {
 func TestBehindAProxyWithNoHeaderTheSocketAddressIsUsed(t *testing.T) {
 	t.Setenv("TRUST_PROXY", "true")
 
-	if got := clientIP(requestFrom("127.0.0.1:40000")); got != "127.0.0.1" {
+	if got := ClientIP(requestFrom("127.0.0.1:40000")); got != "127.0.0.1" {
 		t.Fatalf("want 127.0.0.1, got %q", got)
 	}
 }
@@ -70,5 +70,38 @@ func TestRotatingASpoofedAddressDoesNotBuyAFreshBucket(t *testing.T) {
 
 	if codes[2] != http.StatusTooManyRequests {
 		t.Fatalf("the third request should have been refused, got %v", codes)
+	}
+}
+
+// **the bug this exists to catch is invisible on a laptop.** Uzbek mobile operators put thousands of
+// subscribers behind one public address, so bucketing an authenticated request by address throttles
+// a whole carrier as though it were one person - and every developer machine has an address to
+// itself, so nothing local ever reproduces it.
+func TestKeyedBucketsByAccountRatherThanAddress(t *testing.T) {
+	// one token, so the second request from the same bucket is refused
+	limiter := New(0, 1, time.Minute).Keyed(func(r *http.Request) string {
+		return "user:" + r.Header.Get("X-Test-Account")
+	})
+
+	var served int
+	handler := limiter.Wrap(func(w http.ResponseWriter, r *http.Request) { served++ })
+
+	// two different accounts, one shared address - the shape of a carrier NAT
+	for _, account := range []string{"1", "2"} {
+		req := requestFrom("203.0.113.7:51000")
+		req.Header.Set("X-Test-Account", account)
+		handler(httptest.NewRecorder(), req)
+	}
+	if served != 2 {
+		t.Fatalf("%d of 2 accounts behind one address were served - they share a bucket", served)
+	}
+
+	// and the same account is still held to its own budget
+	req := requestFrom("198.51.100.4:51000")
+	req.Header.Set("X-Test-Account", "1")
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("a second request from one account answered %d, want 429", rec.Code)
 	}
 }

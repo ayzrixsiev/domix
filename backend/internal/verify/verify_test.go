@@ -12,12 +12,7 @@ import (
 // in a pure function rather than inline in main.go.
 
 func TestChoosingAProvider(t *testing.T) {
-	const (
-		token    = "gateway-token"
-		email    = "sales@domix.uz"
-		password = "not-a-real-password"
-		template = "Domix: {code} - tasdiqlash kodi"
-	)
+	const token = "gateway-token"
 
 	cases := []struct {
 		name     string
@@ -37,62 +32,21 @@ func TestChoosingAProvider(t *testing.T) {
 			want:     KindTelegram,
 		},
 		{
-			name:     "eskiz, fully configured",
-			settings: Settings{EskizEmail: email, EskizPassword: password, EskizTemplate: template},
-			want:     KindEskiz,
-		},
-		{
-			// telegram is the primary provider (cheaper per message), so it wins when both are
-			// present and VERIFY_SENDER is what overrides that
-			name:     "both configured",
-			settings: Settings{TelegramToken: token, EskizEmail: email, EskizPassword: password, EskizTemplate: template},
-			want:     KindTelegram,
-		},
-		{
-			name:     "both configured, eskiz named explicitly",
-			settings: Settings{Sender: KindEskiz, TelegramToken: token, EskizEmail: email, EskizPassword: password, EskizTemplate: template},
-			want:     KindEskiz,
-		},
-		{
 			// a .env is typed by a person, so the name is matched loosely
 			name:     "named with capitals and whitespace",
 			settings: Settings{Sender: "  Telegram ", TelegramToken: token},
 			want:     KindTelegram,
 		},
 		{
-			// console on purpose, with real credentials sitting right there: the way to test the
-			// flow end to end without spending money
-			name:     "console named explicitly while eskiz is configured",
-			settings: Settings{Sender: KindConsole, EskizEmail: email, EskizPassword: password, EskizTemplate: template},
+			// console on purpose, with a real token sitting right there: the way to walk the flow
+			// end to end without spending money
+			name:     "console named explicitly while a token is configured",
+			settings: Settings{Sender: KindConsole, TelegramToken: token},
 			want:     KindConsole,
 		},
-
-		// every refusal below is a .env somebody is halfway through filling in. the alternative -
-		// quietly falling back to the console - is an api that boots green, answers 200 to every
-		// login and delivers nothing, found by the first real user rather than at startup.
 		{
-			name:     "eskiz with no password",
-			settings: Settings{EskizEmail: email},
-			want:     "",
-		},
-		{
-			name:     "eskiz with no password, named explicitly",
-			settings: Settings{Sender: KindEskiz, EskizEmail: email},
-			want:     "",
-		},
-		{
-			// the text has to be one Eskiz already moderated, so there is nothing sane to default to
-			name:     "eskiz with no message template",
-			settings: Settings{EskizEmail: email, EskizPassword: password},
-			want:     "",
-		},
-		{
-			// would send a perfectly valid sms carrying no code at all
-			name:     "an eskiz template with no placeholder",
-			settings: Settings{EskizEmail: email, EskizPassword: password, EskizTemplate: "Domix kodi"},
-			want:     "",
-		},
-		{
+			// a .env somebody is halfway through. the alternative - quietly falling back to the
+			// console - is an api that boots green, answers 200 to every login and delivers nothing.
 			name:     "telegram named with no token",
 			settings: Settings{Sender: KindTelegram},
 			want:     "",
@@ -131,46 +85,18 @@ func TestChoosingAProvider(t *testing.T) {
 	}
 }
 
-// The short number is optional - almost every Eskiz account sends from the shared 4546 - so it has a
-// default where the message text deliberately does not.
-func TestEskizFallsBackToTheSharedShortNumber(t *testing.T) {
-	sender, _, err := New(Settings{
-		EskizEmail:    "sales@domix.uz",
-		EskizPassword: "not-a-real-password",
-		EskizTemplate: "Domix: {code}",
-	})
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-
-	if got := sender.(*eskiz).from; got != eskizDefaultFrom {
-		t.Fatalf("eskiz sends from %q, want the default %q", got, eskizDefaultFrom)
-	}
-}
-
 func TestSettingsComeFromTheEnvironment(t *testing.T) {
-	t.Setenv(EnvSender, "eskiz")
+	t.Setenv(EnvSender, "telegram")
 	t.Setenv(EnvTelegramToken, " gateway-token ") // trimmed: a .env line can carry trailing spaces
-	t.Setenv(EnvEskizEmail, "sales@domix.uz")
-	t.Setenv(EnvEskizPassword, "not-a-real-password")
-	t.Setenv(EnvEskizFrom, "3700")
-	t.Setenv(EnvEskizTemplate, "Domix: {code}")
 
-	want := Settings{
-		Sender:        "eskiz",
-		TelegramToken: "gateway-token",
-		EskizEmail:    "sales@domix.uz",
-		EskizPassword: "not-a-real-password",
-		EskizFrom:     "3700",
-		EskizTemplate: "Domix: {code}",
-	}
+	want := Settings{Sender: "telegram", TelegramToken: "gateway-token"}
 	if got := SettingsFromEnv(); got != want {
 		t.Fatalf("SettingsFromEnv() = %+v, want %+v", got, want)
 	}
 }
 
 // The development provider has to be a real Sender, not a panic waiting for the first login: the
-// whole flutter flow is walked against it before there is a gateway balance or a moderated template.
+// whole flutter flow is walked against it before there is a gateway balance.
 func TestTheConsoleSenderAlwaysSucceeds(t *testing.T) {
 	sender, kind, err := New(Settings{})
 	if err != nil || kind != KindConsole {

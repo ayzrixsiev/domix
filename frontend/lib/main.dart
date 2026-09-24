@@ -14,11 +14,10 @@ import 'package:frontend/features/app_shell/presentation/screens/app_shell_scree
 import 'package:frontend/features/profile/presentation/widgets/session_expiry_guard.dart';
 import 'features/home/presentation/controllers/home_controller.dart';
 import 'features/location/presentation/controllers/city_controller.dart';
+import 'features/favorites/presentation/controllers/favorites_controller.dart';
 import 'features/profile/presentation/controllers/auth_controller.dart';
 import 'features/stores/presentation/controllers/stores_controller.dart';
 import 'features/products/presentation/controllers/products_controller.dart';
-import 'features/messages/presentation/controllers/support_controller.dart';
-import 'features/tickets/presentation/controllers/tickets_controller.dart';
 
 void main() async {
   // wake up flutter engine drivers to read hardware encrypted storage before drawing ui
@@ -45,22 +44,19 @@ void main() async {
   // moment later if the server disagrees.
   unawaited(authController.verifySession());
   final storesController = StoresController();
+  final favoritesController = FavoritesController();
   final productsController = ProductsController();
-  final supportController = SupportController();
-  final ticketsController = TicketsController();
-  // awaited too: it decides which of three screens the Заявки tab is, and resolving it one frame
-  // late shows the "кто вы?" chooser to somebody who answered months ago. one storage read.
-  await ticketsController.load();
-
   // what the end of a session has to reach. callbacks rather than imports in either direction, and
-  // main() is the one place allowed to know about all three: the shops, because deleting an account
-  // cascades them away server-side under a map holding a stale snapshot; and the support thread and
-  // the job tickets, which are privacy rather than staleness - a phone number, a district and a
-  // budget left in memory for whoever signs in on this phone next.
+  // main() is the one place allowed to know about both: the shops, because deleting an account
+  // cascades them away server-side under a map holding a stale snapshot; and the saved products,
+  // which are somebody's and must not be handed to whoever signs in on this phone next.
+  // what a new session has to fetch: the saved products, which the hearts on every grid are painted
+  // from. unawaited - nothing on screen waits for it, and the heart fills when it lands.
+  authController.onSessionStarted = () => unawaited(favoritesController.load());
+
   authController.onSessionEnded = (accountDeleted) {
     storesController.handleSessionEnded(accountDeleted);
-    supportController.handleSessionEnded();
-    ticketsController.handleSessionEnded();
+    favoritesController.handleSessionEnded();
   };
 
   runApp(
@@ -76,10 +72,9 @@ void main() async {
           // the network until the first frame is already on screen
           ChangeNotifierProvider(create: (_) => HomeController()),
           ChangeNotifierProvider.value(value: authController),      // make all
-          ChangeNotifierProvider.value(value: storesController),    // UI components
+          ChangeNotifierProvider.value(value: storesController),
+          ChangeNotifierProvider.value(value: favoritesController),    // UI components
           ChangeNotifierProvider.value(value: productsController),  // to listen to these controllers using notifyListener()
-          ChangeNotifierProvider.value(value: supportController),
-          ChangeNotifierProvider.value(value: ticketsController),
         ],
         child: const DomixApp(),
       ),

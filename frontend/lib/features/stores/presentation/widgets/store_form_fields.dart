@@ -354,7 +354,7 @@ class ShopCategorySheet extends StatelessWidget {
                   height: 4,
                   margin: const EdgeInsets.only(top: 10, bottom: 16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE1E4EA),
+                    color: AppColors.trackGrey,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),

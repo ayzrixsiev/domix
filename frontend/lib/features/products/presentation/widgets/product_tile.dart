@@ -27,6 +27,8 @@ class ProductTile extends StatelessWidget {
     this.onTap,
     this.showOwnBadge = false,
     this.showBuyerActions = false,
+    this.isFavorite = false,
+    this.onFavoriteToggle,
     this.subtitle,
   });
 
@@ -44,12 +46,15 @@ class ProductTile extends StatelessWidget {
   /// only the owner's own grid distinguishes their products from the template's
   final bool showOwnBadge;
 
-  /// The heart and the basket button.
-  ///
-  /// **Off on the owner's management grid** - they are not shopping in their own catalogue - and on
-  /// wherever a customer is browsing. Neither is wired to anything yet: a basket is phase two, so
-  /// for now they are drawn and inert.
+  /// The heart and the basket button. **Off on the owner's management grid** - they are not shopping
+  /// in their own catalogue. The basket stays inert: it is phase two.
   final bool showBuyerActions;
+
+  /// Whether the heart is filled.
+  final bool isFavorite;
+
+  /// Saves or unsaves. Null leaves the heart drawn but inert, which is what a preview wants.
+  final VoidCallback? onFavoriteToggle;
 
   /// Photo block 124 (the panel's 118 plus the 6 of frame above it) + text block 98. Hand-tuned to
   /// fit a two-line name, a price, the shop line and the basket button at the smallest width the app
@@ -90,6 +95,8 @@ class ProductTile extends StatelessWidget {
               strings: strings,
               showOwnBadge: showOwnBadge,
               showFavourite: showBuyerActions,
+              isFavorite: isFavorite,
+              onFavoriteToggle: onFavoriteToggle,
             ),
           ),
           Expanded(
@@ -163,11 +170,15 @@ class _PhotoPanel extends StatelessWidget {
     required this.strings,
     required this.showOwnBadge,
     required this.showFavourite,
+    required this.isFavorite,
+    required this.onFavoriteToggle,
   });
 
   final Product product;
   final AppLocalizations strings;
   final bool showOwnBadge;
+  final bool isFavorite;
+  final VoidCallback? onFavoriteToggle;
   final bool showFavourite;
 
   @override
@@ -208,7 +219,11 @@ class _PhotoPanel extends StatelessWidget {
             Positioned(
               top: 7,
               right: 7,
-              child: _FavouriteButton(label: strings.addToFavouritesLabel),
+              child: _FavouriteButton(
+                label: strings.addToFavouritesLabel,
+                saved: isFavorite,
+                onTap: onFavoriteToggle,
+              ),
             ),
           // the owner's marker moves to the bottom: the top right is the shopper's heart, and on the
           // owner's own grid the heart is off, but the two must not be able to collide either way
@@ -306,29 +321,47 @@ class _AvailabilityBadge extends StatelessWidget {
   }
 }
 
-/// The heart over the photo panel. **Inert**: there is nowhere to save a favourite yet.
+/// The heart over the photo panel.
 ///
-/// A ringed white disc, not a plain one: the panel behind it is now white too, so without the
+/// A ringed white disc, not a plain one: the panel behind it is white too, so without the
 /// `trackGrey` edge there is no disc at all - just a heart floating on the photo.
+///
+/// The disc stays white when saved and only the glyph fills: a red disc at 26px reads as a warning
+/// badge on a product tile, where a red heart reads as saved.
 class _FavouriteButton extends StatelessWidget {
-  const _FavouriteButton({required this.label});
+  const _FavouriteButton({required this.label, required this.saved, this.onTap});
 
   final String label;
+  final bool saved;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
+      selected: saved,
       label: label,
-      child: Container(
-        width: 26,
-        height: 26,
-        decoration: BoxDecoration(
-          color: AppColors.surfaceWhite,
-          shape: BoxShape.circle,
-          border: Border.all(color: AppColors.trackGrey),
+      child: GestureDetector(
+        onTap: onTap,
+        // the disc is 26px, which is under the 44px a finger is aimed with - the padding is the
+        // difference between a control and a decoration
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: 26,
+          height: 26,
+          decoration: BoxDecoration(
+            color: AppColors.surfaceWhite,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.trackGrey),
+          ),
+          // a matched Cupertino pair rather than one outline glyph recoloured: "saved" has to be
+          // readable at 14px without comparing it to a tile that is not
+          child: Icon(
+            saved ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+            color: saved ? AppColors.danger : AppColors.textDark,
+            size: 14,
+          ),
         ),
-        child: const Icon(LucideIcons.heart, color: AppColors.textDark, size: 14),
       ),
     );
   }

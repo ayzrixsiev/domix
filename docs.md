@@ -4,33 +4,17 @@
 
 ```mermaid
 erDiagram
-    %% --- User / Support cluster ---
-    User ||--o{ SupportMessage : "User has one thread of Support Messages (Cascade Delete)"
-    User ||--o{ SupportThreadReads : "Admin's read watermark on a thread (Cascade Delete)"
-    User ||--o{ SupportThreadReads : "Watermark belongs to this user's thread (Cascade Delete)"
+    %% --- User cluster ---
+    %% support_messages and support_thread_reads were dropped in migration 000003. The feature is
+    %% being rebuilt from nothing, so the old tables are deliberately not documented here.
 
     User {
         bigint id PK "Internal Sequential ID"
         varchar name "Contact Name (Nullable)"
-        varchar phone UK "Unique Phone Number"
+        varchar phone UK "Unique Phone Number - canonical 998XXXXXXXXX, one spelling only (migration 000003)"
         varchar role "Role (customer, shop_owner, admin)"
         timestamp created_at "Creation timestamp"
         timestamp updated_at "Update timestamp"
-    }
-
-    SupportMessage {
-        bigint id PK "Internal Sequential ID"
-        bigint user_id FK "Whose thread this is - on both sides. There is no threads table"
-        boolean from_support "Which side wrote it. A role, not a sender id - set by the handler, never read from a request body"
-        text body "TEXT, not VARCHAR(n) - the 2000-rune limit is enforced in Go so retuning it is a deploy, not a migration"
-        timestamp created_at "Creation timestamp"
-    }
-
-    SupportThreadReads {
-        bigint admin_id PK, FK "Which admin did the reading - refers to users.id"
-        bigint thread_user_id PK, FK "Whose thread was read - a thread IS one user's messages, there is no threads table"
-        bigint last_read_id "Watermark: id of the newest support_message this admin has seen in this thread. Taken from the DB, never from the client"
-        timestamp updated_at "When the watermark last moved"
     }
 
     %% --- Shop / Product cluster ---
@@ -44,9 +28,7 @@ erDiagram
         varchar name "Shop name"
         text address "Physical text address"
         varchar contact_phone "Contact number shown on shop card"
-        varchar image_url "Shop banner image URL (Nullable, nothing writes it yet)"
         varchar category "universal, plumbing, wood, wallpaper - fixed at creation"
-        numeric rating "Intended 0.0-5.0, but no CHECK enforces it. Stored, nothing writes it - the app hides the star"
         timestamp vip_until "Paid placement runs until this moment (Nullable) - VIP while it is in the future"
         geometry location "PostGIS spatial point, stored as (longitude, latitude). Nullable - validateCoordinates in Go is what keeps it filled"
         boolean excluded_from_index "Admin lever: pulled out of its market's price comparison without touching a price. Default false"
@@ -131,6 +113,19 @@ Parent context in this function means that we need to pass it an existing ctx wh
 
 # Auth
 
+**Current flow: a 6-digit code delivered by Telegram Gateway.** `POST /api/auth/request-code` holds the
+name, role and a hash of the code in RAM (`internal/auth/code.go`); `POST /api/auth/verify` checks the
+code and mints the JWT. The same code backs the phone change and the `/delete-account` page. There is
+no bot, no webhook and no session id.
+
+---
+
+## ARCHIVED — the telegram bot handshake (removed, kept here as the restore point)
+
+*Nothing below is live. `internal/telegram`, `auth.SessionManager`, `/api/auth/init`,
+`/api/auth/status` and the bot's `/delete-account` flow were all deleted. This is the record to
+rebuild from if the code flow is ever rolled back.*
+
 Our authentication works around SessionManager struct, which contains two sync.Map, one called `session` for linking sessionID and data that we got from flutter app - name and role, this data is saved inside another struct named SessionData, another sync map called chatToSession links telegram chatID to sessionID. We used sync.Map deliberately to avoid race condition (two or more goroutines e.g from http requests trying to allocate a store inside one shared container), so sync.Map saves us from concurrency problem. Each sync map contains their entries, and i set up goroutines to watch those entries, if one of the entries in sessions sync.Map get older than 10 minutes it gets cleaned up, if user stuck in the telegram chat without sending a phone number, session and session data will be deleted after 10 minuets as i described above, which will create an orphaned chatToSession - chat id pointing to non existing session id, so the same goroutine cleans it up as soon as it cleand sessions entry.
 
 1. User presses create account in flutter app then he is prompted to choose a role (customer or shop owner) and write down his name, after that he presses "Verify through telegram" button.
@@ -159,7 +154,10 @@ sm.sessions.Store(sessionID, SessionData{
 
 # LOCAL TESTING
 
-- TRUNCATE TABLE users RESTART IDENTITY CASCADE;          
-- ngrok http 8080                           
-- go run ./cmd/api    
+- TRUNCATE TABLE users RESTART IDENTITY CASCADE;
+- ngrok http --url=jeep-prepay-penholder.ngrok-free.dev 8080
+- go run ./cmd/api
+
+With `TELEGRAM_GATEWAY_TOKEN` empty the console sender prints each login code into the api's own log,
+so the whole flow can be walked without spending anything.    
 - make apk-test
