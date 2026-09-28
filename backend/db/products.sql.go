@@ -23,9 +23,9 @@ func (q *Queries) CountCustomProducts(ctx context.Context, shopID int64) (int64,
 }
 
 const createCustomProduct = `-- name: CreateCustomProduct :one
-INSERT INTO products (shop_id, name, price, category, unit, availability)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, shop_id, name, price, category, unit, availability, template_key, image_path
+INSERT INTO products (shop_id, name, price, category, unit, availability, in_basket)
+VALUES ($1, $2, $3, $4, $5, $6, FALSE)
+RETURNING id, shop_id, name, price, category, unit, availability, template_key, image_path, in_basket, variant_group, variant_label
 `
 
 type CreateCustomProductParams struct {
@@ -47,8 +47,13 @@ type CreateCustomProductRow struct {
 	Availability string      `json:"availability"`
 	TemplateKey  pgtype.Text `json:"template_key"`
 	ImagePath    pgtype.Text `json:"image_path"`
+	InBasket     bool        `json:"in_basket"`
+	VariantGroup pgtype.Text `json:"variant_group"`
+	VariantLabel pgtype.Text `json:"variant_label"`
 }
 
+// in_basket is written FALSE rather than left to the column default: an owner's own product is theirs
+// alone, and the shared basket must hold the same rows in every shop of a market.
 func (q *Queries) CreateCustomProduct(ctx context.Context, arg CreateCustomProductParams) (CreateCustomProductRow, error) {
 	row := q.db.QueryRow(ctx, createCustomProduct,
 		arg.ShopID,
@@ -69,6 +74,9 @@ func (q *Queries) CreateCustomProduct(ctx context.Context, arg CreateCustomProdu
 		&i.Availability,
 		&i.TemplateKey,
 		&i.ImagePath,
+		&i.InBasket,
+		&i.VariantGroup,
+		&i.VariantLabel,
 	)
 	return i, err
 }
@@ -86,7 +94,7 @@ func (q *Queries) DeleteProduct(ctx context.Context, id int64) (int64, error) {
 }
 
 const getProduct = `-- name: GetProduct :one
-SELECT id, shop_id, name, price, category, unit, availability, template_key, image_path
+SELECT id, shop_id, name, price, category, unit, availability, template_key, image_path, in_basket, variant_group, variant_label
 FROM products WHERE id = $1
 `
 
@@ -100,6 +108,9 @@ type GetProductRow struct {
 	Availability string      `json:"availability"`
 	TemplateKey  pgtype.Text `json:"template_key"`
 	ImagePath    pgtype.Text `json:"image_path"`
+	InBasket     bool        `json:"in_basket"`
+	VariantGroup pgtype.Text `json:"variant_group"`
+	VariantLabel pgtype.Text `json:"variant_label"`
 }
 
 func (q *Queries) GetProduct(ctx context.Context, id int64) (GetProductRow, error) {
@@ -115,6 +126,9 @@ func (q *Queries) GetProduct(ctx context.Context, id int64) (GetProductRow, erro
 		&i.Availability,
 		&i.TemplateKey,
 		&i.ImagePath,
+		&i.InBasket,
+		&i.VariantGroup,
+		&i.VariantLabel,
 	)
 	return i, err
 }
@@ -180,7 +194,7 @@ func (q *Queries) ListProductsByCategory(ctx context.Context, arg ListProductsBy
 }
 
 const listProductsByShop = `-- name: ListProductsByShop :many
-SELECT id, shop_id, name, price, category, unit, availability, template_key, image_path
+SELECT id, shop_id, name, price, category, unit, availability, template_key, image_path, in_basket, variant_group, variant_label
 FROM products
 WHERE shop_id = $1
 ORDER BY (template_key IS NULL), id
@@ -196,6 +210,9 @@ type ListProductsByShopRow struct {
 	Availability string      `json:"availability"`
 	TemplateKey  pgtype.Text `json:"template_key"`
 	ImagePath    pgtype.Text `json:"image_path"`
+	InBasket     bool        `json:"in_basket"`
+	VariantGroup pgtype.Text `json:"variant_group"`
+	VariantLabel pgtype.Text `json:"variant_label"`
 }
 
 func (q *Queries) ListProductsByShop(ctx context.Context, shopID int64) ([]ListProductsByShopRow, error) {
@@ -217,6 +234,9 @@ func (q *Queries) ListProductsByShop(ctx context.Context, shopID int64) ([]ListP
 			&i.Availability,
 			&i.TemplateKey,
 			&i.ImagePath,
+			&i.InBasket,
+			&i.VariantGroup,
+			&i.VariantLabel,
 		); err != nil {
 			return nil, err
 		}
@@ -293,19 +313,25 @@ func (q *Queries) SearchProducts(ctx context.Context, arg SearchProductsParams) 
 }
 
 const seedTemplateProduct = `-- name: SeedTemplateProduct :exec
-INSERT INTO products (shop_id, name, category, unit, template_key, image_path)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO products (shop_id, name, category, unit, template_key, image_path,
+                      in_basket, variant_group, variant_label)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 `
 
 type SeedTemplateProductParams struct {
-	ShopID      int64       `json:"shop_id"`
-	Name        string      `json:"name"`
-	Category    string      `json:"category"`
-	Unit        string      `json:"unit"`
-	TemplateKey pgtype.Text `json:"template_key"`
-	ImagePath   pgtype.Text `json:"image_path"`
+	ShopID       int64       `json:"shop_id"`
+	Name         string      `json:"name"`
+	Category     string      `json:"category"`
+	Unit         string      `json:"unit"`
+	TemplateKey  pgtype.Text `json:"template_key"`
+	ImagePath    pgtype.Text `json:"image_path"`
+	InBasket     bool        `json:"in_basket"`
+	VariantGroup pgtype.Text `json:"variant_group"`
+	VariantLabel pgtype.Text `json:"variant_label"`
 }
 
+// in_basket and the variant pair are copied from the template rather than defaulted: a shop created
+// today must hold the same basket as one created last month, or the two totals are not comparable.
 func (q *Queries) SeedTemplateProduct(ctx context.Context, arg SeedTemplateProductParams) error {
 	_, err := q.db.Exec(ctx, seedTemplateProduct,
 		arg.ShopID,
@@ -314,6 +340,9 @@ func (q *Queries) SeedTemplateProduct(ctx context.Context, arg SeedTemplateProdu
 		arg.Unit,
 		arg.TemplateKey,
 		arg.ImagePath,
+		arg.InBasket,
+		arg.VariantGroup,
+		arg.VariantLabel,
 	)
 	return err
 }
@@ -323,7 +352,7 @@ UPDATE products
 SET image_path = $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, shop_id, name, price, category, unit, availability, template_key, image_path
+RETURNING id, shop_id, name, price, category, unit, availability, template_key, image_path, in_basket, variant_group, variant_label
 `
 
 type SetProductImageParams struct {
@@ -341,6 +370,9 @@ type SetProductImageRow struct {
 	Availability string      `json:"availability"`
 	TemplateKey  pgtype.Text `json:"template_key"`
 	ImagePath    pgtype.Text `json:"image_path"`
+	InBasket     bool        `json:"in_basket"`
+	VariantGroup pgtype.Text `json:"variant_group"`
+	VariantLabel pgtype.Text `json:"variant_label"`
 }
 
 func (q *Queries) SetProductImage(ctx context.Context, arg SetProductImageParams) (SetProductImageRow, error) {
@@ -356,6 +388,9 @@ func (q *Queries) SetProductImage(ctx context.Context, arg SetProductImageParams
 		&i.Availability,
 		&i.TemplateKey,
 		&i.ImagePath,
+		&i.InBasket,
+		&i.VariantGroup,
+		&i.VariantLabel,
 	)
 	return i, err
 }
@@ -369,7 +404,7 @@ SET name = $2,
     availability = $6,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, shop_id, name, price, category, unit, availability, template_key, image_path
+RETURNING id, shop_id, name, price, category, unit, availability, template_key, image_path, in_basket, variant_group, variant_label
 `
 
 type UpdateProductParams struct {
@@ -391,6 +426,9 @@ type UpdateProductRow struct {
 	Availability string      `json:"availability"`
 	TemplateKey  pgtype.Text `json:"template_key"`
 	ImagePath    pgtype.Text `json:"image_path"`
+	InBasket     bool        `json:"in_basket"`
+	VariantGroup pgtype.Text `json:"variant_group"`
+	VariantLabel pgtype.Text `json:"variant_label"`
 }
 
 func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (UpdateProductRow, error) {
@@ -413,6 +451,9 @@ func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (U
 		&i.Availability,
 		&i.TemplateKey,
 		&i.ImagePath,
+		&i.InBasket,
+		&i.VariantGroup,
+		&i.VariantLabel,
 	)
 	return i, err
 }
@@ -423,7 +464,7 @@ SET price = $2,
     availability = $3,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, shop_id, name, price, category, unit, availability, template_key, image_path
+RETURNING id, shop_id, name, price, category, unit, availability, template_key, image_path, in_basket, variant_group, variant_label
 `
 
 type UpdateProductPricingParams struct {
@@ -442,6 +483,9 @@ type UpdateProductPricingRow struct {
 	Availability string      `json:"availability"`
 	TemplateKey  pgtype.Text `json:"template_key"`
 	ImagePath    pgtype.Text `json:"image_path"`
+	InBasket     bool        `json:"in_basket"`
+	VariantGroup pgtype.Text `json:"variant_group"`
+	VariantLabel pgtype.Text `json:"variant_label"`
 }
 
 func (q *Queries) UpdateProductPricing(ctx context.Context, arg UpdateProductPricingParams) (UpdateProductPricingRow, error) {
@@ -457,6 +501,9 @@ func (q *Queries) UpdateProductPricing(ctx context.Context, arg UpdateProductPri
 		&i.Availability,
 		&i.TemplateKey,
 		&i.ImagePath,
+		&i.InBasket,
+		&i.VariantGroup,
+		&i.VariantLabel,
 	)
 	return i, err
 }
@@ -468,7 +515,7 @@ SET name = $2,
     availability = $4,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, shop_id, name, price, category, unit, availability, template_key, image_path
+RETURNING id, shop_id, name, price, category, unit, availability, template_key, image_path, in_basket, variant_group, variant_label
 `
 
 type UpdateProductSlotParams struct {
@@ -488,6 +535,9 @@ type UpdateProductSlotRow struct {
 	Availability string      `json:"availability"`
 	TemplateKey  pgtype.Text `json:"template_key"`
 	ImagePath    pgtype.Text `json:"image_path"`
+	InBasket     bool        `json:"in_basket"`
+	VariantGroup pgtype.Text `json:"variant_group"`
+	VariantLabel pgtype.Text `json:"variant_label"`
 }
 
 func (q *Queries) UpdateProductSlot(ctx context.Context, arg UpdateProductSlotParams) (UpdateProductSlotRow, error) {
@@ -508,6 +558,9 @@ func (q *Queries) UpdateProductSlot(ctx context.Context, arg UpdateProductSlotPa
 		&i.Availability,
 		&i.TemplateKey,
 		&i.ImagePath,
+		&i.InBasket,
+		&i.VariantGroup,
+		&i.VariantLabel,
 	)
 	return i, err
 }

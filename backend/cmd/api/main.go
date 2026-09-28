@@ -343,6 +343,9 @@ func mustLoadTemplates(queries *db.Queries) {
 			Category:     row.Category,
 			Unit:         row.Unit,
 			ImagePath:    row.ImagePath.String,
+			InBasket:     row.InBasket,
+			VariantGroup: row.VariantGroup.String,
+			VariantLabel: row.VariantLabel.String,
 		})
 	}
 	catalog.Load(loaded)

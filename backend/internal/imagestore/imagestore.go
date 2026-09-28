@@ -28,6 +28,11 @@ import (
 // without either of them moving again.
 const UploadDir = "shops/uploads"
 
+// where the curated catalogue lives: `shops/<shop category>/<file>`, one photo shared by every shop
+// seeded from that template. [UploadDir] sits under the same root, which is what [IsCatalogue] has to
+// exclude.
+const CatalogueRoot = "shops"
+
 // the most that will be read off the network for one photo - a ceiling on the request, not on the
 // stored file, which [Normalize] re-encodes to 100-200 KB. above a full-quality 12MP phone photo,
 // and the app resizes before sending anyway.
@@ -36,6 +41,9 @@ const MaxUploadBytes = 6 << 20
 // what a deletion answers for a path that is not ours - a catalogue photo, or anything with a .. in
 // it. a programming error rather than a user one, so it is loud rather than skipped quietly.
 var ErrOutsideUploads = errors.New("imagestore: refusing to delete a path outside the uploads directory")
+
+// what a catalogue deletion answers for anything that is not shaped like a curated photo
+var ErrOutsideCatalogue = errors.New("imagestore: refusing to delete a path outside the curated catalogue")
 
 // one accepted upload in the two sizes that get stored. a pair rather than two arguments because
 // **the two files are one fact**: a signature that let a caller store a master without its thumbnail
@@ -68,12 +76,20 @@ type Storage interface {
 	// [UploadDir] is [ErrOutsideUploads].
 	Remove(ctx context.Context, rel string) error
 
-	// every file under [UploadDir]. only the orphan sweep calls it.
-	List(ctx context.Context) ([]Object, error)
+	// every file under `prefix` - "shops/uploads" for the owner-upload sweep, "shops" for the
+	// catalogue one. only those two sweeps call it.
+	List(ctx context.Context, prefix string) ([]Object, error)
 
 	// exactly one file, assuming nothing about its partner - the sweep collects stray thumbnails
 	// whose master is already gone, which [Remove] would refuse to handle
 	RemoveFile(ctx context.Context, rel string) error
+
+	// exactly one *curated* file. **a second door with its own guard rather than relaxing the one
+	// above**: an owner's photo and a catalogue photo are deleted for different reasons by different
+	// code, and neither method accepts a path of the other kind - so a bug in one sweep cannot reach
+	// the other's files. curated photos became deletable when sizes of one product started sharing a
+	// photo, which leaves the ones they replaced referenced by nothing.
+	RemoveCatalogueFile(ctx context.Context, rel string) error
 
 	// where photos are going, for one line in the startup log
 	Describe() string
@@ -98,6 +114,16 @@ func IsUpload(rel string) bool {
 		return false
 	}
 	return strings.HasPrefix(path.Clean(rel), UploadDir+"/")
+}
+
+// whether a stored path is a curated catalogue photo: `shops/<category>/<file>`, three segments, and
+// not the uploads directory. the `..` check is what makes the prefix test mean anything.
+func IsCatalogue(rel string) bool {
+	if rel == "" || strings.Contains(rel, "..") || IsUpload(rel) {
+		return false
+	}
+	parts := strings.Split(path.Clean(rel), "/")
+	return len(parts) == 3 && parts[0] == CatalogueRoot && parts[1] != "" && parts[2] != ""
 }
 
 // where images are served from when nothing says otherwise: this api's own disk, the laptop and tests

@@ -313,7 +313,7 @@ func TestListingNamesFilesTheWayTheDatabaseDoes(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	listed, err := store.List(ctx)
+	listed, err := store.List(ctx, UploadDir)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}

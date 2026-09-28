@@ -855,7 +855,8 @@ func syncPayload(t *testing.T, items []catalog.Item) ([]byte, []string) {
 		keys = append(keys, item.Key)
 		rows = append(rows, adminTemplateSyncRow{
 			TemplateKey: item.Key, Name: item.Name, Category: string(item.Category),
-			Unit: item.Unit, ImagePath: item.ImagePath,
+			Unit: item.Unit, ImagePath: item.ImagePath, InBasket: item.InBasket,
+			VariantGroup: item.VariantGroup, VariantLabel: item.VariantLabel,
 		})
 	}
 	payload, err := json.Marshal(rows)
@@ -863,6 +864,49 @@ func syncPayload(t *testing.T, items []catalog.Item) ([]byte, []string) {
 		t.Fatalf("encode template: %v", err)
 	}
 	return payload, keys
+}
+
+// voting a product into the basket in the panel edits one template row; **the shops only learn about
+// it through the sync**, and if they did not, half a market would total one basket and half another.
+func TestSyncCarriesBasketMembershipIntoEveryShop(t *testing.T) {
+	_, ctx, tx, q := adminUnderTest(t)
+
+	shopID := makeSeededShop(t, ctx, tx, q, "Voter", catalog.CategoryWood, false)
+
+	items := catalog.Template(string(catalog.CategoryWood))
+	// the founder adds a product (outside the basket, as the panel does) and pushes it out
+	items = append(items, catalog.Item{
+		Key: "wood.newcomer", Name: "Новинка", Category: catalog.ProductCategory("lumber"), Unit: "шт",
+	})
+	payload, _ := syncPayload(t, items)
+	if _, err := q.AdminSyncTemplateInsert(ctx, db.AdminSyncTemplateInsertParams{
+		Category: string(catalog.CategoryWood), Column2: payload,
+	}); err != nil {
+		t.Fatalf("sync insert: %v", err)
+	}
+	if n := countRows(t, ctx, tx,
+		"SELECT COUNT(*) FROM products WHERE shop_id = $1 AND template_key = 'wood.newcomer' AND NOT in_basket",
+		shopID); n != 1 {
+		t.Fatalf("the new row arrived inside the basket, which would break the comparison for every shop")
+	}
+
+	// and now it is voted in
+	items[len(items)-1].InBasket = true
+	payload, _ = syncPayload(t, items)
+	updated, err := q.AdminSyncTemplateUpdate(ctx, db.AdminSyncTemplateUpdateParams{
+		Category: string(catalog.CategoryWood), Column2: payload, Column3: true,
+	})
+	if err != nil {
+		t.Fatalf("sync update: %v", err)
+	}
+	if updated != 1 {
+		t.Errorf("updated %d rows, want 1 - membership is the only thing that changed", updated)
+	}
+	if n := countRows(t, ctx, tx,
+		"SELECT COUNT(*) FROM products WHERE shop_id = $1 AND template_key = 'wood.newcomer' AND in_basket",
+		shopID); n != 1 {
+		t.Fatalf("the shop's copy still says the row is outside the basket")
+	}
 }
 
 // **the property the whole feature stands on.** a sync that reset prices would destroy hundreds of
@@ -934,8 +978,8 @@ func TestSyncRestoresMissingRowsAndKeepsEveryPrice(t *testing.T) {
 		t.Fatalf("the sync destroyed a price: %v", price)
 	}
 
-	// the three restored rows come back unpriced, which is the truth - nobody has typed one - and is
-	// also why adding a product to a template drops every shop out of the comparison until they do
+	// the three restored rows come back unpriced, which is the truth - nobody has typed one. whether
+	// that costs the shop its badge is now in_basket's business, not this statement's
 	if n := countRows(t, ctx, tx,
 		"SELECT COUNT(*) FROM products WHERE shop_id = $1 AND template_key = ANY($2::text[]) AND price IS NULL",
 		shopID, dropped); n != int64(len(dropped)) {

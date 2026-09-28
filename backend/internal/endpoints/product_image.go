@@ -236,23 +236,7 @@ func (p *Products) allowUpload(w http.ResponseWriter, r *http.Request) bool {
 
 // one response shape for a product, whichever statement produced it
 func (p *Products) writeProductResponse(w http.ResponseWriter, status int, row db.SetProductImageRow) {
-	isTemplate, nameEditable, photoEditable := templateFlags(row.TemplateKey)
-	imageURL, thumbURL, ownImage := productImage(p.URLs, row.ImagePath)
-
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(ProductResponse{
-		ID:            row.ID,
-		ShopID:        row.ShopID,
-		Name:          row.Name,
-		Category:      row.Category,
-		Unit:          row.Unit,
-		Price:         nullableInt64(row.Price),
-		Availability:  row.Availability,
-		IsTemplate:    isTemplate,
-		NameEditable:  nameEditable,
-		ImageURL:      imageURL,
-		ImageThumbURL: thumbURL,
-		OwnImage:      ownImage,
-		PhotoEditable: photoEditable,
-	})
+	json.NewEncoder(w).Encode(productResponse(p.URLs, db.GetProductRow(row)))
 }
+

@@ -62,7 +62,9 @@ WITH progress AS (
            COUNT(p.id)::bigint    AS template_rows,
            COUNT(p.price)::bigint AS priced_rows
     FROM shops s
-    LEFT JOIN products p ON p.shop_id = s.id AND p.template_key IS NOT NULL
+    -- basket rows only: a row outside the basket left unpriced does not keep a shop out of the
+    -- comparison any more, so counting it here would report a shortfall that does not exist
+    LEFT JOIN products p ON p.shop_id = s.id AND p.template_key IS NOT NULL AND p.in_basket
     GROUP BY s.id
 ),
 scored AS (
@@ -164,9 +166,11 @@ func (q *Queries) AdminCountAdmins(ctx context.Context) (int64, error) {
 }
 
 const adminCreateTemplateItem = `-- name: AdminCreateTemplateItem :one
-INSERT INTO product_templates (shop_category, template_key, name, category, unit, image_path)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, shop_category, template_key, name, category, unit, image_path
+INSERT INTO product_templates (shop_category, template_key, name, category, unit, image_path,
+                               in_basket, variant_group, variant_label)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, shop_category, template_key, name, category, unit, image_path,
+          in_basket, variant_group, variant_label
 `
 
 type AdminCreateTemplateItemParams struct {
@@ -176,6 +180,9 @@ type AdminCreateTemplateItemParams struct {
 	Category     string      `json:"category"`
 	Unit         string      `json:"unit"`
 	ImagePath    pgtype.Text `json:"image_path"`
+	InBasket     bool        `json:"in_basket"`
+	VariantGroup pgtype.Text `json:"variant_group"`
+	VariantLabel pgtype.Text `json:"variant_label"`
 }
 
 type AdminCreateTemplateItemRow struct {
@@ -186,6 +193,9 @@ type AdminCreateTemplateItemRow struct {
 	Category     string      `json:"category"`
 	Unit         string      `json:"unit"`
 	ImagePath    pgtype.Text `json:"image_path"`
+	InBasket     bool        `json:"in_basket"`
+	VariantGroup pgtype.Text `json:"variant_group"`
+	VariantLabel pgtype.Text `json:"variant_label"`
 }
 
 func (q *Queries) AdminCreateTemplateItem(ctx context.Context, arg AdminCreateTemplateItemParams) (AdminCreateTemplateItemRow, error) {
@@ -196,6 +206,9 @@ func (q *Queries) AdminCreateTemplateItem(ctx context.Context, arg AdminCreateTe
 		arg.Category,
 		arg.Unit,
 		arg.ImagePath,
+		arg.InBasket,
+		arg.VariantGroup,
+		arg.VariantLabel,
 	)
 	var i AdminCreateTemplateItemRow
 	err := row.Scan(
@@ -206,6 +219,9 @@ func (q *Queries) AdminCreateTemplateItem(ctx context.Context, arg AdminCreateTe
 		&i.Category,
 		&i.Unit,
 		&i.ImagePath,
+		&i.InBasket,
+		&i.VariantGroup,
+		&i.VariantLabel,
 	)
 	return i, err
 }
@@ -326,7 +342,8 @@ func (q *Queries) AdminListShops(ctx context.Context, arg AdminListShopsParams) 
 }
 
 const adminListTemplateItems = `-- name: AdminListTemplateItems :many
-SELECT id, shop_category, template_key, name, category, unit, image_path
+SELECT id, shop_category, template_key, name, category, unit, image_path,
+       in_basket, variant_group, variant_label
 FROM product_templates
 WHERE shop_category = $1
 ORDER BY id
@@ -340,6 +357,9 @@ type AdminListTemplateItemsRow struct {
 	Category     string      `json:"category"`
 	Unit         string      `json:"unit"`
 	ImagePath    pgtype.Text `json:"image_path"`
+	InBasket     bool        `json:"in_basket"`
+	VariantGroup pgtype.Text `json:"variant_group"`
+	VariantLabel pgtype.Text `json:"variant_label"`
 }
 
 func (q *Queries) AdminListTemplateItems(ctx context.Context, shopCategory string) ([]AdminListTemplateItemsRow, error) {
@@ -359,6 +379,9 @@ func (q *Queries) AdminListTemplateItems(ctx context.Context, shopCategory strin
 			&i.Category,
 			&i.Unit,
 			&i.ImagePath,
+			&i.InBasket,
+			&i.VariantGroup,
+			&i.VariantLabel,
 		); err != nil {
 			return nil, err
 		}
@@ -672,6 +695,34 @@ func (q *Queries) AdminProductsByCategory(ctx context.Context) ([]AdminProductsB
 	return items, nil
 }
 
+const adminReferencedImagePaths = `-- name: AdminReferencedImagePaths :many
+SELECT image_path FROM product_templates WHERE image_path IS NOT NULL AND image_path <> ''
+UNION
+SELECT image_path FROM products WHERE image_path IS NOT NULL AND image_path <> ''
+`
+
+// every photo path any row points at, templates and shop catalogues together. the catalogue sweep
+// compares the files on disk against this; a path missing from it is a file nothing draws.
+func (q *Queries) AdminReferencedImagePaths(ctx context.Context) ([]pgtype.Text, error) {
+	rows, err := q.db.Query(ctx, adminReferencedImagePaths)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.Text
+	for rows.Next() {
+		var image_path pgtype.Text
+		if err := rows.Scan(&image_path); err != nil {
+			return nil, err
+		}
+		items = append(items, image_path)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const adminSetShopExcluded = `-- name: AdminSetShopExcluded :one
 UPDATE shops
 SET excluded_from_index = $2,
@@ -755,7 +806,7 @@ SELECT s.id,
        (COUNT(p.id) - COUNT(p.price))::bigint                         AS remaining
 FROM shops s
 JOIN users u ON u.id = s.user_id
-JOIN products p ON p.shop_id = s.id AND p.template_key IS NOT NULL
+JOIN products p ON p.shop_id = s.id AND p.template_key IS NOT NULL AND p.in_basket
 GROUP BY s.id, u.name, u.phone
 HAVING COUNT(p.price) < COUNT(p.id)
 ORDER BY (COUNT(p.id) - COUNT(p.price)), s.created_at
@@ -872,11 +923,14 @@ func (q *Queries) AdminSyncTemplateDelete(ctx context.Context, arg AdminSyncTemp
 }
 
 const adminSyncTemplateInsert = `-- name: AdminSyncTemplateInsert :execrows
-INSERT INTO products (shop_id, name, category, unit, template_key, image_path)
-SELECT s.id, t.name, t.category, t.unit, t.template_key, NULLIF(t.image_path, '')
+INSERT INTO products (shop_id, name, category, unit, template_key, image_path,
+                      in_basket, variant_group, variant_label)
+SELECT s.id, t.name, t.category, t.unit, t.template_key, NULLIF(t.image_path, ''),
+       t.in_basket, NULLIF(t.variant_group, ''), NULLIF(t.variant_label, '')
 FROM shops s
 CROSS JOIN jsonb_to_recordset($2::jsonb)
-        AS t(template_key text, name text, category text, unit text, image_path text)
+        AS t(template_key text, name text, category text, unit text, image_path text,
+             in_basket boolean, variant_group text, variant_label text)
 WHERE s.category = $1
 ON CONFLICT (shop_id, template_key) DO NOTHING
 `
@@ -896,22 +950,29 @@ func (q *Queries) AdminSyncTemplateInsert(ctx context.Context, arg AdminSyncTemp
 
 const adminSyncTemplateUpdate = `-- name: AdminSyncTemplateUpdate :execrows
 UPDATE products p
-SET name       = CASE WHEN $3::boolean THEN t.name ELSE p.name END,
-    category   = t.category,
-    unit       = t.unit,
-    image_path = NULLIF(t.image_path, ''),
-    updated_at = CURRENT_TIMESTAMP
+SET name          = CASE WHEN $3::boolean THEN t.name ELSE p.name END,
+    category      = t.category,
+    unit          = t.unit,
+    image_path    = NULLIF(t.image_path, ''),
+    in_basket     = t.in_basket,
+    variant_group = NULLIF(t.variant_group, ''),
+    variant_label = NULLIF(t.variant_label, ''),
+    updated_at    = CURRENT_TIMESTAMP
 FROM shops s,
      jsonb_to_recordset($2::jsonb)
-        AS t(template_key text, name text, category text, unit text, image_path text)
+        AS t(template_key text, name text, category text, unit text, image_path text,
+             in_basket boolean, variant_group text, variant_label text)
 WHERE p.shop_id = s.id
   AND s.category = $1
   AND p.template_key = t.template_key
   AND (
         (CASE WHEN $3::boolean THEN t.name ELSE p.name END) IS DISTINCT FROM p.name
-        OR p.category   IS DISTINCT FROM t.category
-        OR p.unit       IS DISTINCT FROM t.unit
-        OR p.image_path IS DISTINCT FROM NULLIF(t.image_path, '')
+        OR p.category      IS DISTINCT FROM t.category
+        OR p.unit          IS DISTINCT FROM t.unit
+        OR p.image_path    IS DISTINCT FROM NULLIF(t.image_path, '')
+        OR p.in_basket     IS DISTINCT FROM t.in_basket
+        OR p.variant_group IS DISTINCT FROM NULLIF(t.variant_group, '')
+        OR p.variant_label IS DISTINCT FROM NULLIF(t.variant_label, '')
       )
 `
 
@@ -921,12 +982,56 @@ type AdminSyncTemplateUpdateParams struct {
 	Column3  bool   `json:"column_3"`
 }
 
+// price and availability are absent from the SET list and that is why this is safe to run at all.
+// **in_basket is here**, though: membership is the template's decision, not the shop's, and a row
+// the panel voted into the basket that stayed out of it in half the shops would mean two markets
+// totalling different baskets under one badge.
 func (q *Queries) AdminSyncTemplateUpdate(ctx context.Context, arg AdminSyncTemplateUpdateParams) (int64, error) {
 	result, err := q.db.Exec(ctx, adminSyncTemplateUpdate, arg.Category, arg.Column2, arg.Column3)
 	if err != nil {
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const adminTemplateCoverage = `-- name: AdminTemplateCoverage :many
+SELECT p.template_key,
+       COUNT(*)::bigint            AS present,
+       COUNT(p.price)::bigint      AS priced
+FROM products p
+JOIN shops s ON s.id = p.shop_id
+WHERE s.category = $1
+  AND p.template_key IS NOT NULL
+GROUP BY p.template_key
+`
+
+type AdminTemplateCoverageRow struct {
+	TemplateKey pgtype.Text `json:"template_key"`
+	Present     int64       `json:"present"`
+	Priced      int64       `json:"priced"`
+}
+
+// how many shops of this market have typed a price for each template row. **this is the number that
+// decides when a product can be voted into the basket**: doing it before most shops have priced it
+// takes the rest out of the comparison, which is the exact problem in_basket exists to avoid.
+func (q *Queries) AdminTemplateCoverage(ctx context.Context, category string) ([]AdminTemplateCoverageRow, error) {
+	rows, err := q.db.Query(ctx, adminTemplateCoverage, category)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AdminTemplateCoverageRow
+	for rows.Next() {
+		var i AdminTemplateCoverageRow
+		if err := rows.Scan(&i.TemplateKey, &i.Present, &i.Priced); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const adminTemplateKeyExists = `-- name: AdminTemplateKeyExists :one
@@ -975,17 +1080,24 @@ SET name = $2,
     category = $3,
     unit = $4,
     image_path = $5,
+    in_basket = $6,
+    variant_group = $7,
+    variant_label = $8,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, shop_category, template_key, name, category, unit, image_path
+RETURNING id, shop_category, template_key, name, category, unit, image_path,
+          in_basket, variant_group, variant_label
 `
 
 type AdminUpdateTemplateItemParams struct {
-	ID        int64       `json:"id"`
-	Name      string      `json:"name"`
-	Category  string      `json:"category"`
-	Unit      string      `json:"unit"`
-	ImagePath pgtype.Text `json:"image_path"`
+	ID           int64       `json:"id"`
+	Name         string      `json:"name"`
+	Category     string      `json:"category"`
+	Unit         string      `json:"unit"`
+	ImagePath    pgtype.Text `json:"image_path"`
+	InBasket     bool        `json:"in_basket"`
+	VariantGroup pgtype.Text `json:"variant_group"`
+	VariantLabel pgtype.Text `json:"variant_label"`
 }
 
 type AdminUpdateTemplateItemRow struct {
@@ -996,8 +1108,13 @@ type AdminUpdateTemplateItemRow struct {
 	Category     string      `json:"category"`
 	Unit         string      `json:"unit"`
 	ImagePath    pgtype.Text `json:"image_path"`
+	InBasket     bool        `json:"in_basket"`
+	VariantGroup pgtype.Text `json:"variant_group"`
+	VariantLabel pgtype.Text `json:"variant_label"`
 }
 
+// no SET for template_key: changing it would orphan every shop seeded with the old one and the next
+// sync would delete those rows, losing every price with the row count looking unchanged.
 func (q *Queries) AdminUpdateTemplateItem(ctx context.Context, arg AdminUpdateTemplateItemParams) (AdminUpdateTemplateItemRow, error) {
 	row := q.db.QueryRow(ctx, adminUpdateTemplateItem,
 		arg.ID,
@@ -1005,6 +1122,9 @@ func (q *Queries) AdminUpdateTemplateItem(ctx context.Context, arg AdminUpdateTe
 		arg.Category,
 		arg.Unit,
 		arg.ImagePath,
+		arg.InBasket,
+		arg.VariantGroup,
+		arg.VariantLabel,
 	)
 	var i AdminUpdateTemplateItemRow
 	err := row.Scan(
@@ -1015,6 +1135,9 @@ func (q *Queries) AdminUpdateTemplateItem(ctx context.Context, arg AdminUpdateTe
 		&i.Category,
 		&i.Unit,
 		&i.ImagePath,
+		&i.InBasket,
+		&i.VariantGroup,
+		&i.VariantLabel,
 	)
 	return i, err
 }
@@ -1128,7 +1251,8 @@ func (q *Queries) AdminVipPlacements(ctx context.Context, limit int32) ([]AdminV
 }
 
 const listProductTemplates = `-- name: ListProductTemplates :many
-SELECT shop_category, template_key, name, category, unit, image_path
+SELECT shop_category, template_key, name, category, unit, image_path,
+       in_basket, variant_group, variant_label
 FROM product_templates
 ORDER BY shop_category, id
 `
@@ -1140,6 +1264,9 @@ type ListProductTemplatesRow struct {
 	Category     string      `json:"category"`
 	Unit         string      `json:"unit"`
 	ImagePath    pgtype.Text `json:"image_path"`
+	InBasket     bool        `json:"in_basket"`
+	VariantGroup pgtype.Text `json:"variant_group"`
+	VariantLabel pgtype.Text `json:"variant_label"`
 }
 
 func (q *Queries) ListProductTemplates(ctx context.Context) ([]ListProductTemplatesRow, error) {
@@ -1158,6 +1285,9 @@ func (q *Queries) ListProductTemplates(ctx context.Context) ([]ListProductTempla
 			&i.Category,
 			&i.Unit,
 			&i.ImagePath,
+			&i.InBasket,
+			&i.VariantGroup,
+			&i.VariantLabel,
 		); err != nil {
 			return nil, err
 		}

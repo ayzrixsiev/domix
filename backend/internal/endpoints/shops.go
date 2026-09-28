@@ -277,6 +277,11 @@ func (s *Shops) Create(w http.ResponseWriter, r *http.Request) {
 			Unit:        item.Unit,
 			TemplateKey: pgtype.Text{String: item.Key, Valid: true},
 			ImagePath:   pgtype.Text{String: item.ImagePath, Valid: item.ImagePath != ""},
+			// copied from the template, never defaulted: a shop created today must hold the same
+			// basket as one created last month or their totals are not comparable
+			InBasket:     item.InBasket,
+			VariantGroup: pgtype.Text{String: item.VariantGroup, Valid: item.VariantGroup != ""},
+			VariantLabel: pgtype.Text{String: item.VariantLabel, Valid: item.VariantLabel != ""},
 		}); err != nil {
 			log.Printf("CRITICAL: failed to seed template product %q into shop %d: %v", item.Key, shop.ID, err)
 			writeShopError(w, http.StatusInternalServerError, "server_error", "failed to create shop")

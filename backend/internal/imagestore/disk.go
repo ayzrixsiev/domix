@@ -79,10 +79,17 @@ func (d *Disk) RemoveFile(_ context.Context, rel string) error {
 	return d.removeAt(rel)
 }
 
-// walks `root`/uploads, returning relative forward-slashed paths - directly comparable with
-// products.image_path on either backend
-func (d *Disk) List(_ context.Context) ([]Object, error) {
-	dir := d.Dir()
+func (d *Disk) RemoveCatalogueFile(_ context.Context, rel string) error {
+	if !IsCatalogue(rel) {
+		return fmt.Errorf("%w: %q", ErrOutsideCatalogue, rel)
+	}
+	return d.removeAt(rel)
+}
+
+// walks one prefix under the images root, returning relative forward-slashed paths - directly
+// comparable with products.image_path on either backend
+func (d *Disk) List(_ context.Context, prefix string) ([]Object, error) {
+	dir := filepath.Join(d.root, filepath.FromSlash(path.Clean(prefix)))
 	var out []Object
 
 	err := filepath.WalkDir(dir, func(full string, entry fs.DirEntry, err error) error {

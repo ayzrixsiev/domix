@@ -443,6 +443,10 @@ func makeSeededShop(t *testing.T, ctx context.Context, tx pgx.Tx, q *db.Queries,
 			Unit:        item.Unit,
 			TemplateKey: pgtype.Text{String: item.Key, Valid: true},
 			ImagePath:   pgtype.Text{String: item.ImagePath, Valid: item.ImagePath != ""},
+			// copied from the template, exactly as Shops.Create does
+			InBasket:     item.InBasket,
+			VariantGroup: pgtype.Text{String: item.VariantGroup, Valid: item.VariantGroup != ""},
+			VariantLabel: pgtype.Text{String: item.VariantLabel, Valid: item.VariantLabel != ""},
 		}); err != nil {
 			t.Fatalf("seed %q: %v", item.Key, err)
 		}
@@ -473,6 +477,8 @@ func priceAll(t *testing.T, ctx context.Context, tx pgx.Tx, shopID int64, price 
 // that seeds a shop has to load them first - without it catalog.Template returns nothing and every
 // shop is created with an empty catalogue, which fails as a wrong *count* three assertions later
 // rather than as a missing setup step.
+// the same mapping as endpoints.loadCatalogue - keep the two in step, or a column added to
+// product_templates arrives in production and not in these tests
 func loadTemplates(t *testing.T, ctx context.Context, q *db.Queries) {
 	t.Helper()
 
@@ -489,6 +495,8 @@ func loadTemplates(t *testing.T, ctx context.Context, q *db.Queries) {
 		loaded = append(loaded, catalog.Row{
 			ShopCategory: row.ShopCategory, Key: row.TemplateKey, Name: row.Name,
 			Category: row.Category, Unit: row.Unit, ImagePath: row.ImagePath.String,
+			InBasket:     row.InBasket,
+			VariantGroup: row.VariantGroup.String, VariantLabel: row.VariantLabel.String,
 		})
 	}
 	catalog.Load(loaded)

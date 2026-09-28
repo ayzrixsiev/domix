@@ -184,9 +184,19 @@ func (r *R2) RemoveFile(ctx context.Context, rel string) error {
 	return r.delete(ctx, rel)
 }
 
-// every object under uploads/. **the prefix is sent to the bucket, not filtered afterwards**, so the
-// curated catalogue - same bucket, other prefixes - is never enumerated, let alone deleted.
-func (r *R2) List(ctx context.Context) ([]Object, error) {
+func (r *R2) RemoveCatalogueFile(ctx context.Context, rel string) error {
+	if !IsCatalogue(rel) {
+		return fmt.Errorf("%w: %q", ErrOutsideCatalogue, rel)
+	}
+	ctx, cancel := context.WithTimeout(ctx, r2OpTimeout)
+	defer cancel()
+
+	return r.delete(ctx, rel)
+}
+
+// every object under one prefix. **the prefix is sent to the bucket, not filtered afterwards**, so a
+// sweep of the uploads never enumerates the curated catalogue, or the other way round.
+func (r *R2) List(ctx context.Context, prefix string) ([]Object, error) {
 	ctx, cancel := context.WithTimeout(ctx, r2ListTimeout)
 	defer cancel()
 
@@ -195,7 +205,7 @@ func (r *R2) List(ctx context.Context) ([]Object, error) {
 	// error returns after the loop rather than from inside it
 	var listErr error
 	for obj := range r.client.ListObjects(ctx, r.bucket, minio.ListObjectsOptions{
-		Prefix:    UploadDir + "/",
+		Prefix:    strings.TrimSuffix(prefix, "/") + "/",
 		Recursive: true,
 	}) {
 		if obj.Err != nil {

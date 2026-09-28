@@ -35,6 +35,9 @@ type Product struct {
 	ImagePath    pgtype.Text        `json:"image_path"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	InBasket     bool               `json:"in_basket"`
+	VariantGroup pgtype.Text        `json:"variant_group"`
+	VariantLabel pgtype.Text        `json:"variant_label"`
 }
 
 type ProductTemplate struct {
@@ -47,6 +50,9 @@ type ProductTemplate struct {
 	ImagePath    pgtype.Text        `json:"image_path"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	InBasket     bool               `json:"in_basket"`
+	VariantGroup pgtype.Text        `json:"variant_group"`
+	VariantLabel pgtype.Text        `json:"variant_label"`
 }
 
 type Shop struct {

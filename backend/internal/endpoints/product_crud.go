@@ -94,6 +94,44 @@ type ProductResponse struct {
 
 	// whether the owner may put their own photograph on this row at all - see templateFlags
 	PhotoEditable bool `json:"photo_editable"`
+
+	// one size of a product that has several: the group's name and this row's chip, both empty for a
+	// row that stands alone. **the app draws one tile per group** - five spatula sizes were five
+	// near-identical tiles and five photographs of the same spatula.
+	VariantGroup string `json:"variant_group,omitempty"`
+	VariantLabel string `json:"variant_label,omitempty"`
+
+	// whether this row counts towards the shop's price comparison. an owner's screen needs it: a row
+	// outside the basket left unpriced costs them nothing, and one inside it costs them the badge.
+	InBasket bool `json:"in_basket"`
+}
+
+// **every endpoint that answers with a product goes through here.** the photo fields and the template
+// flags are derived from each other, and six call sites assembling them by hand was six chances for
+// one to send a url with the wrong flag beside it. the parameter is GetProductRow because every
+// statement in products.sql returns exactly those columns, so each row type converts to it.
+func productResponse(urls imagestore.URLs, row db.GetProductRow) ProductResponse {
+	isTemplate, nameEditable, photoEditable := templateFlags(row.TemplateKey)
+	imageURL, thumbURL, ownImage := productImage(urls, row.ImagePath)
+
+	return ProductResponse{
+		ID:            row.ID,
+		ShopID:        row.ShopID,
+		Name:          row.Name,
+		Category:      row.Category,
+		Unit:          row.Unit,
+		Price:         nullableInt64(row.Price),
+		Availability:  row.Availability,
+		IsTemplate:    isTemplate,
+		NameEditable:  nameEditable,
+		ImageURL:      imageURL,
+		ImageThumbURL: thumbURL,
+		OwnImage:      ownImage,
+		PhotoEditable: photoEditable,
+		VariantGroup:  row.VariantGroup.String,
+		VariantLabel:  row.VariantLabel.String,
+		InBasket:      row.InBasket,
+	}
 }
 
 // the three photo fields, derived together so a response cannot carry a url with the wrong answer
@@ -175,23 +213,7 @@ func (p *Products) ListByShop(w http.ResponseWriter, r *http.Request) {
 
 	response := make([]ProductResponse, 0, len(products))
 	for _, product := range products {
-		isTemplate, nameEditable, photoEditable := templateFlags(product.TemplateKey)
-		imageURL, thumbURL, ownImage := productImage(p.URLs, product.ImagePath)
-		response = append(response, ProductResponse{
-			ID:            product.ID,
-			ShopID:        product.ShopID,
-			Name:          product.Name,
-			Category:      product.Category,
-			Unit:          product.Unit,
-			Price:         nullableInt64(product.Price),
-			Availability:  product.Availability,
-			IsTemplate:    isTemplate,
-			NameEditable:  nameEditable,
-			ImageURL:      imageURL,
-			ImageThumbURL: thumbURL,
-			OwnImage:      ownImage,
-			PhotoEditable: photoEditable,
-		})
+		response = append(response, productResponse(p.URLs, db.GetProductRow(product)))
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -263,25 +285,8 @@ func (p *Products) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isTemplate, nameEditable, photoEditable := templateFlags(product.TemplateKey)
-	imageURL, thumbURL, ownImage := productImage(p.URLs, product.ImagePath)
-
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(ProductResponse{
-		ID:            product.ID,
-		ShopID:        product.ShopID,
-		Name:          product.Name,
-		Category:      product.Category,
-		Unit:          product.Unit,
-		Price:         nullableInt64(product.Price),
-		Availability:  product.Availability,
-		IsTemplate:    isTemplate,
-		NameEditable:  nameEditable,
-		ImageURL:      imageURL,
-		ImageThumbURL: thumbURL,
-		OwnImage:      ownImage,
-		PhotoEditable: photoEditable,
-	})
+	json.NewEncoder(w).Encode(productResponse(p.URLs, db.GetProductRow(product)))
 }
 
 // authenticated: edit one product. the endpoint that fills in a seeded catalogue's missing prices,
@@ -313,7 +318,7 @@ func (p *Products) Update(w http.ResponseWriter, r *http.Request) {
 		err     error
 	)
 
-	isTemplate, nameEditable, photoEditable := templateFlags(existing.TemplateKey)
+	isTemplate, nameEditable, _ := templateFlags(existing.TemplateKey)
 
 	switch {
 	case isTemplate && nameEditable:
@@ -377,24 +382,8 @@ func (p *Products) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	imageURL, thumbURL, ownImage := productImage(p.URLs, product.ImagePath)
-
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(ProductResponse{
-		ID:            product.ID,
-		ShopID:        product.ShopID,
-		Name:          product.Name,
-		Category:      product.Category,
-		Unit:          product.Unit,
-		Price:         nullableInt64(product.Price),
-		Availability:  product.Availability,
-		IsTemplate:    isTemplate,
-		NameEditable:  nameEditable,
-		ImageURL:      imageURL,
-		ImageThumbURL: thumbURL,
-		OwnImage:      ownImage,
-		PhotoEditable: photoEditable,
-	})
+	json.NewEncoder(w).Encode(productResponse(p.URLs, db.GetProductRow(product)))
 }
 
 // authenticated: remove one of the owner's own products. template rows are refused, slots included

@@ -115,6 +115,11 @@ func makeShopTx(t *testing.T, ctx context.Context, conn pgx.Tx, q *db.Queries, n
 			Unit:        item.Unit,
 			TemplateKey: pgtype.Text{String: item.Key, Valid: true},
 			ImagePath:   pgtype.Text{String: item.ImagePath, Valid: item.ImagePath != ""},
+			// copied from the template exactly as Shops.Create does: a helper that hardcoded these
+			// would stop testing the thing the app actually writes
+			InBasket:     item.InBasket,
+			VariantGroup: pgtype.Text{String: item.VariantGroup, Valid: item.VariantGroup != ""},
+			VariantLabel: pgtype.Text{String: item.VariantLabel, Valid: item.VariantLabel != ""},
 		}); err != nil {
 			t.Fatalf("seed %q: %v", item.Key, err)
 		}
@@ -155,6 +160,76 @@ func priceProducts(t *testing.T, ctx context.Context, conn pgx.Tx, shopID int64,
 		)`, shopID, n, price)
 	if err != nil {
 		t.Fatalf("price products: %v", err)
+	}
+}
+
+// The point of products.in_basket, in one test: extending the catalogue must not cost every shop in
+// the market its badge, and voting the new row in must.
+//
+// **both halves fail in a way nobody would report.** without the in_basket filter in
+// refresh_basket_index the first half breaks - the founder adds a product and every badge in the
+// market quietly disappears, which is what made the catalogue unextendable. without in_basket in
+// basket_index_after_product_update's watch list the second half breaks - the row is voted in and the
+// index keeps answering about the old basket until some unrelated write happens to move it.
+func TestAProductOutsideTheBasketDoesNotCostAnybodyTheirBadge(t *testing.T) {
+	ctx, conn, q := beginTx(t)
+
+	full := len(catalog.Template(string(catalog.CategoryUniversal)))
+
+	first := makeShopTx(t, ctx, conn, q, "insider", catalog.CategoryUniversal, false)
+	priceProducts(t, ctx, conn, first, full, 100_000)
+	second := makeShopTx(t, ctx, conn, q, "outsider", catalog.CategoryUniversal, false)
+	priceProducts(t, ctx, conn, second, full, 106_000)
+
+	indexed := func(shopID int64, when string) bool {
+		t.Helper()
+		shops, err := q.ListShops(ctx)
+		if err != nil {
+			t.Fatalf("list shops %s: %v", when, err)
+		}
+		return findShop(t, shops, shopID).PriceIndex.Valid
+	}
+
+	if !indexed(first, "before the template grew") || !indexed(second, "before the template grew") {
+		t.Fatalf("both shops priced their whole basket and should be in the comparison")
+	}
+
+	// the sync pushes a new product into both shops, outside the basket and unpriced
+	for _, shop := range []int64{first, second} {
+		if err := q.SeedTemplateProduct(ctx, db.SeedTemplateProductParams{
+			ShopID:      shop,
+			Name:        "новый товар",
+			Category:    "tools",
+			Unit:        "шт",
+			TemplateKey: pgtype.Text{String: "universal.new_row", Valid: true},
+			InBasket:    false,
+		}); err != nil {
+			t.Fatalf("seed the new row into shop %d: %v", shop, err)
+		}
+	}
+
+	if !indexed(first, "after the template grew") || !indexed(second, "after the template grew") {
+		t.Fatalf("a product outside the basket left unpriced has cost a shop its index")
+	}
+
+	// the founder votes it in while it is still unpriced - which is the mistake the coverage number in
+	// the panel exists to prevent, and the comparison has to react to it immediately
+	if _, err := conn.Exec(ctx,
+		`UPDATE products SET in_basket = TRUE WHERE template_key = 'universal.new_row'`); err != nil {
+		t.Fatalf("vote the row into the basket: %v", err)
+	}
+
+	if indexed(first, "after the row joined the basket") {
+		t.Fatalf("an unpriced basket row must take the shop out of the comparison")
+	}
+
+	// and pricing it in both shops puts them back
+	if _, err := conn.Exec(ctx,
+		`UPDATE products SET price = 5000 WHERE template_key = 'universal.new_row'`); err != nil {
+		t.Fatalf("price the new basket row: %v", err)
+	}
+	if !indexed(first, "after pricing the new basket row") || !indexed(second, "after pricing the new basket row") {
+		t.Fatalf("every basket row is priced again and both shops should be back in the comparison")
 	}
 }
 
@@ -298,7 +373,7 @@ func TestBasketIndexNeedsEveryTemplateProductPriced(t *testing.T) {
 // unpriced item short of a complete basket, and the badge has to go out until its owner prices the
 // new row.
 //
-// **It is here because of how the index is kept up to date.** Since 000006 the table is maintained
+// **It is here because of how the index is kept up to date.** The table is maintained
 // by triggers, and the insert trigger deliberately does *not* recompute when an unpriced template
 // row arrives at a shop that has no index row - that is what stops Shops.Create's hundred seeding
 // inserts from recomputing the whole market a hundred times inside one transaction. The guard is
@@ -328,12 +403,16 @@ func TestAGrowingTemplateTakesAShopOutOfTheComparison(t *testing.T) {
 
 	// the founder adds one product to the универсальный template and syncs. the same statement the
 	// admin endpoint runs, one unpriced row into a shop that is currently ranked.
+	//
+	// **in_basket: true is what makes this the losing case.** a row added *outside* the basket is the
+	// default now and leaves every badge standing - see the test below.
 	if err := q.SeedTemplateProduct(ctx, db.SeedTemplateProductParams{
 		ShopID:      shop,
 		Name:        "новый товар",
 		Category:    "tools",
 		Unit:        "шт",
 		TemplateKey: pgtype.Text{String: "universal.grown_row", Valid: true},
+		InBasket:    true,
 	}); err != nil {
 		t.Fatalf("seed the new template row: %v", err)
 	}
@@ -791,6 +870,8 @@ func offerIndices(shops []db.ListBestOffersInCategoryRow) []int64 {
 // that seeds a shop has to load them first - without it catalog.Template returns nothing and every
 // shop is created with an empty catalogue, which fails as a wrong *count* three assertions later
 // rather than as a missing setup step.
+// the same mapping as endpoints.loadCatalogue - keep the two in step, or a column added to
+// product_templates arrives in production and not in these tests
 func loadTemplates(t *testing.T, ctx context.Context, q *db.Queries) {
 	t.Helper()
 
@@ -807,6 +888,8 @@ func loadTemplates(t *testing.T, ctx context.Context, q *db.Queries) {
 		loaded = append(loaded, catalog.Row{
 			ShopCategory: row.ShopCategory, Key: row.TemplateKey, Name: row.Name,
 			Category: row.Category, Unit: row.Unit, ImagePath: row.ImagePath.String,
+			InBasket:     row.InBasket,
+			VariantGroup: row.VariantGroup.String, VariantLabel: row.VariantLabel.String,
 		})
 	}
 	catalog.Load(loaded)

@@ -159,32 +159,46 @@ SELECT
         AND NOT (p.template_key = ANY($2::text[])))::bigint AS stale_rows;
 
 -- name: AdminSyncTemplateInsert :execrows
-INSERT INTO products (shop_id, name, category, unit, template_key, image_path)
-SELECT s.id, t.name, t.category, t.unit, t.template_key, NULLIF(t.image_path, '')
+INSERT INTO products (shop_id, name, category, unit, template_key, image_path,
+                      in_basket, variant_group, variant_label)
+SELECT s.id, t.name, t.category, t.unit, t.template_key, NULLIF(t.image_path, ''),
+       t.in_basket, NULLIF(t.variant_group, ''), NULLIF(t.variant_label, '')
 FROM shops s
 CROSS JOIN jsonb_to_recordset($2::jsonb)
-        AS t(template_key text, name text, category text, unit text, image_path text)
+        AS t(template_key text, name text, category text, unit text, image_path text,
+             in_basket boolean, variant_group text, variant_label text)
 WHERE s.category = $1
 ON CONFLICT (shop_id, template_key) DO NOTHING;
 
 -- name: AdminSyncTemplateUpdate :execrows
+-- price and availability are absent from the SET list and that is why this is safe to run at all.
+-- **in_basket is here**, though: membership is the template's decision, not the shop's, and a row
+-- the panel voted into the basket that stayed out of it in half the shops would mean two markets
+-- totalling different baskets under one badge.
 UPDATE products p
-SET name       = CASE WHEN $3::boolean THEN t.name ELSE p.name END,
-    category   = t.category,
-    unit       = t.unit,
-    image_path = NULLIF(t.image_path, ''),
-    updated_at = CURRENT_TIMESTAMP
+SET name          = CASE WHEN $3::boolean THEN t.name ELSE p.name END,
+    category      = t.category,
+    unit          = t.unit,
+    image_path    = NULLIF(t.image_path, ''),
+    in_basket     = t.in_basket,
+    variant_group = NULLIF(t.variant_group, ''),
+    variant_label = NULLIF(t.variant_label, ''),
+    updated_at    = CURRENT_TIMESTAMP
 FROM shops s,
      jsonb_to_recordset($2::jsonb)
-        AS t(template_key text, name text, category text, unit text, image_path text)
+        AS t(template_key text, name text, category text, unit text, image_path text,
+             in_basket boolean, variant_group text, variant_label text)
 WHERE p.shop_id = s.id
   AND s.category = $1
   AND p.template_key = t.template_key
   AND (
         (CASE WHEN $3::boolean THEN t.name ELSE p.name END) IS DISTINCT FROM p.name
-        OR p.category   IS DISTINCT FROM t.category
-        OR p.unit       IS DISTINCT FROM t.unit
-        OR p.image_path IS DISTINCT FROM NULLIF(t.image_path, '')
+        OR p.category      IS DISTINCT FROM t.category
+        OR p.unit          IS DISTINCT FROM t.unit
+        OR p.image_path    IS DISTINCT FROM NULLIF(t.image_path, '')
+        OR p.in_basket     IS DISTINCT FROM t.in_basket
+        OR p.variant_group IS DISTINCT FROM NULLIF(t.variant_group, '')
+        OR p.variant_label IS DISTINCT FROM NULLIF(t.variant_label, '')
       );
 
 -- name: AdminSyncTemplateDelete :execrows
@@ -196,30 +210,60 @@ WHERE p.shop_id = s.id
   AND NOT (p.template_key = ANY($2::text[]));
 
 -- name: ListProductTemplates :many
-SELECT shop_category, template_key, name, category, unit, image_path
+SELECT shop_category, template_key, name, category, unit, image_path,
+       in_basket, variant_group, variant_label
 FROM product_templates
 ORDER BY shop_category, id;
 
 -- name: AdminListTemplateItems :many
-SELECT id, shop_category, template_key, name, category, unit, image_path
+SELECT id, shop_category, template_key, name, category, unit, image_path,
+       in_basket, variant_group, variant_label
 FROM product_templates
 WHERE shop_category = $1
 ORDER BY id;
 
 -- name: AdminCreateTemplateItem :one
-INSERT INTO product_templates (shop_category, template_key, name, category, unit, image_path)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, shop_category, template_key, name, category, unit, image_path;
+INSERT INTO product_templates (shop_category, template_key, name, category, unit, image_path,
+                               in_basket, variant_group, variant_label)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, shop_category, template_key, name, category, unit, image_path,
+          in_basket, variant_group, variant_label;
 
 -- name: AdminUpdateTemplateItem :one
+-- no SET for template_key: changing it would orphan every shop seeded with the old one and the next
+-- sync would delete those rows, losing every price with the row count looking unchanged.
 UPDATE product_templates
 SET name = $2,
     category = $3,
     unit = $4,
     image_path = $5,
+    in_basket = $6,
+    variant_group = $7,
+    variant_label = $8,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, shop_category, template_key, name, category, unit, image_path;
+RETURNING id, shop_category, template_key, name, category, unit, image_path,
+          in_basket, variant_group, variant_label;
+
+-- name: AdminTemplateCoverage :many
+-- how many shops of this market have typed a price for each template row. **this is the number that
+-- decides when a product can be voted into the basket**: doing it before most shops have priced it
+-- takes the rest out of the comparison, which is the exact problem in_basket exists to avoid.
+SELECT p.template_key,
+       COUNT(*)::bigint            AS present,
+       COUNT(p.price)::bigint      AS priced
+FROM products p
+JOIN shops s ON s.id = p.shop_id
+WHERE s.category = $1
+  AND p.template_key IS NOT NULL
+GROUP BY p.template_key;
+
+-- name: AdminReferencedImagePaths :many
+-- every photo path any row points at, templates and shop catalogues together. the catalogue sweep
+-- compares the files on disk against this; a path missing from it is a file nothing draws.
+SELECT image_path FROM product_templates WHERE image_path IS NOT NULL AND image_path <> ''
+UNION
+SELECT image_path FROM products WHERE image_path IS NOT NULL AND image_path <> '';
 
 -- name: AdminDeleteTemplateItem :one
 DELETE FROM product_templates WHERE id = $1
@@ -235,7 +279,9 @@ WITH progress AS (
            COUNT(p.id)::bigint    AS template_rows,
            COUNT(p.price)::bigint AS priced_rows
     FROM shops s
-    LEFT JOIN products p ON p.shop_id = s.id AND p.template_key IS NOT NULL
+    -- basket rows only: a row outside the basket left unpriced does not keep a shop out of the
+    -- comparison any more, so counting it here would report a shortfall that does not exist
+    LEFT JOIN products p ON p.shop_id = s.id AND p.template_key IS NOT NULL AND p.in_basket
     GROUP BY s.id
 ),
 scored AS (
@@ -268,7 +314,7 @@ SELECT s.id,
        (COUNT(p.id) - COUNT(p.price))::bigint                         AS remaining
 FROM shops s
 JOIN users u ON u.id = s.user_id
-JOIN products p ON p.shop_id = s.id AND p.template_key IS NOT NULL
+JOIN products p ON p.shop_id = s.id AND p.template_key IS NOT NULL AND p.in_basket
 GROUP BY s.id, u.name, u.phone
 HAVING COUNT(p.price) < COUNT(p.id)
 ORDER BY (COUNT(p.id) - COUNT(p.price)), s.created_at

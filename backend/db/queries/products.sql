@@ -1,17 +1,22 @@
 -- name: SeedTemplateProduct :exec
-INSERT INTO products (shop_id, name, category, unit, template_key, image_path)
-VALUES ($1, $2, $3, $4, $5, $6);
+-- in_basket and the variant pair are copied from the template rather than defaulted: a shop created
+-- today must hold the same basket as one created last month, or the two totals are not comparable.
+INSERT INTO products (shop_id, name, category, unit, template_key, image_path,
+                      in_basket, variant_group, variant_label)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
 
 -- name: ListProductsByShop :many
-SELECT id, shop_id, name, price, category, unit, availability, template_key, image_path
+SELECT id, shop_id, name, price, category, unit, availability, template_key, image_path, in_basket, variant_group, variant_label
 FROM products
 WHERE shop_id = $1
 ORDER BY (template_key IS NULL), id;
 
 -- name: CreateCustomProduct :one
-INSERT INTO products (shop_id, name, price, category, unit, availability)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, shop_id, name, price, category, unit, availability, template_key, image_path;
+-- in_basket is written FALSE rather than left to the column default: an owner's own product is theirs
+-- alone, and the shared basket must hold the same rows in every shop of a market.
+INSERT INTO products (shop_id, name, price, category, unit, availability, in_basket)
+VALUES ($1, $2, $3, $4, $5, $6, FALSE)
+RETURNING id, shop_id, name, price, category, unit, availability, template_key, image_path, in_basket, variant_group, variant_label;
 
 -- name: CountCustomProducts :one
 SELECT COUNT(*)::bigint FROM products WHERE shop_id = $1 AND template_key IS NULL;
@@ -25,7 +30,7 @@ SET name = $2,
     availability = $6,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, shop_id, name, price, category, unit, availability, template_key, image_path;
+RETURNING id, shop_id, name, price, category, unit, availability, template_key, image_path, in_basket, variant_group, variant_label;
 
 -- name: UpdateProductPricing :one
 UPDATE products
@@ -33,7 +38,7 @@ SET price = $2,
     availability = $3,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, shop_id, name, price, category, unit, availability, template_key, image_path;
+RETURNING id, shop_id, name, price, category, unit, availability, template_key, image_path, in_basket, variant_group, variant_label;
 
 -- name: UpdateProductSlot :one
 UPDATE products
@@ -42,10 +47,10 @@ SET name = $2,
     availability = $4,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, shop_id, name, price, category, unit, availability, template_key, image_path;
+RETURNING id, shop_id, name, price, category, unit, availability, template_key, image_path, in_basket, variant_group, variant_label;
 
 -- name: GetProduct :one
-SELECT id, shop_id, name, price, category, unit, availability, template_key, image_path
+SELECT id, shop_id, name, price, category, unit, availability, template_key, image_path, in_basket, variant_group, variant_label
 FROM products WHERE id = $1;
 
 -- name: DeleteProduct :execrows
@@ -79,4 +84,4 @@ UPDATE products
 SET image_path = $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, shop_id, name, price, category, unit, availability, template_key, image_path;
+RETURNING id, shop_id, name, price, category, unit, availability, template_key, image_path, in_basket, variant_group, variant_label;
