@@ -3,10 +3,10 @@
 build/
 __pycache__/
 *.pyc
-backend/uploads/
-universal/
-plumbing/
-wood/
-photos/uploads/
+# owner uploads are runtime data, not source: `images/shops/<category>/` IS the catalogue and is
+# committed. **the leading slash is load-bearing** - `universal/` once sat here without one, which
+# matches a directory of that name at any depth, so `images/shops/universal/` was ignored too and
+# the whole curated catalogue existed in one copy on one laptop.
+/images/shops/uploads/
 secrets.vault.enc
 budget.md
