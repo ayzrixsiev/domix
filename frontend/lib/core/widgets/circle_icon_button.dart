@@ -4,13 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 
-/// The one round control in the app: a glyph inside a white disc with a [AppColors.trackGrey] ring.
+/// The one round control in the app: a glyph inside a white disc lifted by a soft shadow.
 ///
 /// Every header control is built from this - the back chevron on the left, the action on the right -
 /// so the two ends of a header are the same object at the same size and weight, and only the glyph's
-/// colour says which one is the primary action. A bare icon would have no shape around it on a
-/// surface this pale, and would disappear entirely over the shop card's full-bleed cover; the ring
-/// is what makes it a control.
+/// colour says which one is the primary action. **No ring**: white on the off-white page is already
+/// a shape, and an outline around it is what made the old disc look like a sticker.
 ///
 /// **No outer padding.** Where the disc sits on the page is the header's business, not the button's
 /// - see [AppPageHeader]'s gutter constants. The two floating uses pad themselves by [gutterInset].
@@ -66,7 +65,6 @@ class CircleIconButton extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.surfaceWhite,
                 shape: BoxShape.circle,
-                border: Border.all(color: AppColors.trackGrey),
                 boxShadow: floating ? AppShadows.floating : AppShadows.card,
               ),
               child: Icon(icon, color: iconColor, size: 20),

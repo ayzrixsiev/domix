@@ -239,4 +239,3 @@ func (p *Products) writeProductResponse(w http.ResponseWriter, status int, row d
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(productResponse(p.URLs, db.GetProductRow(row)))
 }
-

@@ -67,6 +67,10 @@ type ProductResponse struct {
 	Category string `json:"category"`
 	Unit     string `json:"unit"`
 
+	// the line under the name on a card («Квадратная · 24 Вт · 6500 К»), and the shop grid's chip
+	Specs   string `json:"specs"`
+	Section string `json:"section"`
+
 	// a pointer, so an unpriced product is `null` and not `0` - "not priced yet" and "free" are
 	// different facts, and the whole seeded-catalogue flow turns on the app telling them apart
 	Price *int64 `json:"price"`
@@ -95,12 +99,6 @@ type ProductResponse struct {
 	// whether the owner may put their own photograph on this row at all - see templateFlags
 	PhotoEditable bool `json:"photo_editable"`
 
-	// one size of a product that has several: the group's name and this row's chip, both empty for a
-	// row that stands alone. **the app draws one tile per group** - five spatula sizes were five
-	// near-identical tiles and five photographs of the same spatula.
-	VariantGroup string `json:"variant_group,omitempty"`
-	VariantLabel string `json:"variant_label,omitempty"`
-
 	// whether this row counts towards the shop's price comparison. an owner's screen needs it: a row
 	// outside the basket left unpriced costs them nothing, and one inside it costs them the badge.
 	InBasket bool `json:"in_basket"`
@@ -120,6 +118,8 @@ func productResponse(urls imagestore.URLs, row db.GetProductRow) ProductResponse
 		Name:          row.Name,
 		Category:      row.Category,
 		Unit:          row.Unit,
+		Specs:         row.Specs,
+		Section:       row.Section,
 		Price:         nullableInt64(row.Price),
 		Availability:  row.Availability,
 		IsTemplate:    isTemplate,
@@ -128,8 +128,6 @@ func productResponse(urls imagestore.URLs, row db.GetProductRow) ProductResponse
 		ImageThumbURL: thumbURL,
 		OwnImage:      ownImage,
 		PhotoEditable: photoEditable,
-		VariantGroup:  row.VariantGroup.String,
-		VariantLabel:  row.VariantLabel.String,
 		InBasket:      row.InBasket,
 	}
 }

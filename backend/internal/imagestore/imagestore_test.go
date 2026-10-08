@@ -12,6 +12,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 )
@@ -421,4 +422,113 @@ func withEXIFOrientation(t *testing.T, jpegBytes []byte, orientation uint16) []b
 	out = append(out, jpegBytes[:2]...) // SOI
 	out = append(out, segment.Bytes()...)
 	return append(out, jpegBytes[2:]...)
+}
+
+// **the two deletion doors must not overlap.** an owner's photo and a curated one are deleted by
+// different sweeps for different reasons; if either method accepted the other kind, a bug in one
+// sweep would reach files that belong to the other - and a curated file is drawn by every shop of a
+// category at once.
+func TestTheTwoDeletionDoorsDoNotOverlap(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	store, err := NewDisk(root)
+	if err != nil {
+		t.Fatalf("NewDisk: %v", err)
+	}
+
+	upload, err := store.Save(ctx, Photo{Master: []byte("an owner's photo"), Thumb: []byte("small")})
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	shot := filepath.Join(root, "shops", "universal", "001.jpg")
+	if err := os.MkdirAll(filepath.Dir(shot), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(shot, []byte("a catalogue photo"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// the catalogue door refuses an upload, a traversal, the root itself and a deeper path
+	for _, path := range []string{upload, "shops/universal/../uploads/x.jpg", "shops", "shops/universal", "shops/universal/a/b.jpg", ""} {
+		if err := store.RemoveCatalogueFile(ctx, path); !errors.Is(err, ErrOutsideCatalogue) {
+			t.Errorf("RemoveCatalogueFile(%q) returned %v, expected ErrOutsideCatalogue", path, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(upload))); err != nil {
+		t.Fatalf("the catalogue door deleted an owner's photo: %v", err)
+	}
+
+	// the upload door still refuses the catalogue
+	if err := store.RemoveFile(ctx, "shops/universal/001.jpg"); !errors.Is(err, ErrOutsideUploads) {
+		t.Errorf("RemoveFile on a catalogue photo returned %v, expected ErrOutsideUploads", err)
+	}
+
+	// and each door does open for its own kind
+	if err := store.RemoveCatalogueFile(ctx, "shops/universal/001.jpg"); err != nil {
+		t.Fatalf("RemoveCatalogueFile on a catalogue photo: %v", err)
+	}
+	if _, err := os.Stat(shot); !os.IsNotExist(err) {
+		t.Errorf("the catalogue photo is still there: %v", err)
+	}
+}
+
+// **the second write door, and the property that makes it a door rather than an argument.** A
+// curated photo written anywhere `IsCatalogue` does not recognise is a file the catalogue sweep
+// cannot delete and the panel's picker cannot list - and a category that escaped its own folder
+// would be a write into the uploads namespace, where one row owns every file.
+func TestACataloguePhotoIsWrittenIntoItsOwnCategoryAndNowhereElse(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	store, err := NewDisk(root)
+	if err != nil {
+		t.Fatalf("NewDisk: %v", err)
+	}
+
+	rel, err := store.SaveCatalogue(ctx, "universal", Photo{Master: []byte("a curated photo"), Thumb: []byte("small")})
+	if err != nil {
+		t.Fatalf("SaveCatalogue: %v", err)
+	}
+
+	if !IsCatalogue(rel) {
+		t.Errorf("SaveCatalogue returned %q, which IsCatalogue does not recognise - the sweep could never collect it", rel)
+	}
+	if IsUpload(rel) {
+		t.Errorf("SaveCatalogue returned %q, which the uploads door would accept", rel)
+	}
+	if dir := path.Dir(rel); dir != "shops/universal" {
+		t.Errorf("SaveCatalogue wrote into %q, want shops/universal", dir)
+	}
+	for _, p := range []string{rel, ThumbPath(rel)} {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(p))); err != nil {
+			t.Errorf("%q is not on disk: %v", p, err)
+		}
+	}
+
+	// **a replacement is a new name, because these urls are served immutable for a year** - and a
+	// curated file is drawn by every shop of the category, so a reused name would freeze the old
+	// picture onto every phone that had already loaded it
+	other, err := store.SaveCatalogue(ctx, "universal", Photo{Master: []byte("the reshoot"), Thumb: []byte("small")})
+	if err != nil {
+		t.Fatalf("SaveCatalogue: %v", err)
+	}
+	if other == rel {
+		t.Errorf("two catalogue saves produced the same path %q", rel)
+	}
+
+	// a category that is not one segment of its own cannot be written at all: these would land in
+	// the uploads namespace, at the images root, or outside it. a leading slash is not among them -
+	// path.Join cleans it away, so "/universal" is the same write as "universal".
+	for _, category := range []string{"", "..", "universal/../uploads", "a/b"} {
+		if _, err := store.SaveCatalogue(ctx, category, Photo{Master: []byte("x"), Thumb: []byte("y")}); !errors.Is(err, ErrOutsideCatalogue) {
+			t.Errorf("SaveCatalogue(%q) returned %v, expected ErrOutsideCatalogue", category, err)
+		}
+	}
+
+	// and what it wrote opens only the catalogue door
+	if err := store.RemoveFile(ctx, rel); !errors.Is(err, ErrOutsideUploads) {
+		t.Errorf("the uploads door accepted a catalogue photo: %v", err)
+	}
+	if err := store.RemoveCatalogueFile(ctx, rel); err != nil {
+		t.Fatalf("RemoveCatalogueFile on what SaveCatalogue wrote: %v", err)
+	}
 }

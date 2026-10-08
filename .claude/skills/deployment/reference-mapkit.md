@@ -9,14 +9,24 @@ Read when touching the map, `domix_map.dart`, pins, or a Gradle failure that men
 The map is drawn natively by MapKit. Yandex's licence forbids pulling their tiles outside their SDK,
 so there was no "swap the URL" version of the migration off `flutter_map`.
 
-Billing is **monthly active users** (25 000 free), not per-request. **Free tier or not, there is no
-hard cap: set a billing alert.** The Free licence requires: free to download, no turn-by-turn
-navigation, no monitoring or dispatch. **If any of those three changes, revisit the licence before
-the code.**
+**The free licence is 1 000 DAU — daily unique users opening the map — on the yandex.ru terms that
+apply to us** (checked 2026-09-26, `yandex.ru/dev/tariffs/doc/ru/mapkit/prices/`). **yandex.com shows
+a different, international licence (25 000 MAU) — do not quote it**; that mistake was made once.
+Paid plans are annual (5 000 DAU 195 000 ₽/yr, 20 000 DAU 585 000 ₽/yr …) **or monthly** (5 000 DAU
+20 800 ₽/mo, 20 000 DAU 58 500 ₽/mo), the minimum payment non-refundable; a 7-day trial covers 100 DAU.
+At 300–400 users DAU is far below 1 000. **There is no hard cap: set a usage alert.**
+
+The free licence requires: free to download and open registration, no turn-by-turn navigation, no
+real-time tracking of vehicles or staff, Yandex's logo and copyright untouched, **a link to
+`https://yandex.ru/legal/maps_api/` in the app's «О приложении»** (`AboutScreen`, reachable by guests
+too), and **nothing the API returns stored or modified** — which is why a Yandex geocoder could not
+fill `shops.address` on the free terms. **If any of these changes, revisit the licence before the
+code.** Phase three's job tickets are the likeliest thing to touch "tracking staff".
 
 **Lite, not the full package.** `yandex_maps_mapkit_lite` gives map, map objects, camera, user
-location. Search, routing and panoramas are paid and unused — address search and reverse geocoding
-**stay on Nominatim**.
+location. Search, routing and panoramas are paid and unused — address search stays on OpenStreetMap
+services: **Photon** for typed suggestions, **Nominatim** for a pin's address and as the fallback of a
+submitted search (`GeocodingService`).
 
 **`domix_map.dart` is the entire boundary.** `DomixMap`, `DomixMapController` and `MapPin` are all
 the screens see; nothing outside that file imports the SDK. **Keep it that way.**

@@ -48,7 +48,11 @@ class CategoryOffers {
 
 /// Everything `GET /api/home` returns, in one object because it arrives in one response.
 class HomeContent {
-  const HomeContent({required this.vipShops, required this.bestOffers});
+  const HomeContent({
+    required this.vipShops,
+    required this.bestOffers,
+    this.templateSizes = const {},
+  });
 
   final List<HomeShopPreview> vipShops;
 
@@ -56,11 +60,26 @@ class HomeContent {
   /// values whatever arrives, so a category the server said nothing about is still a segment.
   final List<CategoryOffers> bestOffers;
 
+  /// how many products a new shop of each category is seeded with, as the server's template holds
+  /// them. a category the server did not mention is absent, and the form then shows no number rather
+  /// than a guess.
+  final Map<ShopCategory, int> templateSizes;
+
   static HomeContent fromJson(Map<String, dynamic> json) {
     return HomeContent(
       vipShops: _shops(json['vip_shops']),
       bestOffers: _offerGroups(json['best_offers']),
+      templateSizes: _templateSizes(json['template_sizes']),
     );
+  }
+
+  static Map<ShopCategory, int> _templateSizes(dynamic raw) {
+    if (raw is! Map) return const {};
+    return {
+      for (final entry in raw.entries)
+        if (ShopCategory.tryFromCode(entry.key as String) case final category? when entry.value is int)
+          category: entry.value as int,
+    };
   }
 
   static List<CategoryOffers> _offerGroups(dynamic raw) {

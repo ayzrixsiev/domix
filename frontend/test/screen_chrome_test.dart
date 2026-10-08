@@ -38,6 +38,7 @@ Product _product({
   String name = 'Клей ПВА Эрон универсальный строительный',
   int? price = 14000,
   ProductAvailability availability = ProductAvailability.inStock,
+  String specs = '',
 }) {
   return Product(
     id: 1,
@@ -49,17 +50,15 @@ Product _product({
     availability: availability,
     isTemplate: true,
     nameEditable: false,
+    specs: specs,
   );
 }
 
-/// The header's own surface - what makes it a zone rather than text on the page.
+/// The header's own fill: the page's colour, so it sits flush instead of reading as a toolbar.
 Finder _headerSurface() => find.descendant(
       of: find.byType(AppPageHeader),
       matching: find.byWidgetPredicate(
-        (w) =>
-            w is DecoratedBox &&
-            w.decoration is BoxDecoration &&
-            (w.decoration as BoxDecoration).color == AppColors.surfaceMuted,
+        (w) => w is ColoredBox && w.color == AppColors.background,
       ),
     );
 
@@ -72,14 +71,11 @@ Future<Size> _pumpHeader(WidgetTester tester, AppPageHeader header) async {
 
 void main() {
   group('the page header', () {
-    testWidgets('is a surface the full width of the screen, not a line under a title',
-        (tester) async {
+    testWidgets('spans the full width of the screen and carries no divider', (tester) async {
       final size = await _pumpHeader(tester, const AppPageHeader(title: 'Мои магазины'));
 
       expect(size.width, tester.view.physicalSize.width / tester.view.devicePixelRatio);
-      // the real assertion: it has to be a *zone*, which a 1px rule was not
       expect(size.height, greaterThan(40));
-      // and the separation is tonal - nothing in the header paints a divider
       expect(
         find.byWidgetPredicate(
           (w) => w is ColoredBox && w.color == AppColors.textFaint,
@@ -88,16 +84,15 @@ void main() {
       );
     });
 
-    testWidgets('and stands a real step away from the page it sits on', (tester) async {
+    testWidgets('sits flush on the page: its own colour, no shadow of its own', (tester) async {
       await _pumpHeader(tester, const AppPageHeader(title: 'Мои магазины'));
 
-      final decoration =
-          tester.widget<DecoratedBox>(_headerSurface()).decoration as BoxDecoration;
-      expect(decoration.color, isNot(AppColors.background));
-      // the step alone is deliberately small, so the shadow is what closes the edge off. losing it
-      // is the failure this catches: the two surfaces would meet with nothing between them.
-      expect(decoration.boxShadow, isNotNull);
-      expect(decoration.boxShadow, isNotEmpty);
+      // a band of a second colour with a shadow under it is what read as a toolbar bolted on: the
+      // only decorated box left in a title-only header is the back disc
+      expect(
+        find.descendant(of: find.byType(AppPageHeader), matching: find.byType(DecoratedBox)),
+        findsOneWidget,
+      );
     });
 
     testWidgets('is exactly as tall with a subtitle as without one', (tester) async {
@@ -141,12 +136,12 @@ void main() {
       ));
     }
 
-    testWidgets('fits a long name, a price, a shop and both buttons at the narrowest width',
+    testWidgets('fits a long name, the description, a price and a shop at the narrowest width',
         (tester) async {
       await pumpTile(
         tester,
         tile: ProductTile(
-          product: _product(),
+          product: _product(specs: 'Оригинальный · Иран · Эрон · 1 кг · Белый · Для дерева'),
           strings: _strings,
           subtitle: 'Qurilish Baza',
           showBuyerActions: true,
@@ -157,6 +152,7 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('В наличии'), findsOneWidget);
       expect(find.text('Qurilish Baza'), findsOneWidget);
+      expect(find.textContaining('Оригинальный · Иран'), findsOneWidget);
       expect(find.text('/ кг'), findsOneWidget);
     });
 
@@ -174,7 +170,7 @@ void main() {
       }
     });
 
-    testWidgets('keeps the shopper buttons off the owner\'s own grid', (tester) async {
+    testWidgets('keeps the heart off the owner\'s own grid', (tester) async {
       await pumpTile(
         tester,
         tile: ProductTile(product: _product(), strings: _strings, showOwnBadge: true),
@@ -182,7 +178,6 @@ void main() {
 
       expect(tester.takeException(), isNull);
       // the owner is not shopping in their own catalogue
-      expect(find.bySemanticsLabel(_strings.addToBasketLabel), findsNothing);
       expect(find.bySemanticsLabel(_strings.addToFavouritesLabel), findsNothing);
     });
 

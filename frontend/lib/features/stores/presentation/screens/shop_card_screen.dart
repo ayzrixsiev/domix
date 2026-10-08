@@ -14,8 +14,10 @@ import 'package:frontend/features/favorites/presentation/controllers/favorites_c
 import 'package:frontend/features/favorites/presentation/favorite_action.dart';
 import 'package:frontend/features/home/data/category_product.dart';
 import 'package:frontend/features/products/data/product_model.dart';
+import 'package:frontend/features/products/data/product_section.dart';
 import 'package:frontend/features/products/presentation/controllers/products_controller.dart';
 import 'package:frontend/features/products/presentation/widgets/product_grid.dart';
+import 'package:frontend/features/products/presentation/widgets/product_section_bar.dart';
 import 'package:frontend/features/products/presentation/widgets/product_tile.dart';
 import 'package:frontend/features/stores/data/price_tier.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
@@ -229,6 +231,9 @@ class _ShopCardViewState extends State<ShopCardView> {
 
   String _query = '';
 
+  // null is «Все товары»
+  ProductSection? _section;
+
   // below this the search field is not drawn: two per row means eight is about one screenful, and a
   // field over a list already entirely on screen filters nothing
   static const int _searchThreshold = 8;
@@ -310,14 +315,14 @@ class _ShopCardViewState extends State<ShopCardView> {
           if (product.hasPrice) product,
       ];
 
-  // name only - the seller is not a thing to search inside one shop, and "шт" would match most of the
-  // list. `contains`, since people type «мешок» to find «Цемент в мешках».
+  // name and description - the size lives in the description now. not the unit: "шт" would match
+  // most of the list.
   List<Product> _matching(List<Product> priced) {
     final query = _query.trim().toLowerCase();
     if (query.isEmpty) return priced;
     return [
       for (final product in priced)
-        if (product.name.toLowerCase().contains(query)) product,
+        if ('${product.name} ${product.specs}'.toLowerCase().contains(query)) product,
     ];
   }
 
@@ -328,7 +333,10 @@ class _ShopCardViewState extends State<ShopCardView> {
     final shop = widget.shop;
 
     final priced = _pricedProducts(controller);
-    final matches = _matching(priced);
+    // chips from the whole priced list, not the search's, so they do not jump about while typing
+    final sections = sectionsOf(priced);
+    final section = sections.contains(_section) ? _section : null;
+    final matches = productsBySection(_matching(priced), only: section);
     final isFirstLoad = controller.isLoadingFor(shop.id) && !controller.hasLoaded(shop.id);
 
     // the pushed route draws its cover under the status bar, so the picture is that much taller for the
@@ -375,6 +383,19 @@ class _ShopCardViewState extends State<ShopCardView> {
               ),
             ),
           ),
+        if (sections.length > 1)
+          SliverPadding(
+            padding: const EdgeInsets.only(top: 14),
+            sliver: SliverToBoxAdapter(
+              child: ProductSectionBar(
+                products: priced,
+                selected: section,
+                onSelected: (value) => setState(() => _section = value),
+                strings: strings,
+                gutter: _gutter,
+              ),
+            ),
+          ),
         SliverPadding(
           padding: gutter.add(const EdgeInsets.only(top: 14)),
           sliver: _ProductsSliver(
@@ -385,7 +406,7 @@ class _ShopCardViewState extends State<ShopCardView> {
             // three empty states, and telling them apart is the point: the request failed, the shop has priced
             // nothing, or this search matched nothing
             hasFailed: controller.loadFailedFor(shop.id),
-            isFiltered: _query.trim().isNotEmpty,
+            isFiltered: _query.trim().isNotEmpty || section != null,
           ),
         ),
         // a tail so the last row is not flush against the bottom, plus the system inset. viewInsets is in
@@ -1034,18 +1055,18 @@ class _ProductsSliver extends StatelessWidget {
 
     // a sliver grid, so a hundred-product catalogue builds one screenful of tiles - see the note at the
     // top of this file
+    void save(Product product) =>
+        toggleFavorite(context, CategoryProduct(product: product, shopName: shopName));
+
     return ProductSliverGrid(
       tiles: [
-        for (final Product product in products)
+        for (final product in products)
           ProductTile(
             product: product,
             strings: strings,
             showBuyerActions: true,
             isFavorite: favorites.contains(product.id),
-            onFavoriteToggle: () => toggleFavorite(
-              context,
-              CategoryProduct(product: product, shopName: shopName),
-            ),
+            onFavoriteToggle: () => save(product),
           ),
       ],
     );

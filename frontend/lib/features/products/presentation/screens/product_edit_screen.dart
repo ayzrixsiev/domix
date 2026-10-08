@@ -27,12 +27,7 @@ import 'package:frontend/core/widgets/app_page_header.dart';
 // обои are the exception and the reason there are two flags on Product: an обои template row is a
 // *slot*, so its name is a text field while its category and unit stay locked.
 class ProductEditScreen extends StatefulWidget {
-  const ProductEditScreen({
-    super.key,
-    required this.shopId,
-    this.product,
-    this.suggestedCategory,
-  });
+  const ProductEditScreen({super.key, required this.shopId, this.product, this.suggestedCategory});
 
   final int shopId;
   final Product? product;
@@ -83,8 +78,17 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   // text: these are the russian abbreviations, and an uzbek-speaking owner typing "dona" must not be
   // blocked by a fixed list.
   static const _unitSuggestions = [
-    'шт', 'м', 'м²', 'м³', 'кг', 'л',
-    'мешок', 'рулон', 'лист', 'упак', 'компл',
+    'шт',
+    'м',
+    'м²',
+    'м³',
+    'кг',
+    'л',
+    'мешок',
+    'рулон',
+    'лист',
+    'упак',
+    'компл',
   ];
 
   @override
@@ -257,9 +261,10 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     final product = _product;
     if (product == null) return; // nothing to attach it to yet - [_save] sends it
 
-    final saved = await context
-        .read<ProductsController>()
-        .uploadProductPhoto(product: product, filePath: file.path);
+    final saved = await context.read<ProductsController>().uploadProductPhoto(
+      product: product,
+      filePath: file.path,
+    );
     if (!mounted) return;
 
     if (saved == null) {
@@ -352,7 +357,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppPageHeader(title: widget.isNew ? strings.addProductTitle : strings.editProductTitle),
+      appBar: AppPageHeader(
+        title: widget.isNew ? strings.addProductTitle : strings.editProductTitle,
+      ),
       body: SafeArea(
         child: ListView(
           physics: const BouncingScrollPhysics(),
@@ -364,6 +371,12 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
               // a slot's rule is a different rule: telling an обои owner "название изменить нельзя" over a name
               // field they can type in is worse than saying nothing
               _HintCard(message: isSlot ? strings.slotProductHint : strings.templateProductHint),
+              const SizedBox(height: 20),
+            ],
+            // the one catalogue row whose missing price costs the shop nothing - said here, where the
+            // owner is deciding whether to bother
+            if (isTemplate && !product!.inBasket) ...[
+              _HintCard(message: strings.outsideBasketNote),
               const SizedBox(height: 20),
             ],
 
@@ -437,11 +450,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
             StoreFormLabel(strings.productUnitLabel),
             const SizedBox(height: 8),
             if (isTemplate)
-              ProductLockedField(
-                value: product!.unit,
-                icon: CupertinoIcons.scope,
-                strings: strings,
-              )
+              ProductLockedField(value: product!.unit, icon: CupertinoIcons.scope, strings: strings)
             else ...[
               StoreFormTextField(
                 controller: _unitController,
@@ -520,11 +529,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
             ],
 
             const SizedBox(height: 28),
-            StoreSubmitButton(
-              label: strings.saveProductButton,
-              isBusy: isBusy,
-              onTap: _save,
-            ),
+            StoreSubmitButton(label: strings.saveProductButton, isBusy: isBusy, onTap: _save),
 
             // a template row has no delete button at all rather than a disabled one - the hint card above
             // already says why, and a control that is present but never works is worse than one that is not
@@ -548,11 +553,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
 // one-tap shortcuts that fill the unit field. a Wrap rather than a scrolling row, so every option
 // is visible at once - there are only eleven, and a hidden shortcut is not a shortcut.
 class _UnitSuggestions extends StatelessWidget {
-  const _UnitSuggestions({
-    required this.units,
-    required this.selected,
-    required this.onSelected,
-  });
+  const _UnitSuggestions({required this.units, required this.selected, required this.onSelected});
 
   final List<String> units;
   final String selected;
@@ -565,32 +566,24 @@ class _UnitSuggestions extends StatelessWidget {
       runSpacing: 7,
       children: [
         for (final unit in units)
-          _ChoiceChip(
-            label: unit,
-            isSelected: unit == selected,
-            onTap: () => onSelected(unit),
-          ),
+          _ChoiceChip(label: unit, isSelected: unit == selected, onTap: () => onSelected(unit)),
       ],
     );
   }
 }
 
 class _AvailabilityPicker extends StatelessWidget {
-  const _AvailabilityPicker({
-    required this.value,
-    required this.strings,
-    required this.onChanged,
-  });
+  const _AvailabilityPicker({required this.value, required this.strings, required this.onChanged});
 
   final ProductAvailability value;
   final AppLocalizations strings;
   final ValueChanged<ProductAvailability> onChanged;
 
   String _label(ProductAvailability availability) => switch (availability) {
-        ProductAvailability.inStock => strings.availabilityInStock,
-        ProductAvailability.onOrder => strings.availabilityOnOrder,
-        ProductAvailability.unavailable => strings.availabilityUnavailable,
-      };
+    ProductAvailability.inStock => strings.availabilityInStock,
+    ProductAvailability.onOrder => strings.availabilityOnOrder,
+    ProductAvailability.unavailable => strings.availabilityUnavailable,
+  };
 
   @override
   Widget build(BuildContext context) {

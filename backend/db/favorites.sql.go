@@ -29,7 +29,7 @@ func (q *Queries) AddFavorite(ctx context.Context, arg AddFavoriteParams) error 
 }
 
 const listFavorites = `-- name: ListFavorites :many
-SELECT p.id, p.shop_id, p.name, p.price, p.category, p.unit, p.availability, p.template_key,
+SELECT p.id, p.shop_id, p.name, p.specs, p.price, p.category, p.unit, p.availability, p.template_key,
        p.image_path, s.name AS shop_name
 FROM favorites f
 JOIN products p ON p.id = f.product_id
@@ -48,6 +48,7 @@ type ListFavoritesRow struct {
 	ID           int64       `json:"id"`
 	ShopID       int64       `json:"shop_id"`
 	Name         string      `json:"name"`
+	Specs        string      `json:"specs"`
 	Price        pgtype.Int8 `json:"price"`
 	Category     string      `json:"category"`
 	Unit         string      `json:"unit"`
@@ -72,6 +73,7 @@ func (q *Queries) ListFavorites(ctx context.Context, arg ListFavoritesParams) ([
 			&i.ID,
 			&i.ShopID,
 			&i.Name,
+			&i.Specs,
 			&i.Price,
 			&i.Category,
 			&i.Unit,

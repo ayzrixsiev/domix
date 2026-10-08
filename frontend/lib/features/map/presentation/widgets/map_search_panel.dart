@@ -9,11 +9,9 @@ import 'package:frontend/features/map/data/geocoding_service.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 
 // The map's search field and its results panel. **Shops** are already in memory and match on every
-// keystroke; **addresses** come from Nominatim over HTTP, debounced.
-//
-// Nominatim's policy forbids as-you-type on its public api, and this does it anyway - a deliberate
-// call until the Yandex search licence is bought (it has its own address search). Everything else the
-// policy asks for is kept: cached answers, a User-Agent with a contact, the credit line.
+// keystroke; **addresses** come from Photon over HTTP, debounced - a service built for search as you
+// type, unlike Nominatim, whose policy forbids it (see GeocodingService). The debounce, the
+// three-letter floor and the session cache are what "be fair" means for it.
 //
 // It owns the text state and reports only *selections* upward, which keeps MapScreen concerned with
 // the camera and the sheets rather than with text editing.
@@ -66,6 +64,10 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
   /// **a flag, not the exception** - the card draws one written sentence, the reason goes to the log
   bool _placesFailed = false;
 
+  /// a typed lookup that gave up, as opposed to a submitted one: the first has a way forward - press
+  /// search - and the sentence on the card says so
+  bool _placesFailedWhileTyping = false;
+
   @override
   void initState() {
     super.initState();
@@ -104,11 +106,13 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
     _placesQuery = null;
     _places = const [];
     _placesFailed = false;
+    _placesFailedWhileTyping = false;
     _isSearchingPlaces = false;
   }
 
-  /// Repeats cost nothing: GeocodingService answers them from its cache.
-  Future<void> _searchPlaces(String raw) async {
+  /// Repeats cost nothing: GeocodingService answers them from its cache. [submitted] is the keyboard's
+  /// search key, which is what lets a lookup that timed out while typing go to the fallback.
+  Future<void> _searchPlaces(String raw, {bool submitted = false}) async {
     final query = raw.trim();
     if (query.length < _minRemoteQueryLength) return;
     if (query == _placesQuery && !_placesFailed) return;
@@ -123,7 +127,7 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
     var results = const <GeocodeResult>[];
     var failed = false;
     try {
-      results = await _geocoding.search(query);
+      results = await _geocoding.search(query, submitted: submitted);
     } catch (e) {
       debugPrint('MapSearchPanel: address lookup failed: $e');
       failed = true;
@@ -136,8 +140,15 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
     setState(() {
       _places = results;
       _placesFailed = failed;
+      _placesFailedWhileTyping = failed && !submitted;
       _isSearchingPlaces = false;
     });
+  }
+
+  /// the keyboard's search key: the lookup runs now instead of after the pause, and as a submit
+  void _onSubmitted(String value) {
+    _debounce?.cancel();
+    _searchPlaces(value, submitted: true);
   }
 
   /// case-insensitive match on name or address, capped so the dropdown stays a shortlist. ё is read as
@@ -191,6 +202,7 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
           clearTooltip: widget.strings.searchClear,
           showClear: hasQuery,
           onChanged: _onQueryChanged,
+          onSubmitted: _onSubmitted,
           onClear: _clear,
         ),
         // AnimatedSize keeps the dropdown from popping into existence at full height; it grows out
@@ -209,6 +221,7 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
                     places: _places,
                     isSearchingPlaces: _isSearchingPlaces,
                     placesFailed: _placesFailed,
+                    placesFailedWhileTyping: _placesFailedWhileTyping,
                     strings: widget.strings,
                     onShopTap: (shop) {
                       _select(shop.name);
@@ -235,6 +248,7 @@ class _SearchField extends StatelessWidget {
     required this.clearTooltip,
     required this.showClear,
     required this.onChanged,
+    required this.onSubmitted,
     required this.onClear,
   });
 
@@ -244,6 +258,7 @@ class _SearchField extends StatelessWidget {
   final String clearTooltip;
   final bool showClear;
   final ValueChanged<String> onChanged;
+  final ValueChanged<String> onSubmitted;
   final VoidCallback onClear;
 
   @override
@@ -268,6 +283,7 @@ class _SearchField extends StatelessWidget {
               controller: controller,
               focusNode: focusNode,
               onChanged: onChanged,
+              onSubmitted: onSubmitted,
               textInputAction: TextInputAction.search,
               style: const TextStyle(
                 color: AppColors.textDark,
@@ -323,6 +339,7 @@ class _ResultsCard extends StatelessWidget {
     required this.places,
     required this.isSearchingPlaces,
     required this.placesFailed,
+    required this.placesFailedWhileTyping,
     required this.strings,
     required this.onShopTap,
     required this.onPlaceTap,
@@ -334,6 +351,7 @@ class _ResultsCard extends StatelessWidget {
   final List<GeocodeResult> places;
   final bool isSearchingPlaces;
   final bool placesFailed;
+  final bool placesFailedWhileTyping;
 
   final AppLocalizations strings;
   final ValueChanged<Shop> onShopTap;
@@ -400,7 +418,9 @@ class _ResultsCard extends StatelessWidget {
                       )
                     else if (placesFailed)
                       _NoticeRow(
-                        label: strings.mapPlacesSearchFailed,
+                        label: placesFailedWhileTyping
+                            ? strings.mapPlacesSearchSlow
+                            : strings.mapPlacesSearchFailed,
                         icon: CupertinoIcons.wifi_exclamationmark,
                         isError: true,
                       )
@@ -423,8 +443,8 @@ class _ResultsCard extends StatelessWidget {
     );
   }
 
-  // nominatim returns the whole administrative chain; the first segment is the part a person actually
-  // recognises, so it becomes the title and the full string stays underneath as context
+  // the result is the whole address, most specific first; the first segment is the part a person
+  // actually recognises, so it becomes the title and the full string stays underneath as context
   static String _shortPlaceName(String displayName) {
     final head = displayName.split(',').first.trim();
     return head.isEmpty ? displayName : head;
@@ -573,7 +593,7 @@ class _NoticeRow extends StatelessWidget {
   }
 }
 
-// Nominatim's addresses are OpenStreetMap data, and its licence asks for the credit wherever they are
+// the addresses are OpenStreetMap data, and its licence asks for the credit wherever they are
 // shown. the map underneath is Yandex's and credits only Yandex, so this line under the results is the
 // one place it can go.
 class _OsmAttribution extends StatelessWidget {

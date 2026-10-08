@@ -13,9 +13,8 @@ import 'package:frontend/features/products/data/product_category.dart';
 /// for, in the enum's own order, so adding a shot to the assets and naming it on the enum is the
 /// whole of promoting a category onto this grid - there is no second list to forget.
 ///
-/// **The pager and its dots are gone.** Twelve categories over two swiped pages hid four of them
-/// behind a gesture nobody makes on a page that already scrolls vertically; the four without a
-/// photo now live behind the header's "Все категории", which is a thing you can see.
+/// **The pager and its dots are gone, and so is "Все категории".** The four categories without a
+/// photo are not on the home screen; they are still reached through search.
 class PopularCategoriesGrid extends StatelessWidget {
   const PopularCategoriesGrid({super.key, required this.onCategoryTap});
 

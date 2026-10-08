@@ -480,3 +480,65 @@ func TestSigningInStoresTheCanonicalSpellingOfTheNumber(t *testing.T) {
 		t.Fatalf("%d rows for one number", n)
 	}
 }
+
+// **The Play review account at the http boundary.** The reviewer is not a special caller - they walk
+// the same two endpoints every user walks - so what has to hold is that the provider is never asked
+// to deliver anything, and that the code they were handed in the Play Console actually signs them
+// in. Without this the review stops on the login screen and the listing is refused.
+func TestTheReviewAccountSignsInWithoutAnythingBeingDelivered(t *testing.T) {
+	phoneAuth, sender, ctx, _, queries := phoneAuthUnderTest(t)
+
+	const code = "424242"
+	phone := unusedPhone()
+	phoneAuth.Codes = auth.NewCodeManager(true).WithReviewAccount(phone, code)
+
+	rec := postAuthWithContext(t, ctx, phoneAuth.RequestCode, "/api/auth/request-code",
+		map[string]string{"phone": phone, "name": "Google", "role": "customer"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("request-code answered %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	// the point of the whole mechanism: there is no Telegram account on this number to deliver to
+	if _, _, calls := sender.delivered(); calls != 0 {
+		t.Fatalf("the provider was called %d times for the review account, want never", calls)
+	}
+
+	rec = postAuthWithContext(t, ctx, phoneAuth.Verify, "/api/auth/verify",
+		map[string]string{"phone": phone, "code": code})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("the armed code answered %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	var answer PhoneAuthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &answer); err != nil {
+		t.Fatalf("decoding the sign-in answer: %v\nbody: %s", err, rec.Body.String())
+	}
+	if answer.Token == "" {
+		t.Fatal("the review account signed in without being given a token")
+	}
+
+	// **it is an ordinary account, not a privileged one.** the bypass decides which code opens one
+	// number, never what that account may do - the signup's role mapping is untouched.
+	user, err := queries.GetUserByPhone(ctx, phone)
+	if err != nil {
+		t.Fatalf("the review account left no users row: %v", err)
+	}
+	if user.Role != "customer" {
+		t.Fatalf("the review account was registered as %q, want customer", user.Role)
+	}
+}
+
+// The same endpoint with nothing armed, which is how production runs once the review is over: a code
+// is minted, handed to the provider, and is not the one anybody could have guessed.
+func TestWithNoReviewAccountEveryLoginStillGoesThroughTheProvider(t *testing.T) {
+	phoneAuth, sender := codeUnderTest()
+
+	rec := postAuth(t, phoneAuth.RequestCode, "/api/auth/request-code",
+		map[string]string{"phone": "998901110000", "name": "Аброр", "role": "customer"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("request-code answered %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if _, _, calls := sender.delivered(); calls != 1 {
+		t.Fatalf("the provider was called %d times, want once", calls)
+	}
+}

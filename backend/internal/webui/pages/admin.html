@@ -5,6 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Domix · Админ-панель</title>
+<!-- **the theme has to be on <html> before the first paint, which is the only reason there is a
+     script up here.** Resolved at the bottom of the file instead, every load of a dark panel would
+     start with a white flash. An explicit choice is remembered; no choice follows the operating
+     system, so the first visit is already right. The key is spelled again in THEME_KEY below -
+     two literals is the price of running before the rest of the file exists. -->
+<script>
+  try {
+    var saved = localStorage.getItem("domix.admin.theme");
+    document.documentElement.dataset.theme = saved ||
+      (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  } catch (e) { document.documentElement.dataset.theme = "light"; }
+</script>
 <style>
   /* ─────────────────────────────────────────────────────────────────────────────
      A warm, flat palette. The phone app's tokens are cool grey on white with soft
@@ -26,14 +38,53 @@
     --card:#F7F7F5; --card-hi:#FDEEDF; --line:#EFEEEB; --line-2:#E6E4E0;
     --ink:#1A1A1A; --ink-2:#5F5F5A; --muted:#9A9A93; --faint:#B9B8B1;
 
-    --o:#FF6F00; --o-600:#F97316; --o-500:#FB8C3C; --o-400:#FDA968;
+    /* the orange ladder is **surfaces**, not chart colours: 50-200 are fills a tint of orange
+       belongs on, 300-700 are accents. The chart ramp is its own ladder in the javascript and
+       deliberately does not read these - see RAMP. */
+    --o:#FF6F00; --o-700:#EA6600; --o-600:#F97316; --o-400:#FDA968;
     --o-300:#FDC48F; --o-200:#FEDCB6; --o-100:#FFEDD5; --o-50:#FFF7ED;
+    /* text *on* an orange tint. three near-identical browns were written out by hand across the
+       file; they are one idea at two weights, and in dark they have to invert. */
+    --o-ink:#9A4A02; --o-ink-2:#A4642C;
 
-    --green:#15803D; --green-bg:#DCFCE7; --red:#B91C1C; --red-bg:#FEE2E2;
+    --green:#15803D; --green-bg:#DCFCE7;
+    /* `--red` is the solid fill a destructive button carries, `--red-ink` is red *text* on
+       `--red-bg`. They are the same value here and cannot be in dark, where a fill white text
+       stands on and a word on a dark tint are opposite ends of the scale. */
+    --red:#B91C1C; --red-700:#9C1717; --red-bg:#FEE2E2; --red-ink:#B91C1C; --red-line:#F1BDBD;
     --amber:#A16207; --amber-bg:#FEF3C7; --blue:#1D4ED8; --blue-bg:#DBEAFE;
+    --scrim:rgba(45,38,30,.4);
 
     --r-1:10px; --r-2:14px; --r-3:18px; --r-4:24px; --r-5:30px;
     --ease:cubic-bezier(.22,1,.36,1);
+  }
+
+  /* ── the same panel after dark ──
+     **one block of tokens and no second stylesheet**, which is the whole reason every colour above
+     is a custom property. `data-theme` is written onto <html> by the three lines in <head>, so the
+     resolved theme is in place before the first paint; nothing here needs a media query of its own.
+
+     The ramp keeps its *direction* and inverts its ends: the page is the darkest thing, the sidebar
+     recedes under the work area, and a card is a step lighter than the work area it sits on - which
+     is what "separation by fill" means when the fill is dark. Still no shadows on content.
+
+     Two groups cannot simply be darkened. The orange tints (50-200) are *fills*, so they go dark
+     while the orange accents (300-700) and `--o-ink` go light; and red splits in two, because
+     `.btn-d` needs a fill that white text reads on while `.tag.rd` needs a word on a dark tint. */
+  :root[data-theme="dark"]{
+    --beige:#100E0D; --shell:#1C1917; --surface:#161413;
+    --card:#262220; --card-hi:#33240F; --line:#2E2A26; --line-2:#3B3631;
+    --ink:#F5F4F2; --ink-2:#B9B2AA; --muted:#978F87; --faint:#7A736B;
+
+    --o:#FF6F00; --o-700:#FF8524; --o-600:#F97316; --o-400:#E08A3C;
+    --o-300:#C8792F; --o-200:#4D3219; --o-100:#2F2217; --o-50:#241A12;
+    --o-ink:#F0A95E; --o-ink-2:#C69A6E;
+
+    --green:#4ADE80; --green-bg:#163024;
+    --red:#C9342A; --red-700:#A82A22; --red-bg:#331715; --red-ink:#F28B82; --red-line:#5B2A26;
+    --amber:#FBBF24; --amber-bg:#352811; --blue:#8AB4F8; --blue-bg:#17243C;
+    --scrim:rgba(0,0,0,.62);
+    color-scheme:dark;
   }
   *,*::before,*::after{box-sizing:border-box}
   html,body{height:100%}
@@ -73,6 +124,9 @@
   .login-card p{color:var(--ink-2);margin:0 0 26px;font-size:14.5px}
   .hint{color:var(--faint);font-size:12.5px;margin-top:20px;line-height:1.6}
 
+  /* **`#fff` below is always white *on brand orange*, and that is theme-independent** - the fill is
+     `--o` in both, so the only colour the label could be is this one. Every other literal in this
+     file is either a token or the map's own controls, which stand on a raster tile. */
   .btn{
     display:inline-flex;align-items:center;justify-content:center;gap:9px;border:0;
     border-radius:var(--r-2);padding:13px 22px;font-weight:650;font-size:14.5px;cursor:pointer;
@@ -80,13 +134,13 @@
   }
   .btn svg{width:17px;height:17px}
   .btn-p{background:var(--o);color:#fff}
-  .btn-p:hover{background:#EA6600;transform:translateY(-1px)}
+  .btn-p:hover{background:var(--o-700);transform:translateY(-1px)}
   /* white rather than `--card`: this one sits on a card now (storage's «Проверить») as well as in
      a modal, and grey-on-grey there was a button you had to look for. */
   .btn-g{background:var(--shell);color:var(--ink);border:1px solid var(--line-2)}
   .btn-g:hover{background:var(--card)}
   .btn-d{background:var(--red);color:#fff}
-  .btn-d:hover{background:#9c1717}
+  .btn-d:hover{background:var(--red-700)}
   .btn:disabled{opacity:.5;cursor:default;transform:none}
   .btn-w{width:100%}
   .btn-s{padding:9px 15px;font-size:13.5px;border-radius:var(--r-1)}
@@ -100,11 +154,15 @@
   .waiting{display:flex;align-items:center;justify-content:center;gap:10px;color:var(--ink-2);font-size:13.5px;margin-top:22px}
   .spin{width:15px;height:15px;border:2px solid var(--o-200);border-top-color:var(--o);border-radius:50%;animation:sp .7s linear infinite}
   @keyframes sp{to{transform:rotate(360deg)}}
-  .alert{display:flex;gap:10px;text-align:left;align-items:flex-start;background:var(--red-bg);color:var(--red);border-radius:var(--r-2);padding:12px 14px;font-size:13.5px;margin-top:18px}
+  .alert{display:flex;gap:10px;text-align:left;align-items:flex-start;background:var(--red-bg);color:var(--red-ink);border-radius:var(--r-2);padding:12px 14px;font-size:13.5px;margin-top:18px}
   .alert svg{width:17px;height:17px;flex:none;margin-top:2px}
 
-  /* ── shell ── */
-  .app{display:flex;min-height:calc(100vh - 28px);margin:14px;background:var(--shell);border-radius:var(--r-5);overflow:hidden}
+  /* ── shell ──
+     **the work area is the window, with no margin and no rounded outer corner.** It used to float
+     on `--beige` at a 14px inset with a 30px radius, which drew a white panel on an orange page -
+     a frame around every screen, costing 28px in both directions and reading as a mis-sized
+     window rather than as a design. `--beige` is now only the login page's own ground. */
+  .app{display:flex;min-height:100vh;background:var(--shell)}
   aside{width:246px;flex:none;padding:26px 18px;display:flex;flex-direction:column;
         background:var(--surface);border-right:1px solid var(--line)}
   aside .brand{margin:0 0 30px;padding-left:6px}
@@ -185,8 +243,8 @@
   .ib:disabled:not(.busy){opacity:.45}
   .ib.busy{background:var(--o-50);border-color:var(--o-200);transform:none}
   .ib.busy svg{color:var(--o);animation:sp .8s linear infinite}
-  .ib.dg:hover{background:var(--red-bg);border-color:#F1BDBD}
-  .ib.dg:hover svg{color:var(--red)}
+  .ib.dg:hover{background:var(--red-bg);border-color:var(--red-line)}
+  .ib.dg:hover svg{color:var(--red-ink)}
 
   /* ── cards ──
      one surface, `--card` on the white work area, with a hairline doing the last of the separating.
@@ -199,7 +257,7 @@
   .card h2{font-size:16.5px;font-weight:750;letter-spacing:-.02em;margin:0}
   .card .cap{font-size:12.5px;color:var(--muted);margin-top:3px}
   .pill{
-    display:inline-flex;align-items:center;gap:7px;background:var(--o-100);color:#9A4A02;border:0;
+    display:inline-flex;align-items:center;gap:7px;background:var(--o-100);color:var(--o-ink);border:0;
     padding:8px 14px;border-radius:var(--r-1);font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap
   }
   .pill.solid{background:var(--o);color:#fff}
@@ -234,7 +292,7 @@
   .kpi.hi{background:var(--card-hi);border-color:var(--o-200)}
   .kpi .k-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:18px}
   .kpi .k-lab{font-size:13.5px;font-weight:600;color:var(--ink-2)}
-  .kpi.hi .k-lab{color:#8A4302}
+  .kpi.hi .k-lab{color:var(--o-ink)}
   .kpi .k-ico{width:36px;height:36px;border-radius:12px;background:var(--shell);display:grid;place-items:center;flex:none}
   .kpi.hi .k-ico{background:var(--o);}
   .kpi .k-ico svg{width:17px;height:17px;color:var(--ink-2)}
@@ -250,11 +308,11 @@
      is worse than no line, because the reader stops to work out what was there. */
   .kpi .k-sub{font-size:12px;font-weight:650;color:var(--muted);margin-top:12px;
               white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .kpi.hi .k-sub{color:#A4642C}
+  .kpi.hi .k-sub{color:var(--o-ink-2)}
   .kpi .k-side{text-align:right;flex:none}
   .kpi .k-d{font-size:12.5px;font-weight:750}
   .kpi .k-d.up{color:var(--green)}
-  .kpi .k-d.dn{color:var(--red)}
+  .kpi .k-d.dn{color:var(--red-ink)}
   .kpi .k-d.fl{color:var(--muted)}
   .kpi .k-note{font-size:11px;color:var(--muted);margin-top:1px}
 
@@ -315,15 +373,15 @@
          background:var(--o-100);border-radius:var(--r-2);overflow:hidden}
   .g-two > *{padding:12px 10px;text-align:center;min-width:0;border:0;background:transparent;
              font:inherit;color:inherit}
-  .g-two > * + *{box-shadow:inset 1px 0 0 rgba(154,74,2,.16)}
-  .g-two .gl{font-size:11.5px;font-weight:650;color:#A4642C;white-space:nowrap;overflow:hidden;
+  .g-two > * + *{box-shadow:inset 1px 0 0 rgba(255,111,0,.24)}
+  .g-two .gl{font-size:11.5px;font-weight:650;color:var(--o-ink-2);white-space:nowrap;overflow:hidden;
              text-overflow:ellipsis}
   .g-two .gv{margin-top:4px;font-size:20px;font-weight:750;letter-spacing:-.035em;line-height:1}
   /* the half that is a button. it opens the list of who has not finished, so it says so - an
      underline on hover rather than a border, which would make one half a different shape */
   .g-two button{cursor:pointer;transition:background .16s var(--ease)}
   .g-two button:hover{background:rgba(255,111,0,.14)}
-  .g-two button .gl{text-decoration:underline;text-decoration-color:rgba(164,100,44,.4);
+  .g-two button .gl{text-decoration:underline;text-decoration-color:currentColor;
                     text-underline-offset:3px}
   /* nothing to show when nobody is unfinished, so it stops looking like a control - it keeps its
      colour rather than fading, because it is still one half of a measurement */
@@ -402,7 +460,7 @@
   .tr .tg{flex:none;width:78px;display:flex;flex-direction:column;align-items:flex-end;gap:5px}
   .tr .tg svg{display:block}
   .tr .tg em{font-style:normal;font-size:11px;font-weight:700}
-  .tr .tg em.up{color:var(--red)}
+  .tr .tg em.up{color:var(--red-ink)}
   .tr .tg em.dn{color:var(--green)}
   .tr .tg em.fl{color:var(--muted)}
 
@@ -410,8 +468,104 @@
      fact about the business, and it was the only card on the front page nobody could act on without
      pressing something first. Small on purpose here: one strip, one button, and no proportion bar,
      so it cannot push the template tables it now sits above off the first screen. */
-  .stor.tpl-stor{margin-bottom:16px;align-items:center}
+  /* the strip itself. its base rules went with the dashboard card it used to live in, which left
+     the strip under Шаблоны rendering as loose text - so they live here now, beside the only user */
+  .stor{display:flex;gap:14px;align-items:flex-start;background:var(--card);border:1px solid var(--line-2);border-radius:var(--r-3);padding:12px 16px}
+  .stor .si{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;flex:none;background:var(--shell);color:var(--muted)}
+  .stor.ok .si{background:var(--green-bg);color:var(--green)}
+  .stor.hit .si{background:var(--amber-bg);color:var(--amber)}
+  .stor .sb{min-width:0}
+  .stor .sb b{display:block;font-size:13.5px}
+  .stor .sb p{margin:2px 0 0;font-size:12.5px;color:var(--muted);line-height:1.45}
+  .stor.tpl-stor{align-items:center}
+  /* **side by side, because they are the smallest thing on this page and sat above the biggest.**
+     Stacked, the two strips and the drift banner cost 210px before the first product. */
+  #tpl-storage{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+  @media (max-width:1240px){ #tpl-storage{grid-template-columns:1fr} }
   .stor-act{display:flex;gap:10px;align-items:center;margin-left:auto;flex:none}
+
+  /* ── the catalogue, as cards ──
+     **a template is a hundred products, and a product is mostly its photograph.** It was a table:
+     a 38px thumbnail in the first column, the name, the size, the unit, a switch and a fraction -
+     eight columns of which exactly one was the thing the founder was looking for. Checking that
+     five sizes of one shovel share the right picture meant reading a column of postage stamps.
+     The model is the photo picker two screens away, which had the answer already: a grid of
+     pictures, big enough to recognise, with the words underneath.
+
+     Wider than the app's grid on purpose - this is a 1440px browser window, not a phone, so the
+     track is ~170px and six fit across. A card is one button: the whole of it opens the editor,
+     because every field is in there and a row with its own inline controls is how the table got
+     to eight columns. */
+  .tpl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:12px}
+  .tpl-scroll{max-height:64vh;overflow-y:auto;overflow-x:hidden;padding:2px}
+  .tcard{display:flex;flex-direction:column;background:var(--shell);border:1px solid var(--line-2);
+         border-radius:var(--r-3);padding:0;overflow:hidden;cursor:pointer;text-align:left;
+         font:inherit;color:inherit;transition:border-color .16s var(--ease)}
+  .tcard:hover{border-color:var(--o-300)}
+  /* the photograph, at the size a photograph is for. square because the catalogue is shot square
+     and a grid of mixed ratios reads as a grid that failed to load. */
+  .tcard .tc-ph{width:100%;aspect-ratio:1;object-fit:cover;background:var(--card);display:block}
+  .tcard .tc-ph.none{display:grid;place-items:center;color:var(--faint)}
+  .tcard .tc-b{padding:10px 11px 0;flex:1;min-width:0}
+  .tcard .tc-n{font-size:13px;font-weight:650;line-height:1.35;display:block;
+               overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;
+               -webkit-box-orient:vertical}
+  .tcard .tc-s{display:block;margin-top:3px;font-size:11.5px;color:var(--muted);line-height:1.4;
+               overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tcard .tc-f{display:flex;align-items:center;gap:8px;padding:9px 11px 10px}
+  .tcard .tc-f .tag{padding:3px 7px;font-size:10.5px}
+  .tcard .tc-f .tc-cov{margin-left:auto;font-size:11px;font-weight:700;color:var(--ink-2);
+                       font-variant-numeric:tabular-nums;white-space:nowrap}
+  /* **how many shops have priced it, along the bottom edge.** The fraction beside it is the number;
+     this is what makes a hundred of them scannable at once, and it costs three pixels instead of a
+     row of its own. Green at the full market, which is «можно в корзину» in one glance. */
+  .tcard .tc-m{height:3px;background:var(--line-2);flex:none}
+  .tcard .tc-m i{display:block;height:100%;background:var(--amber)}
+  .tcard .tc-m.full i{background:var(--green)}
+  .tpl-banner .sb p{color:var(--ink-2)}
+  .tpl-cat{margin-bottom:16px}
+  .tpl-acts{display:flex;gap:8px;flex-wrap:wrap}
+  .tpl-status{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+
+  /* ── the photo field inside the editor ──
+     **three doors in one place: upload a new one, choose one the catalogue already has, take this
+     one off.** The path used to be a text input with a «Выбрать» button beside it; there is nothing
+     left for a person to type here, so it is shown rather than edited - and a path that cannot be
+     typed is a path that cannot be mistyped into a blank tile in every shop of a market.
+
+     Nothing deletes a file. Several sizes of one product share one photograph and a shop seeded
+     last year still draws the one it was seeded with, so replacing a row's photo only stops this
+     row pointing at it. «Фото каталога без товара» under Шаблоны is what collects it afterwards. */
+  .phf{display:flex;gap:12px;align-items:flex-start}
+  .phf-ph{width:92px;height:92px;flex:none;border-radius:var(--r-2);object-fit:cover;
+          background:var(--card);border:1px solid var(--line-2);display:block}
+  .phf-ph.none{display:grid;place-items:center;color:var(--faint)}
+  .phf-side{min-width:0;flex:1;display:flex;flex-direction:column;gap:8px}
+  .phf-acts{display:flex;gap:8px;flex-wrap:wrap}
+  .phf-path{font-size:11px;color:var(--muted);word-break:break-all;line-height:1.45}
+
+  /* the editor's own row of actions, left of the spacer: this row's two ways out that are not
+     «Сохранить». Quiet on purpose - they are not what the modal is for. */
+  .m-acts .m-left{display:flex;gap:8px;flex:none}
+  .m-acts .m-gap{margin-left:auto}
+  .m-acts .btn-q{flex:none;background:transparent;color:var(--ink-2);padding:9px 12px;white-space:nowrap}
+  .m-acts .btn-q:hover{background:var(--card)}
+  .m-acts .btn-q.dg{color:var(--red-ink)}
+  .m-acts .btn-q.dg:hover{background:var(--red-bg)}
+  .form textarea{width:100%;min-height:280px;border:1px solid var(--line-2);background:var(--shell);border-radius:var(--r-1);padding:11px 13px;font:12.5px/1.55 ui-monospace,Menlo,monospace;white-space:pre;overflow:auto;resize:vertical;outline:none;tab-size:4}
+  .form textarea:focus{border-color:var(--o-300);box-shadow:0 0 0 3px var(--o-50)}
+  .form .chk{display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:600;cursor:pointer}
+  .form .chk input{width:18px;height:18px;accent-color:var(--o);margin:0}
+  .picker{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:10px;margin-top:16px}
+  .picker button{border:1px solid var(--line-2);background:var(--shell);border-radius:var(--r-2);padding:6px;cursor:pointer;text-align:left}
+  .picker button:hover{border-color:var(--o-300)}
+  .picker button.cur{border-color:var(--o);box-shadow:0 0 0 2px var(--o-50)}
+  .picker img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;background:var(--card);display:block}
+  .picker span{display:block;font-size:11px;margin-top:5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .picker .free span{color:var(--amber);font-weight:700}
+  .diff h4{margin:18px 0 6px;font-size:13px}
+  .diff ul{margin:0;padding:0 0 0 18px;font-size:13px;max-height:180px;overflow:auto;line-height:1.6}
+  .diff .rd{color:var(--red-ink)}
 
   .flist{display:flex;flex-direction:column;gap:13px}
   .flist .fr{display:flex;align-items:center;gap:10px;font-size:13.5px}
@@ -474,22 +628,25 @@
 
   .tag{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:4px 9px;border-radius:999px;white-space:nowrap}
   .tag.g{background:var(--card);color:var(--muted);border:1px solid var(--line-2)}
-  .tag.o{background:var(--o-100);color:#9A4A02}
+  .tag.o{background:var(--o-100);color:var(--o-ink)}
   .tag.bl{background:var(--blue-bg);color:var(--blue)}
   .tag.gr{background:var(--green-bg);color:var(--green)}
-  .tag.rd{background:var(--red-bg);color:var(--red)}
+  .tag.rd{background:var(--red-bg);color:var(--red-ink)}
   .tag.am{background:var(--amber-bg);color:var(--amber)}
   .tag.vip{background:var(--o);color:#fff}
 
   .prog{display:flex;align-items:center;gap:9px;min-width:118px}
   .prog .t{flex:1;height:6px;background:var(--o-100);border-radius:99px;overflow:hidden}
   .prog .t i{display:block;height:100%;border-radius:99px;background:var(--o)}
+  /* a finished catalogue, in the one colour that means it. a class rather than a style written from
+     the javascript colour mirror: nothing in a list then has to be redrawn when the theme changes. */
+  .prog.full .t i{background:var(--green)}
   .prog .p{font-size:11.5px;font-weight:750;color:var(--ink-2);min-width:32px;text-align:right;font-variant-numeric:tabular-nums}
 
   .acts{display:inline-flex;gap:6px}
   .ia{width:31px;height:31px;border:1px solid var(--line-2);background:var(--shell);border-radius:9px;display:grid;place-items:center;cursor:pointer;color:var(--muted);transition:all .14s}
   .ia:hover{color:var(--o);border-color:var(--o-300);background:var(--o-50)}
-  .ia.dg:hover{color:var(--red);border-color:#F1BDBD;background:var(--red-bg)}
+  .ia.dg:hover{color:var(--red-ink);border-color:var(--red-line);background:var(--red-bg)}
   .ia svg{width:15px;height:15px}
   .ia:disabled{opacity:.35;cursor:not-allowed}
   .ia:disabled:hover{color:var(--muted);border-color:var(--line-2);background:var(--shell)}
@@ -502,7 +659,7 @@
   .skel{padding:44px;text-align:center;color:var(--faint);font-size:13.5px}
 
   /* ── modal / drawer ── */
-  .scrim{position:fixed;inset:0;background:rgba(45,38,30,.4);backdrop-filter:blur(2px);display:grid;place-items:center;padding:24px;z-index:50;opacity:0;animation:fd .18s var(--ease) forwards}
+  .scrim{position:fixed;inset:0;background:var(--scrim);backdrop-filter:blur(2px);display:grid;place-items:center;padding:24px;z-index:50;opacity:0;animation:fd .18s var(--ease) forwards}
   @keyframes fd{to{opacity:1}}
   .modal{width:100%;max-width:456px;background:var(--shell);border-radius:var(--r-5);padding:26px;transform:scale(.97);animation:pp .22s var(--ease) forwards;max-height:88vh;overflow-y:auto}
   .modal.lg{max-width:900px}
@@ -522,6 +679,8 @@
                  margin:22px -26px -26px;padding:16px 26px 26px;background:var(--shell)}
   .modal .m-acts .btn{flex:1}
   .warn{display:flex;gap:10px;align-items:flex-start;background:var(--amber-bg);color:var(--amber);border-radius:var(--r-2);padding:12px 14px;font-size:13px;margin-top:14px}
+  /* the same block saying what happens next rather than what might go wrong, so it is orange */
+  .warn.note{background:var(--o-50);color:var(--o-ink)}
   .warn svg{width:16px;height:16px;flex:none;margin-top:2px}
 
   .form{display:flex;flex-direction:column;gap:14px;margin-top:20px}
@@ -560,17 +719,20 @@
               box-shadow:0 3px 9px rgba(60,40,20,.42)}
   .mapx-zoom{position:absolute;right:10px;bottom:10px;z-index:4;display:flex;flex-direction:column;gap:1px;
              border-radius:9px;overflow:hidden;box-shadow:0 2px 8px rgba(60,40,20,.28)}
-  .mapx-zoom button{width:30px;height:30px;border:0;background:#fff;color:var(--ink);font-size:17px;font-weight:700;
+  /* **the map's controls are the one place a literal colour is right.** They stand on an
+     OpenStreetMap raster tile, which is light whatever theme the panel is in, so `--ink` here would
+     paint near-white text onto a near-white tile the moment the panel went dark. */
+  .mapx-zoom button{width:30px;height:30px;border:0;background:#fff;color:#1A1A1A;font-size:17px;font-weight:700;
                     line-height:1;cursor:pointer;display:grid;place-items:center}
   .mapx-zoom button:hover{background:var(--card)}
-  .mapx-zoom button:disabled{color:var(--faint);cursor:default;background:#fff}
+  .mapx-zoom button:disabled{color:#B9B8B1;cursor:default;background:#fff}
   .mapx-attr{position:absolute;left:0;bottom:0;z-index:4;background:rgba(255,255,255,.84);font-size:10px;
-             padding:2px 7px;border-top-right-radius:7px;color:var(--ink-2)}
+             padding:2px 7px;border-top-right-radius:7px;color:#5F5F5A}
   .mapx-attr a{color:inherit}
   .mapx-tip{font-size:11.5px;color:var(--muted);margin-top:7px;line-height:1.5}
 
   .toasts{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:60;display:flex;flex-direction:column;gap:8px;align-items:center}
-  .toast{display:flex;align-items:center;gap:10px;background:var(--ink);color:#fff;padding:12px 18px;border-radius:var(--r-2);font-size:13.5px;font-weight:600;animation:rs .24s var(--ease)}
+  .toast{display:flex;align-items:center;gap:10px;background:var(--ink);color:var(--shell);padding:12px 18px;border-radius:var(--r-2);font-size:13.5px;font-weight:600;animation:rs .24s var(--ease)}
   @keyframes rs{from{opacity:0;transform:translateY(9px)}}
   .toast.bad{background:var(--red)}
   .toast svg{width:17px;height:17px;flex:none}
@@ -582,7 +744,7 @@
     .r2{grid-row:auto}
   }
   @media (max-width:900px){
-    .app{flex-direction:column;margin:8px}
+    .app{flex-direction:column}
     aside{width:100%;border-right:0;border-bottom:1px solid var(--line);padding:14px;flex-direction:row;align-items:center;gap:12px;overflow-x:auto}
     aside .brand{margin:0}
     nav{flex-direction:row;gap:4px}
@@ -654,6 +816,9 @@
         <input type="search" id="q-global" autocomplete="off">
       </div>
       <div class="top-acts">
+        <!-- the icon and the label are drawn by drawThemeButton: both say which theme the press
+             would move to, which is not something markup can know -->
+        <button class="ib" id="theme"></button>
         <button class="ib" id="refresh" title="Обновить">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
         </button>
@@ -746,12 +911,29 @@ var TOKEN_KEY = "domix.admin.token";
 // the graduated orange ramp the charts read from, darkest first. a donut of twelve identical
 // oranges is unreadable and a donut of twelve *hues* stops looking like one brand, so segments are
 // ordered by size and shaded along one ramp - position in the ramp carries the ranking.
+//
+// **deliberately not read from the `--o-*` tokens, and the same in both themes.** Those are surface
+// tints, so 50-200 go dark when the panel does; these are data, and six warm oranges that read on
+// white read better still on near-black. A ramp that followed the tokens would put the three
+// smallest segments of the donut at the colour of the card behind them.
 var RAMP = ["#FF6F00","#FB8C3C","#FDA968","#FDC48F","#FEDCB6","#FFEDD5"];
-// mirrors the :root tokens, because svg attributes cannot read a custom property. `line2` is here
-// rather than `line` for the chart's own grid: the cards are `--card` now, and `--line` against it
-// is a two-unit difference - a gridline nobody can see.
-var C = { o:"#FF6F00", o3:"#FDC48F", o1:"#FFEDD5", line:"#EFEEEB", line2:"#E6E4E0",
-          muted:"#9A9A93", faint:"#B9B8B1", green:"#15803D", red:"#B91C1C", ink:"#1A1A1A" };
+
+// **svg attributes cannot read a custom property** - `stroke:var(--line-2)` on a <line> is a
+// gridline with no colour - so the chart colours have to exist in javascript as well.
+//
+// Read out of the cascade rather than written down a second time, which is what makes the dark
+// theme cost nothing here: `applyTheme` re-reads these and redraws, and :root is still the only
+// place any colour is declared. `line2` and not `line`, because the cards are `--card` and `--line`
+// against it is a gridline nobody can see.
+var THEME_COLOURS = { o:"--o", o3:"--o-300", o1:"--o-100", line2:"--line-2",
+                      faint:"--faint", card:"--card" };
+var C = {};
+function readThemeColours() {
+  var cs = getComputedStyle(document.documentElement);
+  Object.keys(THEME_COLOURS).forEach(function (key) {
+    C[key] = cs.getPropertyValue(THEME_COLOURS[key]).trim();
+  });
+}
 
 function shade(i, n) {
   if (n <= 1) return RAMP[0];
@@ -766,14 +948,20 @@ var SHOP_CATS = { universal:"Универсальный", plumbing:"Сантех
 var PRODUCT_CATS = { mixes:"Смеси", blocks:"Блоки", lumber:"Пиломатериалы", metal:"Металл", fasteners:"Крепёж",
   roofing:"Кровля", insulation:"Изоляция", electrical:"Электрика", plumbing:"Сантехника",
   paints:"Краски", finishing:"Отделка", tools:"Инструменты" };
+// a shop's own grid chips, universal only for now. "" keeps a row out of every chip but «Все товары».
+var SECTIONS = { tapes_abrasives:"Ленты, расходники, абразивы и диски", drills_hand_tools:"Свёрла и ручной инструмент",
+  electrical_lighting:"Электрика и освещение", fasteners_mounting:"Крепёж и монтаж",
+  mixes_paints:"Смеси, клеи, краски и химия", films_sheets:"Плёнки, изоляция и листовые материалы" };
 var ROLES = { customer:"Покупатель", shop_owner:"Владелец магазина", admin:"Администратор" };
 var AVAIL = { in_stock:"В наличии", on_order:"Под заказ", unavailable:"Нет в наличии" };
 
 var state = {
   token:null, me:null, stats:null, users:null, shops:null, anomalies:null, templates:null,
-  // the orphaned-file scan. null until somebody presses «Проверить» - unlike every other field here
-  // it is never fetched on a timer, because answering it means walking the whole photo store.
-  storage:null,
+  // the two orphaned-file scans, by sweep. null until somebody presses «Проверить» - unlike every
+  // other field here they are never fetched on a timer, because answering means walking the store.
+  storage:{ uploads:null, catalogue:null },
+  // every curated catalogue file, for the photo picker - the catalogue scan's by-product
+  catalogueFiles:null,
   // which market «Кто дешевле» is showing. it survives the 45-second stats poll, and falls back to
   // the busiest category when the one it names stops having anybody in the comparison.
   view:"dash", threshold:0.5, raceCat:null,
@@ -819,6 +1007,7 @@ function initials(name){
 }
 function catName(c){ return SHOP_CATS[c]||c; }
 function pcatName(c){ return PRODUCT_CATS[c]||c; }
+function sectionName(c){ return c ? (SECTIONS[c]||c) : ""; }
 function roleName(c){ return ROLES[c]||c; }
 
 var ICONS = {
@@ -840,6 +1029,10 @@ var ICONS = {
   x:["M18 6 6 18","m6 6 12 12"],
   send:["m22 2-7 20-4-9-9-4Z","M22 2 11 13"],
   info:["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z","M12 16v-4","M12 8h.01"],
+  sun:["M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z","M12 2v2","M12 20v2","M2 12h2","M20 12h2",
+       "m4.93 4.93 1.41 1.41","m17.66 17.66 1.41 1.41","m4.93 19.07 1.41-1.41","m17.66 6.34 1.41-1.41"],
+  moon:["M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"],
+  upload:["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4","m17 8-5-5-5 5","M12 3v12"],
   broom:["m13 11 9-9","M14.6 12.6c.8.8.9 2 .2 2.7l-1.3 1.3c-.7.7-2 .6-2.7-.2L5.6 11.2c-.8-.8-.9-2-.2-2.7l1.3-1.3c.7-.7 2-.6 2.7.2Z","M6 15l-3 3","M9 18l-3 3","M3 21h6"]
 };
 
@@ -848,7 +1041,9 @@ function api(path, opts) {
   opts = opts || {};
   var h = opts.headers || {};
   if (state.token) h["Authorization"] = "Bearer " + state.token;
-  if (opts.body) h["Content-Type"] = "application/json";
+  // only a string body is json: a FormData one carries its own content type with the multipart
+  // boundary in it, and overwriting that makes the server see a body with no parts
+  if (typeof opts.body === "string") h["Content-Type"] = "application/json";
   return fetch(path, { method: opts.method || "GET", headers: h, body: opts.body })
     .then(function (res) {
       return res.json().catch(function(){ return {}; }).then(function (b) {
@@ -1054,6 +1249,43 @@ function moveNavPill(instant) {
   pill.style.height = b.offsetHeight + "px";
   pill.style.transform = "translate(" + b.offsetLeft + "px," + b.offsetTop + "px)";
   if (instant) { void pill.offsetWidth; pill.classList.remove("cold"); }
+}
+
+// ── the theme ──
+//
+// **the panel is read for an hour at a time, often at night, and it was one fixed light page.**
+// The switch is beside «Обновить» because that is where the controls that are about the panel
+// itself live rather than about what is in it.
+//
+// Spelled the same as the literal in <head>, which is what resolves the theme before the first
+// paint; this copy is what writes a choice down.
+var THEME_KEY = "domix.admin.theme";
+
+function currentTheme() { return document.documentElement.dataset.theme === "dark" ? "dark" : "light"; }
+
+// **the charts are the catch, and they are the reason this is a function rather than one line.**
+// Their colours are svg attributes painted from `C` at the moment they were drawn, so a theme
+// change that only swapped the tokens would leave every gridline, axis label and donut track the
+// colour of the theme before it - on a card that had already gone dark. Re-reading `C` and redrawing
+// is the whole fix; nothing in a table needs it, because tables carry classes.
+function applyTheme(next) {
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+  readThemeColours();
+  drawThemeButton();
+  // the open section only: setView redraws the dashboard on the way back into it, and a chart drawn
+  // inside a hidden section measures 0px wide
+  if (state.stats && state.view === "dash") drawDash();
+}
+
+// the icon says where the press goes, not where it is: a moon on a light panel, a sun on a dark one
+function drawThemeButton() {
+  var b = $("#theme"); if (!b) return;
+  var dark = currentTheme() === "dark";
+  clear(b);
+  b.appendChild(ico(dark ? ICONS.sun : ICONS.moon, 18));
+  b.title = dark ? "Светлая тема" : "Тёмная тема";
+  b.setAttribute("aria-label", b.title);
 }
 
 function enter() {
@@ -1692,18 +1924,23 @@ function sparkline(values, w, h) {
   return svg;
 }
 
-// ── files with no product behind them ──
-//
-// **The one panel here that is not about the market**, and it earns its place because nothing else
-// can answer this: deleting a shop takes its products with it through the schema's cascade, and
-// their uploaded photos are not in the schema. They stay on disk, or in the bucket, costing money
-// and appearing nowhere.
-//
-// **It moved off the dashboard and under Шаблоны on 2026-08-22.** It was the only card on the front
-// page that could not tell the founder anything until he pressed something, which is the wrong thing
-// to give the best real estate to; this section is the one about what is inside the catalogues, and
-// the strip is deliberately small so it cannot push the template tables off the first screen.
-//
+// **two strips, because there are two kinds of file and two doors to delete them.** Owner uploads
+// are left behind by a deleted shop; curated catalogue shots are left behind when sizes of one
+// product start sharing a photo, or a template row is pointed at a different one. The server keeps
+// the two sweeps apart (sweepScope in admin.go) so a bug in one cannot reach the other's files, and
+// the panel keeps them apart for the same reason: one button that deleted "everything unused" would
+// be one confirm dialog away from the shared catalogue.
+var STORAGE = [
+  { key:"uploads", url:"/api/admin/storage/orphans", title:"Файлы без товара",
+    idle:"Фотографии удалённых магазинов. Обход всех файлов слишком дорог для таймера — поэтому кнопка.",
+    found:"на них не ссылается ни один товар",
+    warn:"Фотографии товаров и снимки общего каталога не затрагиваются: удаляется только то, что лежит в uploads/ и старше часа. Список берётся заново в момент удаления, а не тот, что на экране." },
+  { key:"catalogue", url:"/api/admin/storage/catalogue", title:"Фото каталога без товара",
+    idle:"Снимки каталога, которых не показывает ни один шаблон и ни один магазин — например, заменённые новыми.",
+    found:"их не показывает ни один шаблон и ни один магазин",
+    warn:"Удаляются только снимки каталога, на которые не ссылается ни один шаблон и ни одна строка магазина. Загрузки владельцев не затрагиваются — для них отдельная кнопка. Список берётся заново в момент удаления." }
+];
+
 // **It is the only panel that does not load itself, and that is deliberate.** Answering it means
 // listing every file in the store and reading every image path out of the database - on R2, a paged
 // listing over the network - and `loadStats` runs every 45 seconds for as long as the tab is open.
@@ -1711,16 +1948,28 @@ function sparkline(values, w, h) {
 function drawStorage() {
   var host = $("#tpl-storage"); if (!host) return;
   clear(host);
+  STORAGE.forEach(function (scope) { host.appendChild(storageStrip(scope)); });
+}
 
-  var report = state.storage;
+function scanStorage(scope) {
+  return api(scope.url).then(function (d) {
+    state.storage[scope.key] = d;
+    // the catalogue scan is also the photo picker's list, so one press serves both
+    if (scope.key === "catalogue") state.catalogueFiles = d.catalogue || [];
+    drawStorage();
+    return d;
+  });
+}
+
+function storageStrip(scope) {
+  var report = state.storage[scope.key];
 
   var check = el("button","btn btn-g btn-s");
   check.appendChild(ico(ICONS.sync,16));
   check.appendChild(el("span",null, report ? "Ещё раз" : "Проверить"));
   check.addEventListener("click", function () {
     check.disabled = true;
-    api("/api/admin/storage/orphans")
-      .then(function (d) { state.storage = d; drawStorage(); })
+    scanStorage(scope)
       .catch(function (e) { if (!guard(e)) toast("Не удалось проверить хранилище", true); })
       .then(function () { check.disabled = false; });
   });
@@ -1735,23 +1984,21 @@ function drawStorage() {
   glyph.appendChild(ico(kind === "ok" ? ICONS.ok : ICONS.broom, 19));
   strip.appendChild(glyph);
 
-  // the title is the strip's own first line, and the second says which of the three states it is in
   var text = el("div","sb");
-  text.appendChild(el("b",null,"Файлы без товара"));
+  text.appendChild(el("b",null,scope.title));
   var held = report && report.too_recent > 0
     ? " Ещё " + nf(report.too_recent) + " моложе часа — их не трогаем: файл пишется раньше строки в базе."
     : "";
   if (!report) {
-    text.appendChild(el("p",null,"Фотографии удалённых магазинов остаются в хранилище. "
-      + "Обход всех файлов слишком дорог для таймера — это кнопка, а не число."));
+    text.appendChild(el("p",null,scope.idle));
   } else if (report.files === 0) {
     // without the «too_recent» line "12 files, 0 deleted" reads as a broken button rather than as a
     // rule working
     text.appendChild(el("p",null, "Лишних файлов нет: " + nf(report.total_files) + " файлов, "
       + bytes(report.total_bytes) + " — за каждым стоит товар." + held));
   } else {
-    text.appendChild(el("p",null, nf(report.files) + " файлов без товара, " + bytes(report.bytes)
-      + " — на них не ссылается ни один товар." + held));
+    text.appendChild(el("p",null, nf(report.files) + " файлов, " + bytes(report.bytes)
+      + " — " + scope.found + "." + held));
   }
   strip.appendChild(text);
 
@@ -1760,13 +2007,12 @@ function drawStorage() {
     var sweep = el("button","btn btn-d btn-s");
     sweep.appendChild(ico(ICONS.broom,16));
     sweep.appendChild(el("span",null,"Удалить " + nf(report.files)));
-    sweep.addEventListener("click", function () { confirmSweep(report); });
+    sweep.addEventListener("click", function () { confirmSweep(scope, report); });
     acts.appendChild(sweep);
   }
   acts.appendChild(check);
   strip.appendChild(acts);
-
-  host.appendChild(strip);
+  return strip;
 }
 
 // bytes as something a person reads. binary steps, since that is what `du` and every file manager on
@@ -1781,27 +2027,27 @@ function bytes(n) {
 
 // **The confirmation names what disappears, and it also names what does not.** The fear this dialog
 // has to answer is "will this delete a live photo", and the honest answer is the rules - so they are
-// on the dialog rather than only in a comment in admin.go.
-function confirmSweep(report) {
+// on the dialog rather than only in a comment in admin.go. The catalogue's names are listed too:
+// those files have meaningful names, and checking them is the point of looking before pressing.
+function confirmSweep(scope, report) {
+  var names = (report.paths || []).filter(function (p) { return !/_thumb\.[^.]+$/.test(p); });
+  var shown = names.slice(0, 30);
+  if (names.length > shown.length) shown.push("и ещё " + nf(names.length - shown.length));
+
   confirmDialog({
     title:"Удалить " + nf(report.files) + " файлов?",
-    body:"Освободится " + bytes(report.bytes) + ". Это фотографии, на которые не ссылается ни один товар "
+    body:"Освободится " + bytes(report.bytes) + ". Это файлы, на которые не ссылается ни одна строка "
        + "и которые лежат дольше часа.",
-    warn:"Фотографии товаров и снимки общего каталога не затрагиваются: удаляется только то, что "
-       + "лежит в uploads/ и старше часа. Список берётся заново в момент удаления, а не тот, что на экране.",
+    names: scope.key === "catalogue" ? shown : null,
+    warn:scope.warn,
     confirmLabel:"Удалить",
     onConfirm:function () {
       // the server re-derives the list; nothing about which files to delete is sent from here
-      return api("/api/admin/storage/orphans", { method:"DELETE" }).then(function (d) {
+      return api(scope.url, { method:"DELETE" }).then(function (d) {
         toast("Удалено " + nf(d.files) + " файлов" + (d.failed ? ", " + nf(d.failed) + " не удалось" : ""));
         // **re-scan rather than render the delete's own answer.** Its `files` is how many were
-        // removed, not how many are left, so painting it back into the card would leave the panel
-        // reporting the work as if it were still outstanding - and after a capped sweep there
-        // genuinely are more.
-        return api("/api/admin/storage/orphans");
-      }).then(function (scan) {
-        state.storage = scan;
-        drawStorage();
+        // removed, not how many are left - and after a capped sweep there genuinely are more.
+        return scanStorage(scope);
       }).catch(function (e) {
         if (guard(e)) return;
         toast("Не удалось очистить хранилище", true);
@@ -1931,7 +2177,9 @@ function drawSignups(days) {
   svg.appendChild(sv("path",{d:smooth(sPts),fill:"none",stroke:C.o3,"stroke-width":2.2,"stroke-dasharray":"6 5","stroke-linecap":"round"}));
   svg.appendChild(sv("path",{d:smooth(uPts),fill:"none",stroke:C.o,"stroke-width":2.8,"stroke-linecap":"round"}));
 
-  var dot = sv("circle",{r:5,fill:"#fff",stroke:C.o,"stroke-width":3,opacity:0}); svg.appendChild(dot);
+  // the card's own fill, not white: the marker is a hole punched in the line, and a white disc on
+  // a dark card is a second dot rather than a gap
+  var dot = sv("circle",{r:5,fill:C.card,stroke:C.o,"stroke-width":3,opacity:0}); svg.appendChild(dot);
 
   var cw = pw/Math.max(days.length-1,1);
   days.forEach(function (d,i) {
@@ -2180,7 +2428,7 @@ function renderShops() {
     var pg = el("td"); var w = el("div","prog");
     var t = el("div","t"); var f = el("i");
     var done = pct(s.template_priced, s.template_total);
-    f.style.width = done+"%"; if (done===100) f.style.background = C.green;
+    f.style.width = done+"%"; if (done===100) w.classList.add("full");
     t.appendChild(f); w.appendChild(t);
     w.appendChild(el("span","p", s.template_total ? done+"%" : "—"));
     pg.appendChild(w);
@@ -2615,25 +2863,25 @@ function loadTemplates() {
   });
 }
 
-// **the three facts that used to be a card at the top of this section.** They are the rules a
-// template edit is judged against, they are worth every word, and they are read once - after which
-// they sat above the tables forever, pushing the thing this section is *for* down the screen. They
-// are behind the «i» in the toolbar now, whole: shortening them would have been the other way to
-// win the space back, and the wrong one, since what they explain is the difference between an edit
-// that changes what the next shop gets and one that rewrites thousands of existing rows.
+// **the rules a template edit is judged against.** They are read once, so they sit behind the «i»
+// in the toolbar rather than above the tables forever, pushing the thing this section is *for* down
+// the screen. Shortening them would have been the other way to win the space back, and the wrong one.
 var TEMPLATE_HELP = [
-  "Шаблон — это список товаров, которым заполняется каталог нового магазина. Здесь его можно менять: добавлять товары, править названия и единицы, удалять лишнее.",
-  "Изменения действуют на магазины, которые будут созданы дальше. Магазины, которые уже существуют, остаются со своим списком — их догоняет кнопка «Применить ко всем»: она добавит новые строки, поправит названия и уберёт удалённые. Цены при этом не трогаются.",
-  "Ключ товара нельзя изменить после создания: именно по нему товар сравнивается между магазинами. Смена ключа не переименовала бы товар, а оторвала бы его от всех магазинов, где он уже стоит."
+  "Шаблон — это список товаров, которым заполняется каталог нового магазина. Клик по карточке открывает товар: там меняется всё — фото, название, описание, единица, раздел, категория и «в корзине», одной кнопкой «Сохранить».",
+  "Изменения действуют на магазины, которые будут созданы дальше. Магазины, которые уже существуют, остаются со своим списком — их догоняет кнопка «Применить ко всем»: она добавит новые строки, поправит названия, описания, разделы, фото и «в корзине» и уберёт удалённые. Цены и наличие при этом не трогаются.",
+  "Фото загружается прямо в редакторе товара: «Загрузить» берёт файл с компьютера, «Из каталога» выбирает снимок, который уже есть — один и тот же снимок обычно нужен всем размерам товара. Старый файл при замене не удаляется: на него могут ссылаться другие размеры и магазины, созданные раньше. Его потом забирает «Фото каталога без товара».",
+  "«В корзине» — участвует ли товар в сравнении цен. Магазин попадает в сравнение, только когда указал цену на каждый товар корзины. Новый товар добавляется вне корзины, поэтому никого не выбивает. Числа на карточке и полоса под ней — сколько магазинов уже указали цену; когда почти все, карточка подписывается «можно в корзину».",
+  "Каждый размер — отдельный товар со своей ценой и своей карточкой: «Шпатель малярный» с описанием «250 мм» и такой же с «400 мм». «Похожий размер» в редакторе копирует строку — останется поменять описание и ключ. Раздел — вкладка, под которой товар стоит в самом магазине.",
+  "Ключ товара нельзя изменить после создания: именно по нему товар сравнивается между магазинами. Смена ключа не переименовала бы товар, а оторвала бы его от всех магазинов, где он уже стоит.",
+  "У обоев фото и названия ставит владелец: строка шаблона задаёт вид обоев, а товар — рулон в конкретном магазине. Поэтому поле фото там закрыто, и синхронизация не перезаписывает снимок, который владелец загрузил сам."
 ];
 
 function templateHelp() {
   // the page's own modal, not a second mechanism: scrim, Escape and click-outside come with it
-  var s = shell({ title:"Как это работает", icon:ICONS.tpl, iconClass:"o" });
-  TEMPLATE_HELP.forEach(function (text, i) {
+  var s = shell({ title:"Как это работает", icon:ICONS.tpl, iconClass:"o", size:"md" });
+  TEMPLATE_HELP.forEach(function (text) {
     var p = el("p","m-sub", text);
-    p.style.marginTop = i === 0 ? "12px" : "12px";
-    p.style.fontSize = "13.5px"; p.style.lineHeight = "1.6";
+    p.style.marginTop = "12px"; p.style.fontSize = "13.5px"; p.style.lineHeight = "1.6";
     s.modal.appendChild(p);
   });
   var acts = el("div","m-acts");
@@ -2643,24 +2891,64 @@ function templateHelp() {
   ok.focus();
 }
 
-function renderTemplates() {
-  var host = $("#tpl-list"); clear(host);
+// how many shop rows have not caught up with the template, of all three kinds
+function templateDrift(t) { return t.missing_rows + t.stale_rows + (t.changed_rows || 0); }
 
-  // what the deleted page header's sub-line would have said, as a fact rather than a description
+// **the share of shops that have priced a row before it is voted into the basket.** Below it, the
+// switch still works but asks first, because every shop without a price drops out of the comparison
+// the moment the sync runs. 80% is a guess at "almost everybody" until there is a real market.
+var BASKET_READY = 0.8;
+
+// **the scroll position of each grid, because a save rebuilds the whole section.** A hundred cards
+// is several screens, and «Сохранить» throwing the founder back to the first one is how editing ten
+// products in a row becomes ten scrolls.
+var tplScroll = {};
+
+function renderTemplates() {
+  var host = $("#tpl-list");
+  $$("#tpl-list .tpl-scroll").forEach(function (box) { tplScroll[box.dataset.cat] = box.scrollTop; });
+  clear(host);
+
   var rows = state.templates.reduce(function (n, t) { return n + t.size; }, 0);
   $("#c-tpl").textContent = "Шаблонов: " + state.templates.length + " · позиций: " + nf(rows);
 
-  state.templates.forEach(function (t) {
-    var drift = t.missing_rows > 0 || t.stale_rows > 0;
+  // one line across the top when any market is behind its template: the sync is per category, and
+  // a founder who edited three of them should not have to find three buttons to finish the job
+  var behind = state.templates.filter(function (t) { return templateDrift(t) > 0 && t.shops > 0; });
+  if (behind.length) {
+    var banner = el("div","stor tpl-stor hit tpl-banner");
+    var g = el("div","si"); g.appendChild(ico(ICONS.sync,19)); banner.appendChild(g);
+    var bt = el("div","sb");
+    bt.appendChild(el("b",null,"Магазины ещё не получили изменения шаблонов"));
+    bt.appendChild(el("p",null, behind.map(function (t) {
+      return catName(t.category) + ": " + nf(templateDrift(t)) + " строк";
+    }).join(" · ")));
+    banner.appendChild(bt);
+    var ba = el("div","stor-act");
+    var all = el("button","btn btn-p btn-s");
+    all.appendChild(ico(ICONS.sync,16));
+    all.appendChild(el("span",null, behind.length > 1 ? "Применить во всех" : "Применить"));
+    all.addEventListener("click", function () { confirmSyncAll(behind); });
+    ba.appendChild(all); banner.appendChild(ba);
+    host.appendChild(banner);
+  }
 
-    var actions = el("div");
-    actions.style.display = "flex"; actions.style.gap = "8px"; actions.style.flexWrap = "wrap";
+  state.templates.forEach(function (t) {
+    var drift = templateDrift(t) > 0;
+
+    var actions = el("div","tpl-acts");
 
     var add = el("button","pill");
     add.appendChild(ico(["M12 5v14","M5 12h14"],14));
     add.appendChild(document.createTextNode("Добавить товар"));
     add.addEventListener("click", function(){ addTemplateItem(t); });
     actions.appendChild(add);
+
+    var paste = el("button","pill");
+    paste.appendChild(ico(ICONS.grid,14));
+    paste.appendChild(document.createTextNode("Таблицей"));
+    paste.addEventListener("click", function(){ importTemplate(t); });
+    actions.appendChild(paste);
 
     var sync = el("button", "pill" + (drift ? " solid" : ""));
     sync.appendChild(ico(ICONS.sync,14));
@@ -2669,56 +2957,117 @@ function renderTemplates() {
     actions.appendChild(sync);
 
     var c = card(null, catName(t.category),
-      t.size + " позиций · " + nf(t.shops) + " магазинов" + (t.owner_named ? " · названия пишет владелец" : ""),
+      t.size + " позиций · в корзине " + nf(t.basket_size) + " · " + nf(t.shops) + " магазинов"
+        + (t.owner_named ? " · названия и фото пишет владелец" : ""),
       actions);
-    c.style.marginBottom = "16px";
+    c.classList.add("tpl-cat");
 
-    var status = el("div");
-    status.style.display="flex"; status.style.gap="10px"; status.style.flexWrap="wrap"; status.style.marginBottom="16px";
+    var status = el("div","tpl-status");
     if (drift) {
       if (t.missing_rows > 0) status.appendChild(el("span","tag am","не хватает строк в магазинах: " + nf(t.missing_rows)));
+      if (t.changed_rows > 0) status.appendChild(el("span","tag am","строк со старыми данными: " + nf(t.changed_rows)));
       if (t.stale_rows > 0) status.appendChild(el("span","tag rd","лишних строк в магазинах: " + nf(t.stale_rows)));
     } else {
       status.appendChild(el("span","tag gr","все магазины совпадают с шаблоном"));
     }
     c.appendChild(status);
 
-    var tbl = el("div","tbl");
-    var sc = el("div","scroll"); sc.style.maxHeight = "380px";
-    var tb = el("table");
-    var th = el("thead"); var hr = el("tr");
-    ["Ключ","Товар","Категория","Ед.","Фото",""].forEach(function(h){ hr.appendChild(el("th",null,h)); });
-    th.appendChild(hr); tb.appendChild(th);
-
-    var body = el("tbody");
     if (!t.items.length) {
-      var tr = el("tr"); var td = el("td"); td.colSpan = 6;
-      td.appendChild(emptyBox("Шаблон пуст","Магазины этой категории будут создаваться без товаров."));
-      tr.appendChild(td); body.appendChild(tr);
+      c.appendChild(emptyBox("Шаблон пуст","Магазины этой категории будут создаваться без товаров."));
+      host.appendChild(c);
+      return;
     }
-    t.items.forEach(function (it) {
-      var tr = el("tr");
-      tr.appendChild(el("td","mono d", it.key));
-      tr.appendChild(el("td","b", it.name));
-      tr.appendChild(el("td","d", pcatName(it.category)));
-      tr.appendChild(el("td","d", it.unit));
-      tr.appendChild(el("td","d mono", it.image_path || "—"));
 
-      var act = el("td","r"); var wrap = el("div","acts");
-      wrap.appendChild(iconBtn(ICONS.edit,"Редактировать",null,function(){ editTemplateItem(t, it); }));
-      wrap.appendChild(iconBtn(ICONS.trash,"Удалить из шаблона","dg",function(){ deleteTemplateItem(t, it); }));
-      act.appendChild(wrap); tr.appendChild(act);
-
-      body.appendChild(tr);
-    });
-    tb.appendChild(body); sc.appendChild(tb); tbl.appendChild(sc); c.appendChild(tbl);
+    var box = el("div","tpl-scroll"); box.dataset.cat = t.category;
+    var grid = el("div","tpl-grid");
+    t.items.forEach(function (it) { grid.appendChild(templateCard(t, it)); });
+    box.appendChild(grid); c.appendChild(box);
     host.appendChild(c);
+    box.scrollTop = tplScroll[t.category] || 0;
   });
+}
+
+// one product, as the app draws it and as the picker next door draws a file: the photograph first,
+// then the two lines of words that tell two sizes of one product apart.
+//
+// **the whole card is the button.** Every field is in the editor behind it, so there is nothing a
+// row needs its own controls for - and inline controls on a grid of a hundred cards is the table
+// this replaced, with the columns stacked.
+function templateCard(t, it) {
+  var b = el("button","tcard");
+  b.type = "button";
+  // the key and the section on hover: both are permanent facts about the row and neither is worth a
+  // line of its own here - «Ленты, расходники, абразивы и диски» truncates on every card in the grid
+  b.title = it.key + (it.section ? "\n" + sectionName(it.section) : "");
+  b.addEventListener("click", function () { editTemplateItem(t, it); });
+
+  if (it.image_thumb_url) {
+    var img = el("img","tc-ph"); img.src = it.image_thumb_url; img.alt = ""; img.loading = "lazy";
+    b.appendChild(img);
+  } else {
+    var none = el("div","tc-ph none"); none.appendChild(ico(ICONS.box,26)); b.appendChild(none);
+  }
+
+  var body = el("div","tc-b");
+  body.appendChild(el("span","tc-n", it.name));
+  // the size lives in the description, because one size is one row - so this line is what says
+  // which of five identical-looking cards this one is
+  if (it.specs) body.appendChild(el("span","tc-s", it.specs));
+  body.appendChild(el("span","tc-s", it.unit));
+  b.appendChild(body);
+
+  var share = t.shops > 0 ? it.priced / t.shops : 0;
+
+  var foot = el("div","tc-f");
+  // three states and never a blank: in the basket, ready to be voted in, or out of it
+  foot.appendChild(it.in_basket ? el("span","tag o","В корзине")
+    : share >= BASKET_READY ? el("span","tag gr","можно в корзину")
+    : el("span","tag g","вне корзины"));
+  if (t.shops > 0) {
+    var cov = el("span","tc-cov", nf(it.priced) + " / " + nf(t.shops));
+    cov.title = "Цену указали " + nf(it.priced) + " из " + nf(t.shops) + " магазинов";
+    foot.appendChild(cov);
+  }
+  b.appendChild(foot);
+
+  var meter = el("div","tc-m" + (share >= 1 ? " full" : ""));
+  var fill = el("i"); fill.style.width = Math.round(share * 100) + "%";
+  meter.appendChild(fill); b.appendChild(meter);
+  return b;
+}
+
+// the whole row as PUT /api/admin/template-items/{id} wants it - the endpoint replaces, it does not
+// patch, so a change has to send back every field it is not changing
+function templateBody(it, changes) {
+  var b = { name:it.name, category:it.category, unit:it.unit, image_path:it.image_path || "",
+    in_basket:!!it.in_basket, specs:it.specs || "", section:it.section || "" };
+  Object.keys(changes || {}).forEach(function (k) { b[k] = changes[k]; });
+  return b;
+}
+
+function saveTemplateItem(it, changes) {
+  return api("/api/admin/template-items/"+it.id, { method:"PUT", body: JSON.stringify(templateBody(it, changes)) });
+}
+
+function templateError(e, fallback) {
+  return e.code==="key_taken" ? "Такой ключ уже используется"
+    : e.code==="invalid_key" ? "Ключ: только латиница, цифры, точка и подчёркивание"
+    : e.code==="missing_fields" ? "Заполните название и единицу"
+    : e.code==="invalid_category" ? "Неизвестная категория товара"
+    : e.code==="invalid_section" ? "Неизвестный раздел"
+    : e.code==="invalid_image_path" ? "Фото не из каталога этой категории"
+    : e.code==="owner_named_photo" ? "В этой категории фото ставит владелец"
+    : e.code==="field_too_long" ? "Одно из полей длиннее допустимого"
+    : fallback;
 }
 
 // the twelve product categories, as options for the pickers below
 function productCategoryOptions() {
   return Object.keys(PRODUCT_CATS).map(function(k){ return [k, PRODUCT_CATS[k]]; });
+}
+
+function sectionOptions() {
+  return [["", "Без раздела"]].concat(Object.keys(SECTIONS).map(function(k){ return [k, SECTIONS[k]]; }));
 }
 
 // a key the founder does not have to invent: the category prefix plus a transliterated slug of the
@@ -2737,68 +3086,113 @@ function suggestKey(category, name) {
   return slug ? category + "." + slug : "";
 }
 
-function addTemplateItem(t) {
+// `base` is set for «Добавить похожий»: the new row starts as a copy of it, since another size of a
+// product is its own row with its own price and only the description differs.
+function addTemplateItem(t, base) {
   modal({
-    title:"Новый товар в шаблоне",
+    title: base ? "Похожий товар" : "Новый товар в шаблоне",
     sub:catName(t.category) + " · добавится в конец списка",
-    iconClass:"o", icon:ICONS.tpl,
+    iconClass:"o", icon:ICONS.tpl, size:"md",
     fields:[
-      { name:"name", label:"Название" },
+      { name:"name", label:"Название", value: base ? base.name : "" },
+      { name:"specs", label:"Описание", value: base ? (base.specs || "") : "",
+        note:"Строка под названием на карточке: «45 мм × 50 м · Прозрачный»." },
       { name:"template_key", label:"Ключ (навсегда)",
         note:"Ключ нельзя будет изменить: по нему товар сравнивается между магазинами. Латиница, цифры, точка и подчёркивание." },
-      { name:"category", label:"Категория товара", type:"select", value:"tools", options:productCategoryOptions() },
-      { name:"unit", label:"Единица измерения", value:"шт", half:true },
-      { name:"image_path", label:"Фото (путь)", value:"", half:true }
+      { name:"category", label:"Категория товара", type:"select", value: base ? base.category : "tools", options:productCategoryOptions() },
+      { name:"section", label:"Раздел в магазине", type:"select", value: base ? (base.section || "") : "", options:sectionOptions() },
+      { name:"unit", label:"Единица измерения", value: base ? base.unit : "шт" },
+      { name:"image_path", label:"Фото", type:"photo", category:t.category, value: base ? (base.image_path || "") : "",
+        thumb: base ? base.image_thumb_url : "", locked:t.owner_named,
+        note: t.owner_named ? OWNER_PHOTO_NOTE
+          : "Загрузите снимок или выберите из каталога — один и тот же снимок обычно нужен всем размерам товара." },
+      { name:"in_basket", label:"Сразу в корзину", type:"check", value:false,
+        note:"Обычно не нужно: новый товар никто ещё не оценил, и все магазины выпали бы из сравнения цен. Включите позже, когда на карточке будет «можно в корзину»." }
     ],
-    note:"Новый товар появится у магазинов, созданных после этого. Чтобы он появился и у существующих, нажмите «Применить ко всем» — они выпадут из сравнения цен, пока владельцы не укажут цену.",
+    note:"Товар появится у магазинов, созданных после этого. Чтобы он появился и у существующих, нажмите «Применить ко всем».",
     autoKey:true, keyPrefix:t.category,
     confirmLabel:"Добавить",
     onConfirm:function (v) {
       if (!v.template_key) { toast("Укажите ключ", true); return Promise.reject(new Error("no key")); }
       return api("/api/admin/templates/"+t.category+"/items", { method:"POST", body: JSON.stringify({
-        template_key:v.template_key, name:v.name, category:v.category, unit:v.unit, image_path:v.image_path
+        template_key:v.template_key, name:v.name, specs:v.specs, section:v.section, category:v.category,
+        unit:v.unit, image_path:v.image_path, in_basket:v.in_basket
       })}).then(function () {
         loadTemplates(); toast("Товар добавлен в шаблон");
       }).catch(function (e) {
         if (guard(e)) return;
-        toast(e.code==="key_taken" ? "Такой ключ уже используется"
-          : e.code==="invalid_key" ? "Ключ: только латиница, цифры, точка и подчёркивание"
-          : e.code==="missing_fields" ? "Заполните название и единицу"
-          : e.code==="invalid_category" ? "Неизвестная категория товара"
-          : "Не удалось добавить", true);
+        toast(templateError(e, "Не удалось добавить"), true);
         throw e;
       });
     }
   });
 }
 
+// **the editor every card opens, and the only place a template row is edited.** It carries every
+// field, including the two that used to be controls on the row - the basket switch and the photo -
+// so there is one place to look and one «Сохранить» to press.
+//
+// The basket checkbox no longer asks before it is ticked, because ticking it is not what costs
+// anybody their badge: it edits the template, and `confirmSync` is the dialog on the step that
+// reaches the shops. What this screen owes the founder is the number, which the note carries.
 function editTemplateItem(t, it) {
   modal({
-    title:"Редактировать товар шаблона",
+    title:"Товар шаблона",
     sub:catName(t.category),
-    iconClass:"o", icon:ICONS.edit,
+    iconClass:"o", icon:ICONS.edit, size:"md",
     fields:[
-      { name:"name", label:"Название", value:it.name },
+      { name:"image_path", label:"Фото", type:"photo", category:t.category,
+        value:it.image_path || "", thumb:it.image_thumb_url, locked:t.owner_named,
+        note: t.owner_named ? OWNER_PHOTO_NOTE : "" },
+      { name:"name", label:"Название", value:it.name,
+        note: t.owner_named ? "Название здесь — только подсказка, чем это место заполняется: своё пишет владелец." : "" },
+      { name:"specs", label:"Описание", value:it.specs || "",
+        note:"Строка под названием на карточке: «45 мм × 50 м · Прозрачный». Размер пишется здесь." },
+      { name:"unit", label:"Единица измерения", value:it.unit },
+      { name:"section", label:"Раздел в магазине", type:"select", value:it.section || "", options:sectionOptions() },
       { name:"category", label:"Категория товара", type:"select", value:it.category, options:productCategoryOptions() },
-      { name:"unit", label:"Единица измерения", value:it.unit, half:true },
-      { name:"image_path", label:"Фото (путь)", value:it.image_path || "", half:true },
+      { name:"in_basket", label:"В корзине — участвует в сравнении цен", type:"check", value:it.in_basket,
+        note:basketNote(t, it), warnNote:!it.in_basket && t.shops - it.priced > 0 },
       { name:"template_key", label:"Ключ", value:it.key, disabled:true,
         note:"Ключ изменить нельзя. Он не переименовал бы товар, а оторвал бы его от всех магазинов, где товар уже стоит — при следующей синхронизации их строки удалились бы вместе с ценами." }
     ],
     note:"Изменения дойдут до существующих магазинов только после «Применить ко всем». Цены при этом не трогаются.",
     confirmLabel:"Сохранить",
+    extras:[
+      { label:"Похожий размер", title:"Копия этой строки под новым ключом — другой размер того же товара",
+        onClick:function(){ addTemplateItem(t, it); } },
+      { label:"Удалить", cls:"dg", onClick:function(){ deleteTemplateItem(t, it); } }
+    ],
     onConfirm:function (v) {
-      return api("/api/admin/template-items/"+it.id, { method:"PUT", body: JSON.stringify({
-        name:v.name, category:v.category, unit:v.unit, image_path:v.image_path
-      })}).then(function () {
+      return saveTemplateItem(it, {
+        name:v.name, specs:v.specs, section:v.section, category:v.category, unit:v.unit,
+        image_path:v.image_path, in_basket:v.in_basket
+      }).then(function () {
         loadTemplates(); toast("Сохранено");
       }).catch(function (e) {
         if (guard(e)) return;
-        toast(e.code==="missing_fields" ? "Заполните название и единицу" : "Не удалось сохранить", true);
+        toast(templateError(e, "Не удалось сохранить"), true);
         throw e;
       });
     }
   });
+}
+
+// **why the photo field is locked for обои, written where somebody would look for the button.**
+// Shared by the add form and the editor, because the rule is the category's and not the form's.
+var OWNER_PHOTO_NOTE = "Фото ставит владелец: строка задаёт вид обоев, а товар — рулон в конкретном " +
+  "магазине. Право на свой снимок даётся владельцу именно потому, что у строки шаблона снимка нет.";
+
+// the number the basket decision is made from, and what including it would cost today
+function basketNote(t, it) {
+  if (t.shops === 0) return "Магазинов этой категории пока нет.";
+  var missing = t.shops - it.priced;
+  var line = "Цену указали " + nf(it.priced) + " из " + nf(t.shops) + " магазинов.";
+  if (!it.in_basket && missing > 0) {
+    return line + " После «Применить ко всем» остальные " + nf(missing)
+      + " выпадут из сравнения цен, пока не укажут её.";
+  }
+  return line;
 }
 
 function deleteTemplateItem(t, it) {
@@ -2821,35 +3215,374 @@ function deleteTemplateItem(t, it) {
   });
 }
 
+// ── the photo field ──
+//
+// **three doors in one place, and no text input.** The path used to be typed with a «Выбрать»
+// button beside it; there is nothing left for a person to type, so the path is shown rather than
+// edited - and a path that cannot be typed cannot be mistyped into a blank tile in every shop of a
+// market. One snapshot is usually wanted by every size of one product, and each size is its own
+// row, which is why «Из каталога» is as prominent as «Загрузить».
+//
+// **nothing here deletes a file.** Other sizes and shops seeded earlier may draw the one being
+// replaced, so taking it off this row only stops this row pointing at it; «Фото каталога без
+// товара» under Шаблоны is what collects it once nothing does.
+function photoField(f, input) {
+  if (f.locked) input.value = ""; // a slot's row may not carry one at all - see OWNER_PHOTO_NOTE
 
-function confirmSync(t) {
+  var box = el("div","phf");
+  var shot = el("img","phf-ph"); shot.alt = "";
+  var blank = el("div","phf-ph none"); blank.appendChild(ico(ICONS.box,26));
+  box.appendChild(shot); box.appendChild(blank);
+
+  var side = el("div","phf-side");
+  var acts = el("div","phf-acts");
+  var pathLine = el("div","phf-path");
+  side.appendChild(acts); side.appendChild(pathLine);
+  box.appendChild(side);
+
+  // thumbnails learned here: the row's own, plus anything uploaded while this form is open. the
+  // picker's list is the other source and it may not have been fetched yet.
+  var known = {};
+  if (f.value && f.thumb) known[f.value] = f.thumb;
+
+  var drop = null;
+  function draw() {
+    var rel = input.value.trim();
+    var url = known[rel] || "";
+    if (!url) {
+      var hit = (state.catalogueFiles || []).filter(function (c) { return c.path === rel; })[0];
+      url = hit ? hit.thumb_url : "";
+    }
+    shot.hidden = !url; blank.hidden = !!url;
+    if (url) shot.src = url;
+    pathLine.textContent = rel || (f.locked ? "" : "Фото не выбрано");
+    if (drop) drop.hidden = !rel;
+  }
+
+  if (f.locked) { draw(); return box; }
+
+  var file = el("input");
+  file.type = "file"; file.accept = "image/jpeg,image/png"; file.hidden = true;
+  box.appendChild(file);
+
+  var up = el("button","btn btn-g btn-s"); up.type = "button";
+  up.appendChild(ico(ICONS.upload,15));
+  up.appendChild(el("span",null,"Загрузить"));
+  up.addEventListener("click", function () { file.click(); });
+  file.addEventListener("change", function () {
+    var chosen = file.files && file.files[0];
+    if (!chosen) return;
+    var was = up.lastChild.textContent;
+    up.disabled = true; up.lastChild.textContent = "…";
+    uploadCataloguePhoto(f.category, chosen).then(function (saved) {
+      known[saved.path] = saved.thumb_url;
+      input.value = saved.path;
+      draw();
+      toast("Фото загружено в каталог");
+    }).catch(function (e) {
+      if (!guard(e)) toast(photoError(e), true);
+    }).then(function () {
+      up.disabled = false; up.lastChild.textContent = was;
+      file.value = ""; // or picking the same file twice fires no change event
+    });
+  });
+
+  var pick = el("button","btn btn-g btn-s","Из каталога"); pick.type = "button";
+  pick.addEventListener("click", function () {
+    pickPhoto(f.category, input.value.trim(), function (chosen) { input.value = chosen; draw(); });
+  });
+
+  drop = el("button","btn btn-g btn-s","Убрать"); drop.type = "button";
+  drop.addEventListener("click", function () { input.value = ""; draw(); });
+
+  acts.appendChild(up); acts.appendChild(pick); acts.appendChild(drop);
+  draw();
+  return box;
+}
+
+// POST /api/admin/catalogue/{category}/photo - the server decodes it once and writes the two JPEGs,
+// the same path an owner's upload takes.
+//
+// **the file is stored before any row names it, which is the api's ordering and not a leak**: a row
+// naming a file that is not there cannot be repaired by retrying, while a file nothing names is
+// exactly what the catalogue sweep is for. Closing this form without saving leaves one, and that is
+// the harmless direction to fail in.
+function uploadCataloguePhoto(category, file) {
+  var form = new FormData();
+  form.append("image", file);
+  return api("/api/admin/catalogue/" + category + "/photo", { method:"POST", body:form })
+    .then(function (saved) {
+      // the answer has the picker's own shape, so the new file joins its list without a re-scan of
+      // the whole store - otherwise it would be invisible until somebody pressed «Проверить»
+      if (state.catalogueFiles) state.catalogueFiles.push(saved);
+      return saved;
+    });
+}
+
+function photoError(e) {
+  return e.code === "image_too_large" ? "Файл больше 6 МБ"
+    : e.code === "image_too_small" ? "Снимок слишком маленький"
+    : e.code === "invalid_image" ? "Это не jpeg и не png"
+    : e.code === "missing_image" ? "Файл не выбран"
+    : e.code === "owner_named_photo" ? "В этой категории фото ставит владелец"
+    : "Не удалось загрузить фото";
+}
+
+// ── the photo picker ──
+//
+// **a grid of the catalogue's own files instead of a text field.** A mistyped path is a blank tile
+// in every shop of a market, with nothing anywhere saying why. The list is the catalogue scan's
+// (GET /api/admin/storage/catalogue), fetched once and kept in state - the files only change when
+// somebody copies new ones into images/, which is not something the panel does.
+function catalogueFiles() {
+  if (state.catalogueFiles) return Promise.resolve(state.catalogueFiles);
+  var scope = STORAGE.filter(function (s) { return s.key === "catalogue"; })[0];
+  return scanStorage(scope).then(function () { return state.catalogueFiles || []; });
+}
+
+function pickPhoto(category, current, onPick) {
+  var s = shell({ title:"Фото из каталога", sub:catName(category) + " · подписаны файлы, которые сейчас ни к чему не привязаны",
+    icon:ICONS.grid, iconClass:"o", size:"lg" });
+  var grid = el("div","picker");
+  grid.appendChild(el("div","skel","Загрузка…"));
+  s.modal.appendChild(grid);
+
+  catalogueFiles().then(function (files) {
+    clear(grid);
+    var prefix = "shops/" + category + "/";
+    var mine = files.filter(function (f) { return f.path.indexOf(prefix) === 0; });
+    if (!mine.length) { grid.appendChild(el("div","skel","В каталоге этой категории нет файлов")); return; }
+    mine.forEach(function (f) {
+      var b = el("button", (f.used ? "" : "free") + (f.path === current ? " cur" : ""));
+      b.type = "button";
+      var img = el("img"); img.src = f.thumb_url; img.alt = ""; img.loading = "lazy";
+      b.appendChild(img);
+      b.appendChild(el("span", null, f.path.slice(prefix.length) + (f.used ? "" : " · свободен")));
+      b.addEventListener("click", function () { onPick(f.path); s.close(); });
+      grid.appendChild(b);
+    });
+  }).catch(function (e) {
+    if (guard(e)) return;
+    clear(grid); grid.appendChild(el("div","skel","Не удалось загрузить список файлов"));
+  });
+
+  var acts = el("div","m-acts");
+  var cancel = el("button","btn btn-g","Закрыть");
+  cancel.addEventListener("click", s.close);
+  acts.appendChild(cancel); s.modal.appendChild(acts);
+}
+
+// ── the sheet ──
+//
+// **export, edit in a spreadsheet, paste back.** The box opens holding the current template in the
+// same columns it accepts, so the founder copies it into Google Sheets, edits a hundred rows the way
+// spreadsheets are good at, and pastes the result here. The server answers with the difference
+// before anything is written, and **a row missing from the paste is a row deleted** - which is the
+// one outcome the preview exists to show in red.
+var SHEET_COLUMNS = ["ключ","название","описание","раздел","категория","ед","фото","в корзине"];
+
+function templateSheet(t) {
+  var lines = [SHEET_COLUMNS.join("\t")];
+  t.items.forEach(function (it) {
+    lines.push([it.key, it.name, it.specs || "", sectionName(it.section), pcatName(it.category), it.unit,
+      it.image_path || "", it.in_basket ? "да" : "нет"].join("\t"));
+  });
+  return lines.join("\n");
+}
+
+// rows plus, for each, the line of the sheet it came from - the server's errors name a row index,
+// and the founder is looking at line numbers
+function parseTemplateSheet(text) {
+  var byName = {};
+  Object.keys(PRODUCT_CATS).forEach(function (k) { byName[PRODUCT_CATS[k].toLowerCase()] = k; byName[k] = k; });
+  var sectionByName = { "":"" };
+  Object.keys(SECTIONS).forEach(function (k) { sectionByName[SECTIONS[k].toLowerCase()] = k; sectionByName[k] = k; });
+
+  var rows = [], lines = [], problems = [];
+  text.split(/\r?\n/).forEach(function (line, i) {
+    if (!line.trim()) return;
+    var c = line.split("\t").map(function (x) { return x.trim(); });
+    if (rows.length === 0 && /^(ключ|key)$/i.test(c[0])) return;
+    var section = sectionByName[(c[3] || "").toLowerCase()];
+    if (section === undefined) { problems.push("строка " + (i + 1) + ": неизвестный раздел «" + c[3] + "»"); return; }
+    var cat = byName[(c[4] || "").toLowerCase()];
+    if (!cat) { problems.push("строка " + (i + 1) + ": неизвестная категория «" + (c[4] || "") + "»"); return; }
+    rows.push({ template_key:c[0] || "", name:c[1] || "", specs:c[2] || "", section:section, category:cat,
+      unit:c[5] || "", image_path:c[6] || "", in_basket:/^(да|yes|1|true|\+)$/i.test(c[7] || "") });
+    lines.push(i + 1);
+  });
+  return { rows:rows, lines:lines, problems:problems };
+}
+
+function importTemplate(t) {
+  var s = shell({ title:"Шаблон таблицей", sub:catName(t.category) + " · скопируйте в Google Таблицы, поправьте и вставьте обратно",
+    icon:ICONS.grid, iconClass:"o", size:"lg" });
+
+  var form = el("div","form");
+  var area = el("textarea"); area.value = templateSheet(t); area.spellcheck = false;
+  form.appendChild(area);
+  var hint = el("div","locked"); hint.appendChild(ico(ICONS.info,13));
+  hint.appendChild(el("span",null,"Колонки через табуляцию, как их копирует таблица: " + SHEET_COLUMNS.join(", ")
+    + ". «В корзине» — да или нет. Строка, которой нет в таблице, будет удалена из шаблона."));
+  form.appendChild(hint);
+  s.modal.appendChild(form);
+
+  var out = el("div","diff"); s.modal.appendChild(out);
+
+  var acts = el("div","m-acts");
+  var cancel = el("button","btn btn-g","Отмена");
+  var check = el("button","btn btn-p","Проверить");
+  acts.appendChild(cancel); acts.appendChild(check); s.modal.appendChild(acts);
+  cancel.addEventListener("click", s.close);
+
+  // what was checked, so «Применить» sends exactly the rows the preview describes
+  var checked = null;
+  area.addEventListener("input", function () {
+    if (!checked) return;
+    checked = null; clear(out); check.textContent = "Проверить"; check.className = "btn btn-p";
+  });
+
+  function send(parsed, apply) {
+    return api("/api/admin/templates/"+t.category+"/import", { method:"POST",
+      body: JSON.stringify({ rows:parsed.rows, apply:apply }) }).catch(function (e) {
+      if (!guard(e)) {
+        // "row 3: …" is an index into the posted rows; the founder needs the sheet's line
+        var m = /^row (\d+):/.exec(e.message || "");
+        var where = m ? "Строка " + (parsed.lines[Number(m[1]) - 1] || m[1]) + ": " : "";
+        toast(where + templateError(e, e.code === "duplicate_key" ? "ключ повторяется" : "таблица не принята"), true);
+      }
+      throw e;
+    });
+  }
+
+  check.addEventListener("click", function () {
+    var parsed = checked || parseTemplateSheet(area.value);
+    if (parsed.problems.length) { toast(parsed.problems[0], true); return; }
+    if (!parsed.rows.length) { toast("Таблица пуста", true); return; }
+
+    check.disabled = true;
+    var applying = !!checked;
+    send(parsed, applying).then(function (r) {
+      if (applying) {
+        s.close();
+        toast("Шаблон обновлён: +" + nf(r.create.length) + " · изменено " + nf(r.update.length)
+          + " · удалено " + nf(r.delete.length) + ". Магазины узнают после «Применить ко всем».");
+        loadTemplates();
+        return;
+      }
+      drawDiff(out, r);
+      var nothing = !r.create.length && !r.update.length && !r.delete.length;
+      if (nothing) { toast("Таблица совпадает с шаблоном"); return; }
+      checked = parsed;
+      check.textContent = "Применить";
+      check.className = r.delete.length ? "btn btn-d" : "btn btn-p";
+    }).catch(function () {}).then(function () { check.disabled = false; });
+  });
+
+  // the caret at the start, or the box opens scrolled to the end of the last line and the key and
+  // name columns - the two that say which row is which - are off the left edge
+  area.focus(); area.setSelectionRange(0, 0); area.scrollTop = 0; area.scrollLeft = 0;
+}
+
+function drawDiff(host, r) {
+  clear(host);
+  function list(title, items, cls, detail) {
+    if (!items.length) return;
+    host.appendChild(el("h4", cls || null, title + ": " + nf(items.length)));
+    var ul = el("ul", cls || null);
+    items.forEach(function (c) { ul.appendChild(el("li", null, c.name + " · " + c.key + (detail ? detail(c) : ""))); });
+    host.appendChild(ul);
+  }
+  var FIELD = { name:"название", category:"категория", unit:"единица", image_path:"фото",
+    in_basket:"в корзине", specs:"описание", section:"раздел" };
+  list("Добавится", r.create);
+  list("Изменится", r.update, null, function (c) {
+    return " — " + (c.fields || []).map(function (f) { return FIELD[f] || f; }).join(", ");
+  });
+  list("Удалится из шаблона", r.delete, "rd");
+}
+
+// the shops of this market that would lose their place in the comparison once the sync lands: a
+// basket row some of them do not hold yet arrives unpriced
+function basketGaps(t) {
+  return t.items.filter(function (it) { return it.in_basket && it.shops < t.shops; });
+}
+
+function syncNames(t) {
   var names = [];
   if (t.missing_rows > 0) names.push("Добавится строк: " + nf(t.missing_rows) + " — без цены");
+  if (t.changed_rows > 0) names.push("Обновится строк: " + nf(t.changed_rows) + " — названия, описания, разделы, фото, «в корзине»");
   if (t.stale_rows > 0) names.push("Удалится строк: " + nf(t.stale_rows) + " — вместе с ценами, которые владельцы уже ввели");
   names.push(t.owner_named
     ? "Названия НЕ трогаются: в этой категории их пишет владелец"
     : "Названия, единицы и фото приводятся к шаблону");
   names.push("Цены и наличие не меняются");
+  return names;
+}
 
+function runSync(t) {
+  return api("/api/admin/templates/"+t.category+"/sync", { method:"POST" });
+}
+
+function afterSync() {
+  loadTemplates(); loadStats();
+  if (state.shops) loadShops();
+  if (state.anomalies) loadAnomalies();
+}
+
+function confirmSync(t) {
+  var gaps = basketGaps(t);
   confirmDialog({
     title:"Применить шаблон ко всем магазинам?",
     body:catName(t.category) + " · " + nf(t.shops) + " магазинов. Действие нельзя отменить.",
-    names:names,
-    warn: t.missing_rows > 0
-      ? "Новые строки добавятся без цены, а магазин попадает в сравнение цен только с полностью заполненным каталогом. Все магазины этой категории временно выпадут из сравнения, пока владельцы не проставят цены."
+    names:syncNames(t),
+    warn: gaps.length
+      ? "В корзине есть товары, которых у части магазинов ещё нет: " + gaps.slice(0, 3).map(function (it) { return it.name; }).join(", ")
+        + (gaps.length > 3 ? " и ещё " + nf(gaps.length - 3) : "")
+        + ". Эти магазины выпадут из сравнения цен, пока владельцы не укажут цены."
       : null,
     confirmLabel:"Применить",
     danger:t.stale_rows > 0,
     onConfirm:function () {
-      return api("/api/admin/templates/"+t.category+"/sync", { method:"POST" }).then(function (r) {
+      return runSync(t).then(function (r) {
         toast("Готово: +" + nf(r.inserted) + " · изменено " + nf(r.updated) + " · удалено " + nf(r.deleted));
-        loadTemplates(); loadStats();
-        if (state.shops) loadShops();
-        if (state.anomalies) loadAnomalies();
+        afterSync();
       }).catch(function (e) {
         if (guard(e)) return;
         toast("Не удалось применить шаблон", true); throw e;
       });
+    }
+  });
+}
+
+// one at a time rather than in parallel: each sync is its own transaction over its own market, and
+// a failure part-way should leave the toast naming exactly which category did not go through
+function confirmSyncAll(list) {
+  confirmDialog({
+    title:"Применить шаблоны во всех категориях?",
+    body:list.map(function (t) { return catName(t.category); }).join(", ") + ". Действие нельзя отменить.",
+    names:list.map(function (t) {
+      return catName(t.category) + ": +" + nf(t.missing_rows) + " · обновится " + nf(t.changed_rows || 0)
+        + " · удалится " + nf(t.stale_rows);
+    }).concat(["Цены и наличие не меняются"]),
+    warn: list.some(function (t) { return basketGaps(t).length; })
+      ? "В корзине есть товары, которых у части магазинов ещё нет — эти магазины выпадут из сравнения цен, пока не укажут цены."
+      : null,
+    confirmLabel:"Применить",
+    danger:list.some(function (t) { return t.stale_rows > 0; }),
+    onConfirm:function () {
+      var done = 0;
+      return list.reduce(function (chain, t) {
+        return chain.then(function () {
+          return runSync(t).then(function () { done++; }).catch(function (e) {
+            if (!guard(e)) toast("Не удалось применить: " + catName(t.category), true);
+            throw e;
+          });
+        });
+      }, Promise.resolve()).then(function () {
+        toast("Применено в " + nf(done) + " категориях");
+        afterSync();
+      }).catch(function (e) { afterSync(); throw e; });
     }
   });
 }
@@ -3165,11 +3898,22 @@ function modal(o) {
       maps.push({ f:f, slot:slot });
       return;
     }
-    var label = el("label");
-    label.appendChild(el("span","lb",f.label));
+    // a photo field holds a button, and a <label> around a button forwards clicks to the input -
+    // so the two composite fields get a plain block instead
+    var label = el(f.type === "photo" ? "div" : "label");
+    if (f.type !== "check") label.appendChild(el("span","lb",f.label));
 
-    var input;
-    if (f.type === "select") {
+    var input, control;
+    if (f.type === "check") {
+      label.className = "chk";
+      input = el("input"); input.type = "checkbox"; input.checked = !!f.value;
+      control = input;
+    } else if (f.type === "photo") {
+      // the value is the stored path and nothing types it, so the input is hidden: the form keeps
+      // its one way of reading a field and photoField owns everything visible
+      input = el("input"); input.type = "hidden"; input.value = f.value || "";
+      control = photoField(f, input);
+    } else if (f.type === "select") {
       input = el("select");
       f.options.forEach(function (opt) {
         var op = el("option",null,opt[1]); op.value = opt[0];
@@ -3183,13 +3927,19 @@ function modal(o) {
       if (f.disabled) input.disabled = true;
     }
     inputs[f.name] = input;
-    label.appendChild(input);
+    label.appendChild(control || input);
+    if (f.type === "check") label.appendChild(el("span",null,f.label));
 
+    if (f.note && f.type === "check") {
+      var wrapCheck = el("div"); wrapCheck.appendChild(label); label = wrapCheck;
+    }
     if (f.note) {
-      var n = el("div","locked");
+      // `warnNote` is for a note that is a consequence rather than an explanation - ticking «в
+      // корзине» today takes a number of shops out of the comparison, and that reads past in grey
+      var n = el("div", f.warnNote ? "warn" : "locked");
       // a padlock means "you cannot change this", so a note under a field you *can* change gets the
       // «i» instead - the role select is the first such note, and its point is what the choice does
-      n.appendChild(ico(f.disabled ? ICONS.lock : ICONS.info, 13));
+      n.appendChild(ico(f.warnNote ? ICONS.anom : f.disabled || f.locked ? ICONS.lock : ICONS.info, f.warnNote ? 16 : 13));
       n.appendChild(el("span",null,f.note));
       label.appendChild(n);
     }
@@ -3210,13 +3960,27 @@ function modal(o) {
   s.modal.appendChild(form);
 
   if (o.note) {
-    var nb = el("div","warn"); nb.style.background = "var(--o-50)"; nb.style.color = "#8A4302";
+    var nb = el("div","warn note");
     nb.appendChild(ico(ICONS.crown,16)); nb.appendChild(el("span",null,o.note));
     s.modal.appendChild(nb);
   }
 
   var acts = el("div","m-acts");
-  var cancel = el("button","btn btn-g","Отмена");
+  // **this row's ways out that are not «Сохранить»**, kept quiet and on the far side of the gap
+  // from the confirming button. Each of them closes this form first: running one behind an open
+  // editor would leave a form holding values the row no longer has.
+  if (o.extras && o.extras.length) {
+    var left = el("div","m-left");
+    o.extras.forEach(function (x) {
+      var b = el("button","btn btn-s btn-q" + (x.cls ? " " + x.cls : ""), x.label);
+      b.type = "button";
+      if (x.title) b.title = x.title;
+      b.addEventListener("click", function () { s.close(); x.onClick(); });
+      left.appendChild(b);
+    });
+    acts.appendChild(left);
+  }
+  var cancel = el("button","btn btn-g" + (o.extras && o.extras.length ? " m-gap" : ""),"Отмена");
   var ok = el("button","btn btn-p", o.confirmLabel || "Сохранить");
   acts.appendChild(cancel); acts.appendChild(ok); s.modal.appendChild(acts);
   cancel.addEventListener("click", s.close);
@@ -3232,12 +3996,16 @@ function modal(o) {
     });
   }
 
-  var first = o.fields.filter(function(f){ return !f.disabled && f.type !== "map"; })[0];
+  // a photo field's input is hidden, so it cannot take focus and must not be asked to
+  var first = o.fields.filter(function(f){ return !f.disabled && f.type !== "map" && f.type !== "photo"; })[0];
   if (first && inputs[first.name]) inputs[first.name].focus();
 
   ok.addEventListener("click", function () {
     var values = {};
-    Object.keys(inputs).forEach(function(k){ values[k] = inputs[k].value.trim ? inputs[k].value.trim() : inputs[k].value; });
+    Object.keys(inputs).forEach(function(k){
+      var input = inputs[k];
+      values[k] = input.type === "checkbox" ? input.checked : (input.value.trim ? input.value.trim() : input.value);
+    });
     ok.disabled = true; cancel.disabled = true;
     var was = ok.textContent; ok.textContent = "…";
     o.onConfirm(values).then(s.close).catch(function () {
@@ -3309,6 +4077,14 @@ window.addEventListener("resize", function () {
     if (state.view === "dash" && state.stats) drawSignups(state.stats.signups);
   }, 180);
 });
+
+$("#theme").addEventListener("click", function () {
+  applyTheme(currentTheme() === "dark" ? "light" : "dark");
+});
+
+// before anything is drawn: the charts read their colours out of `C`, and `C` is empty until this
+readThemeColours();
+drawThemeButton();
 
 // ── boot ──
 // a stored token is a claim to check, not proof. /api/me decides, and it is also what catches an

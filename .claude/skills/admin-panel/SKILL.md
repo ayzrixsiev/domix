@@ -63,7 +63,7 @@ cooldown cannot be used to tell the two apart either.
   are keyed by the canonical spelling, and anything else is a lookup miss read as "wrong code".
 - The support address is `{{SUPPORT_EMAIL}}`, substituted once at startup rather than baked into the
   markup — it is the value most likely to be wrong on a deployment. Unset it falls back to
-  `support@domix.uz` **and logs a warning at boot**. It is now only the way to reach a person when the
+  `domix.support@gmail.com` **and logs a warning at boot**. It is now only the way to reach a person when the
   flow itself fails, which is the one thing a self-service page cannot cover.
 - `/delete-account/` and `/account-deletion` are 301s onto it, because the URL goes into the Play
   Console and into support replies and those copies cannot be corrected later.
@@ -120,7 +120,7 @@ licence to add it to `ShopResponse`.**
 | **Аномалии** | prices that disagree with the market for the same basket line |
 | **Пользователи** | edit name and role, delete |
 | **Магазины** | edit the four editable fields, grant/revoke VIP, open the catalogue, delete |
-| **Шаблоны** | the «Файлы без товара» strip, then what each template holds, how far shops have drifted, and one button to push it to all of them. The three paragraphs explaining what an edit reaches are behind the «i» in its toolbar (`templateHelp`), not printed above the tables |
+| **Шаблоны** | two storage strips side by side, a banner when any market is behind its template, then per category a **grid of product cards** with add / sheet import / apply-to-all. The rules are behind the «i» (`templateHelp`), not printed above the grids |
 
 ### The page header — `.topbar`
 
@@ -449,14 +449,30 @@ between "write the file" and "point the row at it" are what feed this.
    matching paths literally would find every thumbnail unreferenced and **blank every grid in the market
    on its first run**, with the database perfectly consistent throughout.
 
-Plus the property that is not a rule: **nothing outside `uploads/` is listed or deletable**.
-`imagestore.Storage.List` walks only that prefix and `RemoveFile` refuses anything else, so the curated
-catalogue — one file per row shared by every shop of a category — is not reachable from here even by a
-bug in this file. `TestASweepCannotReachTheCuratedCatalogue` pins it;
-`TestASweepKeepsThumbnailsAndAnythingWrittenRecently` pins rules 2 and 3.
+**Two sweeps, one scan, two doors** (2026-10). `sweepScope` in `admin.go` is the only difference
+between them: which prefix `List` walks, which rows protect a file, and which storage method deletes.
+
+| sweep | route | lists | protected by | deletes through |
+| --- | --- | --- | --- | --- |
+| uploads | `/api/admin/storage/orphans` | `shops/uploads` | `AdminUploadedImagePaths` | `RemoveFile` (`IsUpload`) |
+| catalogue | `/api/admin/storage/catalogue` | `shops` (uploads skipped) | `AdminReferencedImagePaths` — templates **and** every shop row | `RemoveCatalogueFile` (`IsCatalogue`) |
+
+**The catalogue became deletable once photos started being replaced** — migration `000006` left 18
+curated masters (and their thumbs) referenced by nothing, and every reshoot leaves more. **A shop row
+protects a file as much as a template row does**: a shop seeded before a template's photo changed
+still draws the old one. Neither door accepts the other's paths, so a bug in one sweep cannot reach the
+other's files — `TestTheTwoDeletionDoorsDoNotOverlap`, `TestTheCatalogueSweepTakesOnlyWhatNothingDraws`,
+`TestASweepCannotReachTheCuratedCatalogue`, `TestASweepKeepsThumbnailsAndAnythingWrittenRecently`.
+
+**The catalogue GET doubles as the photo picker's source** (`listsEveryFile`, `report.catalogue`: every
+master with `used` and a `thumb_url`), built on the same walk so it obeys rule 1 for free. A GET also
+carries `paths`, so the confirm dialog can name what goes; a DELETE ignores any list and re-derives.
 
 Panel-side, four things:
 
+- **Two strips now, one per sweep** (`STORAGE`, `storageStrip`, `state.storage.{uploads,catalogue}`).
+  **The base `.stor` rules were missing from 2026-08-22 to 2026-10** — they went with the dashboard
+  card — so the strip rendered as loose text; they live beside `.stor.tpl-stor` now.
 - **It lives under Шаблоны, above the template tables** (`drawStorage`, `#tpl-storage`), moved off the
   dashboard on 2026-08-22. It is maintenance rather than a fact about the business, and it was the
   only card on the front page that could not tell the founder anything until he pressed something.
@@ -508,12 +524,93 @@ delete  rows the shop has and the template no longer does
   `text[]`s that could get out of step. Multi-argument `unnest` is valid postgres and was verified
   against the real database, but sqlc's parser does not know the 5-argument signature.
 
+## Basket membership, descriptions, sections and the sheet (2026-10, migrations `000006`–`000007`)
+
+- **«В корзине» is a switch on each row (`toggleBasket`), and «Оценили» beside it is how the founder
+  knows when to flip it**: priced shops over *all* shops of the market (`AdminTemplateCoverage`), green
+  at 100%, with «можно в корзину» from `BASKET_READY` (80%). Voting a row in asks first when not
+  everybody has priced it, naming how many shops will drop out; voting out never asks. Like every
+  template edit it reaches shops only through the sync.
+- **The sync carries `in_basket`, `specs` and `section`** (`AdminSyncTemplateUpdate` sets them), and
+  **`changed_rows` (`AdminTemplateChangedRows`) is the third kind of drift**. Before it, a rename showed
+  «все магазины совпадают» — false, and with membership it would hide half a market totalling a
+  different basket. It compares exactly the columns the sync's update rewrites; keep the two in step.
+- A banner tops the section when any market is behind, with one «Применить во всех» (`confirmSyncAll`,
+  sequential so a failure names its category).
+- **One size is one row** (`000007` dropped the size groups). «Добавить похожий» opens the add form
+  prefilled from a row, so another size is a new key and a new description. «Описание» is free text up
+  to 80; «Раздел в магазине» is a select over `SECTIONS`, refused server-side as `invalid_section`.
+- **The catalogue is cards, and a card opens an editor** (2026-10). It was a table whose first column
+  was a 38px thumbnail: eight columns of which one was the thing being looked for, and checking that
+  five sizes of one shovel share the right picture meant reading a column of postage stamps. The grid
+  is modelled on the photo picker two screens away — `minmax(168px,1fr)`, six across at 1440px, wider
+  than the app's because this is a browser window. A card carries the photograph, the name, `specs`,
+  the unit, one of three basket chips («В корзине» / «можно в корзину» / «вне корзины»), «N / M»
+  priced, and a 3px coverage line along its bottom edge; the key and the section ride on its `title`,
+  because «Ленты, расходники, абразивы и диски» truncates on every card in the grid.
+  **The whole card is one button** and every field is behind it, which is what stops the row growing
+  its own controls again. `tplScroll` restores each grid's scroll position, or saving one product
+  throws the founder back to the top of a hundred cards.
+- **The editor holds everything and saves once**, with «Похожий размер» and «Удалить» as quiet buttons
+  on the far side of the action row's gap — both close the editor before they run. The basket
+  checkbox **no longer asks before it is ticked**: ticking it edits the template, and `confirmSync`
+  is the dialog on the step that reaches the shops. What the editor owes the founder is the number,
+  which `basketNote` carries and `warnNote` paints amber when enabling it would drop shops out.
+- **The photo field is three doors and no text input** (`photoField`): «Загрузить», «Из каталога»
+  (`pickPhoto` over the catalogue scan), «Убрать». A path that cannot be typed cannot be mistyped
+  into a blank tile in every shop of a market. Rows show their thumbnail (`image_thumb_url`, built
+  server-side because only the server knows the photo host).
+  - **The upload writes the file before any row names it**, which is the api's ordering: abandoning
+    the form leaves a file for «Фото каталога без товара», and the other order leaves a row naming a
+    file that is not there. The answer has `catalogueFile`'s own shape, so it joins
+    `state.catalogueFiles` without a re-scan of the whole store.
+  - **`api()` sets `Content-Type: application/json` only for a string body.** A FormData body carries
+    its own with the multipart boundary in it, and overwriting that makes the server see no parts.
+  - **For обои the field is locked, like `template_key`**, with `OWNER_PHOTO_NOTE` saying why where
+    the buttons would be. Two more locks sit behind it, see «The обои photo rule» below.
+- **«Таблицей» (`importTemplate`, `POST /api/admin/templates/{category}/import`)**: the box opens holding
+  the template as TSV (`ключ, название, описание, раздел, категория, ед, фото, в корзине`; раздел by its russian name), so the founder
+  copies it into Google Sheets and pastes it back. **The paste is the whole template — a missing row is
+  a deletion**, which is why «Проверить» always shows the difference first (`apply:false`, written
+  nowhere, the same code path rolled back) and «Применить» turns red when anything is deleted. New
+  rows join at the end; existing rows keep their id and so their place. Server errors name `row N`;
+  the panel maps it back to the sheet's line. Keys of another category are refused up front.
+- **Write endpoints refuse GET** (`SyncTemplate`, `ImportTemplate`): a prefetching browser must not run a
+  sync.
+
 ## Editing the templates themselves
 
 They moved out of Go into `product_templates`. The two-step shape is the design:
 **editing a template decides what the *next* shop is created with** — add, rename, change a unit,
 delete, none of it touches an existing shop — and **«Применить ко всем» is the second, louder step**.
 Merging them would make a typo in a name an event that touches thousands of rows.
+
+### The обои photo rule — three locks, because one is a silent market-wide outage
+
+An обои row names a *kind* of wallpaper; the product is the roll standing in one shop. The owner's
+right to photograph it is granted by **the template row having no photo** (`templateFlags`), so one
+picture put on a slot from the panel takes that right away from every обои shop at once — and the
+next sync replaces each of their real photographs with it, sending the files they replaced to the
+orphan sweep. The row count looks exactly as it should throughout.
+
+| lock | where |
+| --- | --- |
+| the field is disabled for an owner-named category | `photoField`'s `locked`, panel |
+| a write naming a photo is refused | `checkTemplatePhoto`, `owner_named_photo` |
+| the upload endpoint refuses the category outright | `UploadCataloguePhoto`, before a byte is read |
+| the sync keeps a shop's own upload | `AdminSyncTemplateUpdate`'s `$4`, `uploadPathPattern` |
+
+**The sync's guard is the `shops/uploads/` prefix, not the category**, so a second slot-based category
+is covered the day it exists — and `AdminTemplateChangedRows` carries the same `CASE`, or the panel
+would report the market as behind its template forever.
+`TestSyncKeepsAShopsOwnPhotographWhenTheTemplateGainsOne` pins both halves.
+
+### `image_path` is validated now
+
+It used to accept any string. A non-empty path must pass `imagestore.IsCatalogue` **and** name the
+row's own category's folder (`checkTemplatePhoto`, `invalid_image_path`) — on the one-row form, on
+the sheet import (with the sheet's line number in the message) and on the edit endpoint, which reads
+the row first (`AdminGetTemplateItem`) because the url carries only an id.
 
 **`template_key` cannot be edited, and the statement enforces it**: `AdminUpdateTemplateItem` has no
 `SET` for that column. Changing a key would not rename anything — it would orphan every shop already
@@ -526,6 +623,36 @@ memory, so a write that skipped the reload would leave the process seeding from 
 restarted — the founder would edit a template, press sync, and watch nothing happen.
 
 ---
+
+## Dark, and the frame that went with it (2026-10)
+
+**One block of tokens under `:root[data-theme="dark"]`, and no second stylesheet** — which is what
+every colour in the file being a custom property was for. Three lines in `<head>` write the attribute
+before the first paint (an explicit choice from `localStorage`, otherwise the operating system);
+resolving it at the bottom of the file would start every load of a dark panel with a white flash.
+
+- **The ramp keeps its direction and inverts its ends**: the page is the darkest thing, the sidebar
+  recedes under the work area, a card is a step lighter than the work area. Still no shadows on
+  content.
+- **Two groups cannot simply be darkened.** The orange tints 50–200 are *fills* and go dark while the
+  accents 300–700 and `--o-ink` go light; and red splits in two, because `.btn-d` needs a fill white
+  text reads on while `.tag.rd` needs a word on a dark tint (`--red` / `--red-ink`).
+- **The charts are the trap, and it is solved by deletion rather than by discipline.** Svg attributes
+  cannot read a custom property, so `C` has to exist — but it is now *read out of the cascade*
+  (`readThemeColours`) instead of being a second hand-written copy, and `applyTheme` re-reads it and
+  redraws. Nothing in a table needs redrawing: the one colour a list wrote from javascript is now
+  `.prog.full`.
+- **`RAMP` is deliberately not read from the tokens and is the same in both themes.** Those are
+  surface tints; this is data, and six warm oranges that read on white read better on near-black. A
+  ramp that followed the tokens would put the donut's three smallest segments at the colour of the
+  card behind them.
+- The literals that remain are white *on brand orange* (`--o` is `#FF6F00` in both themes) and the
+  map's own controls, which stand on an OpenStreetMap raster tile and are light whatever the panel is.
+
+**The beige frame is gone.** `.app` had `margin:14px` and a 30px radius on a `--beige` body, which
+drew a white panel on an orange page — a frame around every screen costing 28px in both directions.
+It now fills the window. `--beige` is only the login page's ground, and because the margin is gone
+rather than recoloured, dark does not bring the same frame back in another colour.
 
 ## The visual language is deliberately not the app's
 
@@ -656,7 +783,9 @@ web-mercator arithmetic, a grid of 256px `<img>` tiles positioned by `transform`
 - **The modal's action row is `position: sticky`** — the map makes this the one form tall enough to
   scroll, and a Save button that scrolls off the bottom is one people cannot find.
 
-**Unseen:** a real browser. Every screen was rendered headless and read back — driven over the devtools
+**The 2026-10 templates rebuild was checked the stub way**: a copy of the page with `fetch` stubbed
+from real `psql` output, driven by *clicking* (the panel's functions sit in a closure, so a stub cannot
+call them by name), screenshotted at 1440 and 880. **Unseen:** a real browser. Every screen was rendered headless and read back — driven over the devtools
 protocol with a signed token, at 1440px and at 880px, against the live database and against stubbed
 `/api/admin/stats` payloads for the empty market and a half-filled one — plus search, sort, the
 badge lighting and clearing on read, the templates help modal, the pill's per-frame motion and the focus

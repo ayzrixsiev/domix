@@ -1,4 +1,5 @@
 import 'package:frontend/core/constants/api_config.dart';
+import 'product_section.dart';
 
 // one product in a shop's catalogue, as returned by /api/shops/{id}/products. most are not created
 // by anyone: picking a category at shop creation copies a ready-made template in, and the owner's
@@ -18,6 +19,9 @@ class Product {
     this.imageUrl,
     this.thumbUrl,
     this.ownImage = false,
+    this.inBasket = false,
+    this.specs = '',
+    this.section,
   });
 
   final int id;
@@ -75,6 +79,18 @@ class Product {
   /// nothing at all.
   final bool ownImage;
 
+  /// Whether this row counts towards the shop's price comparison. **The comparison asks for a price on
+  /// every basket row, not every template row**: a product added to the catalogue later starts outside
+  /// the basket, so leaving it unpriced costs the shop nothing.
+  final bool inBasket;
+
+  /// the line under the name on a card - «Квадратная · 24 Вт · 6500 К». each size is its own row,
+  /// so this is where the size lives. empty for an owner's own product.
+  final String specs;
+
+  /// the chip this row sits under in its shop, or null - see [ProductSection]
+  final ProductSection? section;
+
   bool get hasPrice => price != null;
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -96,13 +112,16 @@ class Product {
       imageUrl: _absoluteImageUrl(json['image_url'] as String?),
       // an older backend sends no image_thumb_url; falling back to the full-size photo is what this app
       // did before thumbnails existed
-      thumbUrl: _absoluteImageUrl(
-            json['image_thumb_url'] as String?,
-          ) ??
+      thumbUrl:
+          _absoluteImageUrl(json['image_thumb_url'] as String?) ??
           _absoluteImageUrl(json['image_url'] as String?),
       // false on a backend from before uploads existed, which is right there: every photo it can send is
       // a catalogue one
       ownImage: json['own_image'] as bool? ?? false,
+      // a backend from before membership existed totalled every template row, which is what this says
+      inBasket: json['in_basket'] as bool? ?? (json['is_template'] as bool? ?? false),
+      specs: json['specs'] as String? ?? '',
+      section: ProductSection.tryFromCode(json['section'] as String? ?? ''),
     );
   }
 
@@ -116,12 +135,12 @@ class Product {
   }
 
   Map<String, dynamic> toRequestJson() => {
-        'name': name,
-        'category': category,
-        'unit': unit,
-        'price': price, // null travels as json null, which is what clears a price
-        'availability': availability.code,
-      };
+    'name': name,
+    'category': category,
+    'unit': unit,
+    'price': price, // null travels as json null, which is what clears a price
+    'availability': availability.code,
+  };
 
   /// [clearPrice] exists because `price: null` in a copyWith call is indistinguishable from "don't
   /// change the price" - the standard dart wart with nullable optional parameters.
@@ -147,6 +166,9 @@ class Product {
       imageUrl: imageUrl,
       thumbUrl: thumbUrl,
       ownImage: ownImage,
+      inBasket: inBasket,
+      specs: specs,
+      section: section,
     );
   }
 }

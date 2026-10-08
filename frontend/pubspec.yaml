@@ -86,6 +86,11 @@ flutter:
     # the card's photo strip on a 3x screen, and the reason the whole set is under 400KB.
     - assets/decorations/vip/
 
+  # the rim of the glass the nav bar is cut from - see GlassSurface. compiled to the device's own
+  # shader format at build time, which is why it is declared here and not loaded as an asset.
+  shaders:
+    - shaders/liquid_glass.frag
+
   # To add custom fonts to your application, add a fonts section here,
   # in this "flutter" section. Each entry in this list should have a
   # "family" key with the font family name, and a "fonts" key with a

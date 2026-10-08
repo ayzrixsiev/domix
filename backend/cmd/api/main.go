@@ -59,7 +59,8 @@ func main() {
 	// 3. login codes live in ram, never in the database (internal/auth/code.go). the sender is opened
 	// first: it decides whether the send budgets are armed - the console sender is free.
 	codeSender, paidDelivery := mustOpenCodeSender()
-	codeMgr := auth.NewCodeManager(paidDelivery)
+	reviewPhone, reviewCode := mustReadReviewAccount()
+	codeMgr := auth.NewCodeManager(paidDelivery).WithReviewAccount(reviewPhone, reviewCode)
 
 	// 4. rate limiters.
 	//
@@ -202,9 +203,15 @@ func main() {
 	http.HandleFunc("/api/admin/template-items/{id}", adminRoute(adminEndpoints.RouteTemplateItem))
 	// editing a template decides what the next shop gets; the sync pushes it into existing shops
 	http.HandleFunc("/api/admin/templates/{category}/sync", adminRoute(adminEndpoints.SyncTemplate))
+	// a whole template pasted from a sheet: the difference first, the write only on apply
+	http.HandleFunc("/api/admin/templates/{category}/import", adminRoute(adminEndpoints.ImportTemplate))
+	// a curated photo, straight from the editor - the only way one enters images/shops/<category>/
+	http.HandleFunc("/api/admin/catalogue/{category}/photo", adminRoute(adminEndpoints.UploadCataloguePhoto))
 
-	// uploaded photos whose products row went with a deleted shop. GET measures, DELETE sweeps.
+	// photos no row points at. GET measures, DELETE sweeps - owner uploads and the curated catalogue
+	// through two separate doors, see sweepScope
 	http.HandleFunc("/api/admin/storage/orphans", adminRoute(adminEndpoints.RouteOrphans))
+	http.HandleFunc("/api/admin/storage/catalogue", adminRoute(adminEndpoints.RouteCatalogueFiles))
 
 	http.Handle(imagestore.DefaultURLPrefix, staticFiles(imagestore.DefaultURLPrefix, productImagesDir()))
 	http.HandleFunc("/health", healthCheck(dbPool))
@@ -214,13 +221,24 @@ func main() {
 	// goes into the Play Console and into support replies, which is why the aliases exist.
 	supportEmail := os.Getenv("SUPPORT_EMAIL")
 	if supportEmail == "" {
-		supportEmail = "support@domix.uz"
+		supportEmail = "domix.support@gmail.com"
 		log.Printf("WARNING: SUPPORT_EMAIL is not set - the account deletion page will show %q, which must be a mailbox that actually receives mail before submitting to Google Play", supportEmail)
 	}
 	deletionPage := webui.Page("delete-account.html", map[string]string{"SUPPORT_EMAIL": supportEmail})
 	http.HandleFunc("/delete-account", deletionPage)
 	http.HandleFunc("/delete-account/", webui.Redirect("/delete-account"))
 	http.HandleFunc("/account-deletion", webui.Redirect("/delete-account"))
+
+	// the privacy policy, and it is a Play requirement for the same reason: the console wants a url
+	// that opens without installing anything. **the same text lives in the app** - see
+	// privacy_policy.dart - because it has to be readable and acceptable before an account exists.
+	policyPage := webui.Page("privacy.html", map[string]string{
+		"SUPPORT_EMAIL":  supportEmail,
+		"POLICY_VERSION": policyVersion,
+	})
+	http.HandleFunc("/privacy", policyPage)
+	http.HandleFunc("/privacy/", webui.Redirect("/privacy"))
+	http.HandleFunc("/privacy-policy", webui.Redirect("/privacy"))
 
 	http.HandleFunc("/admin", webui.Page("admin.html", nil))
 	http.HandleFunc("/admin/", webui.Redirect("/admin"))
@@ -321,6 +339,46 @@ func mustOpenCodeSender() (verify.Sender, bool) {
 	}
 }
 
+// the policy's own revision date. **it has to match privacy_policy.dart's policyVersion**: the two
+// copies of this text are one document, and a page dated differently from the one in the app is the
+// kind of detail a reviewer reads as two different policies.
+const policyVersion = "2026-10-07"
+
+// the one account Google's reviewer signs in with, read from the environment. Without it the review
+// stops on the login screen: the code goes to Telegram, which a reviewer has no account on for the
+// number they type, and an app that cannot be opened is refused as broken.
+//
+// **A half-filled configuration is the dangerous state**, so it is fatal rather than ignored: one
+// variable set reads as armed in the deployment and behaves as unarmed on the phone, which is
+// discovered by a rejection weeks later. The code is never logged; the number is masked.
+//
+// **Unset both once the review is over** - see auth.CodeManager.WithReviewAccount.
+func mustReadReviewAccount() (phone, code string) {
+	phone = strings.TrimSpace(os.Getenv("PLAY_REVIEW_PHONE"))
+	code = strings.TrimSpace(os.Getenv("PLAY_REVIEW_CODE"))
+	if phone == "" && code == "" {
+		return "", ""
+	}
+	if phone == "" || code == "" {
+		log.Fatalf("PLAY_REVIEW_PHONE and PLAY_REVIEW_CODE have to be set together, or neither")
+	}
+
+	// canonical, because that is what the pending codes are keyed by: a number stored in any other
+	// spelling would arm an account nobody can reach
+	canonical, ok := auth.CanonicalPhone(phone)
+	if !ok {
+		log.Fatalf("PLAY_REVIEW_PHONE is not an uzbek phone number")
+	}
+	// the app's keypad accepts exactly this shape, so anything else is a code that cannot be typed
+	if len(code) != auth.CodeLength || strings.ContainsFunc(code, func(r rune) bool { return r < '0' || r > '9' }) {
+		log.Fatalf("PLAY_REVIEW_CODE has to be exactly %d digits", auth.CodeLength)
+	}
+
+	log.Printf("Play review account is ARMED for %s - its code is fixed and never delivered. "+
+		"Unset PLAY_REVIEW_PHONE and PLAY_REVIEW_CODE once the review is over.", auth.MaskPhone(canonical))
+	return canonical, code
+}
+
 // reads product_templates into internal/catalog's in-memory copy, or dies trying.
 func mustLoadTemplates(queries *db.Queries) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -344,8 +402,8 @@ func mustLoadTemplates(queries *db.Queries) {
 			Unit:         row.Unit,
 			ImagePath:    row.ImagePath.String,
 			InBasket:     row.InBasket,
-			VariantGroup: row.VariantGroup.String,
-			VariantLabel: row.VariantLabel.String,
+			Specs:        row.Specs,
+			Section:      row.Section,
 		})
 	}
 	catalog.Load(loaded)

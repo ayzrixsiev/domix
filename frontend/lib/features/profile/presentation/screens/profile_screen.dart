@@ -14,6 +14,7 @@ import 'package:frontend/core/widgets/primary_action_button.dart';
 import 'package:frontend/features/onboarding/presentation/screens/onboarding_flow.dart';
 import 'package:frontend/features/profile/data/account_role.dart';
 import '../controllers/auth_controller.dart';
+import 'about_screen.dart';
 import 'profile_edit_screen.dart';
 
 // 2. profile state and account type models
@@ -176,10 +177,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
       title: strings.profileGuestTitle,
       subtitle: strings.profileGuestBody,
       bottomInset: widget.bottomPadding,
-      action: PrimaryActionButton(
-        label: strings.profileGuestAction,
-        icon: LucideIcons.log_in,
-        onTap: () => OnboardingFlow.open(context),
+      action: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          PrimaryActionButton(
+            label: strings.profileGuestAction,
+            icon: LucideIcons.log_in,
+            onTap: () => OnboardingFlow.open(context),
+          ),
+          const SizedBox(height: 8),
+          // reachable without an account: the map works for a guest, so its licence's «About» link has
+          // to as well - and a Play reviewer without Telegram never gets past this screen
+          TextButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const AboutScreen()),
+            ),
+            child: Text(
+              strings.aboutApp,
+              style: const TextStyle(color: AppColors.textGrey, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -385,6 +403,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 icon: CupertinoIcons.globe,
                 title: '${_strings.languageSettings} (${_currentLang.displayName})',
                 onTap: _showLanguagePicker,
+              ),
+              _MenuRowData(
+                icon: CupertinoIcons.info,
+                title: _strings.aboutApp,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AboutScreen()),
+                ),
               ),
               _MenuRowData(
                 icon: CupertinoIcons.square_arrow_right,

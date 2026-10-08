@@ -11,8 +11,7 @@ import '../../data/products_repository.dart';
 class ProductsController extends ChangeNotifier {
   final ProductsRepository _repo;
 
-  ProductsController({ProductsRepository? repository})
-      : _repo = repository ?? ProductsRepository();
+  ProductsController({ProductsRepository? repository}) : _repo = repository ?? ProductsRepository();
 
   final Map<int, List<Product>> _byShop = {};
 
@@ -21,6 +20,7 @@ class ProductsController extends ChangeNotifier {
   final Set<int> _stale = {};
 
   final Set<int> _loadingShopIds = {};
+
   /// The shops whose last catalogue load failed. **A set of ids, not a map of messages** - the
   /// screens read it as "did this shop's catalogue fail" and draw a written sentence of their own.
   final Set<int> _failedLoads = {};
@@ -56,17 +56,20 @@ class ProductsController extends ChangeNotifier {
 
   /// the backend enforces the cap; this is only for showing "12 / 20" and greying the add tile out
   /// before a doomed round trip
-  int customCountFor(int shopId) =>
-      productsFor(shopId).where((p) => !p.isTemplate).length;
+  int customCountFor(int shopId) => productsFor(shopId).where((p) => !p.isTemplate).length;
 
-  /// How many of the *category template's* rows have a price. Template rows only, and that is not a
-  /// detail: the index counts a shop only once every template row is priced, and the owner's own
-  /// products are not in the shared basket - so counting them would reach 100% at the wrong moment.
+  /// How many of the shop's *basket* rows have a price. Basket rows only, and that is not a detail: the
+  /// index counts a shop only once every basket row is priced, and neither the owner's own products
+  /// nor a template row outside the basket is part of it - counting either would put 100% at the
+  /// wrong moment.
   (int priced, int total) templatePricingProgressFor(int shopId) {
     var priced = 0;
     var total = 0;
     for (final product in productsFor(shopId)) {
-      if (!product.isTemplate) continue;
+      // **basket rows, not template rows**: the comparison asks for a price on exactly these, and a
+      // product added to the template later starts outside it - counting it would tell an owner who
+      // is in the comparison that they are one price short of it
+      if (!product.isTemplate || !product.inBasket) continue;
       total++;
       if (product.hasPrice) priced++;
     }

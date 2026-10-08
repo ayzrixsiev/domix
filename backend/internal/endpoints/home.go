@@ -69,6 +69,10 @@ type HomeResponse struct {
 	// Сантехника basket is a different list of goods, so "6% cheaper" means a different market on
 	// each row. all groups arrive together so switching a tab is instant.
 	BestOffers []CategoryOffersResponse `json:"best_offers"`
+
+	// how many products a new shop of each category is seeded with. the same for everybody, so it
+	// rides in the cached read; the "add shop" form shows it before the shop exists.
+	TemplateSizes map[string]int `json:"template_sizes"`
 }
 
 // one tab of "Лучшие предложения". only categories with ranked shops are sent: the app draws one
@@ -127,6 +131,11 @@ func (h *Home) homeContent(ctx context.Context) (HomeResponse, error) {
 		// one path an empty database guarantees
 		VipShops:   make([]ShopResponse, 0, len(vip)),
 		BestOffers: offers,
+	}
+
+	response.TemplateSizes = make(map[string]int, len(catalog.AllShopCategories))
+	for _, category := range catalog.AllShopCategories {
+		response.TemplateSizes[string(category)] = catalog.Size(string(category))
 	}
 
 	for _, shop := range vip {
@@ -246,6 +255,7 @@ func categoryProductFromRow(urls imagestore.URLs, row db.ListProductsByCategoryR
 			Name:          row.Name,
 			Category:      row.Category,
 			Unit:          row.Unit,
+			Specs:         row.Specs,
 			Price:         nullableInt64(row.Price),
 			Availability:  row.Availability,
 			IsTemplate:    isTemplate,

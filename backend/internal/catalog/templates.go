@@ -23,10 +23,9 @@ type Item struct {
 	// admin votes it in once most shops have priced it.
 	InBasket bool
 
-	// one size of a product that has several: the group's display name and this row's chip. **display
-	// only** - one row is still one price, which is what the index and the search rest on.
-	VariantGroup string
-	VariantLabel string
+	// the line under the name («Квадратная · 24 Вт · 6500 К») and the shop grid's section code
+	Specs   string
+	Section string
 }
 
 type Row struct {
@@ -37,8 +36,8 @@ type Row struct {
 	Unit         string
 	ImagePath    string
 	InBasket     bool
-	VariantGroup string
-	VariantLabel string
+	Specs        string
+	Section      string
 }
 
 var (
@@ -54,14 +53,14 @@ func Load(rows []Row) {
 	for _, row := range rows {
 		category := Category(row.ShopCategory)
 		next[category] = append(next[category], Item{
-			Key:          row.Key,
-			Name:         row.Name,
-			Category:     ProductCategory(row.Category),
-			Unit:         row.Unit,
-			ImagePath:    row.ImagePath,
-			InBasket:     row.InBasket,
-			VariantGroup: row.VariantGroup,
-			VariantLabel: row.VariantLabel,
+			Key:       row.Key,
+			Name:      row.Name,
+			Category:  ProductCategory(row.Category),
+			Unit:      row.Unit,
+			ImagePath: row.ImagePath,
+			InBasket:  row.InBasket,
+			Specs:     row.Specs,
+			Section:   row.Section,
 		})
 	}
 

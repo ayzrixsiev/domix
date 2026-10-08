@@ -297,8 +297,8 @@ class AppLocalizations {
   String get ticketsComingSoonTitle =>
       isRu ? 'Скоро здесь будут заявки' : "Tez orada bu yerda buyurtmalar bo'ladi";
   String get ticketsComingSoonBody => isRu
-      ? 'Сначала мы запускаемся для магазинов и покупателей. Заявки мастерам появятся позже.'
-      : "Avval do'konlar va xaridorlar uchun ishga tushamiz. Ustalarga buyurtmalar keyinroq paydo bo'ladi.";
+      ? 'Можно будет оставить заявку на корзину товаров и на найм рабочих.'
+      : "Tovarlar savati uchun ariza qoldirish va ishchilar yollash mumkin bo'ladi.";
   String get mapTab => isRu ? 'Карта' : 'Xarita';
   String get messagesTab => isRu ? 'Сообщения' : 'Xabarlar';
   String get profileTab => isRu ? 'Профиль' : 'Profil';
@@ -308,8 +308,6 @@ class AppLocalizations {
   /// ranked by lowest average check, not by distance - the copy promises a price, not a location
   String get bestOffersTitle => isRu ? 'Лучшие предложения' : 'Eng yaxshi takliflar';
   String get popularCategories => isRu ? 'Популярные категории' : 'Mashhur kategoriyalar';
-  /// the home grid shows the eight categories that have a product shot; this opens the full twelve
-  String get allCategories => isRu ? 'Все категории' : 'Barcha kategoriyalar';
   String get seeAll => isRu ? 'Все' : 'Hammasi';
 
   // "VIP" stays latin in both languages: it is the name of the paid tier, not a word to translate
@@ -363,6 +361,33 @@ class AppLocalizations {
   String get categoryPaints => isRu ? 'Краски' : "Bo'yoqlar";
   String get categoryFinishing => isRu ? 'Отделка' : 'Pardozlash';
   String get categoryTools => isRu ? 'Инструменты' : 'Asboblar';
+
+  // a shop's own chips over its grid - shorter than the section names in products.md, to fit a chip
+  String get sectionAll => isRu ? 'Все товары' : 'Barcha mahsulotlar';
+  String get sectionTapesAbrasives => isRu ? 'Ленты и диски' : 'Lentalar va disklar';
+  String get sectionDrillsHandTools => isRu ? 'Свёрла и инструмент' : 'Parmalar va asboblar';
+  String get sectionElectricalLighting => isRu ? 'Электрика и свет' : 'Elektrika va yoritish';
+  String get sectionFastenersMounting => isRu ? 'Крепёж и монтаж' : 'Mahkamlagich va montaj';
+  String get sectionMixesPaints => isRu ? 'Смеси и краски' : "Qorishmalar va bo'yoqlar";
+  String get sectionFilmsSheets => isRu ? 'Плёнки и листы' : 'Plyonka va listlar';
+
+  // the same six in full, for the sheet that the «Категории» button opens
+  String get sectionsButton => isRu ? 'Категории' : 'Turkumlar';
+  String get sectionFullTapesAbrasives => isRu
+      ? 'Ленты, расходники, абразивы и диски'
+      : 'Lentalar, sarf materiallari, abrazivlar va disklar';
+  String get sectionFullDrillsHandTools =>
+      isRu ? 'Свёрла и ручной инструмент' : "Parmalar va qo'l asboblari";
+  String get sectionFullElectricalLighting =>
+      isRu ? 'Электрика и освещение' : 'Elektrika va yoritish';
+  String get sectionFullFastenersMounting =>
+      isRu ? 'Крепёж и монтаж' : 'Mahkamlagichlar va montaj';
+  String get sectionFullMixesPaints => isRu
+      ? 'Смеси, клеи, краски и химия'
+      : "Qorishmalar, yelimlar, bo'yoqlar va kimyo";
+  String get sectionFullFilmsSheets => isRu
+      ? 'Плёнки, изоляция и листовые материалы'
+      : 'Plyonkalar, izolyatsiya va list materiallari';
   // the category drill-down, opened from a "Популярные категории" tile - it lists products
 
   /// its own sentence rather than [noShopsYet]: "nobody has priced anything" and "we could not ask"
@@ -629,6 +654,12 @@ class AppLocalizations {
   String get mapPlacesSearchFailed => isRu
       ? 'Не удалось найти адрес. Проверьте подключение.'
       : "Manzilni topib bo'lmadi. Ulanishni tekshiring.";
+
+  /// the typed lookup gave up - the free suggestion service can be slow - and pressing search asks a
+  /// second one, so the sentence names the key rather than blaming the connection
+  String get mapPlacesSearchSlow => isRu
+      ? 'Подсказки не успели загрузиться. Нажмите «Найти» на клавиатуре.'
+      : "Takliflar yuklanmadi. Klaviaturadagi «Qidirish» tugmasini bosing.";
   String get mapShopsUnavailable =>
       isRu ? 'Магазины не загрузились' : "Do'konlar yuklanmadi";
 
@@ -691,8 +722,8 @@ class AppLocalizations {
   // обои is the one category whose catalogue is places rather than products, and the category cannot
   // be changed afterwards
   String get shopCategoryWallpaperHint => isRu
-      ? '10 мест под ваши обои: премиум, стандарт, эконом'
-      : "Oboylaringiz uchun 10 ta joy: premium, standart, ekonom";
+      ? 'Места под ваши обои: премиум, стандарт, эконом'
+      : "Oboylaringiz uchun joylar: premium, standart, ekonom";
 
   /// "Готовый каталог: 100 товаров" - shown under each category in the picker
   String readyCatalogLabel(int count) => isRu
@@ -807,6 +838,12 @@ class AppLocalizations {
   // creation, so most of these are about rows that have no price yet. ──
 
   String get productsScreenTitle => isRu ? 'Товары' : 'Mahsulotlar';
+  String get catalogueSearchHint =>
+      isRu ? 'Поиск по товарам магазина' : "Do'kon mahsulotlari bo'yicha qidiruv";
+  // the same field spelled for a pill that shares its line with a button - the long hint ellipsised
+  String get searchShortHint => isRu ? 'Поиск' : 'Qidiruv';
+  String get productsScreenSubtitle =>
+      isRu ? 'Управляйте товарами вашего магазина' : "Do'koningiz mahsulotlarini boshqaring";
   String get loadingProducts => isRu ? 'Загружаем товары...' : 'Mahsulotlar yuklanmoqda...';
   // naming the two realistic causes at least points somewhere, which a bare "не удалось" does not
   String get productsLoadErrorHint => isRu
@@ -824,13 +861,13 @@ class AppLocalizations {
   /// on a product with no price yet - the whole to-do list right after a shop is created
   String get priceNotSet => isRu ? 'Цена не указана' : "Narx ko'rsatilmagan";
 
-  /// counts the category template only, because that is the count with a consequence attached
+  /// counts the basket rows only, because that is the count with a consequence attached
   String pricedProgressLabel(int priced, int total) => isRu
       ? 'Цены указаны: $priced из $total'
       : "Narxlar ko'rsatilgan: $total dan $priced";
 
-  /// A shop joins the price comparison only once **every** template product has a price (migration
-  /// 000013), and that rule is invisible from anywhere else in the app. Two strings rather than one
+  /// A shop joins the price comparison only once **every** basket product has a price (migration
+  /// 000006), and that rule is invisible from anywhere else in the app. Two strings rather than one
   /// conditional: the completed state is the only positive confirmation the owner ever gets.
   String priceIndexNeedsEveryPrice(int remaining) => isRu
       ? 'Осталось $remaining — магазин попадёт в сравнение цен, когда указаны все'
@@ -838,6 +875,19 @@ class AppLocalizations {
   String get priceIndexParticipating => isRu
       ? 'Магазин участвует в сравнении цен'
       : "Do'kon narx taqqoslashida ishtirok etmoqda";
+
+  /// on a catalogue product that is not part of the comparison yet - pricing it is welcome, leaving it
+  /// empty costs the shop nothing, and an owner who does not know that prices it under pressure
+  String get outsideBasketNote => isRu
+      ? 'Этот товар пока не входит в сравнение цен: без цены магазин из сравнения не выпадет. Укажите её, когда будет удобно.'
+      : "Bu mahsulot hozircha narx taqqoslashiga kirmaydi: narxsiz ham do'kon taqqoslashdan chiqmaydi. Qulay paytda ko'rsating.";
+
+  // ── about. **Yandex's free MapKit licence asks for a link to its terms in an «About» section**, and
+  // the address search is OpenStreetMap data, whose licence asks for the credit - so both live here.
+  String get aboutApp => isRu ? 'О приложении' : 'Ilova haqida';
+  String get yandexMapsTerms => isRu ? 'Условия использования Яндекс Карт' : 'Yandex Xaritalar foydalanish shartlari';
+  String get openStreetMapCredit =>
+      isRu ? 'Данные адресов: © участники OpenStreetMap' : "Manzillar ma'lumoti: © OpenStreetMap ishtirokchilari";
 
   /// badge on a product the owner added themselves, as opposed to one from the category template
   String get ownProductBadge => isRu ? 'Свой товар' : "O'z mahsuloti";
@@ -935,7 +985,6 @@ class AppLocalizations {
 
   /// the heart on a product card - nothing reads it on screen, so it exists for screen readers
   String get addToFavouritesLabel => isRu ? 'В избранное' : 'Sevimlilarga';
-  String get addToBasketLabel => isRu ? 'В корзину' : 'Savatga';
 
   // customer-facing catalogue on a shop's card
   String get shopProductsSectionTitle => isRu ? 'Товары' : 'Mahsulotlar';

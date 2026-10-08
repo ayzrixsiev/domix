@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"path"
@@ -56,6 +57,10 @@ const (
 	// cheapest place, and the sixth shop in a market says nothing the fifth did not
 	adminRankingDepth = 5
 )
+
+// what an owner's own photo looks like to SQL. the sync leaves such a path alone and the drift count
+// agrees with it; built from imagestore.UploadDir so there is still one declaration of the prefix.
+const uploadPathPattern = imagestore.UploadDir + "/%"
 
 // RequireAdmin refuses anyone whose role is not `admin` - the only thing between a logged-in shop
 // owner and everybody else's account. it must be composed *inside* auth.RequireAuth, which is what
@@ -1083,13 +1088,17 @@ type adminTemplateItem struct {
 	Unit      string `json:"unit"`
 	ImagePath string `json:"image_path,omitempty"`
 
+	// the 400px copy, so the panel can show the photo instead of a path - which is how a founder
+	// checks that five sizes really do share the right picture. built here because only the server
+	// knows whether photos come from this api or from img.domix-api.uz.
+	ImageThumbURL string `json:"image_thumb_url,omitempty"`
+
 	// whether the price comparison totals this row. a product added to a template starts outside the
 	// basket, so extending the catalogue never drops a live market out of the comparison.
 	InBasket bool `json:"in_basket"`
 
-	// one size of a product that has several - display only, see the migration 000006 note
-	VariantGroup string `json:"variant_group,omitempty"`
-	VariantLabel string `json:"variant_label,omitempty"`
+	Specs   string `json:"specs"`
+	Section string `json:"section"`
 
 	// how many shops of this market hold this row, and how many have typed a price for it. **this is
 	// the number the in_basket decision is made from**: voting a row in before most shops have priced
@@ -1099,14 +1108,17 @@ type adminTemplateItem struct {
 }
 
 // one row as the database returns it, plus the coverage counted separately
-func templateItemFrom(row db.AdminListTemplateItemsRow, priced, present int64) adminTemplateItem {
-	return adminTemplateItem{
+func (a *Admin) templateItemFrom(row db.AdminListTemplateItemsRow, priced, present int64) adminTemplateItem {
+	item := adminTemplateItem{
 		ID: row.ID, Key: row.TemplateKey, Name: row.Name,
 		Category: row.Category, Unit: row.Unit, ImagePath: row.ImagePath.String,
-		InBasket:     row.InBasket,
-		VariantGroup: row.VariantGroup.String, VariantLabel: row.VariantLabel.String,
+		InBasket: row.InBasket, Specs: row.Specs, Section: row.Section,
 		Shops: present, Priced: priced,
 	}
+	if item.ImagePath != "" {
+		item.ImageThumbURL = a.URLs.Thumb(item.ImagePath)
+	}
+	return item
 }
 
 type adminTemplateCategory struct {
@@ -1118,6 +1130,8 @@ type adminTemplateCategory struct {
 	Shops       int64               `json:"shops"`
 	MissingRows int64               `json:"missing_rows"`
 	StaleRows   int64               `json:"stale_rows"`
+	// shop rows whose copy differs from the template - what the sync's update would rewrite
+	ChangedRows int64 `json:"changed_rows"`
 }
 
 // GET /api/admin/templates - what each category's template holds, and how far the shops seeded from
@@ -1162,7 +1176,7 @@ func (a *Admin) Templates(w http.ResponseWriter, r *http.Request) {
 			if item.InBasket {
 				basketSize++
 			}
-			wire = append(wire, templateItemFrom(item, priced[item.TemplateKey], present[item.TemplateKey]))
+			wire = append(wire, a.templateItemFrom(item, priced[item.TemplateKey], present[item.TemplateKey]))
 		}
 
 		status, err := a.Queries.AdminTemplateStatus(ctx, db.AdminTemplateStatusParams{
@@ -1175,13 +1189,27 @@ func (a *Admin) Templates(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		changed, err := a.Queries.AdminTemplateChangedRows(ctx, db.AdminTemplateChangedRowsParams{
+			Category: code,
+			// the same switch SyncTemplate passes: an обои name is the owner's, so it never counts
+			Column2: !catalog.IsOwnerNamedCategory(code),
+			// and the same guard: a shop drawing its own upload is not behind the template
+			Column3: uploadPathPattern,
+		})
+		if err != nil {
+			log.Printf("CRITICAL: template drift for %s failed: %v", code, err)
+			writeAPIError(w, http.StatusInternalServerError, "server_error", "could not read template status")
+			return
+		}
+
 		out = append(out, adminTemplateCategory{
-			Category:   code,
-			Size:       len(stored),
-			BasketSize: basketSize,
-			OwnerNamed: catalog.IsOwnerNamedCategory(code),
-			Items:      wire,
-			Shops:      status.Shops,
+			Category:    code,
+			ChangedRows: changed,
+			Size:        len(stored),
+			BasketSize:  basketSize,
+			OwnerNamed:  catalog.IsOwnerNamedCategory(code),
+			Items:       wire,
+			Shops:       status.Shops,
 			// what every shop of this category should hold minus what they do: a shop created before a
 			// product was added to the template is missing that row and nothing tells it
 			MissingRows: status.Shops*int64(len(stored)) - status.PresentRows,
@@ -1200,6 +1228,9 @@ func (a *Admin) Templates(w http.ResponseWriter, r *http.Request) {
 //	update  - names/units/categories/photos for rows both have, prices untouched
 //	delete  - rows the shop has and the template no longer does
 //
+// **a shop's own uploaded photo survives the update** - see the comment on AdminSyncTemplateUpdate.
+// It is the half of the обои rule that lives in SQL; checkTemplatePhoto is the other half.
+//
 // **the transaction is not decoration**: a shop left with the new rows inserted but the stale ones
 // still there holds two versions of its own basket, and the index would total both.
 //
@@ -1207,6 +1238,11 @@ func (a *Admin) Templates(w http.ResponseWriter, r *http.Request) {
 // category out of the comparison until its owner prices the new row, and deleting one takes whatever
 // price the owner had typed, with no undo.
 func (a *Admin) SyncTemplate(w http.ResponseWriter, r *http.Request) {
+	// both write, so a GET must not reach them - a prefetching browser would otherwise run a sync
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
 	adminID, _ := auth.UserIDFromContext(r.Context())
 
 	code := r.PathValue("category")
@@ -1226,14 +1262,14 @@ func (a *Admin) SyncTemplate(w http.ResponseWriter, r *http.Request) {
 	for _, item := range items {
 		keys = append(keys, item.Key)
 		rows = append(rows, adminTemplateSyncRow{
-			TemplateKey:  item.Key,
-			Name:         item.Name,
-			Category:     string(item.Category),
-			Unit:         item.Unit,
-			ImagePath:    item.ImagePath,
-			InBasket:     item.InBasket,
-			VariantGroup: item.VariantGroup,
-			VariantLabel: item.VariantLabel,
+			TemplateKey: item.Key,
+			Name:        item.Name,
+			Category:    string(item.Category),
+			Unit:        item.Unit,
+			ImagePath:   item.ImagePath,
+			InBasket:    item.InBasket,
+			Specs:       item.Specs,
+			Section:     item.Section,
 		})
 	}
 	payload, err := json.Marshal(rows)
@@ -1268,7 +1304,7 @@ func (a *Admin) SyncTemplate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updated, err := q.AdminSyncTemplateUpdate(ctx, db.AdminSyncTemplateUpdateParams{
-		Category: code, Column2: payload, Column3: syncNames,
+		Category: code, Column2: payload, Column3: syncNames, Column4: uploadPathPattern,
 	})
 	if err != nil {
 		log.Printf("CRITICAL: sync update for %s failed: %v", code, err)
@@ -1306,14 +1342,14 @@ func (a *Admin) SyncTemplate(w http.ResponseWriter, r *http.Request) {
 // the field names are what jsonb_to_recordset reads in AdminSyncTemplateInsert/Update - **one jsonb
 // array rather than parallel text[]s, which could get out of step**
 type adminTemplateSyncRow struct {
-	TemplateKey  string `json:"template_key"`
-	Name         string `json:"name"`
-	Category     string `json:"category"`
-	Unit         string `json:"unit"`
-	ImagePath    string `json:"image_path"`
-	InBasket     bool   `json:"in_basket"`
-	VariantGroup string `json:"variant_group"`
-	VariantLabel string `json:"variant_label"`
+	TemplateKey string `json:"template_key"`
+	Name        string `json:"name"`
+	Category    string `json:"category"`
+	Unit        string `json:"unit"`
+	ImagePath   string `json:"image_path"`
+	InBasket    bool   `json:"in_basket"`
+	Specs       string `json:"specs"`
+	Section     string `json:"section"`
 }
 
 // ─────────────────────────── routing ───────────────────────────
@@ -1373,8 +1409,8 @@ func (a *Admin) reloadTemplates(ctx context.Context) error {
 			Unit:         row.Unit,
 			ImagePath:    row.ImagePath.String,
 			InBasket:     row.InBasket,
-			VariantGroup: row.VariantGroup.String,
-			VariantLabel: row.VariantLabel.String,
+			Specs:        row.Specs,
+			Section:      row.Section,
 		})
 	}
 	catalog.Load(loaded)
@@ -1389,8 +1425,8 @@ type templateItemRequest struct {
 	Unit         string `json:"unit"`
 	ImagePath    string `json:"image_path"`
 	InBasket     bool   `json:"in_basket"`
-	VariantGroup string `json:"variant_group"`
-	VariantLabel string `json:"variant_label"`
+	Specs        string `json:"specs"`
+	Section      string `json:"section"`
 }
 
 // the column widths of `products`, which these are copied into at seeding: a row that fits
@@ -1399,13 +1435,12 @@ const (
 	maxTemplateKeyLen  = 60
 	maxTemplateNameLen = 150
 	maxTemplateUnitLen = 20
-
-	// the variant columns in migration 000006
-	maxVariantGroupLen = 80
-	maxVariantLabelLen = 40
+	maxSpecsLen        = 80
 )
 
-func (req templateItemRequest) clean() (templateItemRequest, *accessError) {
+// `shopCategory` is which template the row belongs to, which is what makes a photo path judgeable:
+// a path is only valid inside that category's own catalogue folder.
+func (req templateItemRequest) clean(shopCategory string) (templateItemRequest, *accessError) {
 	req.TemplateKey = strings.TrimSpace(req.TemplateKey)
 	req.Name = strings.TrimSpace(req.Name)
 	req.Category = strings.TrimSpace(req.Category)
@@ -1423,20 +1458,46 @@ func (req templateItemRequest) clean() (templateItemRequest, *accessError) {
 		return req, &accessError{http.StatusBadRequest, "invalid_category", "unknown product category"}
 	}
 
-	req.VariantGroup = strings.TrimSpace(req.VariantGroup)
-	req.VariantLabel = strings.TrimSpace(req.VariantLabel)
-
-	// the CHECK constraint says both or neither; refused here so it arrives as a sentence rather than
-	// as a 500 from postgres
-	if (req.VariantGroup == "") != (req.VariantLabel == "") {
-		return req, &accessError{http.StatusBadRequest, "incomplete_variant",
-			"a size needs both a group and a label, or neither"}
-	}
-	if utf8.RuneCountInString(req.VariantGroup) > maxVariantGroupLen ||
-		utf8.RuneCountInString(req.VariantLabel) > maxVariantLabelLen {
+	req.Specs = strings.TrimSpace(req.Specs)
+	req.Section = strings.TrimSpace(req.Section)
+	if utf8.RuneCountInString(req.Specs) > maxSpecsLen {
 		return req, &accessError{http.StatusBadRequest, "field_too_long", "a field is longer than allowed"}
 	}
+	if req.Section != "" && !catalog.IsValidSection(req.Section) {
+		return req, &accessError{http.StatusBadRequest, "invalid_section", "unknown section"}
+	}
+	if failure := checkTemplatePhoto(shopCategory, req.ImagePath); failure != nil {
+		return req, failure
+	}
 	return req, nil
+}
+
+// **a photo path is a file of this category's own catalogue folder, or it is refused.** The column
+// used to accept any string, and a path that names nothing is a blank tile in every shop of a
+// market with nothing anywhere saying why - `shops/plumbing/x.jpg` on a universal row looked exactly
+// as right in the table as the row beside it.
+//
+// **a category whose names the owner writes carries no photo at all.** The right to photograph a row
+// is granted by the template not having a photo (templateFlags in product_crud.go), so one picture
+// put on an обои slot from here takes that right away from every обои shop at once - and the next
+// sync replaces the roll of wallpaper each of them photographed with that one picture.
+func checkTemplatePhoto(shopCategory, imagePath string) *accessError {
+	if imagePath == "" {
+		return nil
+	}
+	if catalog.IsOwnerNamedCategory(shopCategory) {
+		return &accessError{http.StatusBadRequest, "owner_named_photo",
+			"the photo of a slot belongs to the shop owner, so its template row cannot carry one"}
+	}
+	if !imagestore.IsCatalogue(imagePath) {
+		return &accessError{http.StatusBadRequest, "invalid_image_path",
+			"a photo must be a file of the shared catalogue"}
+	}
+	if path.Base(path.Dir(imagePath)) != shopCategory {
+		return &accessError{http.StatusBadRequest, "invalid_image_path",
+			"that photo belongs to another category's catalogue"}
+	}
+	return nil
 }
 
 // GET /api/admin/templates/{category}/items
@@ -1459,7 +1520,7 @@ func (a *Admin) ListTemplateItems(w http.ResponseWriter, r *http.Request) {
 
 	items := make([]adminTemplateItem, 0, len(rows))
 	for _, row := range rows {
-		items = append(items, templateItemFrom(row, 0, 0))
+		items = append(items, a.templateItemFrom(row, 0, 0))
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -1483,23 +1544,14 @@ func (a *Admin) CreateTemplateItem(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
-	req, failure := req.clean()
+	req, failure := req.clean(code)
 	if failure != nil {
 		failure.write(w)
 		return
 	}
 
-	if req.TemplateKey == "" {
-		writeAPIError(w, http.StatusBadRequest, "missing_key", "a template key is required")
-		return
-	}
-	if utf8.RuneCountInString(req.TemplateKey) > maxTemplateKeyLen {
-		writeAPIError(w, http.StatusBadRequest, "field_too_long", "the template key is longer than allowed")
-		return
-	}
-	if !templateKeyPattern.MatchString(req.TemplateKey) {
-		writeAPIError(w, http.StatusBadRequest, "invalid_key",
-			"a template key may contain only latin letters, digits, dots and underscores")
+	if failure := checkTemplateKey(req.TemplateKey); failure != nil {
+		failure.write(w)
 		return
 	}
 
@@ -1526,8 +1578,8 @@ func (a *Admin) CreateTemplateItem(w http.ResponseWriter, r *http.Request) {
 		Unit:         req.Unit,
 		ImagePath:    pgtype.Text{String: req.ImagePath, Valid: req.ImagePath != ""},
 		InBasket:     req.InBasket,
-		VariantGroup: pgtype.Text{String: req.VariantGroup, Valid: req.VariantGroup != ""},
-		VariantLabel: pgtype.Text{String: req.VariantLabel, Valid: req.VariantLabel != ""},
+		Specs:        req.Specs,
+		Section:      req.Section,
 	})
 	if err != nil {
 		log.Printf("CRITICAL: admin %d failed to add template item to %s: %v", adminID, code, err)
@@ -1542,11 +1594,25 @@ func (a *Admin) CreateTemplateItem(w http.ResponseWriter, r *http.Request) {
 	log.Printf("ADMIN %d added template item %q to %s", adminID, row.TemplateKey, code)
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(templateItemFrom(db.AdminListTemplateItemsRow(row), 0, 0))
+	json.NewEncoder(w).Encode(a.templateItemFrom(db.AdminListTemplateItemsRow(row), 0, 0))
 }
 
 // latin only and no spaces: this is an identifier that ends up in urls and logs, not display text
 var templateKeyPattern = regexp.MustCompile(`^[a-z0-9]+(?:[._][a-z0-9]+)*$`)
+
+// a new key's three rules, shared by the one-row form and the import
+func checkTemplateKey(key string) *accessError {
+	switch {
+	case key == "":
+		return &accessError{http.StatusBadRequest, "missing_key", "a template key is required"}
+	case utf8.RuneCountInString(key) > maxTemplateKeyLen:
+		return &accessError{http.StatusBadRequest, "field_too_long", "the template key is longer than allowed"}
+	case !templateKeyPattern.MatchString(key):
+		return &accessError{http.StatusBadRequest, "invalid_key",
+			"a template key may contain only latin letters, digits, dots and underscores"}
+	}
+	return nil
+}
 
 // PUT /api/admin/templates/items/{id} - name, category, unit and photo. **not the key**: changing
 // it would silently destroy prices rather than rename anything (AdminUpdateTemplateItem).
@@ -1562,24 +1628,38 @@ func (a *Admin) UpdateTemplateItem(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
-	req, failure := req.clean()
+
+	ctx, cancel := dbctx.WithTimeout(r.Context())
+	defer cancel()
+
+	// read before clean: which category the row belongs to is what decides whether its photo path
+	// is a valid one, and the url carries only the id
+	stored, err := a.Queries.AdminGetTemplateItem(ctx, itemID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeAPIError(w, http.StatusNotFound, "item_not_found", "no template item with that id")
+			return
+		}
+		log.Printf("CRITICAL: could not read template item %d: %v", itemID, err)
+		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not save the product")
+		return
+	}
+
+	req, failure := req.clean(stored.ShopCategory)
 	if failure != nil {
 		failure.write(w)
 		return
 	}
 
-	ctx, cancel := dbctx.WithTimeout(r.Context())
-	defer cancel()
-
 	row, err := a.Queries.AdminUpdateTemplateItem(ctx, db.AdminUpdateTemplateItemParams{
-		ID:           itemID,
-		Name:         req.Name,
-		Category:     req.Category,
-		Unit:         req.Unit,
-		ImagePath:    pgtype.Text{String: req.ImagePath, Valid: req.ImagePath != ""},
-		InBasket:     req.InBasket,
-		VariantGroup: pgtype.Text{String: req.VariantGroup, Valid: req.VariantGroup != ""},
-		VariantLabel: pgtype.Text{String: req.VariantLabel, Valid: req.VariantLabel != ""},
+		ID:        itemID,
+		Name:      req.Name,
+		Category:  req.Category,
+		Unit:      req.Unit,
+		ImagePath: pgtype.Text{String: req.ImagePath, Valid: req.ImagePath != ""},
+		InBasket:  req.InBasket,
+		Specs:     req.Specs,
+		Section:   req.Section,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -1598,7 +1678,7 @@ func (a *Admin) UpdateTemplateItem(w http.ResponseWriter, r *http.Request) {
 	log.Printf("ADMIN %d edited template item %q", adminID, row.TemplateKey)
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(templateItemFrom(db.AdminListTemplateItemsRow(row), 0, 0))
+	json.NewEncoder(w).Encode(a.templateItemFrom(db.AdminListTemplateItemsRow(row), 0, 0))
 }
 
 // DELETE /api/admin/templates/items/{id} - the template only. every existing shop keeps its copy,
@@ -1635,6 +1715,249 @@ func (a *Admin) DeleteTemplateItem(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"deleted": true, "template_key": row.TemplateKey})
 }
 
+// a category template is ~100 rows; this is a ceiling against a paste of the wrong sheet, not a page
+const maxTemplateImportRows = 500
+
+type templateImportRequest struct {
+	Rows  []templateItemRequest `json:"rows"`
+	Apply bool                  `json:"apply"`
+}
+
+// one line of the difference. Fields names what an update changes, so "изменится 3" can be checked
+// against the sheet before anything is written.
+type templateImportChange struct {
+	Key    string   `json:"key"`
+	Name   string   `json:"name"`
+	Fields []string `json:"fields,omitempty"`
+}
+
+type templateImportResult struct {
+	Create  []templateImportChange `json:"create"`
+	Update  []templateImportChange `json:"update"`
+	Delete  []templateImportChange `json:"delete"`
+	Applied bool                   `json:"applied"`
+}
+
+// POST /api/admin/templates/{category}/import - a category's whole template, pasted from a sheet.
+// `apply: false` answers with the difference and writes nothing; `apply: true` writes it in one
+// transaction.
+//
+// **the list is the whole template, so a row missing from it is a row to delete** - that is what lets
+// one paste add, change and remove at once, and why the panel always shows the difference first.
+// like every template edit it touches no shop: the sync stays the second, louder step. new rows join
+// at the end in paste order; existing rows keep their place, because a shop's catalogue sorts by id.
+func (a *Admin) ImportTemplate(w http.ResponseWriter, r *http.Request) {
+	// both write, so a GET must not reach them - a prefetching browser would otherwise run a sync
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	adminID, _ := auth.UserIDFromContext(r.Context())
+
+	code := r.PathValue("category")
+	if !catalog.IsValidCategory(code) {
+		writeAPIError(w, http.StatusBadRequest, "invalid_category", "unknown shop category")
+		return
+	}
+
+	var req templateImportRequest
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if len(req.Rows) == 0 || len(req.Rows) > maxTemplateImportRows {
+		writeAPIError(w, http.StatusBadRequest, "invalid_import",
+			fmt.Sprintf("an import holds between 1 and %d rows", maxTemplateImportRows))
+		return
+	}
+
+	rows := make([]templateItemRequest, 0, len(req.Rows))
+	seen := make(map[string]bool, len(req.Rows))
+	for i, raw := range req.Rows {
+		row, failure := raw.clean(code)
+		if failure == nil {
+			failure = checkTemplateKey(row.TemplateKey)
+		}
+		if failure != nil {
+			// the row number is the sheet's, so the founder can find the line that is wrong
+			failure.message = fmt.Sprintf("row %d: %s", i+1, failure.message)
+			failure.write(w)
+			return
+		}
+		if seen[row.TemplateKey] {
+			writeAPIError(w, http.StatusBadRequest, "duplicate_key",
+				fmt.Sprintf("row %d: the key %q appears twice", i+1, row.TemplateKey))
+			return
+		}
+		seen[row.TemplateKey] = true
+		rows = append(rows, row)
+	}
+
+	ctx, cancel := dbctx.WithTimeout(r.Context())
+	defer cancel()
+
+	tx, err := a.Pool.Begin(ctx)
+	if err != nil {
+		log.Printf("CRITICAL: admin %d could not begin a template import: %v", adminID, err)
+		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not start the import")
+		return
+	}
+	defer tx.Rollback(ctx) // the dry run never commits, so it can share the code path exactly
+
+	q := db.New(tx)
+	result, existing, failure := diffTemplate(ctx, q, code, rows)
+	if failure != nil {
+		failure.write(w)
+		return
+	}
+
+	if req.Apply {
+		if failure := applyTemplateImport(ctx, q, code, rows, existing); failure != nil {
+			failure.write(w)
+			return
+		}
+		if err := tx.Commit(ctx); err != nil {
+			log.Printf("CRITICAL: template import commit for %s failed: %v", code, err)
+			writeAPIError(w, http.StatusInternalServerError, "server_error", "could not save the import")
+			return
+		}
+		if err := a.reloadTemplates(ctx); err != nil {
+			log.Printf("CRITICAL: template reload after import failed: %v", err)
+		}
+		result.Applied = true
+		log.Printf("ADMIN %d imported the %s template: %d added, %d changed, %d removed",
+			adminID, code, len(result.Create), len(result.Update), len(result.Delete))
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(result)
+}
+
+// what the paste would do to the stored template, plus the stored rows by key for the writer
+func diffTemplate(ctx context.Context, q *db.Queries, code string, rows []templateItemRequest) (templateImportResult, map[string]db.AdminListTemplateItemsRow, *accessError) {
+	result := templateImportResult{
+		Create: []templateImportChange{}, Update: []templateImportChange{}, Delete: []templateImportChange{},
+	}
+
+	stored, err := q.AdminListTemplateItems(ctx, code)
+	if err != nil {
+		log.Printf("CRITICAL: template items for %s failed during import: %v", code, err)
+		return result, nil, &accessError{http.StatusInternalServerError, "server_error", "could not read the template"}
+	}
+	existing := make(map[string]db.AdminListTemplateItemsRow, len(stored))
+	for _, row := range stored {
+		existing[row.TemplateKey] = row
+	}
+
+	pasted := make(map[string]bool, len(rows))
+	for _, row := range rows {
+		pasted[row.TemplateKey] = true
+		old, ok := existing[row.TemplateKey]
+		if !ok {
+			// keys are unique across every category, so a "new" key may still belong to another one -
+			// refused, or the insert would fail on the constraint halfway through the transaction
+			taken, err := q.AdminTemplateKeyExists(ctx, row.TemplateKey)
+			if err != nil {
+				log.Printf("CRITICAL: template key check failed during import: %v", err)
+				return result, nil, &accessError{http.StatusInternalServerError, "server_error", "could not check the keys"}
+			}
+			if taken {
+				return result, nil, &accessError{http.StatusConflict, "key_taken",
+					fmt.Sprintf("the key %q already belongs to another category", row.TemplateKey)}
+			}
+			result.Create = append(result.Create, templateImportChange{Key: row.TemplateKey, Name: row.Name})
+			continue
+		}
+		if fields := changedTemplateFields(old, row); len(fields) > 0 {
+			result.Update = append(result.Update, templateImportChange{Key: row.TemplateKey, Name: row.Name, Fields: fields})
+		}
+	}
+
+	// in stored order, so the list reads the way the template does
+	for _, row := range stored {
+		if !pasted[row.TemplateKey] {
+			result.Delete = append(result.Delete, templateImportChange{Key: row.TemplateKey, Name: row.Name})
+		}
+	}
+	return result, existing, nil
+}
+
+// the column names that differ, in the panel's own vocabulary
+func changedTemplateFields(old db.AdminListTemplateItemsRow, row templateItemRequest) []string {
+	var fields []string
+	if old.Name != row.Name {
+		fields = append(fields, "name")
+	}
+	if old.Category != row.Category {
+		fields = append(fields, "category")
+	}
+	if old.Unit != row.Unit {
+		fields = append(fields, "unit")
+	}
+	if old.ImagePath.String != row.ImagePath {
+		fields = append(fields, "image_path")
+	}
+	if old.InBasket != row.InBasket {
+		fields = append(fields, "in_basket")
+	}
+	if old.Specs != row.Specs {
+		fields = append(fields, "specs")
+	}
+	if old.Section != row.Section {
+		fields = append(fields, "section")
+	}
+	return fields
+}
+
+// writes the difference diffTemplate found, inside the caller's transaction
+func applyTemplateImport(ctx context.Context, q *db.Queries, code string, rows []templateItemRequest, existing map[string]db.AdminListTemplateItemsRow) *accessError {
+	pasted := make(map[string]bool, len(rows))
+	for _, row := range rows {
+		pasted[row.TemplateKey] = true
+		old, ok := existing[row.TemplateKey]
+		var err error
+		switch {
+		case !ok:
+			_, err = q.AdminCreateTemplateItem(ctx, db.AdminCreateTemplateItemParams{
+				ShopCategory: code,
+				TemplateKey:  row.TemplateKey,
+				Name:         row.Name,
+				Category:     row.Category,
+				Unit:         row.Unit,
+				ImagePath:    pgtype.Text{String: row.ImagePath, Valid: row.ImagePath != ""},
+				InBasket:     row.InBasket,
+				Specs:        row.Specs,
+				Section:      row.Section,
+			})
+		case len(changedTemplateFields(old, row)) > 0:
+			_, err = q.AdminUpdateTemplateItem(ctx, db.AdminUpdateTemplateItemParams{
+				ID:        old.ID,
+				Name:      row.Name,
+				Category:  row.Category,
+				Unit:      row.Unit,
+				ImagePath: pgtype.Text{String: row.ImagePath, Valid: row.ImagePath != ""},
+				InBasket:  row.InBasket,
+				Specs:     row.Specs,
+				Section:   row.Section,
+			})
+		}
+		if err != nil {
+			log.Printf("CRITICAL: template import write for %q failed: %v", row.TemplateKey, err)
+			return &accessError{http.StatusInternalServerError, "server_error", "could not save the import"}
+		}
+	}
+
+	for key, old := range existing {
+		if pasted[key] {
+			continue
+		}
+		if _, err := q.AdminDeleteTemplateItem(ctx, old.ID); err != nil {
+			log.Printf("CRITICAL: template import delete of %q failed: %v", key, err)
+			return &accessError{http.StatusInternalServerError, "server_error", "could not save the import"}
+		}
+	}
+	return nil
+}
+
 // dispatches /api/admin/templates/{category}/items by method.
 func (a *Admin) RouteTemplateItems(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -1656,6 +1979,70 @@ func (a *Admin) RouteTemplateItem(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
+}
+
+// ─────────────────────────── adding a photo to the catalogue ───────────────────────────
+
+// POST /api/admin/catalogue/{category}/photo - one curated photo, from the panel.
+//
+// **this is what replaced converting a file by hand and copying it into images/.** The same single
+// decode into two JPEGs every owner upload goes through, so a catalogue shot and an owner's shot are
+// the same kind of file: EXIF stripped, rotation applied, a 1000px master and a 400px thumb, and no
+// original kept. It writes through [imagestore.Storage], so the laptop's disk and the R2 bucket get
+// byte-identical object keys with no second code path.
+//
+// **the file is written before any row names it, which is the project's ordering and not a leak.**
+// An admin who closes the editor without saving leaves a file nothing points at - exactly what
+// «Фото каталога без товара» below is for, and the harmless direction to fail in. The other order
+// would mean a row naming a file that does not exist.
+func (a *Admin) UploadCataloguePhoto(w http.ResponseWriter, r *http.Request) {
+	// a prefetching browser must not write a file
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	adminID, _ := auth.UserIDFromContext(r.Context())
+
+	code := r.PathValue("category")
+	if !catalog.IsValidCategory(code) {
+		writeAPIError(w, http.StatusBadRequest, "invalid_category", "unknown shop category")
+		return
+	}
+	// refused before a byte is read rather than only by checkTemplatePhoto afterwards: there is no
+	// row that could ever name this file, so writing it would only feed the sweep
+	if catalog.IsOwnerNamedCategory(code) {
+		writeAPIError(w, http.StatusBadRequest, "owner_named_photo",
+			"photos in this category belong to the shop owners")
+		return
+	}
+
+	raw, ok := readUploadedImage(w, r)
+	if !ok {
+		return
+	}
+
+	normalized, err := imagestore.Normalize(raw)
+	if err != nil {
+		writeImageError(w, err)
+		return
+	}
+
+	stored, err := a.Images.SaveCatalogue(r.Context(), code, normalized)
+	if err != nil {
+		log.Printf("CRITICAL: admin %d could not store a %s catalogue photo: %v", adminID, code, err)
+		writeAPIError(w, http.StatusInternalServerError, "server_error", "failed to save the photo")
+		return
+	}
+
+	log.Printf("ADMIN %d added the catalogue photo %q", adminID, stored)
+
+	w.WriteHeader(http.StatusOK)
+	// the path is what a row stores; the urls are what the editor shows, built here because only the
+	// server knows whether photos come from this api or from img.domix-api.uz
+	json.NewEncoder(w).Encode(catalogueFile{
+		Path: stored, ThumbURL: a.URLs.Thumb(stored), Used: false,
+		Size: int64(len(normalized.Master)),
+	})
 }
 
 // ─────────────────────────── orphaned photo files ───────────────────────────
@@ -1717,11 +2104,14 @@ type orphanReport struct {
 	Catalogue []catalogueFile `json:"catalogue,omitempty"`
 }
 
-// one curated photo as the picker sees it. thumbnails are left out: they are not paths any row stores.
+// one curated photo as the picker sees it, and the answer UploadCataloguePhoto gives - the same
+// shape, so a freshly uploaded file joins the picker's list without being translated. thumbnails are
+// left out: they are not paths any row stores.
 type catalogueFile struct {
-	Path string `json:"path"`
-	Used bool   `json:"used"`
-	Size int64  `json:"size"`
+	Path     string `json:"path"`
+	ThumbURL string `json:"thumb_url"`
+	Used     bool   `json:"used"`
+	Size     int64  `json:"size"`
 }
 
 // "shops/universal/001_thumb.jpg" -> "shops/universal/001.jpg". a thumbnail is not a path any row
@@ -1840,9 +2230,7 @@ func (a *Admin) ScanOrphans(w http.ResponseWriter, r *http.Request, scope sweepS
 	for _, file := range orphans {
 		report.Paths = append(report.Paths, file.Path)
 	}
-	if scope.listsEveryFile {
-		report.Catalogue = a.catalogueFiles(r, scope)
-	}
+
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(report)
 }
@@ -1854,6 +2242,7 @@ func (a *Admin) SweepOrphans(w http.ResponseWriter, r *http.Request, scope sweep
 	if !ok {
 		return
 	}
+	report.Catalogue = nil // describes the store before this sweep, so it would be stale the moment it lands
 	if int64(len(orphans)) > orphanSweepLimit {
 		orphans = orphans[:orphanSweepLimit]
 	}
@@ -1935,7 +2324,15 @@ func (a *Admin) findOrphans(w http.ResponseWriter, r *http.Request, scope sweepS
 		report.TotalFiles++
 		report.TotalBytes += file.Size
 
-		if _, referenced := claimed[file.Path]; referenced {
+		_, referenced := claimed[file.Path]
+		// the picker's list rides on the same walk, so it obeys rule 1 for free. masters only:
+		// a thumbnail is not a path any row stores. both stores list in key order already.
+		if scope.listsEveryFile && masterPath(file.Path) == file.Path {
+			report.Catalogue = append(report.Catalogue, catalogueFile{
+				Path: file.Path, ThumbURL: a.URLs.Thumb(file.Path), Used: referenced, Size: file.Size,
+			})
+		}
+		if referenced {
 			continue
 		}
 		if !file.Modified.Before(cutoff) {

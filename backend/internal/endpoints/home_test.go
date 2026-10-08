@@ -114,6 +114,13 @@ func TestHomeWithNoShopsReturnsEmptyListsNotNulls(t *testing.T) {
 		t.Fatalf("no shops exist, so both shop sections must be empty")
 	}
 
+	// the form's "N товаров" is read from here, so it must be the template the seeding copies
+	for _, category := range catalog.AllShopCategories {
+		if got, want := payload.TemplateSizes[string(category)], len(catalog.Template(string(category))); got != want {
+			t.Fatalf("template size for %s: got %d, want %d", category, got, want)
+		}
+	}
+
 	// the twelve category tiles are not in this payload at all - they are a fixed list the app
 	// already holds, so there is nothing to fetch and nothing that can arrive wrong
 	if _, present := raw["categories"]; present {
@@ -444,9 +451,9 @@ func makeSeededShop(t *testing.T, ctx context.Context, tx pgx.Tx, q *db.Queries,
 			TemplateKey: pgtype.Text{String: item.Key, Valid: true},
 			ImagePath:   pgtype.Text{String: item.ImagePath, Valid: item.ImagePath != ""},
 			// copied from the template, exactly as Shops.Create does
-			InBasket:     item.InBasket,
-			VariantGroup: pgtype.Text{String: item.VariantGroup, Valid: item.VariantGroup != ""},
-			VariantLabel: pgtype.Text{String: item.VariantLabel, Valid: item.VariantLabel != ""},
+			InBasket: item.InBasket,
+			Specs:    item.Specs,
+			Section:  item.Section,
 		}); err != nil {
 			t.Fatalf("seed %q: %v", item.Key, err)
 		}
@@ -495,8 +502,8 @@ func loadTemplates(t *testing.T, ctx context.Context, q *db.Queries) {
 		loaded = append(loaded, catalog.Row{
 			ShopCategory: row.ShopCategory, Key: row.TemplateKey, Name: row.Name,
 			Category: row.Category, Unit: row.Unit, ImagePath: row.ImagePath.String,
-			InBasket:     row.InBasket,
-			VariantGroup: row.VariantGroup.String, VariantLabel: row.VariantLabel.String,
+			InBasket: row.InBasket,
+			Specs:    row.Specs, Section: row.Section,
 		})
 	}
 	catalog.Load(loaded)

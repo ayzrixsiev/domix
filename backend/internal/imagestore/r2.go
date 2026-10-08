@@ -145,7 +145,18 @@ func (r *R2) Save(ctx context.Context, photo Photo) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return r.savePair(ctx, master, thumb, photo)
+}
 
+func (r *R2) SaveCatalogue(ctx context.Context, category string, photo Photo) (string, error) {
+	master, thumb, err := newCataloguePaths(category)
+	if err != nil {
+		return "", err
+	}
+	return r.savePair(ctx, master, thumb, photo)
+}
+
+func (r *R2) savePair(ctx context.Context, master, thumb string, photo Photo) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, r2OpTimeout)
 	defer cancel()
 

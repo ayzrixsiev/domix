@@ -5,28 +5,21 @@ import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/widgets/circle_icon_button.dart';
 
-/// The navigation zone every titled screen in the app wears: a surface of its own carrying the back
-/// button, the title and at most one action, with the content as a separate area below it.
+/// The header every titled screen wears: back disc, title with an optional subtitle, at most one
+/// action.
 ///
-/// **The separation is tonal, not a line.** [AppColors.surfaceMuted] over [AppColors.background] is
-/// a five-to-eight unit step - too small to read as a second colour, big enough that the eye places
-/// the edge - and [AppShadows.header] only softens where the two meet. What this replaces was a 1px
-/// [AppColors.textFaint] rule, drawn that dark because the two neutrals lighter than it were
-/// invisible on a phone in daylight; a surface does the same job without drawing anything, and it
-/// does it for the whole header rather than for one edge of it.
+/// **It sits flat on the page, in the page's own colour, with no surface and no shadow of its
+/// own.** A band of a second colour with a shadow under it read as a toolbar bolted onto the screen;
+/// the white discs and the title are enough to say "this is the header", which is how iOS does it.
 ///
 /// **One widget for both ways a screen is drawn.** A tab inside the shell is a child of an
 /// `IndexedStack` with no `Scaffold` of its own, so it cannot hang an `AppBar`; a pushed screen has
 /// a Scaffold and wants its header in the `appBar:` slot. This implements [PreferredSizeWidget] for
-/// the second case and is an ordinary column child in the first, so the two cannot drift apart -
-/// which they had, into four independent headers with three different title sizes between them.
+/// the second case and is an ordinary column child in the first, so the two cannot drift apart.
 ///
 /// **Scaffold adds `MediaQuery.padding.top` to [preferredSize] itself**, and the `SafeArea` here is
-/// what consumes it. So the reported height is the content's alone, and the surface runs up under
-/// the status bar in both modes instead of leaving a strip of page colour above it.
-///
-/// The status bar style comes with it: with no `AppBar` in the tree nothing else asks for dark
-/// icons, and white ones over a surface this pale are invisible.
+/// what consumes it, so the reported height is the content's alone. The status bar style comes with
+/// it: with no `AppBar` in the tree nothing else asks for dark icons.
 class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
   const AppPageHeader({
     super.key,
@@ -69,8 +62,8 @@ class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
   /// One [CircleIconButton] opposite the title - never two, and never a text button.
   final Widget? action;
 
-  /// Drawn on the header's own surface below the title row, for the part of a screen that belongs to
-  /// navigation rather than to content: a filter field, an onboarding progress bar.
+  /// Drawn under the title row, for the part of a screen that belongs to navigation rather than to
+  /// content: a filter field, an onboarding progress bar.
   final PreferredSizeWidget? bottom;
 
   /// The middle of the row when it is not a title - see [AppPageHeader.custom].
@@ -111,11 +104,8 @@ class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
   }
 
   Widget _surface() {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: AppColors.surfaceMuted,
-        boxShadow: AppShadows.header,
-      ),
+    return ColoredBox(
+      color: AppColors.background,
       child: SafeArea(
         bottom: false,
         child: Column(
@@ -142,10 +132,7 @@ class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
           const SizedBox(width: _discGap),
         ] else
           const SizedBox(width: _textGutter),
-        if (icon case final glyph?) ...[
-          _IconTile(glyph),
-          const SizedBox(width: 12),
-        ],
+        if (icon case final glyph?) ...[_IconTile(glyph), const SizedBox(width: 12)],
         Expanded(child: _swap(_middle())),
         if (action case final trailing?) ...[
           const SizedBox(width: 12),
@@ -225,19 +212,18 @@ class _TitleBlock extends StatelessWidget {
           title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          // 19 across the whole app. the tabs titled themselves at 22 and the pushed screens at 17
-          // and 18, which is three sizes for one thing; this is the size at which a title still
-          // leads the row without turning the header into a banner.
+          // one size across the whole app: large enough to lead the row, small enough that a
+          // subtitle still fits under it inside the fixed row height
           style: const TextStyle(
             color: AppColors.textDark,
-            fontSize: 19,
-            height: 1.2,
-            letterSpacing: -0.3,
-            fontWeight: FontWeight.w700,
+            fontSize: 21,
+            height: 1.15,
+            letterSpacing: -0.4,
+            fontWeight: FontWeight.w800,
           ),
         ),
         if (subtitle case final line?) ...[
-          const SizedBox(height: 2),
+          const SizedBox(height: 3),
           Text(
             line,
             maxLines: 1,
@@ -245,7 +231,7 @@ class _TitleBlock extends StatelessWidget {
             style: const TextStyle(
               color: AppColors.textGrey,
               fontSize: 12.5,
-              height: 1.25,
+              height: 1.2,
               fontWeight: FontWeight.w500,
             ),
           ),

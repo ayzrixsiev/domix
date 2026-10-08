@@ -6,19 +6,14 @@ import 'package:frontend/core/localization/app_localizations.dart';
 // ready-made catalogue is seeded, and by the time it could be edited that has already been copied
 // in. [code] travels over the wire; the ru/uz names live in AppLocalizations.
 enum ShopCategory {
-  universal('universal', 100),
-  plumbing('plumbing', 100),
-  wood('wood', 5),
-  wallpaper('wallpaper', 10);
+  universal('universal'),
+  plumbing('plumbing'),
+  wood('wood'),
+  wallpaper('wallpaper');
 
-  const ShopCategory(this.code, this.templateSize);
+  const ShopCategory(this.code);
 
   final String code;
-
-  /// how many products a shop of this kind starts with. duplicated from the backend's catalog package
-  /// on purpose - it is only shown *before* the shop exists, so there is nothing to fetch it from. if
-  /// a template grows, this number has to be updated by hand alongside it.
-  final int templateSize;
 
   /// an unrecognised value falls back to [universal] rather than throwing: a shop row is still
   /// displayable without knowing its category, and a category added on the server before the app is

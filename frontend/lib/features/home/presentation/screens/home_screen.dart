@@ -8,7 +8,6 @@ import 'package:frontend/core/widgets/empty_state_view.dart';
 import 'package:frontend/core/widgets/primary_action_button.dart';
 import 'package:frontend/features/home/data/home_content.dart';
 import 'package:frontend/features/home/presentation/controllers/home_controller.dart';
-import 'package:frontend/features/home/presentation/screens/all_categories_screen.dart';
 import 'package:frontend/features/home/presentation/screens/category_products_screen.dart';
 import 'package:frontend/features/home/presentation/widgets/home_header.dart';
 import 'package:frontend/features/home/presentation/widgets/section_header.dart';
@@ -67,12 +66,6 @@ class _HomeScreenState extends State<HomeScreen> {
   void _openCategory(ProductCategory category) {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => CategoryProductsScreen(category: category)),
-    );
-  }
-
-  void _openAllCategories() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => AllCategoriesScreen(onCategoryTap: _openCategory)),
     );
   }
 
@@ -247,13 +240,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 26),
             Padding(
               padding: _gutter,
-              child: SectionHeader(
-                title: strings.popularCategories,
-                // the grid shows the eight categories that have a product shot - this is how the
-                // other four are reached, and it is why the grid no longer needs a pager
-                actionLabel: strings.allCategories,
-                onAction: _openAllCategories,
-              ),
+              child: SectionHeader(title: strings.popularCategories),
             ),
             const SizedBox(height: 12),
             Padding(

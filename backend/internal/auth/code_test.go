@@ -389,3 +389,81 @@ func TestNoBudgetIsEnforcedWhenSendingIsFree(t *testing.T) {
 		}
 	}
 }
+
+// ── the Play review account ──
+//
+// **This is a login bypass, so the tests are about its edges rather than its happy path.** It exists
+// because a Google reviewer cannot receive a Telegram code on a number they do not own, and an app
+// whose first screen cannot be passed is refused as broken.
+
+const reviewPhone, reviewCode = "998901110000", "424242"
+
+// The whole of what it buys: the reviewer types a code nobody sent them, and it is the one they
+// were given. A fresh code here would be a code only our logs have seen.
+func TestTheReviewAccountGetsTheCodeItWasArmedWith(t *testing.T) {
+	m := NewCodeManager(true).WithReviewAccount(reviewPhone, reviewCode)
+
+	issued := issueFor(t, m, reviewPhone)
+	if issued != reviewCode {
+		t.Fatalf("Issue minted %q for the review number, want the armed %q", issued, reviewCode)
+	}
+	if m.NeedsDelivery(reviewPhone) {
+		t.Fatal("the review account's code would be handed to a provider - there is no phone to deliver it to")
+	}
+
+	// and it still has to be *proven*: armed or not, a wrong code must not open the account
+	if _, err := m.Verify(CodeLogin, reviewPhone, wrongCode(reviewCode)); !errors.Is(err, ErrCodeMismatch) {
+		t.Fatalf("a wrong code against the review number returned %v, want ErrCodeMismatch", err)
+	}
+	if _, err := m.Verify(CodeLogin, reviewPhone, reviewCode); err != nil {
+		t.Fatalf("the armed code did not verify: %v", err)
+	}
+}
+
+// **The exemption is one number wide.** A bug widening this would hand every account a code chosen
+// by whoever set the variable, which is every account in the database.
+func TestOnlyTheArmedNumberIsExempt(t *testing.T) {
+	m := NewCodeManager(true).WithReviewAccount(reviewPhone, reviewCode)
+
+	issued := issueFor(t, m, testPhone)
+	if issued == reviewCode {
+		t.Fatal("an ordinary number was given the review code")
+	}
+	if !m.NeedsDelivery(testPhone) {
+		t.Fatal("an ordinary number's code would not be delivered")
+	}
+}
+
+// Unarmed is the normal state and the one production runs in once the review is over: there must be
+// no number at all whose code is predictable, and the empty string is not a free pass.
+func TestAnUnarmedManagerExemptsNobody(t *testing.T) {
+	for _, name := range []string{"never armed", "armed with nothing"} {
+		t.Run(name, func(t *testing.T) {
+			m := NewCodeManager(true)
+			if name == "armed with nothing" {
+				m = m.WithReviewAccount("", "")
+			}
+
+			for _, phone := range []string{testPhone, reviewPhone, ""} {
+				if !m.NeedsDelivery(phone) {
+					t.Fatalf("%q is exempt from delivery on an unarmed manager", phone)
+				}
+			}
+		})
+	}
+}
+
+// Nothing is sent for this number, so neither budget has a bill to protect - and a reviewer locked
+// out by an hourly limiter mid-review is a rejection. The cooldown still applies: that one is about
+// not replacing a code somebody is in the middle of typing.
+func TestTheReviewAccountIsNotBudgeted(t *testing.T) {
+	m := NewCodeManager(true).WithReviewAccount(reviewPhone, reviewCode)
+
+	for attempt := range phoneSendBurst + 3 {
+		if _, _, err := m.Issue(Pending{Purpose: CodeLogin, Phone: reviewPhone}); err != nil {
+			t.Fatalf("the review number was refused on attempt %d: %v", attempt+1, err)
+		}
+		// a fresh request replaces the entry, so the next one is not refused by the cooldown
+		backdate(t, m, reviewPhone, ResendCooldown+time.Second)
+	}
+}

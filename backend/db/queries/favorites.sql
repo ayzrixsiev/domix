@@ -1,7 +1,7 @@
 -- name: ListFavorites :many
 -- The same columns ListProductsByCategory selects, in the same order, so both convert to one row
 -- type and the app renders them with the grid it already has.
-SELECT p.id, p.shop_id, p.name, p.price, p.category, p.unit, p.availability, p.template_key,
+SELECT p.id, p.shop_id, p.name, p.specs, p.price, p.category, p.unit, p.availability, p.template_key,
        p.image_path, s.name AS shop_name
 FROM favorites f
 JOIN products p ON p.id = f.product_id

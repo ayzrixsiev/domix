@@ -66,7 +66,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     super.dispose();
   }
 
-  // debounced so we don't hammer nominatim's free api on every frame while the user is still dragging
+  // debounced so we don't hammer nominatim's free reverse lookup on every frame while the user is still dragging
   void _resolveAddressForCurrentCenter() {
     _debounce?.cancel();
     setState(() => _isResolvingAddress = true);
@@ -97,7 +97,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
     List<GeocodeResult> results;
     try {
-      results = await _geocodingService.search(query);
+      // a button, so always a submit - the one kind of lookup the Nominatim fallback may serve
+      results = await _geocodingService.search(query, submitted: true);
     } catch (e) {
       // the picker has its own way out - drag the map onto the spot - so a failed lookup is logged and
       // reads as no results, as it did before search() started throwing

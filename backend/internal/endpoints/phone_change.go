@@ -75,15 +75,17 @@ func (p *PhoneAuth) RequestPhoneChangeCode(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// detached from the request for the same money reason the login's send is
-	sendCtx, cancelSend := context.WithTimeout(context.WithoutCancel(r.Context()), codeSendTimeout)
-	defer cancelSend()
+	if p.Codes.NeedsDelivery(phone) {
+		// detached from the request for the same money reason the login's send is
+		sendCtx, cancelSend := context.WithTimeout(context.WithoutCancel(r.Context()), codeSendTimeout)
+		defer cancelSend()
 
-	if err := p.Sender.Send(sendCtx, phone, code); err != nil {
-		p.Codes.Drop(phone)
-		log.Printf("WARNING: could not deliver a phone-change code to %s: %v", auth.MaskPhone(phone), err)
-		writeAPIError(w, http.StatusBadGateway, "code_not_sent", "could not send the code, try again")
-		return
+		if err := p.Sender.Send(sendCtx, phone, code); err != nil {
+			p.Codes.Drop(phone)
+			log.Printf("WARNING: could not deliver a phone-change code to %s: %v", auth.MaskPhone(phone), err)
+			writeAPIError(w, http.StatusBadGateway, "code_not_sent", "could not send the code, try again")
+			return
+		}
 	}
 
 	w.WriteHeader(http.StatusOK)

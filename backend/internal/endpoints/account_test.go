@@ -335,6 +335,30 @@ func TestSearchMatchesEveryWordInAnyOrder(t *testing.T) {
 	}
 }
 
+// sizes live in the description now, so a word from each half has to find the row together
+func TestSearchReadsTheNameAndTheSpecsTogether(t *testing.T) {
+	home, ctx, tx, q := homeUnderTest(t)
+	if _, err := tx.Exec(ctx, "DELETE FROM shops"); err != nil {
+		t.Fatalf("clearing shops: %v", err)
+	}
+
+	shopID := makeSearchableShop(t, ctx, tx, q, map[string]*int64{})
+	for _, specs := range []string{"125 мм · 1ADP · EPA", "180 мм · 1ADP · EPA"} {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO products (shop_id, name, specs, category, unit, price, availability)
+			 VALUES ($1, 'Алмазный диск', $2, 'tools', 'шт', 90000, 'in_stock')`,
+			shopID, specs); err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+	}
+
+	var results []CategoryProductResponse
+	getJSON(t, ctx, home.SearchProducts, searchURL("диск 125"), &results)
+	if len(results) != 1 || results[0].Specs != "125 мм · 1ADP · EPA" {
+		t.Fatalf("want only the 125 mm disc, got %+v", results)
+	}
+}
+
 // the cheapest row is no use if it cannot be bought, so «нет в наличии» goes last whatever its price.
 func TestSearchPutsUnavailableProductsLast(t *testing.T) {
 	home, ctx, tx, q := homeUnderTest(t)

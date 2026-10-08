@@ -818,15 +818,31 @@ func requestAdminBody(t *testing.T, ctx context.Context, a *Admin, method, targe
 	req := httptest.NewRequestWithContext(ctx, method, target, strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
-	// the mux is not in play here, so the {id} wildcard has to be set the way it would have set it.
+	// the mux is not in play here, so its wildcards have to be set the way it would have set them.
 	// "/api/admin/shops/12/vip" ends in a word, so the id is the segment before it.
 	if id := adminTestPathID(target); id != "" {
 		req.SetPathValue("id", id)
+	}
+	if category := adminTestCategory(target); category != "" {
+		req.SetPathValue("category", category)
 	}
 
 	rec := httptest.NewRecorder()
 	auth.RequireAuth(testJWTSecret, a.Queries, a.RequireAdmin(handler))(rec, req)
 	return rec
+}
+
+// the same for {category}: ".../templates/wood/import" and ".../catalogue/wood/photo" both yield
+// "wood". **an empty one reads to the handler as an unknown category**, which is a 400 before the
+// request's own subject is ever looked at - so a test that forgot it would be checking the wrong
+// refusal.
+func adminTestCategory(target string) string {
+	for _, seg := range strings.Split(strings.SplitN(target, "?", 2)[0], "/") {
+		if catalog.IsValidCategory(seg) {
+			return seg
+		}
+	}
+	return ""
 }
 
 // pulls the numeric segment out of a path, wherever it sits: ".../users/42" and ".../shops/42/vip"
@@ -856,7 +872,7 @@ func syncPayload(t *testing.T, items []catalog.Item) ([]byte, []string) {
 		rows = append(rows, adminTemplateSyncRow{
 			TemplateKey: item.Key, Name: item.Name, Category: string(item.Category),
 			Unit: item.Unit, ImagePath: item.ImagePath, InBasket: item.InBasket,
-			VariantGroup: item.VariantGroup, VariantLabel: item.VariantLabel,
+			Specs: item.Specs, Section: item.Section,
 		})
 	}
 	payload, err := json.Marshal(rows)
@@ -987,6 +1003,86 @@ func TestSyncRestoresMissingRowsAndKeepsEveryPrice(t *testing.T) {
 	}
 }
 
+// **the other thing a sync must not destroy, beside a price: the owner's own photograph.**
+//
+// An обои row names a kind of wallpaper, not a wallpaper - the product is the roll standing in one
+// shop, and its photo is the owner's. Nothing stopped a picture being put on that slot in the panel,
+// and the sync would then have replaced every real photo in the market with it and sent the files
+// they replaced to the orphan sweep. Silently: the row count would look exactly as it should.
+//
+// The guard is the `shops/uploads/` prefix rather than the category, so a second slot-based category
+// is covered the day it exists. The contrast row is the other half of the test - the guard keeps
+// *uploads*, not every path a shop happens to hold.
+func TestSyncKeepsAShopsOwnPhotographWhenTheTemplateGainsOne(t *testing.T) {
+	_, ctx, tx, q := adminUnderTest(t)
+
+	code := string(catalog.CategoryWallpaper)
+	shopID := makeSeededShop(t, ctx, tx, q, "Oboi", catalog.CategoryWallpaper, false)
+	items := catalog.Template(code)
+	if len(items) < 2 {
+		t.Fatalf("need at least two wallpaper slots, got %d", len(items))
+	}
+
+	const ownersPhoto = "shops/uploads/ab/abcdef0123456789.jpg"
+	if _, err := tx.Exec(ctx,
+		"UPDATE products SET image_path = $3 WHERE shop_id = $1 AND template_key = $2",
+		shopID, items[0].Key, ownersPhoto); err != nil {
+		t.Fatalf("photograph the roll: %v", err)
+	}
+
+	// somebody puts a picture on both slots in the panel, which writes product_templates - the
+	// payload alone would leave the drift count measuring against a template that never changed
+	const cataloguePhoto = "shops/wallpaper/0123456789abcdef0123456789abcdef.jpg"
+	items[0].ImagePath = cataloguePhoto
+	items[1].ImagePath = cataloguePhoto
+	if _, err := tx.Exec(ctx,
+		"UPDATE product_templates SET image_path = $2 WHERE template_key = ANY($1::text[])",
+		[]string{items[0].Key, items[1].Key}, cataloguePhoto); err != nil {
+		t.Fatalf("put the picture on the slots: %v", err)
+	}
+	payload, _ := syncPayload(t, items)
+
+	if _, err := q.AdminSyncTemplateUpdate(ctx, db.AdminSyncTemplateUpdateParams{
+		Category: code, Column2: payload, Column3: false, Column4: uploadPathPattern,
+	}); err != nil {
+		t.Fatalf("sync update: %v", err)
+	}
+
+	photoOf := func(key string) string {
+		t.Helper()
+		var stored *string
+		if err := tx.QueryRow(ctx,
+			"SELECT image_path FROM products WHERE shop_id = $1 AND template_key = $2",
+			shopID, key).Scan(&stored); err != nil {
+			t.Fatalf("read %s: %v", key, err)
+		}
+		if stored == nil {
+			return ""
+		}
+		return *stored
+	}
+
+	if got := photoOf(items[0].Key); got != ownersPhoto {
+		t.Errorf("the owner's photograph is now %q - the sync overwrote it", got)
+	}
+	// the slot nobody photographed does take the template's, which is what makes the guard narrow
+	if got := photoOf(items[1].Key); got != cataloguePhoto {
+		t.Errorf("a row with no upload of its own is at %q, want the template's photo", got)
+	}
+
+	// **the drift count has to agree with the statement above it**, or the panel would report this
+	// shop as behind its template forever and every «Применить ко всем» would change nothing
+	changed, err := q.AdminTemplateChangedRows(ctx, db.AdminTemplateChangedRowsParams{
+		Category: code, Column2: false, Column3: uploadPathPattern,
+	})
+	if err != nil {
+		t.Fatalf("changed rows: %v", err)
+	}
+	if changed != 0 {
+		t.Errorf("%d rows still count as changed after the sync - the two statements disagree", changed)
+	}
+}
+
 func TestSyncRemovesRowsTheTemplateNoLongerHas(t *testing.T) {
 	_, ctx, tx, q := adminUnderTest(t)
 
@@ -1057,5 +1153,222 @@ func TestSyncLeavesOwnerNamedSlotsAlone(t *testing.T) {
 	}
 	if name != ownersName {
 		t.Errorf("slot name is now %q - the sync overwrote the owner's own product", name)
+	}
+}
+
+// **the paste is the whole template, so a missing row is a deletion** - and that is the one outcome a
+// founder pasting the wrong sheet must see before it happens. the dry run has to write nothing at
+// all, and the apply has to do exactly what the dry run said.
+func TestImportShowsTheDifferenceBeforeWritingIt(t *testing.T) {
+	_, ctx, _, q := adminUnderTest(t)
+
+	code := string(catalog.CategoryWood)
+	stored, err := q.AdminListTemplateItems(ctx, code)
+	if err != nil || len(stored) < 3 {
+		t.Fatalf("need at least three wood template rows, got %d (%v)", len(stored), err)
+	}
+
+	// the sheet: every row but the last, the first one renamed, and one new product at the end
+	rows := make([]templateItemRequest, 0, len(stored))
+	for _, row := range stored[:len(stored)-1] {
+		rows = append(rows, templateItemRequest{
+			TemplateKey: row.TemplateKey, Name: row.Name, Category: row.Category, Unit: row.Unit,
+			ImagePath: row.ImagePath.String, InBasket: row.InBasket,
+			Specs: row.Specs, Section: row.Section,
+		})
+	}
+	rows[0].Name = "Переименовано листом"
+	rows = append(rows, templateItemRequest{
+		TemplateKey: "wood.from_the_sheet", Name: "Новый из таблицы", Category: stored[0].Category, Unit: "шт",
+	})
+
+	result, existing, failure := diffTemplate(ctx, q, code, rows)
+	if failure != nil {
+		t.Fatalf("diff: %s", failure.message)
+	}
+	if len(result.Create) != 1 || result.Create[0].Key != "wood.from_the_sheet" {
+		t.Errorf("create = %v, want the one new key", result.Create)
+	}
+	if len(result.Update) != 1 || result.Update[0].Key != stored[0].TemplateKey ||
+		len(result.Update[0].Fields) != 1 || result.Update[0].Fields[0] != "name" {
+		t.Errorf("update = %v, want only the renamed row, with only its name changed", result.Update)
+	}
+	if len(result.Delete) != 1 || result.Delete[0].Key != stored[len(stored)-1].TemplateKey {
+		t.Errorf("delete = %v, want the row missing from the sheet", result.Delete)
+	}
+
+	// the dry run wrote nothing
+	after, err := q.AdminListTemplateItems(ctx, code)
+	if err != nil {
+		t.Fatalf("re-read: %v", err)
+	}
+	if len(after) != len(stored) || after[0].Name != stored[0].Name {
+		t.Fatalf("a dry run changed the template")
+	}
+
+	if failure := applyTemplateImport(ctx, q, code, rows, existing); failure != nil {
+		t.Fatalf("apply: %s", failure.message)
+	}
+	after, err = q.AdminListTemplateItems(ctx, code)
+	if err != nil {
+		t.Fatalf("re-read: %v", err)
+	}
+	keys := map[string]string{}
+	for _, row := range after {
+		keys[row.TemplateKey] = row.Name
+	}
+	if len(after) != len(stored) {
+		t.Errorf("the template holds %d rows, want %d (one in, one out)", len(after), len(stored))
+	}
+	if keys[stored[0].TemplateKey] != "Переименовано листом" {
+		t.Errorf("the rename did not land")
+	}
+	if _, gone := keys[stored[len(stored)-1].TemplateKey]; gone {
+		t.Errorf("the row missing from the sheet is still in the template")
+	}
+	if _, added := keys["wood.from_the_sheet"]; !added {
+		t.Errorf("the new row did not land")
+	}
+}
+
+// keys are unique across every category, so a "new" row whose key is another category's would fail
+// on the constraint halfway through the write - refused up front, with the key named
+func TestImportRefusesAKeyFromAnotherCategory(t *testing.T) {
+	_, ctx, _, q := adminUnderTest(t)
+
+	foreign := catalog.Template(string(catalog.CategoryUniversal))[0]
+	rows := []templateItemRequest{{
+		TemplateKey: foreign.Key, Name: foreign.Name, Category: string(foreign.Category), Unit: foreign.Unit,
+	}}
+	_, _, failure := diffTemplate(ctx, q, string(catalog.CategoryWood), rows)
+	if failure == nil || failure.code != "key_taken" {
+		t.Fatalf("want key_taken, got %+v", failure)
+	}
+}
+
+// ─────────────────────────── the photo path on a template row ───────────────────────────
+
+// **image_path used to accept any string at all.** A path that names nothing is a blank tile in
+// every shop of a market with nothing anywhere saying why, and `shops/plumbing/...` on a universal
+// row looked exactly as right in the table as the row beside it. The column is written from three
+// places - the one-row form, the sheet import and the sync - and they all come through `clean`.
+func TestATemplatePhotoIsAFileOfItsOwnCategoryOrNothing(t *testing.T) {
+	for _, tc := range []struct {
+		what     string
+		category string
+		photo    string
+		code     string
+	}{
+		{"no photo at all", "universal", "", ""},
+		{"its own category", "universal", "shops/universal/001.jpg", ""},
+		{"another category", "universal", "shops/plumbing/001.jpg", "invalid_image_path"},
+		{"an owner's upload", "universal", "shops/uploads/ab/abcd.jpg", "invalid_image_path"},
+		{"the old two-segment spelling", "universal", "universal/001.jpg", "invalid_image_path"},
+		{"a full url", "universal", "https://img.domix-api.uz/shops/universal/001.jpg", "invalid_image_path"},
+		{"a traversal", "universal", "shops/universal/../../etc/passwd", "invalid_image_path"},
+		{"a folder", "universal", "shops/universal", "invalid_image_path"},
+		// the right to photograph a slot is granted by the template having no photo, so the template
+		// may not have one - see checkTemplatePhoto
+		{"a slot", string(catalog.CategoryWallpaper), "shops/wallpaper/001.jpg", "owner_named_photo"},
+		{"a slot with no photo", string(catalog.CategoryWallpaper), "", ""},
+	} {
+		req := templateItemRequest{Name: "Товар", Unit: "шт", Category: "tools", ImagePath: tc.photo}
+		_, failure := req.clean(tc.category)
+
+		switch {
+		case tc.code == "" && failure != nil:
+			t.Errorf("%s (%q) was refused as %s: %s", tc.what, tc.photo, failure.code, failure.message)
+		case tc.code != "" && failure == nil:
+			t.Errorf("%s (%q) was accepted, want %s", tc.what, tc.photo, tc.code)
+		case tc.code != "" && failure.code != tc.code:
+			t.Errorf("%s (%q) was refused as %s, want %s", tc.what, tc.photo, failure.code, tc.code)
+		}
+	}
+}
+
+// the edit endpoint is handed an id and nothing else, so **which category the row belongs to has to
+// be read before its photo can be judged** - without that lookup the rule above would be enforced
+// on the two paths that carry a category in the url and silently skipped on the one that does not.
+func TestEditingATemplateRowJudgesThePhotoAgainstThatRowsCategory(t *testing.T) {
+	adminEndpoints, ctx, _, q := adminUnderTest(t)
+	adminID := makeUser(t, ctx, q, "Editor", "admin")
+
+	rows, err := q.AdminListTemplateItems(ctx, string(catalog.CategoryUniversal))
+	if err != nil || len(rows) == 0 {
+		t.Fatalf("need a universal template row: %d (%v)", len(rows), err)
+	}
+	row := rows[0]
+	target := "/api/admin/template-items/" + strconv.FormatInt(row.ID, 10)
+
+	body := func(photo string) string {
+		return `{"name":"` + row.Name + `","category":"` + row.Category + `","unit":"` + row.Unit +
+			`","specs":"","section":"","in_basket":false,"image_path":"` + photo + `"}`
+	}
+
+	rec := requestAdminBody(t, ctx, adminEndpoints, http.MethodPut, target, adminID,
+		body("shops/plumbing/001.jpg"), adminEndpoints.UpdateTemplateItem)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("a plumbing photo on a universal row = %d (%s), want 400", rec.Code, rec.Body.String())
+	}
+	var refusal map[string]string
+	decodeBody(t, rec, &refusal)
+	if refusal["code"] != "invalid_image_path" {
+		t.Errorf("code = %q, want invalid_image_path", refusal["code"])
+	}
+
+	// and the row is untouched, rather than half-written
+	after, err := q.AdminGetTemplateItem(ctx, row.ID)
+	if err != nil {
+		t.Fatalf("re-read: %v", err)
+	}
+	if after.ImagePath != row.ImagePath {
+		t.Errorf("the photo is now %v, want %v", after.ImagePath, row.ImagePath)
+	}
+
+	// its own category still goes through
+	if rec := requestAdminBody(t, ctx, adminEndpoints, http.MethodPut, target, adminID,
+		body("shops/universal/001.jpg"), adminEndpoints.UpdateTemplateItem); rec.Code != http.StatusOK {
+		t.Fatalf("a universal photo on a universal row = %d (%s), want 200", rec.Code, rec.Body.String())
+	}
+}
+
+// the sheet carries a photo column too, and a hundred rows pasted at once is where a wrong one is
+// hardest to find - so the refusal names the line
+func TestTheSheetImportNamesTheLineWhosePhotoIsWrong(t *testing.T) {
+	adminEndpoints, ctx, _, q := adminUnderTest(t)
+	adminID := makeUser(t, ctx, q, "Pasting", "admin")
+
+	code := string(catalog.CategoryWood)
+	stored, err := q.AdminListTemplateItems(ctx, code)
+	if err != nil || len(stored) < 2 {
+		t.Fatalf("need at least two wood rows: %d (%v)", len(stored), err)
+	}
+
+	rows := make([]map[string]any, 0, len(stored))
+	for _, row := range stored {
+		rows = append(rows, map[string]any{
+			"template_key": row.TemplateKey, "name": row.Name, "category": row.Category,
+			"unit": row.Unit, "image_path": row.ImagePath.String, "in_basket": row.InBasket,
+			"specs": row.Specs, "section": row.Section,
+		})
+	}
+	rows[1]["image_path"] = "shops/universal/001.jpg"
+	body, err := json.Marshal(map[string]any{"rows": rows, "apply": false})
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+
+	rec := requestAdminBody(t, ctx, adminEndpoints, http.MethodPost, "/api/admin/templates/"+code+"/import",
+		adminID, string(body), adminEndpoints.ImportTemplate)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("import = %d (%s), want 400", rec.Code, rec.Body.String())
+	}
+	var refusal map[string]string
+	decodeBody(t, rec, &refusal)
+	if refusal["code"] != "invalid_image_path" {
+		t.Errorf("code = %q, want invalid_image_path", refusal["code"])
+	}
+	if !strings.HasPrefix(refusal["error"], "row 2:") {
+		t.Errorf("message = %q, want it to name row 2", refusal["error"])
 	}
 }

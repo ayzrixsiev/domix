@@ -24,7 +24,6 @@ import 'package:frontend/features/home/presentation/widgets/search_and_like_bar.
 import 'package:frontend/features/products/data/product_model.dart';
 import 'package:frontend/features/products/presentation/widgets/product_tile.dart';
 import 'package:frontend/features/home/presentation/screens/home_screen.dart';
-import 'package:frontend/features/home/presentation/screens/all_categories_screen.dart';
 import 'package:frontend/features/home/presentation/widgets/best_offers.dart';
 import 'package:frontend/features/home/presentation/widgets/popular_categories_grid.dart';
 import 'package:frontend/features/home/presentation/widgets/home_shop_row.dart';
@@ -570,40 +569,6 @@ void main() {
   // the drill-down behind a category tile reads the database or shows an empty state. it used to
   // answer from the invented catalogue whenever the home screen was showing invented shops, so a
   // tapped tile opened onto plausible products at plausible prices from businesses that do not exist.
-  // **the four categories with no photograph are still reachable**, which is the deal the grid makes
-  // by showing only eight. if this ever fails, a third of the catalogue has no way in from the feed.
-  testWidgets('"Все категории" reaches the categories the grid leaves out', (tester) async {
-    final strings = AppLocalizations(AppLanguage.ru);
-    final repo = _FakeHomeRepository(content: _content(), categoryProducts: const []);
-    await _pumpHome(tester, repo);
-
-    // "Отделка" has no product shot, so it is on no card of the grid
-    expect(
-      find.descendant(
-        of: find.byType(PopularCategoriesGrid),
-        matching: find.text(strings.categoryFinishing),
-      ),
-      findsNothing,
-    );
-
-    await tester.tap(find.text(strings.allCategories));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(AllCategoriesScreen), findsOneWidget);
-    // all twelve, scrolled to in order - the list is longer than a phone
-    for (final category in ProductCategory.values) {
-      await tester.scrollUntilVisible(find.text(category.label(strings)), 120);
-      expect(find.text(category.label(strings)), findsOneWidget);
-    }
-
-    await tester.tap(find.text(strings.categoryFinishing));
-    await tester.pumpAndSettle();
-
-    expect(repo.requestedCategory, ProductCategory.finishing);
-    // the list popped itself on the way through, so back from the products is the feed
-    expect(find.byType(AllCategoriesScreen), findsNothing);
-  });
-
   testWidgets('a category with no products opens onto an empty state, not a story', (tester) async {
     final strings = AppLocalizations(AppLanguage.ru);
     final repo = _FakeHomeRepository(content: _content(), categoryProducts: const []);

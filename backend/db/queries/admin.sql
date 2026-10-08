@@ -158,15 +158,37 @@ SELECT
         AND p.template_key IS NOT NULL
         AND NOT (p.template_key = ANY($2::text[])))::bigint AS stale_rows;
 
+-- name: AdminTemplateChangedRows :one
+-- shop rows whose copy disagrees with the template - exactly the rows AdminSyncTemplateUpdate would
+-- rewrite, so the two must compare the same columns, $3 included. **without this the panel said
+-- "every shop matches" after a rename**, and with in_basket that lie would hide a basket only half
+-- a market has.
+SELECT COUNT(*)::bigint
+FROM products p
+JOIN shops s ON s.id = p.shop_id
+JOIN product_templates t ON t.template_key = p.template_key
+WHERE s.category = $1
+  AND t.shop_category = $1
+  AND (
+        ($2::boolean AND p.name IS DISTINCT FROM t.name)
+        OR p.category      IS DISTINCT FROM t.category
+        OR p.unit          IS DISTINCT FROM t.unit
+        OR p.image_path    IS DISTINCT FROM
+           CASE WHEN p.image_path LIKE $3::text THEN p.image_path ELSE NULLIF(t.image_path, '') END
+        OR p.in_basket     IS DISTINCT FROM t.in_basket
+        OR p.specs         IS DISTINCT FROM t.specs
+        OR p.section       IS DISTINCT FROM t.section
+      );
+
 -- name: AdminSyncTemplateInsert :execrows
 INSERT INTO products (shop_id, name, category, unit, template_key, image_path,
-                      in_basket, variant_group, variant_label)
+                      in_basket, specs, section)
 SELECT s.id, t.name, t.category, t.unit, t.template_key, NULLIF(t.image_path, ''),
-       t.in_basket, NULLIF(t.variant_group, ''), NULLIF(t.variant_label, '')
+       t.in_basket, t.specs, t.section
 FROM shops s
 CROSS JOIN jsonb_to_recordset($2::jsonb)
         AS t(template_key text, name text, category text, unit text, image_path text,
-             in_basket boolean, variant_group text, variant_label text)
+             in_basket boolean, specs text, section text)
 WHERE s.category = $1
 ON CONFLICT (shop_id, template_key) DO NOTHING;
 
@@ -175,19 +197,27 @@ ON CONFLICT (shop_id, template_key) DO NOTHING;
 -- **in_basket is here**, though: membership is the template's decision, not the shop's, and a row
 -- the panel voted into the basket that stayed out of it in half the shops would mean two markets
 -- totalling different baskets under one badge.
+--
+-- **a shop pointing at its own upload keeps it ($4 is imagestore.UploadDir + '/%').** The owner
+-- photographed the roll of wallpaper actually standing in their shop; the template row it sits
+-- under names a kind of product, not a product. Overwriting that would replace every real photo in
+-- the market with one picture and send the files they replaced to the orphan sweep - silently, with
+-- the row count looking exactly as it should. The rule is the prefix rather than the category, so a
+-- second slot-based category is covered the day it exists.
 UPDATE products p
 SET name          = CASE WHEN $3::boolean THEN t.name ELSE p.name END,
     category      = t.category,
     unit          = t.unit,
-    image_path    = NULLIF(t.image_path, ''),
+    image_path    = CASE WHEN p.image_path LIKE $4::text THEN p.image_path
+                         ELSE NULLIF(t.image_path, '') END,
     in_basket     = t.in_basket,
-    variant_group = NULLIF(t.variant_group, ''),
-    variant_label = NULLIF(t.variant_label, ''),
+    specs         = t.specs,
+    section       = t.section,
     updated_at    = CURRENT_TIMESTAMP
 FROM shops s,
      jsonb_to_recordset($2::jsonb)
         AS t(template_key text, name text, category text, unit text, image_path text,
-             in_basket boolean, variant_group text, variant_label text)
+             in_basket boolean, specs text, section text)
 WHERE p.shop_id = s.id
   AND s.category = $1
   AND p.template_key = t.template_key
@@ -195,10 +225,11 @@ WHERE p.shop_id = s.id
         (CASE WHEN $3::boolean THEN t.name ELSE p.name END) IS DISTINCT FROM p.name
         OR p.category      IS DISTINCT FROM t.category
         OR p.unit          IS DISTINCT FROM t.unit
-        OR p.image_path    IS DISTINCT FROM NULLIF(t.image_path, '')
+        OR p.image_path    IS DISTINCT FROM
+           CASE WHEN p.image_path LIKE $4::text THEN p.image_path ELSE NULLIF(t.image_path, '') END
         OR p.in_basket     IS DISTINCT FROM t.in_basket
-        OR p.variant_group IS DISTINCT FROM NULLIF(t.variant_group, '')
-        OR p.variant_label IS DISTINCT FROM NULLIF(t.variant_label, '')
+        OR p.specs         IS DISTINCT FROM t.specs
+        OR p.section       IS DISTINCT FROM t.section
       );
 
 -- name: AdminSyncTemplateDelete :execrows
@@ -211,23 +242,31 @@ WHERE p.shop_id = s.id
 
 -- name: ListProductTemplates :many
 SELECT shop_category, template_key, name, category, unit, image_path,
-       in_basket, variant_group, variant_label
+       in_basket, specs, section
 FROM product_templates
 ORDER BY shop_category, id;
 
 -- name: AdminListTemplateItems :many
 SELECT id, shop_category, template_key, name, category, unit, image_path,
-       in_basket, variant_group, variant_label
+       in_basket, specs, section
 FROM product_templates
 WHERE shop_category = $1
 ORDER BY id;
 
+-- name: AdminGetTemplateItem :one
+-- the row an edit is about, read before it is written: image_path is only valid for one category's
+-- own folder, and the id in the url is all the panel sends.
+SELECT id, shop_category, template_key, name, category, unit, image_path,
+       in_basket, specs, section
+FROM product_templates
+WHERE id = $1;
+
 -- name: AdminCreateTemplateItem :one
 INSERT INTO product_templates (shop_category, template_key, name, category, unit, image_path,
-                               in_basket, variant_group, variant_label)
+                               in_basket, specs, section)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING id, shop_category, template_key, name, category, unit, image_path,
-          in_basket, variant_group, variant_label;
+          in_basket, specs, section;
 
 -- name: AdminUpdateTemplateItem :one
 -- no SET for template_key: changing it would orphan every shop seeded with the old one and the next
@@ -238,12 +277,12 @@ SET name = $2,
     unit = $4,
     image_path = $5,
     in_basket = $6,
-    variant_group = $7,
-    variant_label = $8,
+    specs = $7,
+    section = $8,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
 RETURNING id, shop_category, template_key, name, category, unit, image_path,
-          in_basket, variant_group, variant_label;
+          in_basket, specs, section;
 
 -- name: AdminTemplateCoverage :many
 -- how many shops of this market have typed a price for each template row. **this is the number that

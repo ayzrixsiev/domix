@@ -2,8 +2,8 @@
 // those paths are served from.
 //
 // **curated catalogue photos and owner uploads share one namespace.** the shots under
-// photos/<category>/ are checked into the project and shared by every shop seeded from that
-// template; what a [Storage] writes belongs to exactly one products row. both land in
+// shops/<category>/ are checked into the project and shared by every shop seeded from that
+// template; what [Storage.Save] writes belongs to exactly one products row. both land in
 // products.image_path, and [UploadDir] is what tells them apart - every deletion here refuses
 // anything outside it, which is what stops "replace my photo" unlinking a file forty shops draw.
 //
@@ -16,6 +16,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"path"
 	"strings"
 	"time"
@@ -71,6 +72,12 @@ type Storage interface {
 	// writes both files and returns the *master's* relative path, which is what goes into
 	// products.image_path - the thumbnail's is not stored anywhere, it is [ThumbPath] of this one
 	Save(ctx context.Context, photo Photo) (string, error)
+
+	// the same, into `shops/<category>/` instead. **a second write door rather than an argument on
+	// the one above**, mirroring the two deletion doors: a curated photo is drawn by every shop of a
+	// category and an upload by exactly one row, so the two namespaces are never reachable by the
+	// same call. the returned path passes [IsCatalogue] or nothing is written.
+	SaveCatalogue(ctx context.Context, category string, photo Photo) (string, error)
 
 	// unlinks a master and its thumbnail. a file already gone is a success; anything outside
 	// [UploadDir] is [ErrOutsideUploads].
@@ -182,5 +189,24 @@ func newPaths() (master, thumb string, err error) {
 		return "", "", err
 	}
 	master = path.Join(UploadDir, name[:2], name+".jpg")
+	return master, ThumbPath(master), nil
+}
+
+// the same for a curated photo: `shops/<category>/<random>.jpg`, flat because [IsCatalogue] is
+// exactly three segments - the shard the uploads use would take it out of its own scope.
+//
+// **the name is random here too, for the reason it is random there**: a replaced catalogue shot is
+// drawn by every shop of the market, and reusing `001.jpg` would leave every phone that cached it
+// showing the photo it replaced. the [IsCatalogue] check is what turns a category of "../uploads"
+// into an error instead of a write.
+func newCataloguePaths(category string) (master, thumb string, err error) {
+	name, err := randomName()
+	if err != nil {
+		return "", "", err
+	}
+	master = path.Join(CatalogueRoot, category, name+".jpg")
+	if !IsCatalogue(master) {
+		return "", "", fmt.Errorf("%w: %q", ErrOutsideCatalogue, master)
+	}
 	return master, ThumbPath(master), nil
 }

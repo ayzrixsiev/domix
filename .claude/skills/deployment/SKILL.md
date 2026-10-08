@@ -176,16 +176,29 @@ button rather than a cron job — at this scale the count is zero or single digi
 
 - **The account-deletion page** `/delete-account` is served by the API and `SUPPORT_EMAIL` is set
   (`domix.support@gmail.com`). Remaining: put the production URL in the Play Console.
-- **App access instructions.** Login is a code delivered through Telegram Gateway, so a reviewer
-  whose number has no Telegram hits the login wall and rejects the submission as broken. Fill in the
-  Console's **App access** section with a walkthrough and a screen recording — one of the most common
-  rejections for phone-verified apps, and decide beforehand what a reviewer without Telegram does.
+- **App access instructions — the mechanism is built** (2026-10-07). `PLAY_REVIEW_PHONE` and
+  `PLAY_REVIEW_CODE` arm one number whose six digits are fixed and never delivered, so a reviewer
+  with no Telegram account can still get past the login wall — otherwise the submission is refused as
+  broken, one of the most common rejections for phone-verified apps. `auth.CodeManager.WithReviewAccount`
+  is the whole of it; the account it opens is an ordinary `customer`. **Set both or neither** — the
+  api refuses to boot on half a configuration, because an armed-looking, unarmed deployment is
+  discovered by a rejection weeks later. **Unset both once the review is over**: it is a fixed code on
+  a known number. Fill the Console's **App access** section with that number, that code and a screen
+  recording.
 - **The Data Safety form.** Declare name, phone number and **approximate location**. In-app messages
   are gone with the support thread — put them back on the form the day that feature returns. A
   mismatch found later is a policy strike, not a correction.
 - **Justify `ACCESS_FINE_LOCATION`** (see the MapKit permissions note).
-- Content rating questionnaire, target audience, privacy policy URL — all Console forms, all needing
-  the domain.
+- **The privacy policy is published at `/privacy`** (2026-10-07), the url the Console asks for being
+  `https://domix-api.uz/privacy`. **The same text exists twice** - that page and
+  `privacy_policy.dart`, which renders it before an account exists and without a network - and
+  `TestThePageAndTheAppAgreeOnThePolicyVersion` is what stops the two copies drifting apart in date.
+  `deploy/logrotate.conf` is what makes §6's "90 days" true rather than a promise; read its header
+  before installing, it collides with nginx's own rule.
+- Content rating questionnaire, target audience — Console forms.
+- **`docs-privacy.md` at the repo root is the inventory behind all of this**: every SDK, every merged
+  permission, every external host, and the Data Safety answer per row. Re-run its manifest check after any
+  MapKit upgrade.
 
 ### Code and build
 
@@ -200,8 +213,8 @@ button rather than a cron job — at this scale the count is zero or single digi
   comment above `srv` in `cmd/api/main.go` says so — **do not add them**). What remains: a caller can
   send valid headers, pass the guard, then feed the body one byte at a time forever.
   `http.MaxBytesReader` bounds the bytes, nothing bounds the time. The photo endpoint barely matters
-  (behind `RequireAuth` and a per-account limiter). The real exposure is `POST /api/auth/init` and
-  `POST /api/account-deletion/init`: public, body-carrying, and the login limiter counts _requests_,
+  (behind `RequireAuth` and a per-account limiter). The real exposure is `POST /api/auth/request-code` and
+  `POST /api/account-deletion/request-code`: public, body-carrying, and the login limiter counts _requests_,
   which an unfinished one never becomes. **Fix before going live**, per-handler:
   `http.NewResponseController(w).SetReadDeadline(time.Now().Add(…))`.
   **nginx closes it once it is in front**: `deploy/nginx.conf` buffers every body in full before Go
@@ -224,13 +237,16 @@ button rather than a cron job — at this scale the count is zero or single digi
 - **No error reporting.** When the app breaks on an owner's phone, nobody finds out. Structured
   server logs plus a crash reporter would turn "it doesn't work" into a stack trace. The support
   inbox is the closest thing there is, and it needs the user to write in.
-- **Nominatim** is the free public instance (~1 req/sec shared). The map looks addresses up **as the
-  text is typed** (debounced 450 ms), which its policy forbids outright — a deliberate call
-  (2026-09-13) for the investor demo, to be replaced by Yandex's own address search once that licence
-  is bought. The risk is a block by `User-Agent`, i.e. every install at once. What the app does keep:
-  answers cached for the session (`GeocodingService`), a `User-Agent` with a contact,
-  «© OpenStreetMap contributors» under the results. MapKit **Lite** has no search, so the move means
-  the paid MapKit/Search SDK or Yandex's HTTP geocoder.
+- **Address search is two free OpenStreetMap services, one per job** (2026-10). Typed suggestions go
+  to **Photon** (`photon.komoot.io`), which exists for search-as-you-type, filtered to Uzbekistan by
+  `bbox`; a pin's address and a *submitted* search go to **Nominatim**, whose policy forbids
+  as-you-type but allows a search a person asked for. **The public Photon instance promises no
+  speed** — measured at ~20 s on 2026-10-05 after answering instantly on 2026-09-26 — so a typed
+  lookup gives up after 4 s and the panel says «нажмите «Найти»», which falls back to Nominatim.
+  If that gets common, the options are self-hosting Photon on the VPS (open source; an Uzbekistan
+  extract is small, it wants Java and ~1–2 GB RAM), a keyed free tier (LocationIQ ~5 000/day,
+  Geoapify ~3 000/day), or Yandex's paid search. All are OSM data, so «© OpenStreetMap contributors»
+  stays under the results and in «О приложении».
 - **Nothing exposes `pool.Stat().EmptyAcquireCount()`** — the count of requests that waited for a
   connection, and the only evidence that would justify changing `DB_MAX_CONNS`. Ten lines behind a
   token-protected `/metrics`.

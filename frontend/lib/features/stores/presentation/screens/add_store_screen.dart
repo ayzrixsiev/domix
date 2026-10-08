@@ -5,6 +5,7 @@ import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
+import 'package:frontend/features/home/presentation/controllers/home_controller.dart';
 import 'package:frontend/features/map/presentation/screens/location_picker_screen.dart';
 import 'package:frontend/features/stores/data/shop_category.dart';
 import 'package:frontend/features/stores/presentation/widgets/store_form_fields.dart';
@@ -72,6 +73,7 @@ class _AddStoreScreenState extends State<AddStoreScreen> {
       context,
       selected: _pickedCategory,
       strings: _strings,
+      templateSizes: context.read<HomeController>().templateSizes,
     );
     if (result == null || !mounted) return; // dismissed without choosing
     setState(() {
@@ -164,6 +166,7 @@ class _AddStoreScreenState extends State<AddStoreScreen> {
               selected: _pickedCategory,
               errorText: _categoryError,
               strings: _strings,
+              templateSizes: context.watch<HomeController>().templateSizes,
               onTap: _pickCategory,
             ),
             const SizedBox(height: 18),

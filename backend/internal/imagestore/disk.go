@@ -49,7 +49,19 @@ func (d *Disk) Save(_ context.Context, photo Photo) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return d.savePair(master, thumb, photo)
+}
 
+func (d *Disk) SaveCatalogue(_ context.Context, category string, photo Photo) (string, error) {
+	master, thumb, err := newCataloguePaths(category)
+	if err != nil {
+		return "", err
+	}
+	return d.savePair(master, thumb, photo)
+}
+
+// the ordering both doors share: thumbnail first, master last.
+func (d *Disk) savePair(master, thumb string, photo Photo) (string, error) {
 	if err := d.write(thumb, photo.Thumb); err != nil {
 		return "", err
 	}

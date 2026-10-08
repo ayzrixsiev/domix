@@ -92,18 +92,21 @@ func (p *PhoneAuth) RequestCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// **WithoutCancel is a money decision**: a phone changing cell tower would otherwise abort a send
-	// the provider has already billed, and the code would be dropped - so the user gets an sms whose
-	// digits no longer work. the deadline is what stops the detached attempt running forever.
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), codeSendTimeout)
-	defer cancel()
+	// the review account's code is a constant Google already has - see CodeManager.WithReviewAccount
+	if p.Codes.NeedsDelivery(phone) {
+		// **WithoutCancel is a money decision**: a phone changing cell tower would otherwise abort a send
+		// the provider has already billed, and the code would be dropped - so the user gets an sms whose
+		// digits no longer work. the deadline is what stops the detached attempt running forever.
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), codeSendTimeout)
+		defer cancel()
 
-	if err := p.Sender.Send(ctx, phone, code); err != nil {
-		// leaving it would hold this number in a cooldown waiting for a message that was never sent
-		p.Codes.Drop(phone)
-		log.Printf("WARNING: could not deliver a login code to %s: %v", auth.MaskPhone(phone), err)
-		writeAPIError(w, http.StatusBadGateway, "code_not_sent", "could not send the code, try again")
-		return
+		if err := p.Sender.Send(ctx, phone, code); err != nil {
+			// leaving it would hold this number in a cooldown waiting for a message that was never sent
+			p.Codes.Drop(phone)
+			log.Printf("WARNING: could not deliver a login code to %s: %v", auth.MaskPhone(phone), err)
+			writeAPIError(w, http.StatusBadGateway, "code_not_sent", "could not send the code, try again")
+			return
+		}
 	}
 
 	w.WriteHeader(http.StatusOK)

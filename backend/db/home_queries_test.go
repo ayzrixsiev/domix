@@ -117,9 +117,9 @@ func makeShopTx(t *testing.T, ctx context.Context, conn pgx.Tx, q *db.Queries, n
 			ImagePath:   pgtype.Text{String: item.ImagePath, Valid: item.ImagePath != ""},
 			// copied from the template exactly as Shops.Create does: a helper that hardcoded these
 			// would stop testing the thing the app actually writes
-			InBasket:     item.InBasket,
-			VariantGroup: pgtype.Text{String: item.VariantGroup, Valid: item.VariantGroup != ""},
-			VariantLabel: pgtype.Text{String: item.VariantLabel, Valid: item.VariantLabel != ""},
+			InBasket: item.InBasket,
+			Specs:    item.Specs,
+			Section:  item.Section,
 		}); err != nil {
 			t.Fatalf("seed %q: %v", item.Key, err)
 		}
@@ -888,8 +888,8 @@ func loadTemplates(t *testing.T, ctx context.Context, q *db.Queries) {
 		loaded = append(loaded, catalog.Row{
 			ShopCategory: row.ShopCategory, Key: row.TemplateKey, Name: row.Name,
 			Category: row.Category, Unit: row.Unit, ImagePath: row.ImagePath.String,
-			InBasket:     row.InBasket,
-			VariantGroup: row.VariantGroup.String, VariantLabel: row.VariantLabel.String,
+			InBasket: row.InBasket,
+			Specs:    row.Specs, Section: row.Section,
 		})
 	}
 	catalog.Load(loaded)

@@ -24,6 +24,7 @@ import 'package:frontend/features/home/presentation/screens/home_screen.dart';
 import 'package:frontend/features/location/presentation/controllers/city_controller.dart';
 import 'package:frontend/features/products/data/product_category.dart';
 import 'package:frontend/features/products/data/product_model.dart';
+import 'package:frontend/features/products/data/product_section.dart';
 import 'package:frontend/features/products/data/products_repository.dart';
 import 'package:frontend/features/products/presentation/controllers/products_controller.dart';
 import 'package:frontend/features/products/presentation/widgets/product_tile.dart';
@@ -95,7 +96,13 @@ Shop _shop({required int id, required String name, bool isVip = false}) {
   );
 }
 
-Product _product({required int id, required String name, int? price}) {
+Product _product({
+  required int id,
+  required String name,
+  int? price,
+  String specs = '',
+  ProductSection? section,
+}) {
   return Product(
     id: id,
     shopId: 1,
@@ -106,6 +113,8 @@ Product _product({required int id, required String name, int? price}) {
     availability: ProductAvailability.inStock,
     isTemplate: true,
     nameEditable: false,
+    specs: specs,
+    section: section,
   );
 }
 
@@ -124,9 +133,8 @@ Future<void> _pumpHome(
           create: (_) => HomeController(repository: _FakeHomeRepository(content: content)),
         ),
         ChangeNotifierProvider(
-          create: (_) => ProductsController(
-            repository: _FakeProductsRepository(products: products),
-          ),
+          create: (_) =>
+              ProductsController(repository: _FakeProductsRepository(products: products)),
         ),
       ],
       child: const MaterialApp(home: HomeScreen()),
@@ -260,6 +268,80 @@ void main() {
 
     expect(find.text('Цемент М400'), findsOneWidget);
     expect(find.text('Саморез 0'), findsNothing);
+  });
+
+  // the size is in the description now, so «125» has to find the 125 mm disc
+  testWidgets('the catalogue search reads the description too', (tester) async {
+    await _pumpHome(
+      tester,
+      content: _content(vip: [_shop(id: 1, name: 'Стройбаза', isVip: true)]),
+      products: [
+        for (var i = 0; i < 8; i++) _product(id: 20 + i, name: 'Саморез $i', price: 1000 + i),
+        _product(id: 40, name: 'Алмазный диск', specs: '125 мм · 1ADP · EPA', price: 90000),
+        _product(id: 41, name: 'Алмазный диск', specs: '180 мм · 1ADP · EPA', price: 120000),
+      ],
+    );
+
+    await tester.tap(find.text('Стройбаза').hitTestable().first);
+    await tester.pumpAndSettle();
+    await _scrollToCatalogue(tester);
+
+    await tester.enterText(find.byType(TextField), '125');
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('125 мм · 1ADP · EPA'), findsOneWidget);
+    expect(find.textContaining('180 мм · 1ADP · EPA'), findsNothing);
+  });
+
+  List<Product> sectioned() => [
+        _product(id: 10, name: 'Розетка двойная', price: 25000, section: ProductSection.electricalLighting),
+        _product(id: 11, name: 'Дюбель', price: 300, section: ProductSection.fastenersMounting),
+      ];
+
+  testWidgets('a section chip narrows the grid to that section', (tester) async {
+    await _pumpHome(
+      tester,
+      content: _content(vip: [_shop(id: 1, name: 'Стройбаза', isVip: true)]),
+      products: sectioned(),
+    );
+
+    await tester.tap(find.text('Стройбаза').hitTestable().first);
+    await tester.pumpAndSettle();
+    await _scrollToCatalogue(tester);
+    expect(find.byType(ProductTile), findsNWidgets(2));
+
+    final strings = AppLocalizations(AppLanguage.ru);
+    await tester.tap(find.text(strings.sectionElectricalLighting));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Розетка двойная'), findsOneWidget);
+    expect(find.text('Дюбель'), findsNothing);
+  });
+
+  // the button is the other way to the same choice: the full names, a count each
+  testWidgets('«Категории» opens the full names and a pick narrows the grid', (tester) async {
+    await _pumpHome(
+      tester,
+      content: _content(vip: [_shop(id: 1, name: 'Стройбаза', isVip: true)]),
+      products: sectioned(),
+    );
+
+    await tester.tap(find.text('Стройбаза').hitTestable().first);
+    await tester.pumpAndSettle();
+    await _scrollToCatalogue(tester);
+
+    final strings = AppLocalizations(AppLanguage.ru);
+    await tester.tap(find.text(strings.sectionsButton));
+    await tester.pumpAndSettle();
+
+    // the sheet carries the whole name, which a chip does not
+    expect(find.text(strings.sectionFullElectricalLighting), findsOneWidget);
+
+    await tester.tap(find.text(strings.sectionFullElectricalLighting));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Розетка двойная'), findsOneWidget);
+    expect(find.text('Дюбель'), findsNothing);
   });
 
   // **the magnifier is part of the control, and it used not to be.** a TextField only takes focus

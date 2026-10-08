@@ -18,7 +18,9 @@ Anything that belongs to a session is wiped through `AuthController.onSessionEnd
 
 ### Design System & Components
 
-Visual tokens live in `app_theme.dart` and `app_colors.dart` (using specific radii scales). Brand orange is strictly reserved for primary actions, while `trackGrey` is used for elements sitting directly on the `0xFFEFF1F5` background. Do not hand-roll back buttons or empty states; universally use `CircleIconButton` and `EmptyStateView`. For tap feedback on large tiles, we use `PressableScale` instead of ink ripples because ripples fail to provide clear visual feedback on bordered shapes. We exclusively use `flutter_lucide` for icons.
+Visual tokens live in `app_theme.dart` and `app_colors.dart` (using specific radii scales). **The look is iOS: an off-white page (`background`, #F6F4F2, ~4% under a card) with pure-white cards lifted by the two-layer warm `AppShadows.card`** — the step alone is too small to separate them, so a card without the shadow disappears. Brand orange is strictly reserved for primary actions, while `trackGrey` is used for elements sitting directly on the page.
+
+**The header sits flat on the page** (`AppPageHeader`: page colour, no band, no shadow; title 21/w800 with an optional subtitle) and `CircleIconButton` is a white disc with a shadow and **no ring**. **The bottom nav bar is full width and flush with the bottom edge** (`AppBottomNavBar`): `surfaceRaised`, a hairline on top, one orange pill sliding under the active tab. Tabs clear it by `AppBottomNavBar.height` plus the system inset, not a constant. Do not hand-roll back buttons or empty states; universally use `CircleIconButton` and `EmptyStateView`. For tap feedback on large tiles, we use `PressableScale` instead of ink ripples because ripples fail to provide clear visual feedback on bordered shapes. We exclusively use `flutter_lucide` for icons.
 
 ### Home Screen & Feeds
 
@@ -29,6 +31,16 @@ The home screen does not invent fallback data. VIP and "Best Offers" use a fixed
 The heart on a product tile is painted from `FavoritesController`, never from local widget state — the same product appears on several grids at once. A tap **moves the heart first and sends afterwards**, and a refused request puts it back: waiting for a round trip feels broken, and lying is worse.
 
 A guest has nowhere to save to, so the tap opens the sign-in flow and saves the product they were reaching for once an account exists (`toggleFavorite`). The app holds its own list rather than the server marking each product, because a per-caller field would take the browsing reads out of the backend's cache.
+
+### The product card, sections and the basket
+
+`ProductTile` is a white card with the photo on a `photoPanel`-coloured panel, the name (2 lines), `specs` under it (2 lines of its own — the size lives there, so a long name must never squeeze it out), then the price. **One size is one card**; nothing folds rows together. The height is fixed at 230 and every text carries an explicit line height — `screen_chrome_test` checks the worst case at the narrowest width. **The catalogue photos must be shot on `AppColors.photoPanel` (#F4F2EF)**, or `contain` leaves visible bars either side; the token is separate from `background` so the page can be retuned without a reshoot.
+
+`ProductSectionBar` — a pinned «Категории» button plus a chip per `ProductSection` in use — sits over the grid on the shop card and on the owner's «Товары», and is drawn only when a catalogue uses two sections or more. **The button and the chips are one choice made two ways**: the button opens a sheet with the full names and a count each, both write the same selection. The owner's «Добавить товар» is a button pinned to the bottom of the screen (`_AddProductBar`), never a cell at the end of the grid; a spent allowance greys it out and says so on it. `productsBySection` orders «Все товары» by chip, catalogue order inside each, an owner's own rows (no section) last. `templatePricingProgressFor` counts **basket rows only** (`inBasket`), or an owner in the comparison is told they are one price short of it.
+
+### Address search and «О приложении»
+
+Typed suggestions come from Photon, a pin's address and a submitted search from Nominatim (`GeocodingService`) — see the `deployment` skill for why. `AboutScreen` carries the link Yandex's free MapKit licence requires and the OpenStreetMap credit; it is reachable from the guest gate too.
 
 ### Images
 

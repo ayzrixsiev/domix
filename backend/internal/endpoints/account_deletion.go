@@ -70,7 +70,7 @@ func (d *AccountDeletion) RequestCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if registered {
+	if registered && d.Codes.NeedsDelivery(phone) {
 		sendCtx, cancelSend := context.WithTimeout(context.WithoutCancel(r.Context()), codeSendTimeout)
 		defer cancelSend()
 

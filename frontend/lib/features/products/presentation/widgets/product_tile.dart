@@ -6,19 +6,9 @@ import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import '../../data/product_model.dart';
 
-/// One product as a card in a two-per-row grid. A fixed height (see [height]) rather than an aspect
-/// ratio, which derives height from *width* - so the same tile grows on a wide phone and the text
-/// block underneath, which needs the same room everywhere, is what breaks first.
-///
-/// **The card is grey and the photo panel inside it is white** - the inverse of the obvious way
-/// round, and it is load-bearing rather than decorative. Every catalogue shot is a product
-/// photographed on white, so a *grey* panel showed that white as a rectangle around each product.
-/// Putting the white on the panel lets the photo's own background disappear into it, and moves the
-/// grey out to the card, where nothing is composited against it.
-///
-/// It also means the 410 committed catalogue JPEGs need no reprocessing at all: the alternative was
-/// repainting every one of their backgrounds to match a panel colour, which would have welded the
-/// assets to a hex value in this file.
+/// One product as a card in a two-per-row grid: photo, name, the description line under it, price.
+/// A fixed height (see [height]) rather than an aspect ratio, so a wide phone does not grow the
+/// photo and squeeze the text.
 class ProductTile extends StatelessWidget {
   const ProductTile({
     super.key,
@@ -35,34 +25,30 @@ class ProductTile extends StatelessWidget {
   final Product product;
   final AppLocalizations strings;
 
-  /// A line under the price - the selling shop, on the cross-shop browse, where it is the difference
-  /// between a price and an actionable price.
+  /// the selling shop, under the price - only on the cross-shop grids, where it is what makes the
+  /// price actionable
   final String? subtitle;
 
-  /// null on the customer-facing grid: a tile that lights up under a finger but does nothing when
-  /// released reads as broken
+  /// null on the customer-facing grid: a tile that lights up under a finger but does nothing reads
+  /// as broken
   final VoidCallback? onTap;
 
   /// only the owner's own grid distinguishes their products from the template's
   final bool showOwnBadge;
 
-  /// The heart and the basket button. **Off on the owner's management grid** - they are not shopping
-  /// in their own catalogue. The basket stays inert: it is phase two.
+  /// the heart - off on the owner's grid, they are not shopping in their own catalogue
   final bool showBuyerActions;
 
-  /// Whether the heart is filled.
   final bool isFavorite;
 
-  /// Saves or unsaves. Null leaves the heart drawn but inert, which is what a preview wants.
+  /// null leaves the heart drawn but inert, which is what a preview wants
   final VoidCallback? onFavoriteToggle;
 
-  /// Photo block 124 (the panel's 118 plus the 6 of frame above it) + text block 98. Hand-tuned to
-  /// fit a two-line name, a price, the shop line and the basket button at the smallest width the app
-  /// supports, with nothing left over at the largest.
-  static const double height = 222;
+  /// frame 6 + panel 100 + text 122: two lines of name, two of description, the price, the shop
+  /// line. every text carries an explicit line height, so this holds on any font.
+  static const double height = 230;
 
-  /// the grey panel's own height. [_frame] of white sits above it and either side.
-  static const double _photoHeight = 118;
+  static const double _photoHeight = 100;
 
   /// the white margin between the card's edge and the photo panel, on three sides
   static const double _frame = 6;
@@ -70,24 +56,15 @@ class ProductTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final card = Container(
-      // trackGrey rather than the `cardGrey` that was on the panel: #F1F3F6 is *lighter* than the
-      // #EFF1F5 page, so a card filled with it is two units from its background and disappears.
-      //
-      // **No border.** One was tried in `textFaint`, since every lighter neutral is at or above this
-      // fill and would ring a grey card in a paler line. It was visible and it was worse: twelve
-      // outlined boxes down a scrolling grid read as a table. The fill carries the shape on its own.
       decoration: BoxDecoration(
-        color: AppColors.trackGrey,
+        color: AppColors.surfaceWhite,
         borderRadius: BorderRadius.circular(AppRadius.md),
         boxShadow: AppShadows.card,
       ),
-      // the ink splash of a tapped tile must not paint over the card's rounded corners
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // no bottom inset: the panel's lower edge meets the text block, so the white frame reads as
-          // a margin around the picture rather than as a box drawn around it
           Padding(
             padding: const EdgeInsets.fromLTRB(_frame, _frame, _frame, 0),
             child: _PhotoPanel(
@@ -101,7 +78,7 @@ class ProductTile extends StatelessWidget {
           ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(11, 9, 11, 10),
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 11),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -111,37 +88,34 @@ class ProductTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: AppColors.textDark,
-                      fontSize: 12.5,
-                      height: 1.28,
-                      letterSpacing: -0.1,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 13.5,
+                      height: 1.25,
+                      letterSpacing: -0.15,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  // pushes the price to the bottom edge, so prices line up across a row whether a name
-                  // wrapped onto one line or two
-                  const Spacer(),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _PriceLine(product: product, strings: strings),
-                            if (subtitle case final shop?) ...[
-                              const SizedBox(height: 4),
-                              _ShopLine(name: shop),
-                            ],
-                          ],
-                        ),
+                  // two lines of its own, never squeezed out by a long name: the size lives here
+                  if (product.specs.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      product.specs,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.textGrey,
+                        fontSize: 11.5,
+                        height: 1.3,
+                        fontWeight: FontWeight.w500,
                       ),
-                      if (showBuyerActions) ...[
-                        const SizedBox(width: 6),
-                        _BasketButton(label: strings.addToBasketLabel),
-                      ],
-                    ],
-                  ),
+                    ),
+                  ],
+                  // pushes the price to the bottom edge, so prices line up across a row
+                  const Spacer(),
+                  _PriceLine(product: product, strings: strings),
+                  if (subtitle case final shop?) ...[
+                    const SizedBox(height: 4),
+                    _ShopLine(name: shop),
+                  ],
                 ],
               ),
             ),
@@ -154,16 +128,12 @@ class ProductTile extends StatelessWidget {
 
     return Material(
       color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        child: card,
-      ),
+      child: InkWell(onTap: onTap, borderRadius: BorderRadius.circular(AppRadius.md), child: card),
     );
   }
 }
 
-/// The white panel the photo is mounted on, with the availability badge and the heart over it.
+/// The grey panel the photo is mounted on, with the availability badge and the heart over it.
 class _PhotoPanel extends StatelessWidget {
   const _PhotoPanel({
     required this.product,
@@ -193,8 +163,8 @@ class _PhotoPanel extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(AppRadius.sm),
             child: ColoredBox(
-              // white, and the whole point of the layout - see the class doc on [ProductTile]
-              color: AppColors.surfaceWhite,
+              // **the catalogue photos are shot on this exact colour** - see AppColors.photoPanel
+              color: AppColors.photoPanel,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -239,9 +209,7 @@ class _PhotoPanel extends StatelessWidget {
   }
 }
 
-// **The panel is white and the photo sits straight on it.** The catalogue shots are `contain`, so
-// whatever is behind them is the bars either side of the picture - and since every one of those
-// shots was taken on white, white is the one colour that leaves no seam.
+// what shows while the photo downloads, and what is left if it fails
 class _PanelPlaceholder extends StatelessWidget {
   const _PanelPlaceholder();
 
@@ -306,8 +274,7 @@ class _AvailabilityBadge extends StatelessWidget {
     final (color, label) = switch (availability) {
       ProductAvailability.inStock => (AppColors.success, strings.availabilityBadgeInStock),
       ProductAvailability.onOrder => (AppColors.warning, strings.availabilityBadgeOnOrder),
-      ProductAvailability.unavailable =>
-        (AppColors.textGrey, strings.availabilityBadgeUnavailable),
+      ProductAvailability.unavailable => (AppColors.textGrey, strings.availabilityBadgeUnavailable),
     };
 
     return Container(
@@ -323,8 +290,7 @@ class _AvailabilityBadge extends StatelessWidget {
 
 /// The heart over the photo panel.
 ///
-/// A ringed white disc, not a plain one: the panel behind it is white too, so without the
-/// `trackGrey` edge there is no disc at all - just a heart floating on the photo.
+/// A white disc with a `trackGrey` ring, so it still reads over a light photo.
 ///
 /// The disc stays white when saved and only the glyph fills: a red disc at 26px reads as a warning
 /// badge on a product tile, where a red heart reads as saved.
@@ -362,27 +328,6 @@ class _FavouriteButton extends StatelessWidget {
             size: 14,
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// The dark disc beside the price. **Inert**: the basket is phase two.
-class _BasketButton extends StatelessWidget {
-  const _BasketButton({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: label,
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: const BoxDecoration(color: AppColors.primaryDark, shape: BoxShape.circle),
-        child: const Icon(LucideIcons.shopping_cart, color: Colors.white, size: 15),
       ),
     );
   }
@@ -462,7 +407,8 @@ class _PriceLine extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(
           color: AppColors.primaryOrange,
-          fontSize: 11.5,
+          fontSize: 12,
+          height: 1.5,
           fontWeight: FontWeight.w600,
         ),
       );
@@ -479,9 +425,10 @@ class _PriceLine extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: AppColors.textDark,
-              fontSize: 14,
-              letterSpacing: -0.2,
-              fontWeight: FontWeight.w700,
+              fontSize: 15.5,
+              height: 1.2,
+              letterSpacing: -0.3,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ),
@@ -493,92 +440,11 @@ class _PriceLine extends StatelessWidget {
           style: const TextStyle(
             color: AppColors.textFaint,
             fontSize: 11,
+            height: 1.2,
             fontWeight: FontWeight.w500,
           ),
         ),
       ],
-    );
-  }
-}
-
-// the last cell of the owner's grid: a slot shaped like a product card but obviously empty, so "add
-// one of your own" sits where the eye already is. disabled once the allowance is spent, with the
-// reason on the tile rather than in a snackbar seen after a wasted round trip.
-class AddProductTile extends StatelessWidget {
-  const AddProductTile({
-    super.key,
-    required this.strings,
-    required this.used,
-    required this.max,
-    required this.onTap,
-  });
-
-  final AppLocalizations strings;
-  final int used;
-  final int max;
-  final VoidCallback onTap;
-
-  bool get _isFull => used >= max;
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = _isFull ? AppColors.textFaint : AppColors.primaryOrange;
-
-    return Material(
-      color: _isFull ? AppColors.surfaceMuted : AppColors.primarySoft,
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      child: InkWell(
-        onTap: _isFull ? null : onTap,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        child: Ink(
-          decoration: BoxDecoration(
-            color: _isFull ? AppColors.surfaceMuted : AppColors.primarySoft,
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(color: accent.withValues(alpha: 0.3), width: 1.4),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
-                  child: const Icon(CupertinoIcons.add, color: Colors.white, size: 20),
-                ),
-                const SizedBox(height: 11),
-                Text(
-                  strings.addProductButton,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textDark,
-                    fontSize: 12.5,
-                    height: 1.28,
-                    letterSpacing: -0.1,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  strings.ownProductsUsedLabel(used, max),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textGrey,
-                    fontSize: 10.5,
-                    height: 1.3,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

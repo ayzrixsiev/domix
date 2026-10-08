@@ -41,11 +41,20 @@ class StoreFormTextField extends StatelessWidget {
     this.inputFormatters,
     this.suffixText,
     this.onChanged,
+    this.focusNode,
+    this.textInputAction,
+    this.onSubmitted,
   });
 
   final TextEditingController controller;
   final String hint;
   final IconData icon;
+
+  /// the three a list of fields needs to walk from one to the next with the keyboard still up -
+  /// the sizes screen, where closing it between every price is the whole cost being saved
+  final FocusNode? focusNode;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
   final String? errorText;
   final TextInputType? keyboardType;
 
@@ -64,6 +73,9 @@ class StoreFormTextField extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
+      focusNode: focusNode,
+      textInputAction: textInputAction,
+      onSubmitted: onSubmitted,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       onChanged: onChanged,
@@ -214,12 +226,14 @@ class StoreCategoryTile extends StatelessWidget {
     required this.selected,
     required this.errorText,
     required this.strings,
+    required this.templateSizes,
     required this.onTap,
   });
 
   final ShopCategory? selected;
   final String? errorText;
   final AppLocalizations strings;
+  final Map<ShopCategory, int> templateSizes;
   final VoidCallback onTap;
 
   @override
@@ -268,10 +282,10 @@ class StoreCategoryTile extends StatelessWidget {
                     ),
                     // the catalogue size is the concrete thing the owner gets out of the choice, so it stays visible
                     // after picking rather than only in the sheet
-                    if (category != null) ...[
+                    if (templateSizes[category] case final size?) ...[
                       const SizedBox(height: 2),
                       Text(
-                        strings.readyCatalogLabel(category.templateSize),
+                        strings.readyCatalogLabel(size),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -312,15 +326,22 @@ class StoreCategoryTile extends StatelessWidget {
 // two lines of explanation plus the catalogue size, and four of those do not fit an alert box.
 // returns the picked ShopCategory through Navigator.pop, or null if dismissed.
 class ShopCategorySheet extends StatelessWidget {
-  const ShopCategorySheet({super.key, required this.selected, required this.strings});
+  const ShopCategorySheet({
+    super.key,
+    required this.selected,
+    required this.strings,
+    required this.templateSizes,
+  });
 
   final ShopCategory? selected;
   final AppLocalizations strings;
+  final Map<ShopCategory, int> templateSizes;
 
   static Future<ShopCategory?> show(
     BuildContext context, {
     required ShopCategory? selected,
     required AppLocalizations strings,
+    required Map<ShopCategory, int> templateSizes,
   }) {
     return showModalBottomSheet<ShopCategory>(
       context: context,
@@ -328,7 +349,8 @@ class ShopCategorySheet extends StatelessWidget {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       barrierColor: Colors.black.withValues(alpha: 0.28),
-      builder: (_) => ShopCategorySheet(selected: selected, strings: strings),
+      builder: (_) =>
+          ShopCategorySheet(selected: selected, strings: strings, templateSizes: templateSizes),
     );
   }
 
@@ -387,6 +409,7 @@ class ShopCategorySheet extends StatelessWidget {
                 _CategoryRow(
                   category: category,
                   strings: strings,
+                  size: templateSizes[category],
                   isSelected: category == selected,
                   onTap: () => Navigator.of(context).pop(category),
                 ),
@@ -403,12 +426,14 @@ class _CategoryRow extends StatelessWidget {
   const _CategoryRow({
     required this.category,
     required this.strings,
+    required this.size,
     required this.isSelected,
     required this.onTap,
   });
 
   final ShopCategory category;
   final AppLocalizations strings;
+  final int? size;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -456,22 +481,24 @@ class _CategoryRow extends StatelessWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.primarySoft,
-                            borderRadius: BorderRadius.circular(AppRadius.xs),
-                          ),
-                          child: Text(
-                            '${category.templateSize}',
-                            style: const TextStyle(
-                              color: AppColors.primaryOrange,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
+                        if (size != null) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.primarySoft,
+                              borderRadius: BorderRadius.circular(AppRadius.xs),
+                            ),
+                            child: Text(
+                              '$size',
+                              style: const TextStyle(
+                                color: AppColors.primaryOrange,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 3),

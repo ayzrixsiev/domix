@@ -4,6 +4,7 @@ import 'package:frontend/features/home/data/category_product.dart';
 import 'package:frontend/features/home/data/home_content.dart';
 import 'package:frontend/features/home/data/home_repository.dart';
 import 'package:frontend/features/products/data/product_category.dart';
+import 'package:frontend/features/stores/data/shop_category.dart';
 
 /// The viewmodel behind the home screen's three sections. **There is no fallback content**: what
 /// the screen shows is what the database holds, and an empty slot says so plainly.
@@ -14,6 +15,7 @@ class HomeController extends ChangeNotifier {
 
   List<HomeShopPreview> _vipShops = const [];
   List<CategoryOffers> _bestOffers = const [];
+  Map<ShopCategory, int> _templateSizes = const {};
 
   bool _isLoading = false;
   bool _loadFailed = false;
@@ -25,6 +27,10 @@ class HomeController extends ChangeNotifier {
 
   /// one entry per category with ranked shops, so a strip of dead tabs is impossible by construction
   List<CategoryOffers> get bestOffers => _bestOffers;
+
+  /// read by the "add shop" form; kept across a failed reload, since a template size does not go stale
+  /// the way a price does
+  Map<ShopCategory, int> get templateSizes => _templateSizes;
 
   bool get isLoading => _isLoading;
 
@@ -46,6 +52,7 @@ class HomeController extends ChangeNotifier {
       final content = await _repo.fetchHomeContent();
       _vipShops = content.vipShops;
       _bestOffers = content.bestOffers;
+      _templateSizes = content.templateSizes;
       _loadFailed = false;
     } catch (e) {
       // the sections are emptied as well: leaving the last successful load under a failure banner shows

@@ -226,7 +226,7 @@ func TestOrdinaryTemplateProductKeepsItsName(t *testing.T) {
 	}
 
 	saved := decodeProduct(t, rec)
-	if saved.Name != "Кнауф Ротбанд, 25 кг" {
+	if saved.Name != "Штукатурка гипсовая" || saved.Specs != "25 кг · Rotband · Knauf" {
 		t.Fatalf("a template row's name must survive an edit, got %q", saved.Name)
 	}
 	if saved.Unit != "мешок" || saved.Category != "mixes" {

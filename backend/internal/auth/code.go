@@ -99,6 +99,16 @@ type CodeManager struct {
 	// both nil when sends are free - see NewCodeManager
 	budget *ratelimit.Limiter // per phone
 	daily  *ratelimit.Limiter // every caller together
+
+	// zero unless WithReviewAccount armed it
+	review reviewAccount
+}
+
+// the one number whose code is a constant we chose rather than one we minted - see
+// [CodeManager.WithReviewAccount]
+type reviewAccount struct {
+	phone string // canonical, 998XXXXXXXXX
+	code  string
 }
 
 // the single bucket the daily budget lives in: it is a ceiling on the total, not on a caller
@@ -135,6 +145,43 @@ func NewCodeManager(paidDelivery bool) *CodeManager {
 	return m
 }
 
+// WithReviewAccount arms the single number Google's reviewer signs in with: [code] is handed back
+// by Issue instead of a fresh one, and [NeedsDelivery] answers false for it.
+//
+// **It exists because the login cannot be walked by a reviewer otherwise.** The code is delivered
+// through Telegram, and a reviewer in another country has no Telegram account on the number they
+// type - so the review stops on the first screen and the listing is refused as broken software.
+//
+// **It is a login bypass on a known number, so it is armed by configuration and meant to be
+// disarmed.** Unset the two variables once the review is over. What it can reach is bounded by what
+// a signup can: the role is whatever the app asked for mapped through the customer/shop_owner pair,
+// never admin.
+//
+// Either argument empty leaves the manager unarmed - that is the normal state. Call it at startup
+// only: nothing guards the field, because it is read under the lock Issue already holds and written
+// before the server accepts a request.
+func (m *CodeManager) WithReviewAccount(phone, code string) *CodeManager {
+	if phone == "" || code == "" {
+		return m
+	}
+	m.review = reviewAccount{phone: phone, code: code}
+	return m
+}
+
+// NeedsDelivery reports whether a code minted for this number still has to reach a provider. False
+// only for the review account, whose code was published to Google rather than sent to a phone.
+func (m *CodeManager) NeedsDelivery(phone string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return !m.isReview(phone)
+}
+
+// call under the lock. the empty check is what keeps an unarmed manager from matching the empty
+// string, which is not a phone but is what an unset field holds
+func (m *CodeManager) isReview(phone string) bool {
+	return m.review.phone != "" && phone == m.review.phone
+}
+
 // Issue mints a code and remembers its hash. The returned code is the only plaintext copy that ever
 // exists, and the caller's one job is to hand it to a verify.Sender.
 //
@@ -157,11 +204,17 @@ func (m *CodeManager) Issue(p Pending) (code string, wait time.Duration, err err
 		}
 	}
 
-	if m.budget != nil && !m.budget.Allow(p.Phone) {
-		return "", 0, ErrSendBudget
-	}
-	if m.daily != nil && !m.daily.Allow(everyone) {
-		return "", 0, ErrSendBudget
+	// the review account gets the constant the reviewer was given, and neither budget applies to it:
+	// both exist to cap a bill, and nothing is sent for this number
+	if m.isReview(p.Phone) {
+		code = m.review.code
+	} else {
+		if m.budget != nil && !m.budget.Allow(p.Phone) {
+			return "", 0, ErrSendBudget
+		}
+		if m.daily != nil && !m.daily.Allow(everyone) {
+			return "", 0, ErrSendBudget
+		}
 	}
 
 	entry := &pendingCode{purpose: p.Purpose, name: p.Name, role: p.Role, issuedAt: time.Now()}
