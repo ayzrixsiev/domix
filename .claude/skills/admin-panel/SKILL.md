@@ -1,30 +1,55 @@
 ---
 name: admin-panel
 description: >
-  Domix's two web pages, served by the Go API itself — the `/admin` panel (statistics,
+  Domix's html, served by the Go API itself — the `/admin` panel (statistics,
   anomaly report, user/shop/product management, VIP placements, template
-  editing and sync) and the `/delete-account` page Google Play requires. Use when working in
+  editing and sync) and the public site: home, `/privacy`, `/terms` and the
+  `/delete-account` page Google Play requires. Use when working in
   `backend/internal/webui/`, `backend/internal/endpoints/admin.go`,
   `backend/db/queries/admin.sql`, the `RequireAdmin` middleware, the template sync endpoint,
   or anything about admin roles, the anomaly report, or the panel's
   HTML/CSS/JS.
 ---
 
-# The web pages: account deletion and the admin panel
+# The web pages: the public site and the admin panel
 
-Two HTML pages served by the Go API for unrelated reasons: one is a Play requirement, the other
-is the admin panel.
+The Go API serves two unrelated kinds of html: a small public site, which Google Play requires, and
+the admin panel.
 
-**They are `go:embed`-ed into the binary** (`internal/webui/`), where product photos are read off
+**Both are `go:embed`-ed into the binary** (`internal/webui/`), where product photos are read off
 disk. Photos are *content* — hundreds of megabytes, changing without the code, living outside
 `backend/` where embed cannot reach. These pages are *program* — small, changing only when the API
 they call changes — so embedding means deploying is copying one file and a page can never 404
 because a directory was not copied. The cost is that editing HTML needs a rebuild.
 
-**Neither page goes through `WithCORS`** — that wrapper sets `Content-Type: application/json`, so a
-page routed through it downloads instead of rendering.
+**Nothing here goes through `WithJSON`/`WithCORS`** — those set `Content-Type: application/json`, so
+a page routed through them downloads instead of rendering.
 
 ---
+
+## The public site — `internal/webui/site/`
+
+Four pages in one shell (2026-10-08, modelled on how other Uzbek apps that shipped to Play do it):
+`/` (home), `/privacy`, `/terms`, `/delete-account`, and «Связаться» as a `mailto:`.
+
+- **`layout.html` is written once** — header, nav, the 🇺🇿 🇷🇺 🇬🇧 switch, footer, shared css — and each
+  page fills `content` (plus `style`/`script` if it needs them). `html/template`, rendered **once at
+  startup** by `webui.NewSite`: a broken template stops the boot rather than 500-ing its first reader.
+  The admin panel is not in it — `webui.Page` serves that file as it is.
+- **All three languages are in the markup** and css shows one off `<html lang>`, so every page is
+  complete with javascript off. A script in `<head>` picks the language before the body is drawn:
+  `?lang=` → the reader's earlier click (`localStorage`) → the browser → ru. Only a click is stored.
+- **The documents' contents list is built from their own `h2`s** by the layout's script, so it cannot
+  disagree with the headings; without javascript it simply is not there.
+- **The policy text lives twice**: `site/privacy.html` (ru/uz/en) and the app's
+  `privacy_policy.dart` (ru/uz). `TestTheAppCarriesThePublishedPolicy` reads the dart source and
+  compares every heading and line. The terms exist only on the site.
+- **`supportEmail`, `policyVersion` and `termsVersion` are constants in `main.go`, not env**: the app
+  prints the same address and date in its copy, and a deployment that set a different one would
+  publish a policy the app does not show.
+- Dates are written per language by `humanDate` («8 октября 2026 г.», «2026-yil 8-oktabr»,
+  «October 8, 2026»).
+- `/delete-account` is `noindex`; the documents and the home page are indexable.
 
 ## `/delete-account`
 
@@ -41,14 +66,11 @@ only paid for when one does — otherwise a public page is a way to ask from a b
 number in the country is registered with Domix. The pending entry is minted either way, so the
 cooldown cannot be used to tell the two apart either.
 
-- **One centred card, and deliberately almost nothing on it**: the field, the button, and what
-  disappears. Everything else that was there — the in-app instructions, the email path, the English
-  column — described a process that does not exist.
-- **Two languages in one file** (ru/uz), picked by CSS off `<html lang>`, and it **renders correctly
-  with javascript disabled** — the audience is a Play reviewer following a URL, and a blank page is a
-  rejection. Confirming needs JS, so `<noscript>` points at the support address. Every dynamic string
-  is written into the DOM in **both** languages for the same reason the static copy is: switching
-  language after an answer has landed must not blank it out.
+- **One centred card inside the site's shell, and deliberately almost nothing on it**: the field, the
+  button, and what disappears.
+- **Three languages** like the rest of the site. Confirming needs JS, so `<noscript>` points at the
+  support address. Every dynamic string is written into the DOM in **all three** languages (`say`),
+  so switching language after an answer has landed does not blank it out.
 - **Three steps in one card**, swapped by the `hidden` attribute: the number, the code, the answer.
   `[hidden]{display:none !important}` is load-bearing — `hidden` is styled by the *browser's*
   stylesheet, which any author rule outranks, so `.btn{display:flex}` silently un-hides every button
@@ -57,14 +79,14 @@ cooldown cannot be used to tell the two apart either.
   a successful deletion there is no account left to start again with.
 - **A wrong code is fixed in place, not on a result screen**: the code step prints the refusal under
   the field and stays. Only a completed deletion and an outright failure reach step three.
-- **Every refusal the api can answer with has a sentence in both languages** (`errors` in the page's
+- **Every refusal the api can answer with has a sentence in all three languages** (`errors` in the page's
   JS, keyed by the server's stable `code`), and an unrecognised one falls through to `default`.
 - **Confirm sends the number the server echoed back**, never the digits as typed: the pending codes
   are keyed by the canonical spelling, and anything else is a lookup miss read as "wrong code".
-- The support address is `{{SUPPORT_EMAIL}}`, substituted once at startup rather than baked into the
-  markup — it is the value most likely to be wrong on a deployment. Unset it falls back to
-  `domix.support@gmail.com` **and logs a warning at boot**. It is now only the way to reach a person when the
-  flow itself fails, which is the one thing a self-service page cannot cover.
+- **Deleting an account deletes the owner's uploaded photos** (`eraseAccount`, 2026-10-08): the
+  cascade takes the rows, never the files, so the paths are read first and unlinked after. The admin
+  panel's own delete does the same through `removeUploads`. A file that fails to go is left for the
+  orphan sweep, never undoing the deletion.
 - `/delete-account/` and `/account-deletion` are 301s onto it, because the URL goes into the Play
   Console and into support replies and those copies cannot be corrected later.
 - The retention line says what is true: nothing personal is kept, and server logs may hold the

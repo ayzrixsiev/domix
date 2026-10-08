@@ -20,6 +20,7 @@ import 'package:frontend/features/profile/data/account_role.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/role_option_tile.dart';
+import 'package:frontend/features/onboarding/data/privacy_policy.dart';
 import 'package:frontend/features/onboarding/presentation/screens/onboarding_flow.dart';
 import 'package:frontend/core/widgets/code_input_field.dart';
 import 'package:frontend/features/profile/presentation/controllers/auth_controller.dart';
@@ -236,8 +237,10 @@ void main() {
     await tester.tap(find.text(_strings.nextButton));
     await tester.pumpAndSettle();
 
-    // the summary is on the step; the sections themselves are not
-    expect(find.textContaining('Кто обрабатывает ваши данные'), findsNothing);
+    // the summary is on the step; the sections themselves are not. read from the policy itself, so
+    // rewording a heading does not break the test that only cares the sheet opens
+    final firstHeading = privacyPolicySections(AppLanguage.ru).first.title;
+    expect(find.text(firstHeading), findsNothing);
 
     await _scrollTo(tester, find.text(_strings.policyReadFull));
     await tester.tap(find.text(_strings.policyReadFull));
@@ -245,6 +248,6 @@ void main() {
 
     // only the first section is asserted: the rest are below the sheet's fold and a ListView does
     // not build what it does not show
-    expect(find.textContaining('Кто обрабатывает ваши данные'), findsOneWidget);
+    expect(find.text(firstHeading), findsOneWidget);
   });
 }

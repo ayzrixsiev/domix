@@ -1,0 +1,294 @@
+{{/* **the ru and uz halves are also in the app** - privacy_policy.dart. a test compares them line by line. */}}
+{{define "content"}}
+<article class="card doc" data-lang="ru">
+  <h1>Политика конфиденциальности</h1>
+  <p class="meta">Редакция от {{date "ru" .PolicyVersion}}</p>
+  <p class="lede">Здесь мы объясняем, какие данные получает Domix, зачем они нужны и как их удалить. Если коротко: для входа нужен только номер телефона, приложение не определяет, где вы находитесь, в нём нет сторонней рекламы, а данные мы не продаём.</p>
+  <nav class="toc" aria-label="Содержание" hidden></nav>
+  <section>
+    <h2>1. Кто мы</h2>
+    <p>Domix разрабатывает и поддерживает команда Domix (далее — «мы»), г. Ташкент, Республика Узбекистан. Мы отвечаем за данные, о которых говорится в этой политике.</p>
+    <p>Политика относится к мобильному приложению Domix для Android и к сайту domix-api.uz. Если у вас есть вопрос о ваших данных, пишите на <a href="mailto:{{.Email}}">{{.Email}}</a>.</p>
+  </section>
+  <section>
+    <h2>2. Какие данные мы получаем</h2>
+    <ul>
+      <li>Номер телефона. Без него нельзя войти: на номер приходит код подтверждения, и по номеру мы узнаём вас при следующем входе.</li>
+      <li>Имя. Вы указываете его сами, оно отображается в вашем профиле.</li>
+      <li>Роль: покупатель или владелец магазина.</li>
+      <li>Данные магазина, если вы его открываете: название, адрес, точку на карте, контактный телефон, категорию, цены и фотографии товаров. Это витрина, поэтому её видят все пользователи приложения.</li>
+      <li>Избранное: товары, которые вы сохранили.</li>
+      <li>Технические данные. Когда приложение обращается к серверу, в журнал записываются IP-адрес, время и адрес запроса. Это нужно, чтобы защищать сервис от злоупотреблений и разбираться со сбоями.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>3. Чего мы не собираем</h2>
+    <ul>
+      <li>Ваше местоположение. Приложение не запрашивает доступ к геолокации и не знает, где вы находитесь. Город и адрес магазина вы выбираете на карте сами.</li>
+      <li>Место съёмки фотографий. Камера телефона записывает в снимок координаты. Когда вы загружаете фото товара, мы пересохраняем его, и эти сведения удаляются.</li>
+      <li>Контакты, сообщения, файлы и рекламный идентификатор устройства.</li>
+      <li>Ничего для рекламы и аналитики: в Domix нет систем аналитики, трекеров и рекламных библиотек.</li>
+      <li>Пароли. В Domix их нет: вход только по одноразовому коду.</li>
+    </ul>
+    <p>В карточке приложения в Google Play может быть указано разрешение на геолокацию. Его объявляет встроенная карта Яндекса. Domix это разрешение не запрашивает, а без вашего согласия Android его не выдаёт.</p>
+  </section>
+  <section>
+    <h2>4. Зачем нам эти данные</h2>
+    <ul>
+      <li>Чтобы вы могли войти, а мы — убедиться, что номер ваш.</li>
+      <li>Чтобы показывать магазины на карте и сравнивать их цены.</li>
+      <li>Чтобы покупатель мог связаться с магазином.</li>
+      <li>Чтобы защищать сервис от автоматических запросов и злоупотреблений.</li>
+    </ul>
+    <p>Мы обрабатываем данные с вашего согласия, которое вы даёте при регистрации, и только в том объёме, без которого приложение не может работать. Согласие можно отозвать в любой момент: для этого достаточно удалить аккаунт.</p>
+  </section>
+  <section>
+    <h2>5. Кто ещё получает данные</h2>
+    <p>Мы не продаём данные и не передаём их другим компаниям для их собственных целей. Часть работы за нас делают сервисы-подрядчики, и каждый получает только то, что нужно для его задачи:</p>
+    <ul>
+      <li>Telegram Gateway — номер телефона и код, чтобы доставить код подтверждения в Telegram.</li>
+      <li>Яндекс Карты (MapKit) — запросы карты, пока она открыта.</li>
+      <li>Photon (Komoot GmbH, Германия) — текст, который вы вводите в поиске адреса, чтобы показать подсказки.</li>
+      <li>Nominatim (OpenStreetMap Foundation) — координаты точки, которую вы поставили на карте, чтобы определить её адрес, и поисковый запрос, когда вы запускаете поиск.</li>
+      <li>Cloudflare R2 — хранение фотографий товаров.</li>
+      <li>Хостинг-провайдер в Узбекистане — сервер и база данных.</li>
+    </ul>
+    <p>Государственным органам мы раскрываем данные только тогда, когда этого требует закон Республики Узбекистан.</p>
+  </section>
+  <section>
+    <h2>6. Где хранятся данные</h2>
+    <p>Аккаунты, номера телефонов и магазины хранятся в базе данных на сервере в Республике Узбекистан.</p>
+    <p>Telegram, Яндекс, Photon, Nominatim и Cloudflare работают за пределами Узбекистана. Поэтому то, что получает каждый из них (см. раздел 5), передаётся за рубеж: номер телефона — для доставки кода, адресные запросы и координаты точки — для поиска адреса, фотографии товаров — для хранения.</p>
+  </section>
+  <section>
+    <h2>7. Сколько мы храним данные</h2>
+    <ul>
+      <li>Аккаунт, магазины, товары и избранное — пока вы пользуетесь Domix.</li>
+      <li>Код подтверждения — 5 минут. Он хранится только в оперативной памяти сервера и только в виде хэша, поэтому от начатой и брошенной регистрации ничего не остаётся.</li>
+      <li>Журналы сервера — до 90 дней.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>8. Ваши права и удаление аккаунта</h2>
+    <p>Вы можете узнать, какие данные о вас у нас есть, исправить их или удалить. Имя, номер телефона и данные магазина меняются прямо в приложении, остальное — по письму на <a href="mailto:{{.Email}}">{{.Email}}</a>.</p>
+    <p>Удалить аккаунт можно двумя способами:</p>
+    <ul>
+      <li>в приложении: «Профиль» → «Удалить аккаунт»;</li>
+      <li>без приложения: на странице <a href="/delete-account">domix-api.uz/delete-account</a>.</li>
+    </ul>
+    <p>Аккаунт удаляется сразу, а не по заявке. Вместе с ним удаляются ваши магазины, товары, загруженные фотографии и избранное. Восстановить их нельзя. В журналах сервера до 90 дней может остаться числовой номер удалённого аккаунта — без имени и телефона.</p>
+  </section>
+  <section>
+    <h2>9. Безопасность</h2>
+    <p>Соединение с сервером зашифровано (TLS). Ключ сессии хранится в защищённом хранилище Android. Коды подтверждения хранятся только в виде хэша, а число попыток ввода ограничено.</p>
+    <p>Полностью защищённых систем не бывает. Если заметили в своём аккаунте что-то подозрительное, напишите нам.</p>
+  </section>
+  <section>
+    <h2>10. Дети</h2>
+    <p>Domix не рассчитан на детей младше 16 лет, и мы сознательно не собираем их данные. Если вы считаете, что ребёнок зарегистрировался в приложении, напишите нам, и мы удалим аккаунт.</p>
+  </section>
+  <section>
+    <h2>11. Изменения политики</h2>
+    <p>Если мы существенно изменим политику, приложение покажет новую редакцию и снова попросит согласия. Дата текущей редакции указана в начале документа.</p>
+  </section>
+  <section>
+    <h2>12. Контакты</h2>
+    <p>Вопросы о данных, просьбы исправить или удалить их присылайте на <a href="mailto:{{.Email}}">{{.Email}}</a>.</p>
+  </section>
+</article>
+
+<article class="card doc" data-lang="uz">
+  <h1>Maxfiylik siyosati</h1>
+  <p class="meta">Tahrir sanasi: {{date "uz" .PolicyVersion}}</p>
+  <p class="lede">Bu yerda Domix qanday ma’lumotlarni olishi, ular nima uchun kerakligi va ularni qanday o‘chirish mumkinligini tushuntiramiz. Qisqasi: kirish uchun faqat telefon raqami kerak, ilova qayerdaligingizni aniqlamaydi, unda begona reklama yo‘q, ma’lumotlarni esa sotmaymiz.</p>
+  <nav class="toc" aria-label="Mundarija" hidden></nav>
+  <section>
+    <h2>1. Biz kimmiz</h2>
+    <p>Domix’ni Domix jamoasi («biz») ishlab chiqadi va qo‘llab-quvvatlaydi, Toshkent shahri, O‘zbekiston Respublikasi. Ushbu siyosatda so‘z yuritilgan ma’lumotlar uchun biz javob beramiz.</p>
+    <p>Siyosat Android uchun Domix mobil ilovasiga va domix-api.uz saytiga tegishli. Ma’lumotlaringiz bo‘yicha savolingiz bo‘lsa, <a href="mailto:{{.Email}}">{{.Email}}</a> manziliga yozing.</p>
+  </section>
+  <section>
+    <h2>2. Qanday ma’lumotlarni olamiz</h2>
+    <ul>
+      <li>Telefon raqami. Usiz kirib bo‘lmaydi: raqamga tasdiqlash kodi keladi, keyingi safar esa sizni shu raqam orqali taniymiz.</li>
+      <li>Ism. Uni o‘zingiz kiritasiz, u profilingizda ko‘rinadi.</li>
+      <li>Rol: xaridor yoki do‘kon egasi.</li>
+      <li>Do‘kon ma’lumotlari, agar do‘kon ochsangiz: nomi, manzili, xaritadagi nuqtasi, aloqa telefoni, toifasi, mahsulotlar narxi va suratlari. Bu vitrina, shuning uchun uni ilovaning barcha foydalanuvchilari ko‘radi.</li>
+      <li>Tanlanganlar: siz saqlab qo‘ygan mahsulotlar.</li>
+      <li>Texnik ma’lumotlar. Ilova serverga murojaat qilganda jurnalga IP manzil, vaqt va so‘rov manzili yoziladi. Bu xizmatni suiiste’moldan himoya qilish va nosozliklarni aniqlash uchun kerak.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>3. Nimalarni to‘plamaymiz</h2>
+    <ul>
+      <li>Joylashuvingiz. Ilova geolokatsiyaga ruxsat so‘ramaydi va qayerdaligingizni bilmaydi. Shahar va do‘kon manzilini xaritada o‘zingiz tanlaysiz.</li>
+      <li>Suratga olingan joy. Telefon kamerasi suratga koordinatalarni yozib qo‘yadi. Mahsulot suratini yuklaganingizda biz uni qayta saqlaymiz va bu ma’lumotlar o‘chib ketadi.</li>
+      <li>Kontaktlar, xabarlar, fayllar va qurilmaning reklama identifikatori.</li>
+      <li>Reklama va tahlil uchun hech narsa: Domix’da tahlil tizimlari, kuzatuvchilar va reklama kutubxonalari yo‘q.</li>
+      <li>Parollar. Domix’da ular yo‘q: kirish faqat bir martalik kod orqali.</li>
+    </ul>
+    <p>Google Play’dagi ilova sahifasida geolokatsiyaga ruxsat ko‘rsatilgan bo‘lishi mumkin. Uni ilovaga o‘rnatilgan Yandex xaritasi e’lon qiladi. Domix bu ruxsatni so‘ramaydi, roziligingizsiz esa Android uni bermaydi.</p>
+  </section>
+  <section>
+    <h2>4. Bu ma’lumotlar nima uchun kerak</h2>
+    <ul>
+      <li>Siz kira olishingiz, biz esa raqam sizniki ekaniga ishonch hosil qilishimiz uchun.</li>
+      <li>Do‘konlarni xaritada ko‘rsatish va ularning narxlarini solishtirish uchun.</li>
+      <li>Xaridor do‘kon bilan bog‘lana olishi uchun.</li>
+      <li>Xizmatni avtomatik so‘rovlar va suiiste’moldan himoya qilish uchun.</li>
+    </ul>
+    <p>Ma’lumotlarni ro‘yxatdan o‘tishda bergan roziligingiz asosida va faqat ilova ishlashi uchun zarur hajmda qayta ishlaymiz. Rozilikni istalgan vaqtda qaytarib olish mumkin: buning uchun akkauntni o‘chirish kifoya.</p>
+  </section>
+  <section>
+    <h2>5. Ma’lumotlarni yana kim oladi</h2>
+    <p>Biz ma’lumotlarni sotmaymiz va boshqa kompaniyalarga ularning o‘z maqsadlari uchun bermaymiz. Ishning bir qismini biz uchun pudratchi xizmatlar bajaradi va ularning har biri faqat o‘z vazifasi uchun keraklisini oladi:</p>
+    <ul>
+      <li>Telegram Gateway — tasdiqlash kodini Telegram’ga yetkazish uchun telefon raqami va kod.</li>
+      <li>Yandex Xaritalar (MapKit) — xarita ochiq turganda uning so‘rovlari.</li>
+      <li>Photon (Komoot GmbH, Germaniya) — takliflarni ko‘rsatish uchun manzil qidiruvida yozgan matningiz.</li>
+      <li>Nominatim (OpenStreetMap Foundation) — manzilini aniqlash uchun xaritada qo‘ygan nuqtangiz koordinatalari va qidiruvni boshlaganingizdagi so‘rov.</li>
+      <li>Cloudflare R2 — mahsulot suratlarini saqlash.</li>
+      <li>O‘zbekistondagi hosting-provayder — server va ma’lumotlar bazasi.</li>
+    </ul>
+    <p>Davlat organlariga ma’lumotlarni faqat O‘zbekiston Respublikasi qonunchiligi talab qilgandagina oshkor qilamiz.</p>
+  </section>
+  <section>
+    <h2>6. Ma’lumotlar qayerda saqlanadi</h2>
+    <p>Akkauntlar, telefon raqamlari va do‘konlar O‘zbekiston Respublikasidagi serverda joylashgan ma’lumotlar bazasida saqlanadi.</p>
+    <p>Telegram, Yandex, Photon, Nominatim va Cloudflare O‘zbekistondan tashqarida ishlaydi. Shuning uchun ularning har biri oladigan narsa (5-bo‘limga qarang) chet elga uzatiladi: telefon raqami — kodni yetkazish uchun, manzil so‘rovlari va nuqta koordinatalari — manzilni qidirish uchun, mahsulot suratlari — saqlash uchun.</p>
+  </section>
+  <section>
+    <h2>7. Ma’lumotlarni qancha saqlaymiz</h2>
+    <ul>
+      <li>Akkaunt, do‘konlar, mahsulotlar va tanlanganlar — Domix’dan foydalanar ekansiz.</li>
+      <li>Tasdiqlash kodi — 5 daqiqa. U faqat server tezkor xotirasida va faqat xesh ko‘rinishida saqlanadi, shuning uchun boshlangan va tashlab ketilgan ro‘yxatdan o‘tishdan hech narsa qolmaydi.</li>
+      <li>Server jurnallari — 90 kungacha.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>8. Huquqlaringiz va akkauntni o‘chirish</h2>
+    <p>Siz haqingizda qanday ma’lumotlar borligini bilishingiz, ularni tuzatishingiz yoki o‘chirishingiz mumkin. Ism, telefon raqami va do‘kon ma’lumotlari bevosita ilovada o‘zgartiriladi, qolganlari — <a href="mailto:{{.Email}}">{{.Email}}</a> manziliga xat orqali.</p>
+    <p>Akkauntni ikki yo‘l bilan o‘chirish mumkin:</p>
+    <ul>
+      <li>ilovada: «Profil» → «Akkauntni o‘chirish»;</li>
+      <li>ilovasiz: <a href="/delete-account">domix-api.uz/delete-account</a> sahifasida.</li>
+    </ul>
+    <p>Akkaunt ariza bo‘yicha emas, darhol o‘chiriladi. U bilan birga do‘konlaringiz, mahsulotlaringiz, yuklangan suratlar va tanlanganlar ham o‘chiriladi. Ularni tiklab bo‘lmaydi. Server jurnallarida 90 kungacha o‘chirilgan akkauntning raqamli identifikatori qolishi mumkin — ismsiz va telefonsiz.</p>
+  </section>
+  <section>
+    <h2>9. Xavfsizlik</h2>
+    <p>Server bilan aloqa shifrlangan (TLS). Sessiya kaliti Android’ning himoyalangan xotirasida saqlanadi. Tasdiqlash kodlari faqat xesh ko‘rinishida saqlanadi, kiritish urinishlari soni esa cheklangan.</p>
+    <p>To‘liq himoyalangan tizimlar bo‘lmaydi. Akkauntingizda shubhali narsani sezsangiz, bizga yozing.</p>
+  </section>
+  <section>
+    <h2>10. Bolalar</h2>
+    <p>Domix 16 yoshgacha bo‘lgan bolalar uchun mo‘ljallanmagan va biz ularning ma’lumotlarini ataylab to‘plamaymiz. Agar bola ilovada ro‘yxatdan o‘tgan deb hisoblasangiz, bizga yozing — akkauntni o‘chiramiz.</p>
+  </section>
+  <section>
+    <h2>11. Siyosatdagi o‘zgarishlar</h2>
+    <p>Siyosatni jiddiy o‘zgartirsak, ilova yangi tahrirni ko‘rsatadi va rozilikni qaytadan so‘raydi. Joriy tahrir sanasi hujjat boshida ko‘rsatilgan.</p>
+  </section>
+  <section>
+    <h2>12. Aloqa</h2>
+    <p>Ma’lumotlar bo‘yicha savollar, ularni tuzatish yoki o‘chirish haqidagi so‘rovlarni <a href="mailto:{{.Email}}">{{.Email}}</a> manziliga yuboring.</p>
+  </section>
+</article>
+
+<article class="card doc" data-lang="en">
+  <h1>Privacy Policy</h1>
+  <p class="meta">Last updated: {{date "en" .PolicyVersion}}</p>
+  <p class="lede">This policy explains what data Domix receives, why it needs it and how to delete it. In short: all you need to sign in is a phone number, the app does not know where you are, it shows no third-party ads, and we do not sell your data.</p>
+  <nav class="toc" aria-label="Contents" hidden></nav>
+  <section>
+    <h2>1. Who we are</h2>
+    <p>Domix is built and run by the Domix team (“we”), based in Tashkent, Uzbekistan. We are responsible for the data described in this policy.</p>
+    <p>This policy covers the Domix app for Android and the website domix-api.uz. If you have a question about your data, write to <a href="mailto:{{.Email}}">{{.Email}}</a>.</p>
+  </section>
+  <section>
+    <h2>2. What we collect</h2>
+    <ul>
+      <li>Your phone number. You cannot sign in without it: the verification code is sent to it, and it is how we recognise you next time.</li>
+      <li>Your name. You enter it yourself, and it is shown in your profile.</li>
+      <li>Your role: buyer or store owner.</li>
+      <li>Store details, if you open a store: its name, address, location on the map, contact phone, category, and the prices and photos of its products. This is the storefront, so every user of the app can see it.</li>
+      <li>Favourites: the products you have saved.</li>
+      <li>Technical data. When the app contacts our server, the IP address, the time and the address of the request are written to the server log. We use this to protect the service from abuse and to investigate failures.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>3. What we do not collect</h2>
+    <ul>
+      <li>Your location. The app does not ask for location access and does not know where you are. You choose your city and your store’s address on the map yourself.</li>
+      <li>Where a photo was taken. Phone cameras write location data into each picture. When you upload a product photo, we re-save it and that data is removed.</li>
+      <li>Your contacts, messages, files or your device’s advertising ID.</li>
+      <li>Anything for advertising or analytics: Domix contains no analytics systems, trackers or advertising libraries.</li>
+      <li>Passwords. Domix has none: you sign in with a one-time code.</li>
+    </ul>
+    <p>The app’s Google Play listing may show a location permission. It is declared by the built-in Yandex map. Domix never requests it, and Android does not grant it without your consent.</p>
+  </section>
+  <section>
+    <h2>4. Why we need it</h2>
+    <ul>
+      <li>So you can sign in and we can confirm the number is yours.</li>
+      <li>To show stores on the map and compare their prices.</li>
+      <li>So buyers can contact stores.</li>
+      <li>To protect the service from automated requests and abuse.</li>
+    </ul>
+    <p>We process this data with the consent you give when you register, and only to the extent the app needs in order to work. You can withdraw consent at any time by deleting your account.</p>
+  </section>
+  <section>
+    <h2>5. Who else receives data</h2>
+    <p>We do not sell data, and we do not give it to other companies for their own purposes. Some of the work is done for us by service providers, and each one receives only what its task requires:</p>
+    <ul>
+      <li>Telegram Gateway: your phone number and the code, to deliver the verification code in Telegram.</li>
+      <li>Yandex Maps (MapKit): map requests while the map is open.</li>
+      <li>Photon (Komoot GmbH, Germany): what you type into the address search, to suggest matches.</li>
+      <li>Nominatim (OpenStreetMap Foundation): the coordinates of the point you place on the map, to work out its address, and your query when you run a search.</li>
+      <li>Cloudflare R2: storage for product photos.</li>
+      <li>A hosting provider in Uzbekistan: the server and the database.</li>
+    </ul>
+    <p>We disclose data to government authorities only when the law of the Republic of Uzbekistan requires it.</p>
+  </section>
+  <section>
+    <h2>6. Where data is stored</h2>
+    <p>Accounts, phone numbers and stores are kept in a database on a server in the Republic of Uzbekistan.</p>
+    <p>Telegram, Yandex, Photon, Nominatim and Cloudflare operate outside Uzbekistan, so what each of them receives (see section 5) is transferred abroad: your phone number to deliver the code, address queries and map coordinates to look up addresses, and product photos for storage.</p>
+  </section>
+  <section>
+    <h2>7. How long we keep it</h2>
+    <ul>
+      <li>Your account, stores, products and favourites: for as long as you use Domix.</li>
+      <li>Verification codes: 5 minutes. They are held only in the server’s memory and only as a hash, so a registration you start and abandon leaves nothing behind.</li>
+      <li>Server logs: up to 90 days.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>8. Your rights and deleting your account</h2>
+    <p>You can find out what data we hold about you, correct it or delete it. Your name, phone number and store details can be changed in the app; for anything else, email <a href="mailto:{{.Email}}">{{.Email}}</a>.</p>
+    <p>You can delete your account in two ways:</p>
+    <ul>
+      <li>in the app: «Профиль» → «Удалить аккаунт» (Profile → Delete account);</li>
+      <li>without the app: at <a href="/delete-account">domix-api.uz/delete-account</a>.</li>
+    </ul>
+    <p>The account is deleted immediately, not queued as a request. Your stores, products, uploaded photos and favourites are deleted with it, and they cannot be restored. The server logs may keep the numeric ID of the deleted account for up to 90 days, without a name or phone number.</p>
+  </section>
+  <section>
+    <h2>9. Security</h2>
+    <p>Connections to our server are encrypted (TLS). Your session key is kept in Android’s secure storage. Verification codes are stored only as a hash, and the number of attempts is limited.</p>
+    <p>No system is perfectly secure. If you notice anything suspicious in your account, let us know.</p>
+  </section>
+  <section>
+    <h2>10. Children</h2>
+    <p>Domix is not meant for children under 16, and we do not knowingly collect their data. If you believe a child has registered, write to us and we will delete the account.</p>
+  </section>
+  <section>
+    <h2>11. Changes to this policy</h2>
+    <p>If we change this policy in a meaningful way, the app will show you the new version and ask for your consent again. The date of the current version is at the top of this document.</p>
+  </section>
+  <section>
+    <h2>12. Contact</h2>
+    <p>Send questions about your data, or requests to correct or delete it, to <a href="mailto:{{.Email}}">{{.Email}}</a>.</p>
+  </section>
+</article>
+
+{{end}}

@@ -8,6 +8,7 @@ import '../../data/geocoding_service.dart';
 import '../widgets/domix_map.dart';
 import '../widgets/shop_marker.dart';
 import 'package:frontend/core/widgets/circle_icon_button.dart';
+import 'package:frontend/core/widgets/floating_search_field.dart';
 
 // what the caller gets back once the user confirms a location
 class LocationPickResult {
@@ -182,11 +183,24 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                       const CircleBackButton(floating: true),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: _SearchField(
+                        child: FloatingSearchField(
                           controller: _searchController,
-                          hintText: strings.searchLocationHint,
-                          isSearching: _isSearching,
+                          hint: strings.searchLocationHint,
                           onSubmitted: _performSearch,
+                          trailing: _isSearching
+                              ? const Padding(
+                                  padding: EdgeInsets.all(13),
+                                  child: SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  ),
+                                )
+                              : IconButton(
+                                  icon: const Icon(CupertinoIcons.arrow_right_circle_fill),
+                                  color: AppColors.primaryOrange,
+                                  onPressed: () => _performSearch(_searchController.text),
+                                ),
                         ),
                       ),
                     ],
@@ -243,57 +257,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _SearchField extends StatelessWidget {
-  const _SearchField({
-    required this.controller,
-    required this.hintText,
-    required this.isSearching,
-    required this.onSubmitted,
-  });
-
-  final TextEditingController controller;
-  final String hintText;
-  final bool isSearching;
-  final ValueChanged<String> onSubmitted;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      borderRadius: BorderRadius.circular(16),
-      elevation: 3,
-      child: TextField(
-        controller: controller,
-        onSubmitted: onSubmitted,
-        textInputAction: TextInputAction.search,
-        decoration: InputDecoration(
-          hintText: hintText,
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          prefixIcon: const Icon(CupertinoIcons.search, size: 20),
-          suffixIcon: isSearching
-              ? const Padding(
-                  padding: EdgeInsets.all(14),
-                  child: SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              : IconButton(
-                  icon: const Icon(CupertinoIcons.arrow_right_circle_fill),
-                  color: AppColors.primaryOrange,
-                  onPressed: () => onSubmitted(controller.text),
-                ),
-        ),
       ),
     );
   }

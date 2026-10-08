@@ -174,8 +174,9 @@ button rather than a cron job — at this scale the count is zero or single digi
 
 ### Play policy — a listing is rejected without each of these
 
-- **The account-deletion page** `/delete-account` is served by the API and `SUPPORT_EMAIL` is set
-  (`domix.support@gmail.com`). Remaining: put the production URL in the Play Console.
+- **The public site is built** (2026-10-08): `/`, `/privacy`, `/terms`, `/delete-account`, in ru, uz
+  and en, served by the API (see the `admin-panel` skill). The Console takes two of those urls:
+  `https://domix-api.uz/privacy` and `https://domix-api.uz/delete-account`.
 - **App access instructions — the mechanism is built** (2026-10-07). `PLAY_REVIEW_PHONE` and
   `PLAY_REVIEW_CODE` arm one number whose six digits are fixed and never delivered, so a reviewer
   with no Telegram account can still get past the login wall — otherwise the submission is refused as
@@ -185,16 +186,14 @@ button rather than a cron job — at this scale the count is zero or single digi
   discovered by a rejection weeks later. **Unset both once the review is over**: it is a fixed code on
   a known number. Fill the Console's **App access** section with that number, that code and a screen
   recording.
-- **The Data Safety form.** Declare name, phone number and **approximate location**. In-app messages
-  are gone with the support thread — put them back on the form the day that feature returns. A
-  mismatch found later is a policy strike, not a correction.
+- **The Data Safety form.** Declare name, phone number, the store's address, product photos and
+  favourites — **not device location**: the app never requests it (`docs-privacy.md` §3.2, §9 has the
+  row-by-row answers). A mismatch found later is a policy strike, not a correction.
 - **Justify `ACCESS_FINE_LOCATION`** (see the MapKit permissions note).
-- **The privacy policy is published at `/privacy`** (2026-10-07), the url the Console asks for being
-  `https://domix-api.uz/privacy`. **The same text exists twice** - that page and
-  `privacy_policy.dart`, which renders it before an account exists and without a network - and
-  `TestThePageAndTheAppAgreeOnThePolicyVersion` is what stops the two copies drifting apart in date.
-  `deploy/logrotate.conf` is what makes §6's "90 days" true rather than a promise; read its header
-  before installing, it collides with nginx's own rule.
+- **The policy exists twice**: `/privacy` and `privacy_policy.dart`, which the app shows before an
+  account exists. `TestTheAppCarriesThePublishedPolicy` compares them line by line, ru and uz.
+  `deploy/logrotate.conf` is what makes the policy's "90 days" true rather than a promise; read its
+  header before installing, it collides with nginx's own rule.
 - Content rating questionnaire, target audience — Console forms.
 - **`docs-privacy.md` at the repo root is the inventory behind all of this**: every SDK, every merged
   permission, every external host, and the Data Safety answer per row. Re-run its manifest check after any

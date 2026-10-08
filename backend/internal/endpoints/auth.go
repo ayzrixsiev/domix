@@ -14,6 +14,7 @@ import (
 	"domix/backend/db"
 	"domix/backend/internal/auth"
 	"domix/backend/internal/dbctx"
+	"domix/backend/internal/imagestore"
 )
 
 const maxUserNameLen = 150
@@ -22,6 +23,9 @@ const maxUserNameLen = 150
 // endpoints.PhoneAuth, and moving an account onto a new number in phone_change.go.
 type Auth struct {
 	Queries *db.Queries
+
+	// only DeleteMe needs it: an account's photos go with the account - see eraseAccount
+	Images imagestore.Storage
 }
 
 // the account, as GET /api/me and the login both answer with it
@@ -165,7 +169,7 @@ func (a *Auth) DeleteMe(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := dbctx.WithTimeout(r.Context())
 	defer cancel()
 
-	if err := a.Queries.DeleteUser(ctx, userID); err != nil {
+	if err := eraseAccount(ctx, a.Queries, a.Images, userID); err != nil {
 		log.Printf("CRITICAL: failed to delete user %d: %v", userID, err)
 		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not delete the account")
 		return

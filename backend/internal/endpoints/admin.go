@@ -442,6 +442,14 @@ func (a *Admin) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// read before the cascade takes the rows that name them - see eraseAccount
+	uploads, err := a.Queries.ListUploadedImagesOfUser(ctx, targetID)
+	if err != nil {
+		log.Printf("CRITICAL: admin %d could not list the photos of user %d: %v", adminID, targetID, err)
+		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not delete the user")
+		return
+	}
+
 	deleted, err := a.Queries.AdminDeleteUser(ctx, targetID)
 	if err != nil {
 		log.Printf("CRITICAL: admin %d failed to delete user %d: %v", adminID, targetID, err)
@@ -457,6 +465,7 @@ func (a *Admin) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	// ids and a role only: an audit line says who did what to whom, and the name and number of the
 	// account just erased are exactly what must not be copied into a log on the way out
 	log.Printf("ADMIN %d deleted user %d (role=%s)", adminID, targetID, role)
+	removeUploads(ctx, a.Images, targetID, uploads)
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]bool{"deleted": true})

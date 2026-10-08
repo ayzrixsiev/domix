@@ -17,6 +17,7 @@ import (
 	"domix/backend/db"
 	"domix/backend/internal/auth"
 	"domix/backend/internal/catalog"
+	"domix/backend/internal/imagestore"
 )
 
 func accountUnderTest(t *testing.T) (*Auth, context.Context, pgx.Tx, *db.Queries) {
@@ -92,6 +93,47 @@ func TestDeletingAnAccountTakesItsShopsAndProductsWithIt(t *testing.T) {
 	}
 	if got := countRows(t, ctx, tx, "SELECT COUNT(*) FROM products WHERE shop_id = $1", shopID); got != 0 {
 		t.Fatalf("%d products outlived the shop", got)
+	}
+}
+
+// **The policy promises the photos go with the account**, and the cascade cannot keep that promise:
+// it takes the rows, and the files live in a bucket no transaction reaches.
+func TestDeletingAnAccountDeletesThePhotosItsOwnerUploaded(t *testing.T) {
+	authEndpoints, ctx, tx, q := accountUnderTest(t)
+
+	store, err := imagestore.NewDisk(t.TempDir())
+	if err != nil {
+		t.Fatalf("imagestore.NewDisk: %v", err)
+	}
+	authEndpoints.Images = store
+
+	shopID := makeSeededShop(t, ctx, tx, q, "Photographer", catalog.CategoryWallpaper, false)
+	ownerID := shopOwner(t, ctx, tx, shopID)
+
+	uploaded, err := store.Save(ctx, imagestore.Photo{Master: []byte("master"), Thumb: []byte("thumb")})
+	if err != nil {
+		t.Fatalf("saving the owner's photo: %v", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE products SET image_path = $2
+		WHERE id = (SELECT id FROM products WHERE shop_id = $1 ORDER BY id LIMIT 1)`, shopID, uploaded); err != nil {
+		t.Fatalf("pointing a product at the upload: %v", err)
+	}
+
+	rec := requestMe(t, ctx, authEndpoints, http.MethodDelete, ownerID)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	left, err := store.List(ctx, imagestore.UploadDir)
+	if err != nil {
+		t.Fatalf("listing the store: %v", err)
+	}
+	if len(left) != 0 {
+		names := make([]string, 0, len(left))
+		for _, obj := range left {
+			names = append(names, obj.Path)
+		}
+		t.Fatalf("the account is gone but its photos are not: %v", names)
 	}
 }
 

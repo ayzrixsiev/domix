@@ -1,25 +1,15 @@
 import 'package:frontend/core/localization/app_localizations.dart';
 
-/// The privacy policy shown during onboarding, in both languages.
+/// The privacy policy shown during onboarding, in both of the app's languages.
 ///
-/// **Why this lives in the app as data rather than as a web page.** Google Play and the App Store
-/// both require a policy that is readable *before* an account exists, and Play additionally wants
-/// one reachable from a URL in the console listing. **The same text exists twice on purpose**: here,
-/// so it can be read and accepted before an account exists and without a network, and as the page
-/// the api serves at `/privacy`, which is the URL the console gets. Change one and change the other,
-/// and move [policyVersion] in both.
-///
-/// **What it must actually cover**, and what a reviewer checks for: every category of personal data
-/// collected, the purpose of each, who it is shared with (named, not "third parties"), how long it
-/// is kept, and how to delete it. A policy that omits the deletion route is the single most common
-/// rejection at review, which is why §7 names both routes.
-///
-/// **This is a competent draft, not legal advice.** [policyVersion] exists so that the day a lawyer
-/// rewrites it, the app can tell who accepted which version - see [OnboardingFlow].
-const String policyVersion = '2026-10-07';
+/// **The same text is the page at `/privacy`** (backend/internal/webui/site/privacy.html), which also
+/// carries an English version. It lives here as well so it can be read and accepted before an account
+/// exists. `TestTheAppCarriesThePublishedPolicy` compares the two line by line: edit both, and move
+/// [policyVersion] together with the api's `policyVersion`.
+const String policyVersion = '2026-10-08';
 
-/// One heading and the paragraphs under it. Bullets are plain strings beginning with "• " so the
-/// renderer stays a `Text` per line rather than growing a markdown dependency for nine screens.
+/// One heading and the paragraphs under it. Bullets are plain strings beginning with "• ", so the
+/// renderer stays a `Text` per line.
 class PolicySection {
   const PolicySection({required this.title, required this.body});
 
@@ -30,267 +20,295 @@ class PolicySection {
 List<PolicySection> privacyPolicySections(AppLanguage language) =>
     language == AppLanguage.ru ? _russian : _uzbek;
 
-/// The one-line summary above the scrollable policy: what a reader takes away if they read nothing
-/// else. It is not a substitute for the sections below and deliberately makes no promise they do
-/// not also make.
-String privacyPolicyLead(AppLanguage language) => language == AppLanguage.ru
-    ? 'Domix собирает минимум данных: номер телефона для входа, имя для обращения и — только если '
-          'вы открываете магазин — его адрес на карте. Мы не продаём данные и не показываем рекламу '
-          'сторонних сетей.'
-    : "Domix eng kam ma'lumot to'playdi: kirish uchun telefon raqami, murojaat uchun ism va — agar "
-          "do'kon ochsangiz — uning xaritadagi manzili. Biz ma'lumotlarni sotmaymiz va begona "
-          "tarmoqlar reklamasini ko'rsatmaymiz.";
+/// What a reader takes away if they read nothing else. It promises nothing the sections do not.
+String privacyPolicyLead(AppLanguage language) => language == AppLanguage.ru ? _leadRu : _leadUz;
+
+const String _leadRu =
+    "Здесь мы объясняем, какие данные получает Domix, зачем они нужны и как их удалить. Если коротко:"
+    " для входа нужен только номер телефона, приложение не определяет, где вы находитесь, в нём нет "
+    "сторонней рекламы, а данные мы не продаём.";
+
+const String _leadUz =
+    "Bu yerda Domix qanday ma’lumotlarni olishi, ular nima uchun kerakligi va ularni qanday o‘chirish"
+    " mumkinligini tushuntiramiz. Qisqasi: kirish uchun faqat telefon raqami kerak, ilova "
+    "qayerdaligingizni aniqlamaydi, unda begona reklama yo‘q, ma’lumotlarni esa sotmaymiz.";
 
 const List<PolicySection> _russian = [
   PolicySection(
-    title: '1. Кто обрабатывает ваши данные',
+    title: "1. Кто мы",
     body: [
-      'Оператором персональных данных является команда приложения Domix («мы»), Республика '
-          'Узбекистан, г. Ташкент. Связаться с нами можно по адресу domix.support@gmail.com.',
-      'Настоящая политика описывает, какие данные собирает мобильное приложение Domix и что мы с '
-          'ними делаем. Её действующая редакция опубликована на https://domix-api.uz/privacy.',
+      "Domix разрабатывает и поддерживает команда Domix (далее — «мы»), г. Ташкент, Республика "
+          "Узбекистан. Мы отвечаем за данные, о которых говорится в этой политике.",
+      "Политика относится к мобильному приложению Domix для Android и к сайту domix-api.uz. Если "
+          "у вас есть вопрос о ваших данных, пишите на domix.support@gmail.com.",
     ],
   ),
   PolicySection(
-    title: '2. Какие данные мы собираем',
+    title: "2. Какие данные мы получаем",
     body: [
-      '• Номер телефона — обязателен. Это ваш идентификатор в Domix: по нему выполняется вход и по '
-          'нему покупатель связывается с магазином.',
-      '• Имя — вы указываете его сами при регистрации. Отображается в вашем профиле.',
-      '• Роль — покупатель или владелец магазина. Определяет, какие разделы приложения вам '
-          'доступны.',
-      '• Данные магазина — если вы открываете магазин: название, адрес, контактный телефон, '
-          'категория, координаты на карте и фотографии товаров. Эти данные публичны по своей сути: '
-          'магазин существует для того, чтобы его находили.',
-      '• Избранные товары — список товаров, которые вы сохранили у себя.',
-      '• Технические данные — IP-адрес и версия приложения, сохраняемые в журналах сервера для '
-          'защиты от злоупотреблений и диагностики сбоев.',
-      'Приложение не определяет ваше местоположение. Доступ к геолокации устройства не '
-          'запрашивается и приложению не выдаётся: город и адрес магазина вы указываете сами, '
-          'передвигая карту.',
-      'Когда вы загружаете фотографию товара, мы пересохраняем изображение. Служебные данные '
-          'снимка, включая координаты съёмки, которые записывает камера телефона, при этом '
-          'удаляются и на сервер не попадают.',
+      "• Номер телефона. Без него нельзя войти: на номер приходит код подтверждения, и по номеру "
+          "мы узнаём вас при следующем входе.",
+      "• Имя. Вы указываете его сами, оно отображается в вашем профиле.",
+      "• Роль: покупатель или владелец магазина.",
+      "• Данные магазина, если вы его открываете: название, адрес, точку на карте, контактный "
+          "телефон, категорию, цены и фотографии товаров. Это витрина, поэтому её видят все "
+          "пользователи приложения.",
+      "• Избранное: товары, которые вы сохранили.",
+      "• Технические данные. Когда приложение обращается к серверу, в журнал записываются IP-"
+          "адрес, время и адрес запроса. Это нужно, чтобы защищать сервис от злоупотреблений и "
+          "разбираться со сбоями.",
     ],
   ),
   PolicySection(
-    title: '3. Зачем мы их обрабатываем',
+    title: "3. Чего мы не собираем",
     body: [
-      '• Чтобы создать учётную запись и подтвердить, что номер принадлежит вам.',
-      '• Чтобы показать магазины на карте и сравнить цены между ними.',
-      '• Чтобы покупатель мог связаться с магазином.',
-      '• Чтобы ограничить количество запросов и защитить сервис от автоматических злоупотреблений.',
-      'Мы не показываем рекламу сторонних рекламных сетей и не составляем профили для рекламного '
-          'таргетинга. В приложении нет аналитики, трекеров и рекламных библиотек, и рекламный '
-          'идентификатор вашего устройства мы не читаем.',
+      "• Ваше местоположение. Приложение не запрашивает доступ к геолокации и не знает, где вы "
+          "находитесь. Город и адрес магазина вы выбираете на карте сами.",
+      "• Место съёмки фотографий. Камера телефона записывает в снимок координаты. Когда вы "
+          "загружаете фото товара, мы пересохраняем его, и эти сведения удаляются.",
+      "• Контакты, сообщения, файлы и рекламный идентификатор устройства.",
+      "• Ничего для рекламы и аналитики: в Domix нет систем аналитики, трекеров и рекламных "
+          "библиотек.",
+      "• Пароли. В Domix их нет: вход только по одноразовому коду.",
+      "В карточке приложения в Google Play может быть указано разрешение на геолокацию. Его "
+          "объявляет встроенная карта Яндекса. Domix это разрешение не запрашивает, а без вашего "
+          "согласия Android его не выдаёт.",
     ],
   ),
   PolicySection(
-    title: '4. Основание обработки',
+    title: "4. Зачем нам эти данные",
     body: [
-      'Мы обрабатываем данные на основании вашего согласия, которое вы даёте на этом экране, и в '
-          'объёме, необходимом для исполнения нашего соглашения с вами — то есть для работы самого '
-          'приложения. Согласие можно отозвать в любой момент, удалив учётную запись (см. §7).',
+      "• Чтобы вы могли войти, а мы — убедиться, что номер ваш.",
+      "• Чтобы показывать магазины на карте и сравнивать их цены.",
+      "• Чтобы покупатель мог связаться с магазином.",
+      "• Чтобы защищать сервис от автоматических запросов и злоупотреблений.",
+      "Мы обрабатываем данные с вашего согласия, которое вы даёте при регистрации, и только в том"
+          " объёме, без которого приложение не может работать. Согласие можно отозвать в любой "
+          "момент: для этого достаточно удалить аккаунт.",
     ],
   ),
   PolicySection(
-    title: '5. Кому мы передаём данные',
+    title: "5. Кто ещё получает данные",
     body: [
-      'Мы не продаём персональные данные и не передаём их третьим лицам для их собственных целей. '
-          'Мы пользуемся следующими поставщиками услуг, каждый из которых обрабатывает строго '
-          'необходимый минимум:',
-      '• Telegram Gateway — получает ваш номер телефона, чтобы доставить одноразовый код '
-          'подтверждения в Telegram.',
-      '• Yandex MapKit — обрабатывает картографические запросы, когда вы открываете карту.',
-      '• Photon (Komoot GmbH, Германия) — получает текст, который вы вводите в поиске адреса, '
-          'чтобы предложить подсказки.',
-      '• Nominatim (OpenStreetMap Foundation) — получает координаты выбранной вами точки, чтобы '
-          'назвать её адрес, и поисковый запрос, когда вы нажимаете «Найти».',
-      '• Cloudflare R2 — хранит загруженные фотографии товаров.',
-      '• Хостинг-провайдер в Республике Узбекистан — размещает серверы приложения и базу данных.',
-      'Photon и Nominatim находятся за пределами Республики Узбекистан, поэтому поиск адреса '
-          'означает передачу вашего запроса за рубеж. Пользоваться поиском адреса не обязательно: '
-          'точку на карте можно выбрать вручную.',
-      'Мы также раскрываем данные, если этого требует закон Республики Узбекистан по обоснованному '
-          'запросу уполномоченного органа.',
+      "Мы не продаём данные и не передаём их другим компаниям для их собственных целей. Часть "
+          "работы за нас делают сервисы-подрядчики, и каждый получает только то, что нужно для его "
+          "задачи:",
+      "• Telegram Gateway — номер телефона и код, чтобы доставить код подтверждения в Telegram.",
+      "• Яндекс Карты (MapKit) — запросы карты, пока она открыта.",
+      "• Photon (Komoot GmbH, Германия) — текст, который вы вводите в поиске адреса, чтобы "
+          "показать подсказки.",
+      "• Nominatim (OpenStreetMap Foundation) — координаты точки, которую вы поставили на карте, "
+          "чтобы определить её адрес, и поисковый запрос, когда вы запускаете поиск.",
+      "• Cloudflare R2 — хранение фотографий товаров.",
+      "• Хостинг-провайдер в Узбекистане — сервер и база данных.",
+      "Государственным органам мы раскрываем данные только тогда, когда этого требует закон "
+          "Республики Узбекистан.",
     ],
   ),
   PolicySection(
-    title: '6. Сколько мы храним данные',
+    title: "6. Где хранятся данные",
     body: [
-      '• Учётная запись, магазины, товары и избранное — пока вы пользуетесь Domix. При удалении '
-          'учётной записи они удаляются вместе с ней.',
-      '• Одноразовые коды подтверждения — не более 5 минут. Они хранятся только в оперативной '
-          'памяти сервера и только в виде необратимого хэша, поэтому начатая и брошенная '
-          'регистрация не оставляет о себе записи.',
-      '• Журналы сервера — до 90 дней.',
+      "Аккаунты, номера телефонов и магазины хранятся в базе данных на сервере в Республике "
+          "Узбекистан.",
+      "Telegram, Яндекс, Photon, Nominatim и Cloudflare работают за пределами Узбекистана. "
+          "Поэтому то, что получает каждый из них (см. раздел 5), передаётся за рубеж: номер телефона"
+          " — для доставки кода, адресные запросы и координаты точки — для поиска адреса, фотографии "
+          "товаров — для хранения.",
     ],
   ),
   PolicySection(
-    title: '7. Ваши права и удаление данных',
+    title: "7. Сколько мы храним данные",
     body: [
-      'Вы вправе получить доступ к своим данным, исправить их и удалить. Имя и данные магазина '
-          'редактируются прямо в приложении.',
-      'Удалить учётную запись можно двумя способами:',
-      '• В приложении: «Профиль» → «Удалить аккаунт».',
-      '• Без установки приложения: на странице https://domix-api.uz/delete-account.',
-      'Оба способа удаляют учётную запись сразу, а не создают заявку на удаление. Удаление '
-          'необратимо: вместе с учётной записью удаляются ваши магазины, товары, загруженные '
-          'фотографии и избранное.',
-      'После удаления в журналах сервера до 90 дней может оставаться числовой идентификатор '
-          'удалённой учётной записи — без имени и без номера телефона.',
+      "• Аккаунт, магазины, товары и избранное — пока вы пользуетесь Domix.",
+      "• Код подтверждения — 5 минут. Он хранится только в оперативной памяти сервера и только в "
+          "виде хэша, поэтому от начатой и брошенной регистрации ничего не остаётся.",
+      "• Журналы сервера — до 90 дней.",
     ],
   ),
   PolicySection(
-    title: '8. Безопасность',
+    title: "8. Ваши права и удаление аккаунта",
     body: [
-      'Соединение приложения с сервером защищено TLS. Токен вашей сессии хранится в защищённом '
-          'хранилище операционной системы устройства. Коды подтверждения хранятся только в виде '
-          'хэша и ограничены по числу попыток ввода.',
-      'Ни один способ передачи данных не защищён абсолютно, и мы не можем гарантировать абсолютную '
-          'безопасность.',
+      "Вы можете узнать, какие данные о вас у нас есть, исправить их или удалить. Имя, номер "
+          "телефона и данные магазина меняются прямо в приложении, остальное — по письму на "
+          "domix.support@gmail.com.",
+      "Удалить аккаунт можно двумя способами:",
+      "• в приложении: «Профиль» → «Удалить аккаунт»;",
+      "• без приложения: на странице domix-api.uz/delete-account.",
+      "Аккаунт удаляется сразу, а не по заявке. Вместе с ним удаляются ваши магазины, товары, "
+          "загруженные фотографии и избранное. Восстановить их нельзя. В журналах сервера до 90 дней "
+          "может остаться числовой номер удалённого аккаунта — без имени и телефона.",
     ],
   ),
   PolicySection(
-    title: '9. Дети',
+    title: "9. Безопасность",
     body: [
-      'Domix не предназначен для лиц младше 16 лет, и мы сознательно не собираем их данные. Если вы '
-          'считаете, что ребёнок передал нам свои данные, напишите на domix.support@gmail.com — мы '
-          'удалим их.',
+      "Соединение с сервером зашифровано (TLS). Ключ сессии хранится в защищённом хранилище "
+          "Android. Коды подтверждения хранятся только в виде хэша, а число попыток ввода ограничено.",
+      "Полностью защищённых систем не бывает. Если заметили в своём аккаунте что-то "
+          "подозрительное, напишите нам.",
     ],
   ),
   PolicySection(
-    title: '10. Изменения политики',
+    title: "10. Дети",
     body: [
-      'При существенном изменении этой политики мы покажем её новую редакцию в приложении и '
-          'запросим согласие заново. Дата текущей редакции указана в начале документа.',
+      "Domix не рассчитан на детей младше 16 лет, и мы сознательно не собираем их данные. Если вы"
+          " считаете, что ребёнок зарегистрировался в приложении, напишите нам, и мы удалим аккаунт.",
+    ],
+  ),
+  PolicySection(
+    title: "11. Изменения политики",
+    body: [
+      "Если мы существенно изменим политику, приложение покажет новую редакцию и снова попросит "
+          "согласия. Дата текущей редакции указана в начале документа.",
+    ],
+  ),
+  PolicySection(
+    title: "12. Контакты",
+    body: [
+      "Вопросы о данных, просьбы исправить или удалить их присылайте на domix.support@gmail.com.",
     ],
   ),
 ];
 
 const List<PolicySection> _uzbek = [
   PolicySection(
-    title: "1. Ma'lumotlaringizni kim qayta ishlaydi",
+    title: "1. Biz kimmiz",
     body: [
-      "Shaxsiy ma'lumotlar operatori — Domix ilovasi jamoasi («biz»), O'zbekiston Respublikasi, "
-          "Toshkent shahri. Biz bilan domix.support@gmail.com orqali bog'lanishingiz mumkin.",
-      "Ushbu siyosat Domix mobil ilovasi qanday ma'lumotlarni to'plashini va ular bilan nima "
-          "qilishimizni tushuntiradi. Uning amaldagi tahriri https://domix-api.uz/privacy "
-          "sahifasida chop etilgan.",
+      "Domix’ni Domix jamoasi («biz») ishlab chiqadi va qo‘llab-quvvatlaydi, Toshkent shahri, "
+          "O‘zbekiston Respublikasi. Ushbu siyosatda so‘z yuritilgan ma’lumotlar uchun biz javob "
+          "beramiz.",
+      "Siyosat Android uchun Domix mobil ilovasiga va domix-api.uz saytiga tegishli. "
+          "Ma’lumotlaringiz bo‘yicha savolingiz bo‘lsa, domix.support@gmail.com manziliga yozing.",
     ],
   ),
   PolicySection(
-    title: "2. Qanday ma'lumotlarni to'playmiz",
+    title: "2. Qanday ma’lumotlarni olamiz",
     body: [
-      "• Telefon raqami — majburiy. Bu Domix'dagi identifikatoringiz: kirish shu orqali amalga "
-          "oshiriladi va xaridor do'kon bilan shu orqali bog'lanadi.",
-      "• Ism — ro'yxatdan o'tishda o'zingiz kiritasiz. Profilingizda ko'rinadi.",
-      "• Rol — xaridor yoki do'kon egasi. Ilovaning qaysi bo'limlari ochiqligini belgilaydi.",
-      "• Do'kon ma'lumotlari — agar do'kon ochsangiz: nomi, manzili, aloqa telefoni, toifasi, "
-          "xaritadagi koordinatalari va mahsulot suratlari. Bu ma'lumotlar tabiatan ochiq: do'kon "
-          "topilishi uchun mavjud.",
-      "• Tanlangan mahsulotlar — o'zingiz saqlab qo'ygan mahsulotlar ro'yxati.",
-      "• Texnik ma'lumotlar — IP manzil va ilova versiyasi; suiiste'moldan himoya va nosozliklarni "
-          "aniqlash uchun server jurnallarida saqlanadi.",
-      "Ilova sizning joylashuvingizni aniqlamaydi. Qurilma geolokatsiyasiga ruxsat so'ralmaydi va "
-          "ilovaga berilmaydi: shahar va do'kon manzilini xaritani surib, o'zingiz ko'rsatasiz.",
-      "Mahsulot suratini yuklaganingizda biz tasvirni qayta saqlaymiz. Telefon kamerasi yozib "
-          "qo'yadigan xizmat ma'lumotlari, shu jumladan suratga olingan joy koordinatalari, shunda "
-          "o'chiriladi va serverga tushmaydi.",
+      "• Telefon raqami. Usiz kirib bo‘lmaydi: raqamga tasdiqlash kodi keladi, keyingi safar esa "
+          "sizni shu raqam orqali taniymiz.",
+      "• Ism. Uni o‘zingiz kiritasiz, u profilingizda ko‘rinadi.",
+      "• Rol: xaridor yoki do‘kon egasi.",
+      "• Do‘kon ma’lumotlari, agar do‘kon ochsangiz: nomi, manzili, xaritadagi nuqtasi, aloqa "
+          "telefoni, toifasi, mahsulotlar narxi va suratlari. Bu vitrina, shuning uchun uni ilovaning"
+          " barcha foydalanuvchilari ko‘radi.",
+      "• Tanlanganlar: siz saqlab qo‘ygan mahsulotlar.",
+      "• Texnik ma’lumotlar. Ilova serverga murojaat qilganda jurnalga IP manzil, vaqt va so‘rov "
+          "manzili yoziladi. Bu xizmatni suiiste’moldan himoya qilish va nosozliklarni aniqlash uchun"
+          " kerak.",
     ],
   ),
   PolicySection(
-    title: "3. Nima uchun qayta ishlaymiz",
+    title: "3. Nimalarni to‘plamaymiz",
     body: [
-      "• Hisob yaratish va raqam sizga tegishli ekanini tasdiqlash uchun.",
-      "• Do'konlarni xaritada ko'rsatish va narxlarni taqqoslash uchun.",
-      "• Xaridor do'kon bilan bog'lana olishi uchun.",
-      "• So'rovlar sonini cheklash va xizmatni avtomatik suiiste'moldan himoya qilish uchun.",
-      "Biz begona reklama tarmoqlari reklamasini ko'rsatmaymiz va reklama maqsadida profil "
-          "tuzmaymiz. Ilovada tahlil tizimlari, kuzatuvchilar va reklama kutubxonalari yo'q, "
-          "qurilmangizning reklama identifikatorini ham o'qimaymiz.",
+      "• Joylashuvingiz. Ilova geolokatsiyaga ruxsat so‘ramaydi va qayerdaligingizni bilmaydi. "
+          "Shahar va do‘kon manzilini xaritada o‘zingiz tanlaysiz.",
+      "• Suratga olingan joy. Telefon kamerasi suratga koordinatalarni yozib qo‘yadi. Mahsulot "
+          "suratini yuklaganingizda biz uni qayta saqlaymiz va bu ma’lumotlar o‘chib ketadi.",
+      "• Kontaktlar, xabarlar, fayllar va qurilmaning reklama identifikatori.",
+      "• Reklama va tahlil uchun hech narsa: Domix’da tahlil tizimlari, kuzatuvchilar va reklama "
+          "kutubxonalari yo‘q.",
+      "• Parollar. Domix’da ular yo‘q: kirish faqat bir martalik kod orqali.",
+      "Google Play’dagi ilova sahifasida geolokatsiyaga ruxsat ko‘rsatilgan bo‘lishi mumkin. Uni "
+          "ilovaga o‘rnatilgan Yandex xaritasi e’lon qiladi. Domix bu ruxsatni so‘ramaydi, "
+          "roziligingizsiz esa Android uni bermaydi.",
     ],
   ),
   PolicySection(
-    title: "4. Qayta ishlash asosi",
+    title: "4. Bu ma’lumotlar nima uchun kerak",
     body: [
-      "Ma'lumotlarni ushbu ekranda bergan roziligingiz asosida va siz bilan tuzilgan kelishuvni "
-          "bajarish — ya'ni ilovaning ishlashi — uchun zarur hajmda qayta ishlaymiz. Rozilikni "
-          "istalgan vaqtda hisobni o'chirish orqali qaytarib olishingiz mumkin (7-bandga qarang).",
+      "• Siz kira olishingiz, biz esa raqam sizniki ekaniga ishonch hosil qilishimiz uchun.",
+      "• Do‘konlarni xaritada ko‘rsatish va ularning narxlarini solishtirish uchun.",
+      "• Xaridor do‘kon bilan bog‘lana olishi uchun.",
+      "• Xizmatni avtomatik so‘rovlar va suiiste’moldan himoya qilish uchun.",
+      "Ma’lumotlarni ro‘yxatdan o‘tishda bergan roziligingiz asosida va faqat ilova ishlashi "
+          "uchun zarur hajmda qayta ishlaymiz. Rozilikni istalgan vaqtda qaytarib olish mumkin: "
+          "buning uchun akkauntni o‘chirish kifoya.",
     ],
   ),
   PolicySection(
-    title: "5. Ma'lumotlarni kimga beramiz",
+    title: "5. Ma’lumotlarni yana kim oladi",
     body: [
-      "Biz shaxsiy ma'lumotlarni sotmaymiz va uchinchi shaxslarga o'z maqsadlari uchun bermaymiz. "
-          "Quyidagi xizmat yetkazib beruvchilardan foydalanamiz, ularning har biri faqat zarur "
-          "minimumni qayta ishlaydi:",
-      "• Telegram Gateway — bir martalik tasdiqlash kodini Telegram'ga yetkazish uchun telefon "
-          "raqamingizni oladi.",
-      "• Yandex MapKit — xaritani ochganingizda karta so'rovlarini qayta ishlaydi.",
-      "• Photon (Komoot GmbH, Germaniya) — manzil qidiruvida yozgan matningizni oladi va "
-          "takliflarni qaytaradi.",
-      "• Nominatim (OpenStreetMap Foundation) — tanlagan nuqtangiz koordinatalarini manzilga "
-          "aylantirish uchun oladi, «Topish» bosilganda esa qidiruv so'rovini oladi.",
-      "• Cloudflare R2 — yuklangan mahsulot suratlarini saqlaydi.",
-      "• O'zbekiston Respublikasidagi hosting-provayder — ilova serverlari va ma'lumotlar bazasini "
-          "joylashtiradi.",
-      "Photon va Nominatim O'zbekiston Respublikasidan tashqarida joylashgan, shuning uchun manzil "
-          "qidiruvi so'rovingizni chet elga uzatishni anglatadi. Manzil qidiruvidan foydalanish "
-          "shart emas: xaritadagi nuqtani qo'lda ham tanlash mumkin.",
-      "Shuningdek, vakolatli organning asoslangan so'rovi bo'yicha O'zbekiston Respublikasi "
-          "qonunchiligi talab qilsa, ma'lumotlarni oshkor qilamiz.",
+      "Biz ma’lumotlarni sotmaymiz va boshqa kompaniyalarga ularning o‘z maqsadlari uchun "
+          "bermaymiz. Ishning bir qismini biz uchun pudratchi xizmatlar bajaradi va ularning har biri"
+          " faqat o‘z vazifasi uchun keraklisini oladi:",
+      "• Telegram Gateway — tasdiqlash kodini Telegram’ga yetkazish uchun telefon raqami va kod.",
+      "• Yandex Xaritalar (MapKit) — xarita ochiq turganda uning so‘rovlari.",
+      "• Photon (Komoot GmbH, Germaniya) — takliflarni ko‘rsatish uchun manzil qidiruvida yozgan "
+          "matningiz.",
+      "• Nominatim (OpenStreetMap Foundation) — manzilini aniqlash uchun xaritada qo‘ygan "
+          "nuqtangiz koordinatalari va qidiruvni boshlaganingizdagi so‘rov.",
+      "• Cloudflare R2 — mahsulot suratlarini saqlash.",
+      "• O‘zbekistondagi hosting-provayder — server va ma’lumotlar bazasi.",
+      "Davlat organlariga ma’lumotlarni faqat O‘zbekiston Respublikasi qonunchiligi talab "
+          "qilgandagina oshkor qilamiz.",
     ],
   ),
   PolicySection(
-    title: "6. Ma'lumotlarni qancha saqlaymiz",
+    title: "6. Ma’lumotlar qayerda saqlanadi",
     body: [
-      "• Hisob, do'konlar, mahsulotlar va tanlanganlar — Domix'dan foydalanganingizcha. Hisobni "
-          "o'chirganingizda ular ham o'chiriladi.",
-      "• Bir martalik tasdiqlash kodlari — ko'pi bilan 5 daqiqa. Ular faqat server tezkor "
-          "xotirasida va faqat qaytarib bo'lmaydigan xesh ko'rinishida saqlanadi, shuning uchun "
-          "boshlangan va tashlab ketilgan ro'yxatdan o'tish hech qanday yozuv qoldirmaydi.",
+      "Akkauntlar, telefon raqamlari va do‘konlar O‘zbekiston Respublikasidagi serverda "
+          "joylashgan ma’lumotlar bazasida saqlanadi.",
+      "Telegram, Yandex, Photon, Nominatim va Cloudflare O‘zbekistondan tashqarida ishlaydi. "
+          "Shuning uchun ularning har biri oladigan narsa (5-bo‘limga qarang) chet elga uzatiladi: "
+          "telefon raqami — kodni yetkazish uchun, manzil so‘rovlari va nuqta koordinatalari — "
+          "manzilni qidirish uchun, mahsulot suratlari — saqlash uchun.",
+    ],
+  ),
+  PolicySection(
+    title: "7. Ma’lumotlarni qancha saqlaymiz",
+    body: [
+      "• Akkaunt, do‘konlar, mahsulotlar va tanlanganlar — Domix’dan foydalanar ekansiz.",
+      "• Tasdiqlash kodi — 5 daqiqa. U faqat server tezkor xotirasida va faqat xesh ko‘rinishida "
+          "saqlanadi, shuning uchun boshlangan va tashlab ketilgan ro‘yxatdan o‘tishdan hech narsa "
+          "qolmaydi.",
       "• Server jurnallari — 90 kungacha.",
     ],
   ),
   PolicySection(
-    title: "7. Huquqlaringiz va ma'lumotlarni o'chirish",
+    title: "8. Huquqlaringiz va akkauntni o‘chirish",
     body: [
-      "Siz o'z ma'lumotlaringizni olish, to'g'rilash va o'chirish huquqiga egasiz. Ism va do'kon "
-          "ma'lumotlari bevosita ilovada tahrirlanadi.",
-      "Hisobni ikki yo'l bilan o'chirish mumkin:",
-      "• Ilovada: «Profil» → «Hisobni o'chirish».",
-      "• Ilovani o'rnatmasdan: https://domix-api.uz/delete-account sahifasida.",
-      "Ikkala yo'l ham hisobni darhol o'chiradi, o'chirishga ariza yaratmaydi. O'chirish qaytarib "
-          "bo'lmaydi: hisob bilan birga do'konlaringiz, mahsulotlaringiz, yuklangan suratlar va "
-          "tanlanganlar o'chiriladi.",
-      "O'chirilgandan so'ng server jurnallarida 90 kungacha o'chirilgan hisobning raqamli "
-          "identifikatori qolishi mumkin — ismsiz va telefon raqamisiz.",
+      "Siz haqingizda qanday ma’lumotlar borligini bilishingiz, ularni tuzatishingiz yoki "
+          "o‘chirishingiz mumkin. Ism, telefon raqami va do‘kon ma’lumotlari bevosita ilovada "
+          "o‘zgartiriladi, qolganlari — domix.support@gmail.com manziliga xat orqali.",
+      "Akkauntni ikki yo‘l bilan o‘chirish mumkin:",
+      "• ilovada: «Profil» → «Akkauntni o‘chirish»;",
+      "• ilovasiz: domix-api.uz/delete-account sahifasida.",
+      "Akkaunt ariza bo‘yicha emas, darhol o‘chiriladi. U bilan birga do‘konlaringiz, "
+          "mahsulotlaringiz, yuklangan suratlar va tanlanganlar ham o‘chiriladi. Ularni tiklab "
+          "bo‘lmaydi. Server jurnallarida 90 kungacha o‘chirilgan akkauntning raqamli identifikatori "
+          "qolishi mumkin — ismsiz va telefonsiz.",
     ],
   ),
   PolicySection(
-    title: "8. Xavfsizlik",
+    title: "9. Xavfsizlik",
     body: [
-      "Ilovaning server bilan aloqasi TLS bilan himoyalangan. Sessiya tokeni qurilma operatsion "
-          "tizimining himoyalangan xotirasida saqlanadi. Tasdiqlash kodlari faqat xesh ko'rinishida "
-          "saqlanadi va kiritish urinishlari soni cheklangan.",
-      "Ma'lumot uzatishning hech bir usuli mutlaq himoyalangan emas va biz mutlaq xavfsizlikni "
-          "kafolatlay olmaymiz.",
+      "Server bilan aloqa shifrlangan (TLS). Sessiya kaliti Android’ning himoyalangan xotirasida "
+          "saqlanadi. Tasdiqlash kodlari faqat xesh ko‘rinishida saqlanadi, kiritish urinishlari soni"
+          " esa cheklangan.",
+      "To‘liq himoyalangan tizimlar bo‘lmaydi. Akkauntingizda shubhali narsani sezsangiz, bizga "
+          "yozing.",
     ],
   ),
   PolicySection(
-    title: "9. Bolalar",
+    title: "10. Bolalar",
     body: [
-      "Domix 16 yoshga to'lmagan shaxslar uchun mo'ljallanmagan va biz ularning ma'lumotlarini "
-          "ataylab to'plamaymiz. Agar bola bizga o'z ma'lumotlarini bergan deb hisoblasangiz, "
-          "domix.support@gmail.com ga yozing — biz ularni o'chiramiz.",
+      "Domix 16 yoshgacha bo‘lgan bolalar uchun mo‘ljallanmagan va biz ularning ma’lumotlarini "
+          "ataylab to‘plamaymiz. Agar bola ilovada ro‘yxatdan o‘tgan deb hisoblasangiz, bizga yozing "
+          "— akkauntni o‘chiramiz.",
     ],
   ),
   PolicySection(
-    title: "10. Siyosat o'zgarishlari",
+    title: "11. Siyosatdagi o‘zgarishlar",
     body: [
-      "Ushbu siyosat jiddiy o'zgarganda, uning yangi tahririni ilovada ko'rsatamiz va rozilikni "
-          "qaytadan so'raymiz. Joriy tahrir sanasi hujjat boshida ko'rsatilgan.",
+      "Siyosatni jiddiy o‘zgartirsak, ilova yangi tahrirni ko‘rsatadi va rozilikni qaytadan "
+          "so‘raydi. Joriy tahrir sanasi hujjat boshida ko‘rsatilgan.",
+    ],
+  ),
+  PolicySection(
+    title: "12. Aloqa",
+    body: [
+      "Ma’lumotlar bo‘yicha savollar, ularni tuzatish yoki o‘chirish haqidagi so‘rovlarni "
+          "domix.support@gmail.com manziliga yuboring.",
     ],
   ),
 ];

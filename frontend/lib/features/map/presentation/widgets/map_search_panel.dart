@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
+import 'package:frontend/core/widgets/floating_search_field.dart';
 import 'package:frontend/features/map/data/geocoding_service.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 
@@ -195,15 +196,27 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _SearchField(
+        FloatingSearchField(
           controller: _textController,
           focusNode: _focusNode,
           hint: widget.strings.mapSearchHint,
-          clearTooltip: widget.strings.searchClear,
-          showClear: hasQuery,
           onChanged: _onQueryChanged,
           onSubmitted: _onSubmitted,
-          onClear: _clear,
+          trailing: hasQuery
+              ? Tooltip(
+                  message: widget.strings.searchClear,
+                  child: InkWell(
+                    canRequestFocus: false,
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: _clear,
+                    child: const SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: Icon(CupertinoIcons.clear_circled_solid, color: AppColors.textFaint, size: 17),
+                    ),
+                  ),
+                )
+              : null,
         ),
         // AnimatedSize keeps the dropdown from popping into existence at full height; it grows out
         // from under the field the same way the profile accordion does.
@@ -236,97 +249,6 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
               : const SizedBox(width: double.infinity),
         ),
       ],
-    );
-  }
-}
-
-class _SearchField extends StatelessWidget {
-  const _SearchField({
-    required this.controller,
-    required this.focusNode,
-    required this.hint,
-    required this.clearTooltip,
-    required this.showClear,
-    required this.onChanged,
-    required this.onSubmitted,
-    required this.onClear,
-  });
-
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final String hint;
-  final String clearTooltip;
-  final bool showClear;
-  final ValueChanged<String> onChanged;
-  final ValueChanged<String> onSubmitted;
-  final VoidCallback onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 50,
-      padding: const EdgeInsets.only(left: 14, right: 6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: AppColors.hairline),
-        // it floats over a busy, coloured map rather than sitting on a page, so it needs the
-        // stronger of the two elevations
-        boxShadow: AppShadows.floating,
-      ),
-      child: Row(
-        children: [
-          const Icon(CupertinoIcons.search, color: AppColors.textFaint, size: 18),
-          const SizedBox(width: 10),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              onChanged: onChanged,
-              onSubmitted: onSubmitted,
-              textInputAction: TextInputAction.search,
-              style: const TextStyle(
-                color: AppColors.textDark,
-                fontSize: 14.5,
-                fontWeight: FontWeight.w500,
-              ),
-              decoration: InputDecoration(
-                hintText: hint,
-                hintStyle: const TextStyle(
-                  color: AppColors.textFaint,
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w400,
-                ),
-                // strips the material underline and the default 16px vertical padding, so the text
-                // sits centred in our own 50px box instead of fighting it
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
-          ),
-          if (showClear)
-            Tooltip(
-              message: clearTooltip,
-              child: InkWell(
-                canRequestFocus: false,
-                borderRadius: BorderRadius.circular(18),
-                onTap: onClear,
-                child: const SizedBox(
-                  width: 36,
-                  height: 36,
-                  child: Icon(
-                    CupertinoIcons.clear_circled_solid,
-                    color: AppColors.textFaint,
-                    size: 17,
-                  ),
-                ),
-              ),
-            )
-          else
-            const SizedBox(width: 8),
-        ],
-      ),
     );
   }
 }

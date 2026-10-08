@@ -100,6 +100,35 @@ func (q *Queries) GetUserRole(ctx context.Context, id int64) (string, error) {
 	return role, err
 }
 
+const listUploadedImagesOfUser = `-- name: ListUploadedImagesOfUser :many
+SELECT p.image_path::text AS image_path
+FROM products p
+JOIN shops s ON s.id = p.shop_id
+WHERE s.user_id = $1 AND p.image_path LIKE 'shops/uploads/%'
+`
+
+// the photos an owner uploaded, read before the account goes: the delete cascades through shops and
+// products, and after it nothing names these files any more
+func (q *Queries) ListUploadedImagesOfUser(ctx context.Context, userID int64) ([]string, error) {
+	rows, err := q.db.Query(ctx, listUploadedImagesOfUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var image_path string
+		if err := rows.Scan(&image_path); err != nil {
+			return nil, err
+		}
+		items = append(items, image_path)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateUserPhone = `-- name: UpdateUserPhone :one
 UPDATE users
 SET phone = $2,

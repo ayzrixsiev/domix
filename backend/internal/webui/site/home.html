@@ -1,0 +1,183 @@
+{{define "style"}}
+  .hero{display:grid; grid-template-columns:1.05fr .95fr; gap:44px; align-items:center; padding:28px 0 52px}
+  .kicker{display:inline-flex; align-items:center; gap:8px; font-size:13px; font-weight:650; color:var(--orange-deep);
+          background:var(--orange-soft); padding:5px 12px; border-radius:999px; margin:0 0 18px}
+  .hero h1{font-size:50px; line-height:1.06; letter-spacing:-.035em; margin:0 0 18px}
+  .hero .sub{font-size:18.5px; line-height:1.6; color:var(--muted); margin:0 0 28px; max-width:34em}
+  .soon{display:inline-flex; align-items:center; gap:12px; height:56px; padding:0 22px 0 18px; border-radius:16px;
+        background:var(--ink); color:#fff; font-weight:650; font-size:15px}
+  .soon svg{width:22px; height:22px}
+  .soon small{display:block; font-size:11.5px; font-weight:500; opacity:.7; line-height:1.2}
+  .soon b{display:block; font-size:16px; line-height:1.25}
+
+  .art{position:relative; aspect-ratio:44/36}
+  .art svg{width:100%; height:100%; display:block; border-radius:28px; box-shadow:var(--shadow)}
+  .chip{position:absolute; display:flex; align-items:center; gap:8px; background:var(--white); border-radius:12px;
+        padding:8px 12px; box-shadow:0 10px 30px rgba(16,24,40,.12), 0 1px 3px rgba(16,24,40,.06);
+        font-size:13px; line-height:1.3; white-space:nowrap}
+  .chip b{display:block; font-size:13.5px}
+  .chip .tag{font-size:12px; font-weight:700; color:var(--success); background:var(--success-soft); padding:2px 8px; border-radius:999px}
+  .chip.one{left:46%; top:12%}
+  .chip.two{left:7%; bottom:12%}
+
+  .features{display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin:0 0 56px}
+  .feature{padding:26px 24px 24px}
+  .feature .ic{width:44px; height:44px; border-radius:13px; background:var(--orange-soft); display:grid; place-items:center; margin-bottom:16px}
+  .feature .ic svg{width:22px; height:22px}
+  .feature h3{font-size:18px; letter-spacing:-.015em; margin:0 0 8px}
+  .feature p{margin:0; color:var(--muted); font-size:15px; line-height:1.6}
+
+  .section-title{font-size:30px; letter-spacing:-.03em; line-height:1.15; margin:0 0 22px}
+  .how{display:grid; grid-template-columns:1fr 1fr; gap:18px; margin:0 0 56px}
+  .how .card{padding:28px 28px 22px}
+  .how h3{font-size:17px; margin:0 0 16px; display:flex; align-items:center; gap:10px}
+  .how h3 i{font-style:normal; font-size:12px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+            color:var(--orange-deep); background:var(--orange-soft); padding:3px 10px; border-radius:999px}
+  .how ol{list-style:none; margin:0; padding:0; counter-reset:step}
+  .how li{counter-increment:step; display:grid; grid-template-columns:32px 1fr; gap:12px; align-items:start;
+          padding:0 0 14px; font-size:15.5px; line-height:1.55; color:#2B2B33}
+  .how li::before{content:counter(step); width:28px; height:28px; border-radius:50%; background:var(--page);
+                  display:grid; place-items:center; font-size:13px; font-weight:700; color:var(--ink)}
+
+  .help{display:grid; grid-template-columns:repeat(3,1fr); gap:18px}
+  .help a.card{display:block; padding:24px; text-decoration:none; transition:transform .15s cubic-bezier(.22,1,.36,1)}
+  .help a.card:hover{transform:translateY(-2px)}
+  .help h3{font-size:16.5px; margin:0 0 6px; display:flex; justify-content:space-between; gap:10px}
+  .help h3::after{content:"→"; color:var(--orange)}
+  .help p{margin:0; font-size:14.5px; color:var(--muted); line-height:1.55}
+  .help .addr{color:var(--orange-deep); font-weight:600}
+
+  @media (max-width:860px){
+    .hero{grid-template-columns:1fr; gap:30px; padding:8px 0 36px}
+    .hero h1{font-size:36px}
+    .hero .sub{font-size:16.5px}
+    .features, .how, .help{grid-template-columns:1fr}
+    .section-title{font-size:25px}
+    .features, .how{margin-bottom:40px}
+  }
+{{end}}
+
+{{define "content"}}
+<section class="hero">
+  <div>
+    <p class="kicker">
+      <span data-lang="ru">Узбекистан</span><span data-lang="uz">O‘zbekiston</span><span data-lang="en">Uzbekistan</span>
+    </p>
+    <h1>
+      <span data-lang="ru">Стройматериалы рядом — и сразу с ценами</span>
+      <span data-lang="uz">Qurilish mollari yaqiningizda — narxlari bilan</span>
+      <span data-lang="en">Building supplies nearby, prices included</span>
+    </h1>
+    <p class="sub">
+      <span data-lang="ru">Domix — карта строительных магазинов. Смотрите, что продают в магазинах вокруг, сравнивайте цены и звоните в магазин напрямую.</span>
+      <span data-lang="uz">Domix — qurilish do‘konlari xaritasi. Atrofdagi do‘konlarda nima sotilayotganini ko‘ring, narxlarni solishtiring va do‘konga to‘g‘ridan-to‘g‘ri qo‘ng‘iroq qiling.</span>
+      <span data-lang="en">Domix is a map of building supply stores. See what the stores around you sell, compare their prices and call the store directly.</span>
+    </p>
+    <span class="soon">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M4.6 2.3c-.3.3-.5.8-.5 1.4v16.6c0 .6.2 1.1.5 1.4l.1.1 9.3-9.3v-.2L4.7 2.2l-.1.1Z" opacity=".95"/><path fill="#fff" d="m17.1 15.6-3.1-3.1v-.2l3.1-3.1.1.1 3.7 2.1c1 .6 1 1.6 0 2.2l-3.7 2.1-.1-.1Z" opacity=".75"/><path fill="#fff" d="M17.2 15.5 14 12.4l-9.4 9.4c.3.4.9.4 1.6.1l11-6.4" opacity=".6"/><path fill="#fff" d="M17.2 9.3 6.2 3c-.7-.4-1.3-.3-1.6.1L14 12.4l3.2-3.1Z" opacity=".85"/></svg>
+      <span>
+        <small><span data-lang="ru">Скоро в</span><span data-lang="uz">Tez orada</span><span data-lang="en">Coming soon to</span></small>
+        <b>Google Play</b>
+      </span>
+    </span>
+  </div>
+
+  <div class="art" aria-hidden="true">
+    <svg viewBox="0 0 440 360" xmlns="http://www.w3.org/2000/svg">
+      <rect width="440" height="360" fill="#ECEEF3"/>
+      <rect x="22" y="24" width="120" height="86" rx="10" fill="#E2E5EC"/>
+      <rect x="168" y="24" width="96" height="86" rx="10" fill="#E2E5EC"/>
+      <rect x="290" y="24" width="128" height="140" rx="12" fill="#DCEFDA"/>
+      <rect x="22" y="136" width="242" height="94" rx="10" fill="#E2E5EC"/>
+      <rect x="22" y="256" width="150" height="82" rx="10" fill="#E2E5EC"/>
+      <rect x="198" y="256" width="220" height="82" rx="10" fill="#E2E5EC"/>
+      <rect x="290" y="190" width="128" height="40" rx="10" fill="#E2E5EC"/>
+      <path d="M0 123h440M0 243h440M155 0v360M277 0v360" stroke="#fff" stroke-width="14"/>
+      <path d="M-10 330C80 300 130 190 230 176s170-80 230-150" stroke="#CFE2F7" stroke-width="12" fill="none" stroke-linecap="round" opacity=".9"/>
+      <g fill="#FF6F00">
+        <path d="M214 116c-13 0-22 9.5-22 21.5 0 16 22 37.5 22 37.5s22-21.5 22-37.5c0-12-9-21.5-22-21.5Z"/>
+        <path d="M86 196c-10 0-17 7.4-17 16.6 0 12.4 17 29 17 29s17-16.6 17-29C103 203.4 96 196 86 196Z" opacity=".9"/>
+        <path d="M356 214c-10 0-17 7.4-17 16.6 0 12.4 17 29 17 29s17-16.6 17-29c0-9.2-7-16.6-17-16.6Z" opacity=".9"/>
+        <path d="M118 52c-8 0-14 6-14 13.4 0 10 14 23.6 14 23.6s14-13.6 14-23.6C132 58 126 52 118 52Z" opacity=".75"/>
+      </g>
+      <g fill="#fff">
+        <circle cx="214" cy="137" r="8"/><circle cx="86" cy="212" r="6"/><circle cx="356" cy="230" r="6"/><circle cx="118" cy="65" r="5"/>
+      </g>
+    </svg>
+    <div class="chip one">
+      <span><b><span data-lang="ru">Строительный магазин</span><span data-lang="uz">Qurilish do‘koni</span><span data-lang="en">Building supply store</span></b>
+      <span class="tag"><span data-lang="ru">на 6% дешевле рынка</span><span data-lang="uz">bozordan 6% arzon</span><span data-lang="en">6% below market</span></span></span>
+    </div>
+    <div class="chip two">
+      <span><b><span data-lang="ru">Цемент М400, 50 кг</span><span data-lang="uz">Sement M400, 50 kg</span><span data-lang="en">Cement M400, 50 kg</span></b>
+      <span style="color:var(--grey)"><span data-lang="ru">цены в магазинах рядом</span><span data-lang="uz">yaqindagi do‘konlardagi narxlar</span><span data-lang="en">prices at stores nearby</span></span></span>
+    </div>
+  </div>
+</section>
+
+<section class="features">
+  <div class="card feature">
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#E65D00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></div>
+    <h3><span data-lang="ru">Магазины на карте</span><span data-lang="uz">Do‘konlar xaritada</span><span data-lang="en">Stores on the map</span></h3>
+    <p>
+      <span data-lang="ru">Каждый магазин отмечен значком своего профиля: универсальный, сантехника, пиломатериалы или обои. В карточке магазина — адрес, телефон и весь каталог.</span>
+      <span data-lang="uz">Har bir do‘kon o‘z yo‘nalishi belgisi bilan ko‘rsatilgan: universal, santexnika, yog‘och materiallar yoki oboylar. Do‘kon kartochkasida — manzil, telefon va butun katalog.</span>
+      <span data-lang="en">Each store carries the icon of its trade: general supplies, plumbing, timber or wallpaper. Open one to see its address, phone number and full catalogue.</span>
+    </p>
+  </div>
+  <div class="card feature">
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#E65D00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg></div>
+    <h3><span data-lang="ru">Честное сравнение цен</span><span data-lang="uz">Halol narx solishtiruvi</span><span data-lang="en">A fair price comparison</span></h3>
+    <p>
+      <span data-lang="ru">Мы сравниваем магазины по одной и той же корзине товаров. Если магазин дешевле рынка, это видно прямо на карте.</span>
+      <span data-lang="uz">Do‘konlarni bir xil mahsulotlar savati bo‘yicha solishtiramiz. Do‘kon bozordan arzon bo‘lsa, bu xaritaning o‘zida ko‘rinadi.</span>
+      <span data-lang="en">Stores are compared on the same basket of products. When a store is cheaper than the market, you see it right on the map.</span>
+    </p>
+  </div>
+  <div class="card feature">
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#E65D00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1.5-5h15L21 9"/><path d="M4 9v11h16V9"/><path d="M3 9h18"/><path d="M10 20v-6h4v6"/></svg></div>
+    <h3><span data-lang="ru">Для магазинов — бесплатно</span><span data-lang="uz">Do‘konlar uchun — bepul</span><span data-lang="en">Free for stores</span></h3>
+    <p>
+      <span data-lang="ru">Магазин открывается за пару минут и сразу получает готовый каталог товаров. Остаётся проставить свои цены.</span>
+      <span data-lang="uz">Do‘kon bir necha daqiqada ochiladi va darhol tayyor mahsulotlar katalogini oladi. Faqat o‘z narxlaringizni qo‘yish qoladi.</span>
+      <span data-lang="en">A store is set up in a couple of minutes and comes with a ready-made product catalogue. All that is left is to enter your prices.</span>
+    </p>
+  </div>
+</section>
+
+<h2 class="section-title"><span data-lang="ru">Как это работает</span><span data-lang="uz">Bu qanday ishlaydi</span><span data-lang="en">How it works</span></h2>
+<section class="how">
+  <div class="card">
+    <h3><i><span data-lang="ru">Покупателю</span><span data-lang="uz">Xaridorga</span><span data-lang="en">For buyers</span></i></h3>
+    <ol>
+      <li><span><span data-lang="ru">Откройте карту или выберите категорию на главном экране.</span><span data-lang="uz">Xaritani oching yoki bosh ekranda toifani tanlang.</span><span data-lang="en">Open the map or pick a category on the home screen.</span></span></li>
+      <li><span><span data-lang="ru">Сравните цены в магазинах поблизости.</span><span data-lang="uz">Yaqin atrofdagi do‘konlarda narxlarni solishtiring.</span><span data-lang="en">Compare prices at the stores nearby.</span></span></li>
+      <li><span><span data-lang="ru">Позвоните в магазин или постройте к нему маршрут.</span><span data-lang="uz">Do‘konga qo‘ng‘iroq qiling yoki unga yo‘nalish oling.</span><span data-lang="en">Call the store or get directions to it.</span></span></li>
+    </ol>
+  </div>
+  <div class="card">
+    <h3><i><span data-lang="ru">Магазину</span><span data-lang="uz">Do‘konga</span><span data-lang="en">For stores</span></i></h3>
+    <ol>
+      <li><span><span data-lang="ru">Войдите по номеру телефона и создайте магазин.</span><span data-lang="uz">Telefon raqamingiz bilan kiring va do‘kon yarating.</span><span data-lang="en">Sign in with your phone number and create your store.</span></span></li>
+      <li><span><span data-lang="ru">Отметьте адрес на карте и проставьте цены в готовом каталоге.</span><span data-lang="uz">Xaritada manzilni belgilang va tayyor katalogda narxlarni qo‘ying.</span><span data-lang="en">Mark your address on the map and fill in prices in the ready-made catalogue.</span></span></li>
+      <li><span><span data-lang="ru">Покупатели видят магазин на карте, а когда цены заполнены — ещё и в сравнении цен.</span><span data-lang="uz">Xaridorlar do‘koningizni xaritada ko‘radi, narxlar to‘ldirilgach esa — narx solishtiruvida ham.</span><span data-lang="en">Buyers see your store on the map and, once your prices are complete, in the price comparison too.</span></span></li>
+    </ol>
+  </div>
+</section>
+
+<h2 class="section-title"><span data-lang="ru">Помощь</span><span data-lang="uz">Yordam</span><span data-lang="en">Help</span></h2>
+<section class="help">
+  <a class="card" href="mailto:{{.Email}}">
+    <h3><span data-lang="ru">Написать нам</span><span data-lang="uz">Bizga yozish</span><span data-lang="en">Write to us</span></h3>
+    <p><span data-lang="ru">Вопросы, ошибки, предложения — всё сюда:</span><span data-lang="uz">Savollar, xatolar, takliflar — barchasi shu yerga:</span><span data-lang="en">Questions, bugs, ideas, all of it goes here:</span> <span class="addr">{{.Email}}</span></p>
+  </a>
+  <a class="card" href="/delete-account">
+    <h3><span data-lang="ru">Удалить аккаунт</span><span data-lang="uz">Akkauntni o‘chirish</span><span data-lang="en">Delete your account</span></h3>
+    <p><span data-lang="ru">Можно и без приложения: введите номер, подтвердите кодом из Telegram — и аккаунт удалён.</span><span data-lang="uz">Buni ilovasiz ham qilish mumkin: raqamni kiriting, Telegram’dagi kod bilan tasdiqlang — akkaunt o‘chiriladi.</span><span data-lang="en">No app needed: enter your number, confirm with the code from Telegram, and the account is gone.</span></p>
+  </a>
+  <a class="card" href="/privacy">
+    <h3><span data-lang="ru">Ваши данные</span><span data-lang="uz">Ma’lumotlaringiz</span><span data-lang="en">Your data</span></h3>
+    <p><span data-lang="ru">Какие данные мы получаем, зачем и как их удалить — в политике конфиденциальности.</span><span data-lang="uz">Qanday ma’lumot olamiz, nima uchun va ularni qanday o‘chirish mumkin — maxfiylik siyosatida.</span><span data-lang="en">What we collect, why, and how to delete it: it is all in the Privacy Policy.</span></p>
+  </a>
+</section>
+{{end}}

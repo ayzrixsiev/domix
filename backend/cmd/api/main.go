@@ -62,6 +62,10 @@ func main() {
 	reviewPhone, reviewCode := mustReadReviewAccount()
 	codeMgr := auth.NewCodeManager(paidDelivery).WithReviewAccount(reviewPhone, reviewCode)
 
+	// where photos are written and where the app fetches them from - two settings that have to
+	// agree, see mustOpenPhotoStorage. opened here because deleting an account deletes its photos
+	productImages, imageURLs := mustOpenPhotoStorage()
+
 	// 4. rate limiters.
 	//
 	// **a signed-in caller is bucketed by account, everybody else by address** - see byCaller. every
@@ -110,12 +114,12 @@ func main() {
 	http.HandleFunc("/api/me/phone/verify", endpoints.WithJSON(loginLimiter.Wrap(
 		auth.RequireAuth(jwtSecret, queries, phoneAuth.VerifyPhoneChange))))
 
-	authEndpoints := &endpoints.Auth{Queries: queries}
+	authEndpoints := &endpoints.Auth{Queries: queries, Images: productImages}
 	http.HandleFunc("/api/me", endpoints.WithJSON(apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, authEndpoints.RouteMe))))
 
 	// the /delete-account page Google Play requires: the same code, typed on a web page. public, so
 	// request-code sits behind the money bucket exactly as the login's does.
-	deletionEndpoints := &endpoints.AccountDeletion{Queries: queries, Codes: codeMgr, Sender: codeSender}
+	deletionEndpoints := &endpoints.AccountDeletion{Queries: queries, Codes: codeMgr, Sender: codeSender, Images: productImages}
 	http.HandleFunc("/api/account-deletion/request-code", endpoints.WithJSON(codeLimiter.Wrap(deletionEndpoints.RequestCode)))
 	http.HandleFunc("/api/account-deletion/confirm", endpoints.WithJSON(loginLimiter.Wrap(deletionEndpoints.Confirm)))
 
@@ -138,10 +142,6 @@ func main() {
 	http.HandleFunc("/api/shops", endpoints.WithJSON(browse(shopsEndpoints.Route)))
 	http.HandleFunc("/api/shops/mine", endpoints.WithJSON(apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, shopsEndpoints.ListMine))))
 	http.HandleFunc("/api/shops/{id}", endpoints.WithJSON(browse(shopsEndpoints.RouteByID)))
-
-	// where photos are written and where the app fetches them from - two settings that have to
-	// agree, see mustOpenPhotoStorage
-	productImages, imageURLs := mustOpenPhotoStorage()
 
 	productsEndpoints := &endpoints.Products{
 		Queries:   queries,
@@ -216,31 +216,31 @@ func main() {
 	http.Handle(imagestore.DefaultURLPrefix, staticFiles(imagestore.DefaultURLPrefix, productImagesDir()))
 	http.HandleFunc("/health", healthCheck(dbPool))
 
-	// the two web pages, deliberately not behind WithJSON - a json content type would make a browser
-	// download them instead of rendering them. /delete-account is a Google Play requirement: its url
-	// goes into the Play Console and into support replies, which is why the aliases exist.
-	supportEmail := os.Getenv("SUPPORT_EMAIL")
-	if supportEmail == "" {
-		supportEmail = "domix.support@gmail.com"
-		log.Printf("WARNING: SUPPORT_EMAIL is not set - the account deletion page will show %q, which must be a mailbox that actually receives mail before submitting to Google Play", supportEmail)
-	}
-	deletionPage := webui.Page("delete-account.html", map[string]string{"SUPPORT_EMAIL": supportEmail})
-	http.HandleFunc("/delete-account", deletionPage)
-	http.HandleFunc("/delete-account/", webui.Redirect("/delete-account"))
-	http.HandleFunc("/account-deletion", webui.Redirect("/delete-account"))
-
-	// the privacy policy, and it is a Play requirement for the same reason: the console wants a url
-	// that opens without installing anything. **the same text lives in the app** - see
-	// privacy_policy.dart - because it has to be readable and acceptable before an account exists.
-	policyPage := webui.Page("privacy.html", map[string]string{
-		"SUPPORT_EMAIL":  supportEmail,
-		"POLICY_VERSION": policyVersion,
+	// the public site, deliberately not behind WithJSON - a json content type would make a browser
+	// download a page instead of rendering it. the policy and the deletion page are Google Play
+	// requirements: their urls go into the console and into support replies, hence the aliases.
+	site, err := webui.NewSite(webui.SiteConfig{
+		SupportEmail:  supportEmail,
+		PolicyVersion: policyVersion,
+		TermsVersion:  termsVersion,
 	})
-	http.HandleFunc("/privacy", policyPage)
-	http.HandleFunc("/privacy/", webui.Redirect("/privacy"))
-	http.HandleFunc("/privacy-policy", webui.Redirect("/privacy"))
+	if err != nil {
+		log.Fatalf("Cannot render the public site: %v", err)
+	}
+	// "/{$}" is the root and only the root: a bare "/" would answer every unknown path with the home page
+	http.HandleFunc("/{$}", site.Page("home"))
+	http.HandleFunc("/privacy", site.Page("privacy"))
+	http.HandleFunc("/terms", site.Page("terms"))
+	http.HandleFunc("/delete-account", site.Page("delete-account"))
+	for alias, to := range map[string]string{
+		"/privacy/": "/privacy", "/privacy-policy": "/privacy",
+		"/terms/": "/terms", "/terms-of-use": "/terms",
+		"/delete-account/": "/delete-account", "/account-deletion": "/delete-account",
+	} {
+		http.HandleFunc(alias, webui.Redirect(to))
+	}
 
-	http.HandleFunc("/admin", webui.Page("admin.html", nil))
+	http.HandleFunc("/admin", webui.Page("admin.html"))
 	http.HandleFunc("/admin/", webui.Redirect("/admin"))
 
 	// 6. run the http server in its own goroutine, so main() is free to wait for a shutdown signal
@@ -339,10 +339,14 @@ func mustOpenCodeSender() (verify.Sender, bool) {
 	}
 }
 
-// the policy's own revision date. **it has to match privacy_policy.dart's policyVersion**: the two
-// copies of this text are one document, and a page dated differently from the one in the app is the
-// kind of detail a reviewer reads as two different policies.
-const policyVersion = "2026-10-07"
+// **the policy's date and the address have to match the app's copy of the policy**
+// (privacy_policy.dart): it prints both, and two copies of one document that disagree read as two
+// different policies. webui's TestTheAppCarriesThePublishedPolicy compares the texts.
+const (
+	policyVersion = "2026-10-08"
+	termsVersion  = "2026-10-08"
+	supportEmail  = "domix.support@gmail.com"
+)
 
 // the one account Google's reviewer signs in with, read from the environment. Without it the review
 // stops on the login screen: the code goes to Telegram, which a reviewer has no account on for the

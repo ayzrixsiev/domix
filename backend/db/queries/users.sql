@@ -33,3 +33,11 @@ RETURNING id, name, phone, role, created_at, updated_at;
 
 -- name: DeleteUser :exec
 DELETE FROM users WHERE id = $1;
+
+-- name: ListUploadedImagesOfUser :many
+-- the photos an owner uploaded, read before the account goes: the delete cascades through shops and
+-- products, and after it nothing names these files any more
+SELECT p.image_path::text AS image_path
+FROM products p
+JOIN shops s ON s.id = p.shop_id
+WHERE s.user_id = $1 AND p.image_path LIKE 'shops/uploads/%';

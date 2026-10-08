@@ -1,0 +1,267 @@
+{{/* the terms exist only here: the app carries no copy of them. */}}
+{{define "content"}}
+<article class="card doc" data-lang="ru">
+  <h1>Условия использования</h1>
+  <p class="meta">Действуют с {{date "ru" .TermsVersion}}</p>
+  <p class="lede">Это правила, по которым работает Domix. Пользуясь приложением или сайтом, вы соглашаетесь с ними, поэтому мы постарались написать их коротко и понятно.</p>
+  <nav class="toc" aria-label="Содержание" hidden></nav>
+  <section>
+    <h2>1. Что такое Domix</h2>
+    <p>Domix — это карта строительных магазинов Узбекистана с каталогами и ценами. Покупатели находят магазины и сравнивают цены, владельцы магазинов выкладывают свои товары.</p>
+    <p>Domix не продаёт товары и не участвует в сделках. Мы не принимаем оплату, не доставляем товары и не даём на них гарантий — всё это решается между покупателем и магазином.</p>
+  </section>
+  <section>
+    <h2>2. Кто может пользоваться</h2>
+    <p>Пользоваться Domix можно с 16 лет. Открыть магазин в приложении может только тот, кто вправе его представлять: владелец или сотрудник с согласия владельца.</p>
+  </section>
+  <section>
+    <h2>3. Аккаунт</h2>
+    <ul>
+      <li>Аккаунт привязан к номеру телефона, а вход — по одноразовому коду, который приходит в Telegram.</li>
+      <li>Регистрируйтесь только на свой номер и никому не сообщайте коды. Всё, что сделано из вашего аккаунта, считается сделанным вами.</li>
+      <li>Если номер перестал быть вашим, смените его в профиле или удалите аккаунт.</li>
+      <li>Удалить аккаунт можно в любой момент — в приложении или на странице <a href="/delete-account">domix-api.uz/delete-account</a>.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>4. Правила для магазинов</h2>
+    <p>Открывая магазин, вы отвечаете за то, что в нём указано:</p>
+    <ul>
+      <li>магазин существует и работает по указанному адресу, а точка на карте стоит там, где он находится;</li>
+      <li>цены актуальны, и по ним вы действительно продаёте;</li>
+      <li>фотографии сделаны вами, или вы имеете право их использовать;</li>
+      <li>контактный телефон рабочий, и на звонки по нему отвечают от имени магазина.</li>
+    </ul>
+    <p>Готовый каталог — это шаблон. Если какого-то товара у вас нет, отметьте это в поле наличия, а не ставьте цену наугад.</p>
+  </section>
+  <section>
+    <h2>5. Цены и сравнение</h2>
+    <p>Цены в Domix указывают сами магазины. Мы не проверяем каждую цену и не гарантируем, что в магазине она окажется такой же. Окончательную цену и наличие уточняйте у продавца.</p>
+    <p>Сравнение с рынком мы считаем по одной и той же корзине товаров для всех магазинов одного профиля. В сравнение попадает только магазин, у которого заполнены цены на всю корзину. Это подсказка, где выгоднее, а не оценка качества магазина или товаров.</p>
+    <p>Если цены магазина явно не соответствуют действительности, мы можем временно исключить его из сравнения, пока не разберёмся.</p>
+  </section>
+  <section>
+    <h2>6. VIP-размещение</h2>
+    <p>Часть магазинов показывается на главном экране в блоке «VIP». Это платное размещение: магазин оказывается там по договорённости с нами, а не потому, что он дешевле других. Срок и стоимость согласуются отдельно. На место магазина в сравнении цен VIP не влияет.</p>
+  </section>
+  <section>
+    <h2>7. Что запрещено</h2>
+    <ul>
+      <li>создавать несуществующие магазины или выдавать себя за чужой магазин;</li>
+      <li>указывать заведомо ложные цены или наличие, чтобы привлечь покупателей;</li>
+      <li>загружать чужие фотографии без разрешения, а также непристойные, оскорбительные или незаконные изображения;</li>
+      <li>автоматически собирать данные из приложения, перегружать сервис запросами, искать и использовать уязвимости;</li>
+      <li>использовать Domix для спама, мошенничества или любой незаконной деятельности.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>8. Ваш контент и наш</h2>
+    <p>Названия, цены, описания и фотографии, которые вы добавляете, остаются вашими. Добавляя их, вы разрешаете нам бесплатно показывать их в приложении и на сайте, пока магазин размещён в Domix. Когда вы удаляете товар, фотографию или аккаунт, мы перестаём их показывать.</p>
+    <p>Приложение, его дизайн, готовые каталоги и фотографии каталога принадлежат Domix. Копировать их без нашего разрешения нельзя.</p>
+  </section>
+  <section>
+    <h2>9. Модерация</h2>
+    <p>Если магазин, товар или фотография нарушают эти условия или закон, мы можем их удалить, исключить магазин из сравнения цен или удалить аккаунт. Когда нарушение можно исправить, мы сначала связываемся с владельцем.</p>
+    <p>Если вы считаете, что мы ошиблись, напишите на <a href="mailto:{{.Email}}">{{.Email}}</a> — разберёмся.</p>
+  </section>
+  <section>
+    <h2>10. Работа сервиса</h2>
+    <p>Мы стараемся, чтобы Domix работал без перебоев, но не можем этого обещать: бывают технические работы, сбои у подрядчиков и проблемы со связью. Мы можем менять, добавлять и убирать функции приложения.</p>
+  </section>
+  <section>
+    <h2>11. Ответственность</h2>
+    <p>Domix предоставляется «как есть». Мы не отвечаем за товары магазинов, их цены и наличие, за качество обслуживания и за договорённости между покупателем и магазином.</p>
+    <p>В той мере, в какой это допускает закон Республики Узбекистан, мы не отвечаем за косвенные убытки от использования Domix, например за упущенную выгоду. Права потребителей, которые закон ограничивать не позволяет, эти условия не ограничивают.</p>
+  </section>
+  <section>
+    <h2>12. Изменения условий</h2>
+    <p>Мы можем обновлять эти условия. О существенных изменениях мы сообщим в приложении или на этой странице до того, как они вступят в силу. Если вы продолжаете пользоваться Domix после этого, значит, вы согласны с новой редакцией.</p>
+  </section>
+  <section>
+    <h2>13. Применимое право и язык</h2>
+    <p>Эти условия регулируются законодательством Республики Узбекистан. Споры мы сначала стараемся решить перепиской, а если договориться не удалось, спор рассматривается в порядке, установленном законодательством Республики Узбекистан.</p>
+    <p>Условия опубликованы на русском, узбекском и английском языках. Если версии расходятся, основной считается русская.</p>
+  </section>
+  <section>
+    <h2>14. Контакты</h2>
+    <p>Вопросы, жалобы и предложения присылайте на <a href="mailto:{{.Email}}">{{.Email}}</a>.</p>
+  </section>
+</article>
+
+<article class="card doc" data-lang="uz">
+  <h1>Foydalanish shartlari</h1>
+  <p class="meta">Kuchga kirgan sana: {{date "uz" .TermsVersion}}</p>
+  <p class="lede">Bu Domix ishlaydigan qoidalar. Ilova yoki saytdan foydalanib, siz ularga rozilik bildirasiz, shuning uchun ularni qisqa va tushunarli yozishga harakat qildik.</p>
+  <nav class="toc" aria-label="Mundarija" hidden></nav>
+  <section>
+    <h2>1. Domix nima</h2>
+    <p>Domix — O‘zbekistondagi qurilish do‘konlari xaritasi, ularning kataloglari va narxlari bilan. Xaridorlar do‘konlarni topadi va narxlarni solishtiradi, do‘kon egalari o‘z mahsulotlarini joylashtiradi.</p>
+    <p>Domix mahsulot sotmaydi va bitimlarda ishtirok etmaydi. Biz to‘lov qabul qilmaymiz, mahsulot yetkazmaymiz va ularga kafolat bermaymiz — bularning barchasi xaridor bilan do‘kon o‘rtasida hal qilinadi.</p>
+  </section>
+  <section>
+    <h2>2. Kim foydalanishi mumkin</h2>
+    <p>Domix’dan 16 yoshdan boshlab foydalanish mumkin. Ilovada do‘konni faqat uning nomidan ish ko‘rish huquqiga ega shaxs ochishi mumkin: egasi yoki egasining roziligi bilan xodim.</p>
+  </section>
+  <section>
+    <h2>3. Akkaunt</h2>
+    <ul>
+      <li>Akkaunt telefon raqamiga bog‘langan, kirish esa Telegram’ga keladigan bir martalik kod orqali.</li>
+      <li>Faqat o‘z raqamingiz bilan ro‘yxatdan o‘ting va kodlarni hech kimga aytmang. Akkauntingizdan qilingan har qanday harakat siz tomoningizdan qilingan hisoblanadi.</li>
+      <li>Agar raqam endi sizniki bo‘lmasa, uni profilda o‘zgartiring yoki akkauntni o‘chiring.</li>
+      <li>Akkauntni istalgan vaqtda o‘chirish mumkin — ilovada yoki <a href="/delete-account">domix-api.uz/delete-account</a> sahifasida.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>4. Do‘konlar uchun qoidalar</h2>
+    <p>Do‘kon ochar ekansiz, unda ko‘rsatilgan ma’lumotlar uchun siz javob berasiz:</p>
+    <ul>
+      <li>do‘kon mavjud va ko‘rsatilgan manzilda ishlaydi, xaritadagi nuqta esa u joylashgan joyda turibdi;</li>
+      <li>narxlar dolzarb va siz haqiqatan ham shu narxlarda sotasiz;</li>
+      <li>suratlarni o‘zingiz olgansiz yoki ulardan foydalanish huquqiga egasiz;</li>
+      <li>aloqa telefoni ishlaydi va unga do‘kon nomidan javob beriladi.</li>
+    </ul>
+    <p>Tayyor katalog — bu shablon. Agar biror mahsulot sizda bo‘lmasa, buni mavjudlik maydonida belgilang, taxminiy narx qo‘ymang.</p>
+  </section>
+  <section>
+    <h2>5. Narxlar va solishtirish</h2>
+    <p>Domix’dagi narxlarni do‘konlarning o‘zi ko‘rsatadi. Biz har bir narxni tekshirmaymiz va do‘konda u xuddi shunday bo‘lishiga kafolat bermaymiz. Yakuniy narx va mavjudlikni sotuvchidan aniqlang.</p>
+    <p>Bozor bilan solishtirishni bir yo‘nalishdagi barcha do‘konlar uchun bir xil mahsulotlar savati bo‘yicha hisoblaymiz. Solishtiruvga faqat butun savat narxlari to‘ldirilgan do‘kon kiradi. Bu qayerda arzonroq ekanini ko‘rsatadigan ishora, do‘kon yoki mahsulot sifatiga baho emas.</p>
+    <p>Agar do‘kon narxlari haqiqatga to‘g‘ri kelmasligi yaqqol ko‘rinsa, vaziyatni aniqlaguncha uni solishtiruvdan vaqtincha chiqarishimiz mumkin.</p>
+  </section>
+  <section>
+    <h2>6. VIP joylashtirish</h2>
+    <p>Ba’zi do‘konlar bosh ekrandagi «VIP» blokida ko‘rsatiladi. Bu pullik joylashtirish: do‘kon u yerga boshqalardan arzonligi uchun emas, biz bilan kelishuv asosida tushadi. Muddati va narxi alohida kelishiladi. VIP do‘konning narx solishtiruvidagi o‘rniga ta’sir qilmaydi.</p>
+  </section>
+  <section>
+    <h2>7. Nimalar taqiqlanadi</h2>
+    <ul>
+      <li>mavjud bo‘lmagan do‘konlarni yaratish yoki o‘zini boshqa do‘kon deb ko‘rsatish;</li>
+      <li>xaridorlarni jalb qilish uchun ataylab noto‘g‘ri narx yoki mavjudlikni ko‘rsatish;</li>
+      <li>boshqalarning suratlarini ruxsatsiz, shuningdek odobsiz, haqoratli yoki noqonuniy tasvirlarni yuklash;</li>
+      <li>ilovadan ma’lumotlarni avtomatik yig‘ish, xizmatni so‘rovlar bilan ortiqcha yuklash, zaifliklarni qidirish va ulardan foydalanish;</li>
+      <li>Domix’dan spam, firibgarlik yoki har qanday noqonuniy faoliyat uchun foydalanish.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>8. Sizning kontentingiz va bizniki</h2>
+    <p>Siz qo‘shgan nomlar, narxlar, tavsiflar va suratlar sizniki bo‘lib qoladi. Ularni qo‘shib, do‘kon Domix’da joylashgan ekan, ularni ilovada va saytda bepul ko‘rsatishimizga ruxsat berasiz. Mahsulot, surat yoki akkauntni o‘chirganingizda, biz ularni ko‘rsatishni to‘xtatamiz.</p>
+    <p>Ilova, uning dizayni, tayyor kataloglar va katalog suratlari Domix’ga tegishli. Ularni ruxsatimizsiz nusxalash mumkin emas.</p>
+  </section>
+  <section>
+    <h2>9. Moderatsiya</h2>
+    <p>Agar do‘kon, mahsulot yoki surat ushbu shartlarni yoki qonunni buzsa, biz ularni o‘chirishimiz, do‘konni narx solishtiruvidan chiqarishimiz yoki akkauntni o‘chirishimiz mumkin. Buzilishni tuzatish mumkin bo‘lsa, avval do‘kon egasi bilan bog‘lanamiz.</p>
+    <p>Agar xato qildik deb hisoblasangiz, <a href="mailto:{{.Email}}">{{.Email}}</a> manziliga yozing — ko‘rib chiqamiz.</p>
+  </section>
+  <section>
+    <h2>10. Xizmatning ishlashi</h2>
+    <p>Domix uzilishlarsiz ishlashiga harakat qilamiz, lekin buni va’da qila olmaymiz: texnik ishlar, pudratchilardagi nosozliklar va aloqa muammolari bo‘lib turadi. Ilova funksiyalarini o‘zgartirishimiz, qo‘shishimiz va olib tashlashimiz mumkin.</p>
+  </section>
+  <section>
+    <h2>11. Javobgarlik</h2>
+    <p>Domix «boricha» taqdim etiladi. Biz do‘konlarning mahsulotlari, ularning narxi va mavjudligi, xizmat ko‘rsatish sifati hamda xaridor va do‘kon o‘rtasidagi kelishuvlar uchun javob bermaymiz.</p>
+    <p>O‘zbekiston Respublikasi qonunchiligi yo‘l qo‘ygan darajada biz Domix’dan foydalanish bilan bog‘liq bilvosita zararlar, masalan, boy berilgan foyda uchun javob bermaymiz. Qonun cheklashga yo‘l qo‘ymaydigan iste’molchi huquqlarini ushbu shartlar cheklamaydi.</p>
+  </section>
+  <section>
+    <h2>12. Shartlardagi o‘zgarishlar</h2>
+    <p>Biz ushbu shartlarni yangilashimiz mumkin. Jiddiy o‘zgarishlar haqida ular kuchga kirishidan oldin ilovada yoki shu sahifada xabar beramiz. Shundan keyin ham Domix’dan foydalanishda davom etsangiz, bu yangi tahrirga rozi ekaningizni bildiradi.</p>
+  </section>
+  <section>
+    <h2>13. Qo‘llaniladigan huquq va til</h2>
+    <p>Ushbu shartlar O‘zbekiston Respublikasi qonunchiligi bilan tartibga solinadi. Nizolarni avval yozishmalar orqali hal qilishga harakat qilamiz, kelisha olmasak, nizo O‘zbekiston Respublikasi qonunchiligida belgilangan tartibda ko‘rib chiqiladi.</p>
+    <p>Shartlar rus, o‘zbek va ingliz tillarida e’lon qilingan. Matnlar o‘rtasida farq bo‘lsa, rus tilidagi matn asosiy hisoblanadi.</p>
+  </section>
+  <section>
+    <h2>14. Aloqa</h2>
+    <p>Savollar, shikoyatlar va takliflarni <a href="mailto:{{.Email}}">{{.Email}}</a> manziliga yuboring.</p>
+  </section>
+</article>
+
+<article class="card doc" data-lang="en">
+  <h1>Terms of Use</h1>
+  <p class="meta">Effective {{date "en" .TermsVersion}}</p>
+  <p class="lede">These are the rules Domix works by. By using the app or this website you agree to them, so we have tried to keep them short and clear.</p>
+  <nav class="toc" aria-label="Contents" hidden></nav>
+  <section>
+    <h2>1. What Domix is</h2>
+    <p>Domix is a map of building supply stores in Uzbekistan, with their catalogues and prices. Buyers find stores and compare prices; store owners list their products.</p>
+    <p>Domix does not sell goods and is not a party to any sale. We do not take payments, deliver goods or guarantee them. All of that is between the buyer and the store.</p>
+  </section>
+  <section>
+    <h2>2. Who can use Domix</h2>
+    <p>You must be at least 16 to use Domix. Only someone entitled to represent a store may open it in the app: the owner, or an employee with the owner’s consent.</p>
+  </section>
+  <section>
+    <h2>3. Your account</h2>
+    <ul>
+      <li>Your account is tied to your phone number, and you sign in with a one-time code sent to Telegram.</li>
+      <li>Register only with your own number and never share your codes. Anything done from your account is treated as done by you.</li>
+      <li>If the number is no longer yours, change it in your profile or delete the account.</li>
+      <li>You can delete your account at any time, in the app or at <a href="/delete-account">domix-api.uz/delete-account</a>.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>4. Rules for stores</h2>
+    <p>If you open a store, you are responsible for what it says:</p>
+    <ul>
+      <li>the store exists and trades at the address shown, and its pin is where the store actually is;</li>
+      <li>the prices are current, and they are the prices you actually sell at;</li>
+      <li>the photos are your own, or you have the right to use them;</li>
+      <li>the contact number works, and calls to it are answered on the store’s behalf.</li>
+    </ul>
+    <p>The ready-made catalogue is a template. If you do not carry a product, mark it as unavailable rather than entering a guessed price.</p>
+  </section>
+  <section>
+    <h2>5. Prices and the comparison</h2>
+    <p>Prices on Domix are entered by the stores themselves. We do not check every price and cannot guarantee it will be the same in the store. Confirm the final price and availability with the seller.</p>
+    <p>The market comparison is calculated on the same basket of products for every store of the same type. A store is included only once it has priced the whole basket. It is a pointer to where things are cheaper, not a rating of the store or its products.</p>
+    <p>If a store’s prices are clearly not genuine, we may take it out of the comparison while we look into it.</p>
+  </section>
+  <section>
+    <h2>6. VIP placement</h2>
+    <p>Some stores are shown in the “VIP” section of the home screen. This is paid placement: a store appears there by arrangement with us, not because it is cheaper than others. Its length and price are agreed separately. VIP placement has no effect on a store’s position in the price comparison.</p>
+  </section>
+  <section>
+    <h2>7. What is not allowed</h2>
+    <ul>
+      <li>creating stores that do not exist, or posing as someone else’s store;</li>
+      <li>listing prices or availability you know to be false in order to attract buyers;</li>
+      <li>uploading other people’s photos without permission, or obscene, offensive or illegal images;</li>
+      <li>collecting data from the app automatically, overloading the service with requests, or looking for and exploiting vulnerabilities;</li>
+      <li>using Domix for spam, fraud or anything else illegal.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>8. Your content and ours</h2>
+    <p>The names, prices, descriptions and photos you add remain yours. By adding them, you allow us to show them in the app and on this website, free of charge, for as long as your store is on Domix. When you delete a product, a photo or your account, we stop showing it.</p>
+    <p>The app, its design, the ready-made catalogues and the catalogue photos belong to Domix and may not be copied without our permission.</p>
+  </section>
+  <section>
+    <h2>9. Moderation</h2>
+    <p>If a store, product or photo breaks these terms or the law, we may remove it, take the store out of the price comparison or delete the account. Where the problem can be fixed, we contact the owner first.</p>
+    <p>If you think we got it wrong, write to <a href="mailto:{{.Email}}">{{.Email}}</a> and we will look into it.</p>
+  </section>
+  <section>
+    <h2>10. Availability of the service</h2>
+    <p>We try to keep Domix running without interruption, but we cannot promise it: there is maintenance, our providers have outages, and connections fail. We may change, add or remove features of the app.</p>
+  </section>
+  <section>
+    <h2>11. Liability</h2>
+    <p>Domix is provided “as is”. We are not responsible for the stores’ products, their prices or availability, the quality of their service, or any arrangement between a buyer and a store.</p>
+    <p>To the extent the law of the Republic of Uzbekistan allows, we are not liable for indirect losses arising from the use of Domix, such as lost profits. Nothing in these terms limits consumer rights that the law does not allow to be limited.</p>
+  </section>
+  <section>
+    <h2>12. Changes to these terms</h2>
+    <p>We may update these terms. We will announce significant changes in the app or on this page before they take effect. If you keep using Domix afterwards, you accept the new version.</p>
+  </section>
+  <section>
+    <h2>13. Governing law and language</h2>
+    <p>These terms are governed by the law of the Republic of Uzbekistan. We will first try to settle any dispute by correspondence; if that fails, it will be resolved as provided by the law of the Republic of Uzbekistan.</p>
+    <p>These terms are published in Russian, Uzbek and English. If the versions differ, the Russian version prevails.</p>
+  </section>
+  <section>
+    <h2>14. Contact</h2>
+    <p>Send questions, complaints and suggestions to <a href="mailto:{{.Email}}">{{.Email}}</a>.</p>
+  </section>
+</article>
+
+{{end}}

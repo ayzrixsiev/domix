@@ -4,15 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"domix/backend/db"
 	"domix/backend/internal/auth"
 	"domix/backend/internal/dbctx"
+	"domix/backend/internal/imagestore"
 	"domix/backend/internal/verify"
 )
 
@@ -31,6 +34,9 @@ type AccountDeletion struct {
 	Queries *db.Queries
 	Codes   *auth.CodeManager
 	Sender  verify.Sender
+
+	// where the owner's photos live, so deleting the account deletes them too - see eraseAccount
+	Images imagestore.Storage
 }
 
 // POST /api/account-deletion/request-code
@@ -136,8 +142,7 @@ func (d *AccountDeletion) Confirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// one statement takes the account, its shops and their products - the schema cascades
-	if err := d.Queries.DeleteUser(ctx, user.ID); err != nil {
+	if err := eraseAccount(ctx, d.Queries, d.Images, user.ID); err != nil {
 		log.Printf("CRITICAL: failed to delete user %d from the deletion page: %v", user.ID, err)
 		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not delete the account")
 		return
@@ -158,4 +163,44 @@ func (d *AccountDeletion) accountExists(ctx context.Context, phone string) (bool
 		return false, err
 	}
 	return true, nil
+}
+
+// long enough for a shop's worth of photos on R2 (two round trips each), short of nginx's 60s cut
+const photoRemovalBudget = 30 * time.Second
+
+// eraseAccount deletes an account and then the photos its owner uploaded - the app's path and the
+// web page's both end here. the admin panel's own delete calls the two halves around its statement.
+//
+// **the paths are read before the delete**: it cascades through shops and products, and afterwards
+// no row names those files. **the rows go before the files**, so a failure part-way leaves files
+// nothing points at, which the admin's orphan sweep collects - never a row naming a file that is gone.
+func eraseAccount(ctx context.Context, q *db.Queries, images imagestore.Storage, userID int64) error {
+	uploads, err := q.ListUploadedImagesOfUser(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("listing the photos of user %d: %w", userID, err)
+	}
+	if err := q.DeleteUser(ctx, userID); err != nil {
+		return fmt.Errorf("deleting user %d: %w", userID, err)
+	}
+	removeUploads(ctx, images, userID, uploads)
+	return nil
+}
+
+// removeUploads unlinks the photos of an account that is already deleted. a photo that cannot be
+// removed does not undo anything: it is logged and left for the orphan sweep.
+func removeUploads(ctx context.Context, images imagestore.Storage, userID int64, uploads []string) {
+	// detached from the request: the account is already gone, and a client hanging up now must not
+	// strand its photos in the bucket
+	removeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), photoRemovalBudget)
+	defer cancel()
+
+	failed := 0
+	for _, rel := range uploads {
+		if err := images.Remove(removeCtx, rel); err != nil {
+			failed++
+		}
+	}
+	if failed > 0 {
+		log.Printf("WARNING: user %d deleted, %d of %d photos left for the orphan sweep", userID, failed, len(uploads))
+	}
 }

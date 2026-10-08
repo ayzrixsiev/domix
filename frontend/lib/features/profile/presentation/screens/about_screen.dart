@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:frontend/core/constants/api_config.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/language_provider.dart';
@@ -46,6 +47,13 @@ class AboutScreen extends StatelessWidget {
                     title: strings.openStreetMapCredit,
                     uri: openStreetMapCopyright,
                   ),
+                  const Divider(height: 1, thickness: 1, color: AppColors.hairline),
+                  // the site's home page, not one document: it links the terms and the policy
+                  _LinkRow(
+                    icon: LucideIcons.file_text,
+                    title: strings.termsAndPrivacy,
+                    uri: Uri.parse('${ApiConfig.serverRoot}/'),
+                  ),
                 ],
               ),
             ),
@@ -70,25 +78,29 @@ class _LinkRow extends StatelessWidget {
       child: InkWell(
         // the browser, not an in-app view: both pages are legal text the reader may want to keep open
         onTap: () => launchUrl(uri, mode: LaunchMode.externalApplication),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              Icon(icon, color: AppColors.textMuted, size: 20),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    color: AppColors.textDark,
-                    fontSize: 14.5,
-                    height: 1.3,
-                    fontWeight: FontWeight.w600,
+        // one fixed minimum so the rows match whether the title takes one line or two
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 68),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Icon(icon, color: AppColors.textMuted, size: 20),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      color: AppColors.textDark,
+                      fontSize: 14.5,
+                      height: 1.3,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
-              const Icon(CupertinoIcons.arrow_up_right, color: AppColors.textFaint, size: 15),
-            ],
+                const Icon(CupertinoIcons.arrow_up_right, color: AppColors.textFaint, size: 15),
+              ],
+            ),
           ),
         ),
       ),

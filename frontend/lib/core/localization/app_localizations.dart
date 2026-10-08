@@ -888,6 +888,7 @@ class AppLocalizations {
   String get yandexMapsTerms => isRu ? 'Условия использования Яндекс Карт' : 'Yandex Xaritalar foydalanish shartlari';
   String get openStreetMapCredit =>
       isRu ? 'Данные адресов: © участники OpenStreetMap' : "Manzillar ma'lumoti: © OpenStreetMap ishtirokchilari";
+  String get termsAndPrivacy => isRu ? 'Условия использования и конфиденциальность' : 'Foydalanish shartlari va maxfiylik';
 
   /// badge on a product the owner added themselves, as opposed to one from the category template
   String get ownProductBadge => isRu ? 'Свой товар' : "O'z mahsuloti";
