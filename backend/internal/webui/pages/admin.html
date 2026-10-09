@@ -558,6 +558,9 @@
   .phf-ph{width:92px;height:92px;flex:none;border-radius:var(--r-2);object-fit:cover;
           background:var(--card);border:1px solid var(--line-2);display:block}
   .phf-ph.none{display:grid;place-items:center;color:var(--faint)}
+  /* a shop's own photo is the VIP card's picture, which is a horizontal frame - a 92px square
+     preview says nothing about how the storefront will sit in it */
+  .phf-ph.wide{width:168px;height:106px}
   .phf-side{min-width:0;flex:1;display:flex;flex-direction:column;gap:8px}
   .phf-acts{display:flex;gap:8px;flex-wrap:wrap}
   .phf-path{font-size:11px;color:var(--muted);word-break:break-all;line-height:1.45}
@@ -1036,6 +1039,7 @@ var ICONS = {
        "m4.93 4.93 1.41 1.41","m17.66 17.66 1.41 1.41","m4.93 19.07 1.41-1.41","m17.66 6.34 1.41-1.41"],
   moon:["M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"],
   upload:["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4","m17 8-5-5-5 5","M12 3v12"],
+  photo:["M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z","M11 9a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z","m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"],
   broom:["m13 11 9-9","M14.6 12.6c.8.8.9 2 .2 2.7l-1.3 1.3c-.7.7-2 .6-2.7-.2L5.6 11.2c-.8-.8-.9-2-.2-2.7l1.3-1.3c.7-.7 2-.6 2.7.2Z","M6 15l-3 3","M9 18l-3 3","M3 21h6"]
 };
 
@@ -2461,12 +2465,18 @@ function renderShops() {
     tr.appendChild(ix);
 
     var vp = el("td");
-    if (s.is_vip) { vp.appendChild(el("span","tag vip","VIP")); if (s.vip_until) vp.appendChild(el("div","d num","до "+sdate(s.vip_until))); }
+    if (s.is_vip) {
+      vp.appendChild(el("span","tag vip","VIP"));
+      if (s.vip_until) vp.appendChild(el("div","d num","до "+sdate(s.vip_until)));
+      // the only place a missing storefront is visible at all: the card itself is on the phone
+      if (!s.image_thumb_url) vp.appendChild(el("div","tag am","без фото"));
+    }
     else vp.appendChild(el("span","d","—"));
     tr.appendChild(vp);
 
     var act = el("td","r"); var wrap = el("div","acts");
     wrap.appendChild(iconBtn(ICONS.crown, s.is_vip?"Изменить размещение":"Сделать VIP", null, function(){ editVIP(s); }));
+    wrap.appendChild(iconBtn(ICONS.photo, s.image_thumb_url?"Заменить фото":"Загрузить фото", null, function(){ editShopPhoto(s); }));
     wrap.appendChild(iconBtn(ICONS.lock, s.excluded_from_index?"Вернуть в индекс":"Исключить из индекса", s.excluded_from_index?null:"dg", function(){ toggleExcluded(s); }));
     wrap.appendChild(iconBtn(ICONS.box, "Товары", null, function(){ openProducts(s); }));
     wrap.appendChild(iconBtn(ICONS.edit, "Редактировать", null, function(){ editShop(s); }));
@@ -2527,7 +2537,8 @@ function editVIP(s) {
       { name:"days", label:"Срок размещения", type:"select", value:"30",
         options: choices.map(function(c){ return [String(c[0]), c[1]]; }).concat([["0","Снять размещение"]]) }
     ],
-    note:"Размещение отсчитывается от сегодняшнего дня. VIP-магазины попадают в карусель на главном экране; на индекс цен это не влияет.",
+    note:"Размещение отсчитывается от сегодняшнего дня. VIP-магазины попадают в карусель на главном экране; на индекс цен это не влияет."
+      + (s.image_thumb_url ? "" : " У магазина нет фото — карточка в карусели показывает витрину, поэтому после выдачи панель попросит снимок."),
     confirmLabel:"Применить",
     onConfirm:function (v) {
       var days = parseInt(v.days, 10) || 0;
@@ -2536,9 +2547,113 @@ function editVIP(s) {
           s.is_vip = r.is_vip; s.vip_until = r.vip_until;
           renderShops(); loadStats();
           toast(days > 0 ? "Размещение выдано на " + days + " дн." : "Размещение снято");
+          // **the grant is never blocked on a photo, so this is the whole of the asking.** the
+          // server answers needs_photo, and the card is otherwise only visible from a phone.
+          if (r.needs_photo) editShopPhoto(s, { afterGrant:true });
         }).catch(function (e) { if (guard(e)) return; toast("Не удалось изменить размещение", true); throw e; });
     }
   });
+}
+
+// ── the storefront photograph ──
+//
+// **the panel takes this picture, not the owner.** The VIP carousel is the part of the home screen
+// that is sold, and an invented or careless shot sits over a real shop's name - so it is checked by
+// whoever sold the placement. One photo per shop; the app shows it nowhere else.
+//
+// Its own window rather than a field on «Редактировать магазин»: the file uploads the moment it is
+// picked (multipart, while that form is json) and the row is pointed at it by the server, so there
+// is nothing here for a «Сохранить» to do.
+function editShopPhoto(s, opts) {
+  opts = opts || {};
+  var st = shell({
+    title:"Фото магазина", sub:s.name + " · #" + s.id,
+    icon:ICONS.photo, iconClass:"o"
+  });
+
+  var box = el("div","phf");
+  var shot = el("img","phf-ph wide"); shot.alt = "";
+  var blank = el("div","phf-ph wide none"); blank.appendChild(ico(ICONS.photo,26));
+  box.appendChild(shot); box.appendChild(blank);
+
+  var side = el("div","phf-side");
+  var acts = el("div","phf-acts");
+  var pathLine = el("div","phf-path");
+  side.appendChild(acts); side.appendChild(pathLine);
+  box.appendChild(side);
+
+  var file = el("input");
+  file.type = "file"; file.accept = "image/jpeg,image/png"; file.hidden = true;
+  box.appendChild(file);
+
+  var up = el("button","btn btn-g btn-s"); up.type = "button";
+  up.appendChild(ico(ICONS.upload,15));
+  up.appendChild(el("span",null,"Загрузить"));
+  var drop = el("button","btn btn-g btn-s","Убрать"); drop.type = "button";
+  acts.appendChild(up); acts.appendChild(drop);
+
+  function draw() {
+    var url = s.image_thumb_url || "";
+    shot.hidden = !url; blank.hidden = !!url;
+    // a replacement is a new url, so the browser never has a cached copy to show instead
+    if (url) shot.src = url;
+    pathLine.textContent = url ? "Фото стоит на карточке в карусели" : "Фото нет — карточка выйдет с пустой рамкой";
+    drop.hidden = !url;
+  }
+
+  up.addEventListener("click", function () { file.click(); });
+  file.addEventListener("change", function () {
+    var chosen = file.files && file.files[0];
+    if (!chosen) return;
+    up.disabled = true; up.lastChild.textContent = "…";
+    shrinkForUpload(chosen).then(function (ready) {
+      var form = new FormData();
+      form.append("image", ready);
+      return api("/api/admin/shops/" + s.id + "/photo", { method:"POST", body:form });
+    })
+      .then(function (saved) {
+        s.image_url = saved.image_url; s.image_thumb_url = saved.image_thumb_url;
+        draw(); renderShops(); toast("Фото магазина сохранено");
+      }).catch(function (e) {
+        if (!guard(e)) toast(photoError(e), true);
+      }).then(function () {
+        up.disabled = false; up.lastChild.textContent = "Загрузить";
+        file.value = ""; // or picking the same file twice fires no change event
+      });
+  });
+
+  // the files go with the row, so this is a deletion and is asked about like one
+  drop.addEventListener("click", function () {
+    confirmDialog({
+      title:"Убрать фото магазина?",
+      body:"Снимок будет удалён с сервера." + (s.is_vip ? " VIP-карточка «" + s.name + "» останется в карусели, но с пустой рамкой." : ""),
+      confirmLabel:"Убрать", danger:true,
+      onConfirm:function () {
+        return api("/api/admin/shops/" + s.id + "/photo", { method:"DELETE" })
+          .then(function () {
+            s.image_url = ""; s.image_thumb_url = "";
+            draw(); renderShops(); toast("Фото убрано");
+          }).catch(function (e) { if (guard(e)) return; toast("Не удалось убрать фото", true); throw e; });
+      }
+    });
+  });
+
+  var note = el("div","warn note");
+  note.appendChild(ico(ICONS.info,16));
+  note.appendChild(el("span",null, opts.afterGrant
+    ? "Размещение выдано — осталось фото. Карточка в карусели показывает витрину магазина: горизонтальный снимок, без чужих логотипов и вывесок."
+    : "Карточка в карусели показывает витрину магазина: горизонтальный снимок, без чужих логотипов и вывесок. Больше нигде в приложении это фото не появляется."));
+
+  st.modal.appendChild(box);
+  st.modal.appendChild(note);
+
+  var row = el("div","m-acts");
+  var close = el("button","btn btn-g","Закрыть");
+  close.addEventListener("click", st.close);
+  row.appendChild(close);
+  st.modal.appendChild(row);
+
+  draw();
 }
 
 // an admin's own suspension, separate from catalogue completeness - shop_basket_index already
@@ -3326,9 +3441,11 @@ function photoField(f, input) {
 // exactly what the catalogue sweep is for. Closing this form without saving leaves one, and that is
 // the harmless direction to fail in.
 function uploadCataloguePhoto(category, file) {
-  var form = new FormData();
-  form.append("image", file);
-  return api("/api/admin/catalogue/" + category + "/photo", { method:"POST", body:form })
+  return shrinkForUpload(file).then(function (ready) {
+    var form = new FormData();
+    form.append("image", ready);
+    return api("/api/admin/catalogue/" + category + "/photo", { method:"POST", body:form });
+  })
     .then(function (saved) {
       // the answer has the picker's own shape, so the new file joins its list without a re-scan of
       // the whole store - otherwise it would be invisible until somebody pressed «Проверить»
@@ -3337,8 +3454,55 @@ function uploadCataloguePhoto(category, file) {
     });
 }
 
+// ── every upload goes through the browser first ──
+//
+// **The admin's source is a screenshot or a 12MP phone photo, and the api refuses anything over
+// 6 MB** (imagestore.MaxUploadBytes, a ceiling on the request rather than on the stored file).
+// Raising it would make every upload path pay for a limit only this page runs into, so the page
+// shrinks the picture instead: a canvas re-encode costs nothing here and the file that leaves the
+// browser is already close to what the server stores.
+//
+// It also **normalises the format**. A webp or an avif the browser can display reaches the server
+// as the jpeg it accepts, where before it came back «Это не jpeg и не png» with nothing on the
+// page saying what to do about it.
+//
+// `createImageBitmap` is what applies the EXIF rotation. Without it a phone photo would arrive
+// sideways: the canvas output carries no EXIF for the server's own rotation step to read, so the
+// orientation has to be baked in here or lost here.
+var UPLOAD_MAX_SIDE = 1600;   // the server stores 1000; the headroom costs nothing and survives a reshoot
+var UPLOAD_QUALITY = 0.9;
+
+function shrinkForUpload(file) {
+  if (!window.createImageBitmap || !file.type || file.type.indexOf("image/") !== 0) {
+    return Promise.resolve(file);
+  }
+  return createImageBitmap(file, { imageOrientation: "from-image" }).then(function (bitmap) {
+    var scale = Math.min(1, UPLOAD_MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+    var canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+
+    var ctx = canvas.getContext("2d");
+    // white first, like the server's own flatten: Go's jpeg encoder composites transparency onto
+    // black, and a png logo would arrive with a black background either way
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+
+    return new Promise(function (resolve) {
+      canvas.toBlob(function (blob) {
+        // a blob that somehow came back bigger than the original is not worth sending
+        resolve(blob && blob.size < file.size ? new File([blob], "photo.jpg", { type:"image/jpeg" }) : file);
+      }, "image/jpeg", UPLOAD_QUALITY);
+    });
+  }).catch(function () {
+    return file; // an image this browser cannot decode: let the server give the real answer
+  });
+}
+
 function photoError(e) {
-  return e.code === "image_too_large" ? "Файл больше 6 МБ"
+  return e.code === "image_too_large" ? "Снимок слишком большой даже после сжатия"
     : e.code === "image_too_small" ? "Снимок слишком маленький"
     : e.code === "invalid_image" ? "Это не jpeg и не png"
     : e.code === "missing_image" ? "Файл не выбран"

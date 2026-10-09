@@ -78,9 +78,21 @@ class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
   static const double _topPadding = 6;
   static const double _bottomPadding = 10;
 
-  /// Where a disc's slot begins: 14 plus the 2 of slack inside its target lands the disc itself on
-  /// the 16px page gutter.
-  static const double _discGutter = CircleIconButton.gutterInset;
+  /// **The discs on a header whose middle is a control match that control, not the title's 40.** A
+  /// 40 disc beside the 48 search field read as a different object dropped next to it; the search
+  /// screen's back button looked like the smaller, lesser half of its own bar. An `action` on such
+  /// a header is the caller's to size, with this.
+  static const double customDisc = _rowHeight;
+
+  /// 40 under a title, the row's own height beside a control - see [customDisc].
+  double get _discDiameter => child == null ? CircleIconButton.disc : customDisc;
+
+  /// Where a disc's slot begins, so the disc itself lands on the 16px page gutter: a disc narrower
+  /// than its tap target is already inset by that slack, and only the rest is padding.
+  double get _discGutter {
+    final slack = (CircleIconButton.target - _discDiameter) / 2;
+    return slack > 0 ? 16 - slack : 16;
+  }
 
   /// Where text begins when there is no disc on that side - the gutter the tab headers have always
   /// started their titles on.
@@ -127,8 +139,8 @@ class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
     return Row(
       children: [
         if (showBack) ...[
-          const SizedBox(width: _discGutter),
-          CircleBackButton(onTap: onBack),
+          SizedBox(width: _discGutter),
+          CircleBackButton(onTap: onBack, diameter: _discDiameter),
           const SizedBox(width: _discGap),
         ] else
           const SizedBox(width: _textGutter),
@@ -137,7 +149,7 @@ class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
         if (action case final trailing?) ...[
           const SizedBox(width: 12),
           _swap(trailing),
-          const SizedBox(width: _discGutter),
+          SizedBox(width: _discGutter),
         ] else
           const SizedBox(width: _textGutter),
       ],

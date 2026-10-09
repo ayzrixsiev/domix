@@ -112,6 +112,86 @@ class ShopMarker extends StatelessWidget {
   }
 }
 
+/// What a shop is drawn as while the map is zoomed out: a plain dot.
+///
+/// **Not "no pin at all", which is what this replaced.** At city zoom the category glyph is too
+/// small to read and seventy price labels overlap into a wall of white pills - but an empty map is
+/// a worse answer than a scatter of dots, because the scatter is the one thing the user came to see:
+/// where the shops are. The glyph and the price arrive on their own as soon as the map is zoomed in.
+///
+/// Every dot draws identically, so the whole city costs MapKit **one** raster - see
+/// [MapPin.visualKey], which is why [visualKey] is a constant here rather than built per shop.
+class ShopDot extends StatelessWidget {
+  const ShopDot({super.key});
+
+  /// The raster cache key for every dot there will ever be.
+  static const String visualKey = 'shop-dot';
+
+  /// The box the dot is centred in, so the pin anchors at its middle (0.5, 0.5) rather than at a
+  /// teardrop's tip.
+  static const double size = 16;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: AppColors.primaryOrange,
+        shape: BoxShape.circle,
+        // the same white rim the teardrop carries: over dark map tiles an unrimmed orange dot
+        // disappears into a park or a motorway
+        border: Border.all(color: Colors.white, width: 2),
+        boxShadow: const [
+          BoxShadow(color: Color(0x33101828), blurRadius: 4, offset: Offset(0, 1)),
+        ],
+      ),
+    );
+  }
+}
+
+/// «Вы здесь» - the one mark on the map that is not a shop, so it is the one mark that is not
+/// orange. Blue because every map app's own-location dot is blue: the convention is what stops it
+/// being read as a seventy-first shop.
+class UserLocationDot extends StatelessWidget {
+  const UserLocationDot({super.key});
+
+  static const String visualKey = 'user-location';
+
+  /// includes the halo; the solid dot inside is [_coreSize]
+  static const double size = 28;
+  static const double _coreSize = 16;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Center(
+        child: Container(
+          width: _coreSize,
+          height: _coreSize,
+          decoration: BoxDecoration(
+            color: AppColors.accentBlue,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 3),
+            // the halo, drawn as a shadow rather than a second box: one widget, and it fades out
+            // the way an accuracy ring does
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.accentBlue.withValues(alpha: 0.22),
+                blurRadius: 0,
+                spreadRadius: 5,
+              ),
+              const BoxShadow(color: Color(0x33101828), blurRadius: 6, offset: Offset(0, 2)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PriceComparisonLabel extends StatelessWidget {
   const _PriceComparisonLabel({required this.tier, required this.differencePercent});
 

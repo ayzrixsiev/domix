@@ -130,7 +130,10 @@ class _MapPinIdentity {
       a.id == b.id &&
       a.latitude == b.latitude &&
       a.longitude == b.longitude &&
-      a.visualKey == b.visualKey;
+      a.visualKey == b.visualKey &&
+      // part of where the pin lands, not of how it looks, so the visual key cannot stand in for it:
+      // a teardrop stands on the point and a dot sits centred over it
+      a.anchor == b.anchor;
 }
 
 /// **MapKit downloads nothing until `mapkit.onStart()` is called, and that is not optional.** The

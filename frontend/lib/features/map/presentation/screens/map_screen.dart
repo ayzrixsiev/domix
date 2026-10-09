@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,11 +7,15 @@ import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
+import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
+import 'package:frontend/features/map/data/user_location_service.dart';
+import 'package:frontend/features/stores/data/shop_category.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 import 'package:frontend/features/stores/presentation/controllers/stores_controller.dart';
 import 'package:frontend/features/stores/presentation/screens/shop_card_screen.dart';
 import '../widgets/domix_map.dart';
+import '../widgets/map_category_bar.dart';
 import '../widgets/map_search_panel.dart';
 import '../widgets/shop_marker.dart';
 
@@ -19,10 +25,20 @@ class MapScreen extends StatefulWidget {
     this.showScaffold = true,
     this.bottomPadding = 36,
     this.isActive = true,
+    this.onExit,
   });
 
   final bool showScaffold;
+
+  /// What the map has to keep clear at its foot. **Zero inside the shell**, which hides the nav bar
+  /// for this tab - the map is the whole screen, and the only thing left to clear is the system
+  /// inset, which this screen adds itself.
   final double bottomPadding;
+
+  /// The way back to the rest of the app, drawn as the disc left of the search field. **Null means
+  /// no disc**: a MapScreen opened on its own route has the system back gesture, and a button that
+  /// popped nothing would be a dead control.
+  final VoidCallback? onExit;
 
   /// Whether this screen is the tab the user is looking at. **The shell's `IndexedStack` builds every
   /// tab and paints one**, so `build()` running says nothing about visibility and `initState` runs
@@ -41,24 +57,50 @@ class _MapScreenState extends State<MapScreen> {
   /// close enough to read street names after jumping to a search result
   static const _focusedZoom = 16.0;
 
-  /// the whole city fits at this zoom, which is why the map opens here - and why it is also where
-  /// drawing every pin stops being useful
+  /// where «Рядом со мной» lands: a few streets around the user, which is what "nearby" means on
+  /// foot or by car. tighter than [_focusedZoom], which is aimed at one address.
+  static const _nearMeZoom = 15.0;
+
+  /// the band at the foot of the map that nothing of ours is drawn in - it belongs to Yandex's logo
+  /// and copyright line, which MapKit paints there and the licence requires be visible
+  static const _logoClearance = 30.0;
+
+  /// the whole city fits at this zoom, which is why the map opens here
   static const _initialZoom = 12.0;
 
-  /// Below this zoom the map draws no shop pins at all. MapKit culls off-screen objects itself; what
-  /// culling cannot help with is being zoomed out over a city, where *every* shop is in the viewport -
-  /// seventy `CustomPaint` pins that overlap into something unreadable anyway.
+  /// Below this zoom a shop is a [ShopDot] and above it a full [ShopMarker]. **Not a cutoff where
+  /// pins disappear**, which is what this used to be: at city scale the category glyph is too small
+  /// to read and seventy price labels overlap into noise, but *where the shops are* is exactly what
+  /// a zoomed-out map is for, so the dots stay and only the detail is withheld.
   ///
-  /// 13 and not 12: at [_initialZoom] the map opens with the pins withheld and a line saying so, and
-  /// one pinch brings them in. Search still reaches any shop from any zoom.
-  static const _minShopZoom = 13.0;
+  /// 13 and not 12: the map opens at [_initialZoom] showing the scatter, and one pinch turns it into
+  /// pins that can be read.
+  static const _minDetailZoom = 13.0;
 
   DomixMapController? _map;
 
   /// A bool rather than the zoom itself, and that is the point of the design: the camera listener
   /// fires on every frame of a pinch, so holding the zoom in state would rebuild the pin list sixty
   /// times a second.
-  bool _shopsVisible = _initialZoom >= _minShopZoom;
+  bool _detailedPins = _initialZoom >= _minDetailZoom;
+
+  /// null is every kind of shop. Lives here rather than in [StoresController] because it is a view
+  /// of one screen's map, not a fact about the shop list - the home screen browses the same shops
+  /// under its own categories.
+  ShopCategory? _category;
+
+  /// The chips start open: they are the feature, and a control nobody sees is a control nobody uses.
+  bool _categoriesOpen = true;
+
+  final _location = UserLocationService();
+
+  /// The last fix, drawn as the blue dot. Kept for the session only - never stored, never sent.
+  ({double latitude, double longitude})? _userLocation;
+  bool _locating = false;
+
+  /// Why the last press of «Рядом со мной» came back empty. Cleared by the next press, so the
+  /// sentence on the banner is always about the button the user just pressed.
+  UserLocationFailure? _locationFailure;
 
   @override
   void initState() {
@@ -98,11 +140,11 @@ class _MapScreenState extends State<MapScreen> {
 
   // fires on every camera frame, so it has to be cheap and must not setState unless the answer
   // changed. programmatic moves come through the same listener, which is what makes flying to a
-  // search result bring the pins in on its own.
+  // search result bring the detail in on its own.
   void _onZoomChanged(double zoom) {
-    final visible = zoom >= _minShopZoom;
-    if (visible != _shopsVisible) {
-      setState(() => _shopsVisible = visible);
+    final detailed = zoom >= _minDetailZoom;
+    if (detailed != _detailedPins) {
+      setState(() => _detailedPins = detailed);
     }
   }
 
@@ -113,33 +155,86 @@ class _MapScreenState extends State<MapScreen> {
     showShopCardSheet(context, shop);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final strings = Provider.of<LanguageProvider>(context).strings;
-    final controller = Provider.of<StoresController>(context);
+  /// One press of «Рядом со мной»: ask the phone once, move the camera, drop the blue dot.
+  ///
+  /// The fix is **not** cached between presses. A coordinate held from ten minutes ago would move
+  /// the camera to where the user was, which is worse than the second of waiting - and asking again
+  /// is what makes the button mean "now".
+  Future<void> _goToUserLocation() async {
+    if (_locating) return;
 
-    Widget? statusBanner;
+    setState(() {
+      _locating = true;
+      _locationFailure = null;
+    });
+
+    try {
+      final point = await _location.current();
+      if (!mounted) return;
+      setState(() => _userLocation = point);
+      _flyTo(point.latitude, point.longitude, zoom: _nearMeZoom);
+    } on UserLocationException catch (e) {
+      if (!mounted) return;
+      setState(() => _locationFailure = e.failure);
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  String _locationFailureMessage(UserLocationFailure failure, AppLocalizations strings) =>
+      switch (failure) {
+        UserLocationFailure.servicesOff => strings.locationServicesOff,
+        UserLocationFailure.denied => strings.locationDenied,
+        UserLocationFailure.deniedForever => strings.locationDeniedForever,
+        UserLocationFailure.unavailable => strings.locationUnavailable,
+      };
+
+  /// The one line over the map, or nothing. **Order is the message**: the location failure answers
+  /// the button the user just pressed, so it outranks everything about the shop list, and "no shops
+  /// in this category" only makes sense once there are shops to have filtered.
+  Widget? _statusBanner(StoresController controller, List<Shop> visible, AppLocalizations strings) {
+    if (_locationFailure case final failure?) {
+      // the two failures a settings page can undo carry the button; the other two are just facts
+      final actionable = failure != UserLocationFailure.unavailable;
+      return _MapMessageBanner(
+        message: _locationFailureMessage(failure, strings),
+        isError: true,
+        actionLabel: actionable ? strings.openSettingsButton : null,
+        onAction: actionable ? () => _location.openSettingsFor(failure) : null,
+      );
+    }
     if (controller.isLoading && controller.stores.isEmpty) {
-      statusBanner = _MapMessageBanner(message: strings.loadingShops, isBusy: true);
-    } else if (controller.loadFailed && controller.stores.isEmpty) {
+      return _MapMessageBanner(message: strings.loadingShops, isBusy: true);
+    }
+    if (controller.loadFailed && controller.stores.isEmpty) {
       // the retry is the whole point of this branch: the automatic re-sync only fires on a tab switch,
       // which is not something anyone should have to guess at
-      statusBanner = _MapMessageBanner(
+      return _MapMessageBanner(
         message: strings.mapLoadError,
         isError: true,
         actionLabel: strings.retryButtonShort,
         onAction: () => controller.loadStores(),
       );
-    } else if (controller.stores.isEmpty) {
-      statusBanner = _MapMessageBanner(message: strings.noShopsYet);
-    } else if (!_shopsVisible) {
-      // last, and only once there are shops: a map empty because it is zoomed out is a different fact
-      // from one empty because the city has no shops, and saying the wrong one is worse than nothing
-      statusBanner = _MapMessageBanner(
-        message: strings.zoomInForShops(controller.stores.length),
-        icon: LucideIcons.zoom_in,
-      );
     }
+    if (controller.stores.isEmpty) {
+      return _MapMessageBanner(message: strings.noShopsYet);
+    }
+    if (visible.isEmpty) {
+      return _MapMessageBanner(message: strings.noShopsInCategory);
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = Provider.of<LanguageProvider>(context).strings;
+    final controller = Provider.of<StoresController>(context);
+
+    final shops = _category == null
+        ? controller.stores
+        : controller.stores.where((shop) => shop.category == _category).toList();
+
+    final statusBanner = _statusBanner(controller, shops, strings);
 
     final body = Stack(
       children: [
@@ -155,8 +250,8 @@ class _MapScreenState extends State<MapScreen> {
           // tapping the map itself drops the keyboard and closes the search dropdown
           onMapTap: () => FocusScope.of(context).unfocus(),
           pins: [
-            if (_shopsVisible)
-              for (final shop in controller.stores)
+            for (final shop in shops)
+              if (_detailedPins)
                 MapPin(
                   id: shop.id.toString(),
                   latitude: shop.latitude,
@@ -177,7 +272,33 @@ class _MapScreenState extends State<MapScreen> {
                     priceTier: shop.priceTier,
                     priceDifferencePercent: shop.priceDifferencePercent,
                   ),
+                )
+              else
+                MapPin(
+                  // the same id as the detailed pin above, so switching between the two reads as one
+                  // pin changing rather than every shop leaving and a new one arriving
+                  id: shop.id.toString(),
+                  latitude: shop.latitude,
+                  longitude: shop.longitude,
+                  visualKey: ShopDot.visualKey,
+                  // centred on the point: a dot has no tip to stand on
+                  anchor: const math.Point(0.5, 0.5),
+                  // **a dot zooms in, it does not open the card.** at city scale a fingertip covers
+                  // several dots, so opening a shop would be a coin toss the user has to undo; flying
+                  // in resolves which dot was meant and costs nothing if it was the wrong one.
+                  onTap: () => _flyTo(shop.latitude, shop.longitude, zoom: _nearMeZoom),
+                  builder: () => const ShopDot(),
                 ),
+            // last, so it draws over the shops: where the user is standing is never the thing to hide
+            if (_userLocation case final point?)
+              MapPin(
+                id: 'user-location',
+                latitude: point.latitude,
+                longitude: point.longitude,
+                visualKey: UserLocationDot.visualKey,
+                anchor: const math.Point(0.5, 0.5),
+                builder: () => const UserLocationDot(),
+              ),
           ],
         ),
 
@@ -188,17 +309,33 @@ class _MapScreenState extends State<MapScreen> {
           right: 0,
           child: SafeArea(
             bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  MapSearchPanel(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                  child: MapSearchPanel(
                     shops: controller.stores,
                     // only when there is nothing at all to search: a list that loaded before a failed
                     // refresh is still worth searching
                     shopsFailed: controller.loadFailed && controller.stores.isEmpty,
                     strings: strings,
+                    leading: switch (widget.onExit) {
+                      final VoidCallback exit => MapBarButton(
+                          icon: LucideIcons.chevron_left,
+                          tooltip: strings.exitMap,
+                          onTap: exit,
+                        ),
+                      _ => null,
+                    },
+                    action: MapBarButton(
+                      // up folds the strip away, down brings it back: the arrow points where the
+                      // strip is going, not at what it is hiding
+                      icon: LucideIcons.chevron_up,
+                      turns: _categoriesOpen ? 0 : 0.5,
+                      tooltip: _categoriesOpen ? strings.hideCategories : strings.showCategories,
+                      onTap: () => setState(() => _categoriesOpen = !_categoriesOpen),
+                    ),
                     onShopSelected: (shop) {
                       // the camera moves first, so popping the card lands back on a map already centred on the shop
                       _flyTo(shop.latitude, shop.longitude);
@@ -206,13 +343,47 @@ class _MapScreenState extends State<MapScreen> {
                     },
                     onPlaceSelected: (place) => _flyTo(place.latitude, place.longitude),
                   ),
-                  if (statusBanner != null) ...[
-                    const SizedBox(height: 10),
-                    statusBanner,
-                  ],
-                ],
-              ),
+                ),
+                AnimatedSize(
+                  duration: AppMotion.base,
+                  curve: AppMotion.easing,
+                  alignment: Alignment.topCenter,
+                  child: _categoriesOpen
+                      ? Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                          child: MapCategoryBar(
+                            selected: _category,
+                            strings: strings,
+                            onSelected: (category) => setState(() => _category = category),
+                          ),
+                        )
+                      : const SizedBox(width: double.infinity),
+                ),
+                if (statusBanner != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                    child: statusBanner,
+                  ),
+              ],
             ),
+          ),
+        ),
+
+        // **viewPaddingOf, not paddingOf**: the second collapses to zero while the keyboard is up,
+        // which would drop the button onto the gesture bar every time the search field is tapped.
+        // Drawn whatever MapConfig says - on a desktop preview there is no map to centre, but the
+        // button is still part of the layout being reviewed, and pressing it just says it could not
+        // find a position.
+        //
+        // Right-hand side and clear of the foot: MapKit draws Yandex's logo along the bottom as a
+        // condition of the licence, and [_logoClearance] is the strip left for it.
+        Positioned(
+          right: 16,
+          bottom: widget.bottomPadding + MediaQuery.viewPaddingOf(context).bottom + _logoClearance,
+          child: _NearMeButton(
+            label: strings.nearMe,
+            isBusy: _locating,
+            onTap: _goToUserLocation,
           ),
         ),
       ],
@@ -234,15 +405,76 @@ class _MapScreenState extends State<MapScreen> {
 }
 
 // the hand-rolled `_MapAttribution` pill here is **deleted**: MapKit draws Yandex's logo and
-// copyright itself as a condition of the licence. if a future provider needs credit, it belongs
-// above the nav bar at `bottomPadding + 10`.
+// copyright itself as a condition of the licence. the shell hides its nav bar for this tab, so that
+// logo is now in clear air - keep the foot of the map that way.
+
+/// «Рядом со мной» - the one control on the map that asks the phone a question. A pill rather than a
+/// disc because it carries a verb: a bare arrow glyph over a map is read as a compass.
+class _NearMeButton extends StatelessWidget {
+  const _NearMeButton({required this.label, required this.isBusy, required this.onTap});
+
+  final String label;
+
+  /// the fix can take a second or two indoors, and a button that does nothing for two seconds is a
+  /// button the user presses again
+  final bool isBusy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        // still tappable while busy - the screen drops the second press, so this stays one control
+        onTap: onTap,
+        child: Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: AppColors.hairline),
+            boxShadow: AppShadows.floating,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isBusy)
+                const SizedBox(
+                  width: 17,
+                  height: 17,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryOrange),
+                )
+              else
+                // **not orange.** the glyph is a direction, not an action's accent, and the strip
+                // above already spends the brand colour on the picked category.
+                const Icon(LucideIcons.navigation, size: 17, color: AppColors.textDark),
+              const SizedBox(width: 9),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.textDark,
+                  fontSize: 14.5,
+                  height: 1.2,
+                  letterSpacing: -0.1,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _MapMessageBanner extends StatelessWidget {
   const _MapMessageBanner({
     required this.message,
     this.isBusy = false,
     this.isError = false,
-    this.icon,
     this.actionLabel,
     this.onAction,
   });
@@ -251,14 +483,10 @@ class _MapMessageBanner extends StatelessWidget {
   final bool isBusy;
   final bool isError;
 
-  /// «Повторить» on the error banner, and nothing on the other three, which report a state the user
-  /// cannot act on.
+  /// «Повторить» on the error banner, «Настройки» on the two location refusals a system page can
+  /// undo, and nothing on the rest, which report a state the user cannot act on.
   final String? actionLabel;
   final VoidCallback? onAction;
-
-  /// Overrides the glyph the two flags would otherwise pick: the zoom hint is neither an error nor
-  /// "there is nothing here", and a struck-through pin would say the opposite of the line beside it.
-  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -287,10 +515,9 @@ class _MapMessageBanner extends StatelessWidget {
                 )
               else
                 Icon(
-                  icon ??
-                      (isError
-                          ? CupertinoIcons.exclamationmark_circle_fill
-                          : CupertinoIcons.map_pin_slash),
+                  isError
+                      ? CupertinoIcons.exclamationmark_circle_fill
+                      : CupertinoIcons.map_pin_slash,
                   color: isError ? AppColors.danger : AppColors.textFaint,
                   size: 15,
                 ),

@@ -16,7 +16,9 @@ class HomeShopPreview {
         priceTier = source.priceTier,
         priceDifferencePercent = source.priceDifferencePercent,
         basketPrice = source.basketPrice,
-        isVip = source.isVip;
+        isVip = source.isVip,
+        productCount = source.productCount,
+        imageThumbUrl = source.imageThumbUrl;
 
   final String name;
   final String address;
@@ -31,6 +33,13 @@ class HomeShopPreview {
   final int? basketPrice;
 
   final bool isVip;
+
+  /// how many products this shop prices, as the VIP card's «Товаров» cell shows it. 0 on any read
+  /// that does not count them, which is every read but the carousel's.
+  final int productCount;
+
+  /// the storefront a VIP card draws, or null for a placement with no photograph yet
+  final String? imageThumbUrl;
 
   /// the backend row this preview came from - the phone, category and id a shop card needs, all of
   /// which `GET /api/home` already sends

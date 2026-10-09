@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:frontend/core/constants/app_colors.dart';
-import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/home/data/category_product.dart';
 import 'package:frontend/features/home/presentation/widgets/product_results_view.dart';
 import 'package:frontend/features/home/presentation/screens/product_search_screen.dart';
 import 'package:frontend/core/widgets/app_page_header.dart';
 import 'package:frontend/core/widgets/circle_icon_button.dart';
+import 'package:frontend/core/widgets/pill_search_field.dart';
 
 /// A titled page of products from across every shop - what a category tile opens: an app bar and
 /// [ProductResultsView], and that split is the whole of it.
@@ -157,15 +157,22 @@ class _ProductResultsScreenState extends State<ProductResultsScreen> {
                 key: const ValueKey('close-search'),
                 icon: Icons.close_rounded,
                 tooltip: strings.cancelButton,
+                // the field beside it is the row's full height, and so is this
+                diameter: AppPageHeader.customDisc,
                 onTap: _closeSearch,
               ),
-              child: _FilterField(
+              // **a filter, but the app's one search field** - this used to be its own rounded
+              // rectangle with a ring, which is a third kind of field on the gesture that opens the
+              // same screen one level up. onSubmitted null leaves it a pure filter.
+              child: PillSearchField(
                 controller: _filter,
                 focusNode: _filterFocus,
                 hint: strings.categoryFilterHint,
                 onChanged: (value) => setState(() => _typed = value),
                 onSubmitted: widget.onSearch == null ? null : _search,
+                // clears the text *and* drops back out of a catalogue-wide search into the category
                 onClear: _clearSearch,
+                clearTooltip: strings.searchClear,
               ),
             )
           : AppPageHeader(
@@ -217,106 +224,6 @@ class _ProductResultsScreenState extends State<ProductResultsScreen> {
             if (mounted) setState(() => _count = count);
           },
         ),
-      ),
-    );
-  }
-}
-
-/// The filter over a category's products.
-///
-/// **A live field, unlike the home screen's search bar**, which is a button that opens a screen. The
-/// difference is what each one costs: that one runs a query against the api's most expensive read,
-/// so it waits for the search key; this one walks a list already in memory, so waiting for anything
-/// would only make it feel slow.
-class _FilterField extends StatelessWidget {
-  const _FilterField({
-    required this.controller,
-    required this.focusNode,
-    required this.hint,
-    required this.onChanged,
-    required this.onSubmitted,
-    required this.onClear,
-  });
-
-  final TextEditingController controller;
-
-  /// Held by the screen, which focuses it the frame after the magnifier opens this.
-  final FocusNode focusNode;
-
-  final String hint;
-  final ValueChanged<String> onChanged;
-
-  /// null when this screen has no catalogue-wide search to offer, which leaves the field a pure filter
-  final ValueChanged<String>? onSubmitted;
-
-  final VoidCallback onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    // the home feed's search bar exactly - same height, radius, white fill and ring - since this is
-    // the same gesture arriving one screen deeper
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceWhite,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: AppColors.trackGrey),
-        boxShadow: AppShadows.card,
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 18),
-          const SizedBox(width: 9),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              onChanged: onChanged,
-              // focus is given by the screen rather than by `autofocus`, because this field is not in
-              // the tree until the magnifier puts it there - and when it is, it was asked for
-              textCapitalization: TextCapitalization.sentences,
-              // gives the keyboard a "search" key rather than a newline - without it there is no way
-              // to ask for the wider search at all
-              textInputAction: TextInputAction.search,
-              onSubmitted: onSubmitted,
-              cursorColor: AppColors.primaryOrange,
-              style: const TextStyle(
-                color: AppColors.textDark,
-                fontSize: 14,
-                fontWeight: FontWeight.w400,
-              ),
-              decoration: InputDecoration(
-                // strips the ~48px a TextField reserves for a material label, which this row cannot fit
-                isCollapsed: true,
-                border: InputBorder.none,
-                hintText: hint,
-                hintStyle: const TextStyle(
-                  color: AppColors.textGrey,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ),
-          ),
-          // rebuilds only this button as the text changes, rather than the field beside it
-          ValueListenableBuilder<TextEditingValue>(
-            valueListenable: controller,
-            builder: (context, value, _) {
-              if (value.text.isEmpty) return const SizedBox.shrink();
-              return GestureDetector(
-                key: const ValueKey('clear-filter'),
-                behavior: HitTestBehavior.opaque,
-                // clears the text *and* drops back out of a catalogue-wide search into the category
-                onTap: onClear,
-                child: const Padding(
-                  padding: EdgeInsets.only(left: 8),
-                  child: Icon(Icons.close_rounded, color: AppColors.textMuted, size: 17),
-                ),
-              );
-            },
-          ),
-        ],
       ),
     );
   }

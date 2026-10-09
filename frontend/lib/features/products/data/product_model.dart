@@ -109,12 +109,12 @@ class Product {
       nameEditable: json['name_editable'] as bool? ?? !(json['is_template'] as bool? ?? false),
       // true on a backend from before the rule existed, which is what that backend did
       photoEditable: json['photo_editable'] as bool? ?? true,
-      imageUrl: _absoluteImageUrl(json['image_url'] as String?),
+      imageUrl: ApiConfig.absoluteImageUrl(json['image_url'] as String?),
       // an older backend sends no image_thumb_url; falling back to the full-size photo is what this app
       // did before thumbnails existed
       thumbUrl:
-          _absoluteImageUrl(json['image_thumb_url'] as String?) ??
-          _absoluteImageUrl(json['image_url'] as String?),
+          ApiConfig.absoluteImageUrl(json['image_thumb_url'] as String?) ??
+          ApiConfig.absoluteImageUrl(json['image_url'] as String?),
       // false on a backend from before uploads existed, which is right there: every photo it can send is
       // a catalogue one
       ownImage: json['own_image'] as bool? ?? false,
@@ -128,12 +128,6 @@ class Product {
   /// The server sends a root-relative path while the API serves photos itself; the widget needs a full
   /// url. The absolute branch is what arrives once IMAGE_BASE_URL points at its own host, and is why
   /// the app needed no change when it did.
-  static String? _absoluteImageUrl(String? path) {
-    if (path == null || path.isEmpty) return null;
-    if (path.startsWith('http://') || path.startsWith('https://')) return path;
-    return '${ApiConfig.serverRoot}$path';
-  }
-
   Map<String, dynamic> toRequestJson() => {
     'name': name,
     'category': category,

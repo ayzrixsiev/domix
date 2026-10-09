@@ -12,7 +12,7 @@ import '../../data/product_model.dart';
 import '../../data/product_section.dart';
 import '../controllers/products_controller.dart';
 import '../widgets/product_grid.dart';
-import '../widgets/product_section_bar.dart';
+import '../widgets/catalogue_search_bar.dart';
 import '../widgets/product_tile.dart';
 import 'product_edit_screen.dart';
 import 'package:frontend/core/widgets/app_page_header.dart';

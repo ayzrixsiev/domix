@@ -1,14 +1,15 @@
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import '../../data/geocoding_service.dart';
 import '../widgets/domix_map.dart';
 import '../widgets/shop_marker.dart';
-import 'package:frontend/core/widgets/circle_icon_button.dart';
-import 'package:frontend/core/widgets/floating_search_field.dart';
+import 'package:frontend/core/widgets/pill_search_field.dart';
+import '../widgets/map_search_panel.dart';
 
 // what the caller gets back once the user confirms a location
 class LocationPickResult {
@@ -172,19 +173,24 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
           // back button + search bar
           SafeArea(
             child: Padding(
-              // 14 on the left, not 16: the disc sits 2px inside its own tap target, so this lands
-              // its edge on the same page gutter the search field's starts on
-              padding: const EdgeInsets.fromLTRB(CircleIconButton.gutterInset, 12, 16, 0),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: Column(
                 children: [
                   Row(
                     children: [
-                      // floating: this one sits on the map itself, the busiest ground in the app
-                      const CircleBackButton(floating: true),
+                      // **MapBarButton, not the page's round control**: three things form one bar
+                      // over the map here, and a 40 disc beside the 50 floating field is the odd
+                      // one out - the same reason the full-screen map's exit is this button
+                      MapBarButton(
+                        icon: LucideIcons.chevron_left,
+                        tooltip: strings.stepBackButton,
+                        onTap: () => Navigator.of(context).maybePop(),
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: FloatingSearchField(
+                        child: PillSearchField(
                           controller: _searchController,
+                          floating: true,
                           hint: strings.searchLocationHint,
                           onSubmitted: _performSearch,
                           trailing: _isSearching

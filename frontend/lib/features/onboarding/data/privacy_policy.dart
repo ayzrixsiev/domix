@@ -25,13 +25,13 @@ String privacyPolicyLead(AppLanguage language) => language == AppLanguage.ru ? _
 
 const String _leadRu =
     "Здесь мы объясняем, какие данные получает Domix, зачем они нужны и как их удалить. Если коротко:"
-    " для входа нужен только номер телефона, приложение не определяет, где вы находитесь, в нём нет "
+    " для входа нужен только номер телефона, ваше местоположение остаётся на телефоне, в нём нет "
     "сторонней рекламы, а данные мы не продаём.";
 
 const String _leadUz =
     "Bu yerda Domix qanday ma’lumotlarni olishi, ular nima uchun kerakligi va ularni qanday o‘chirish"
-    " mumkinligini tushuntiramiz. Qisqasi: kirish uchun faqat telefon raqami kerak, ilova "
-    "qayerdaligingizni aniqlamaydi, unda begona reklama yo‘q, ma’lumotlarni esa sotmaymiz.";
+    " mumkinligini tushuntiramiz. Qisqasi: kirish uchun faqat telefon raqami kerak, joylashuvingiz"
+    " telefoningizda qoladi, unda begona reklama yo‘q, ma’lumotlarni esa sotmaymiz.";
 
 const List<PolicySection> _russian = [
   PolicySection(
@@ -62,17 +62,19 @@ const List<PolicySection> _russian = [
   PolicySection(
     title: "3. Чего мы не собираем",
     body: [
-      "• Ваше местоположение. Приложение не запрашивает доступ к геолокации и не знает, где вы "
-          "находитесь. Город и адрес магазина вы выбираете на карте сами.",
+      "• Ваше местоположение. Мы его не получаем и не храним. Кнопка «Рядом со мной» на карте "
+          "спрашивает у телефона, где вы, только в момент нажатия: координата нужна, чтобы сдвинуть "
+          "карту к вам, и дальше вашего устройства она не уходит. Город и адрес магазина вы "
+          "выбираете на карте сами.",
       "• Место съёмки фотографий. Камера телефона записывает в снимок координаты. Когда вы "
           "загружаете фото товара, мы пересохраняем его, и эти сведения удаляются.",
       "• Контакты, сообщения, файлы и рекламный идентификатор устройства.",
       "• Ничего для рекламы и аналитики: в Domix нет систем аналитики, трекеров и рекламных "
           "библиотек.",
       "• Пароли. В Domix их нет: вход только по одноразовому коду.",
-      "В карточке приложения в Google Play может быть указано разрешение на геолокацию. Его "
-          "объявляет встроенная карта Яндекса. Domix это разрешение не запрашивает, а без вашего "
-          "согласия Android его не выдаёт.",
+      "Разрешение на геолокацию в карточке приложения в Google Play — от этой кнопки. Android "
+          "спрашивает его в момент первого нажатия, отказаться можно, и всё остальное в приложении "
+          "продолжит работать как прежде. Доступ к местоположению в фоне мы не запрашиваем.",
     ],
   ),
   PolicySection(
@@ -200,17 +202,19 @@ const List<PolicySection> _uzbek = [
   PolicySection(
     title: "3. Nimalarni to‘plamaymiz",
     body: [
-      "• Joylashuvingiz. Ilova geolokatsiyaga ruxsat so‘ramaydi va qayerdaligingizni bilmaydi. "
-          "Shahar va do‘kon manzilini xaritada o‘zingiz tanlaysiz.",
+      "• Joylashuvingiz. Biz uni olmaymiz va saqlamaymiz. Xaritadagi «Yaqinimda» tugmasi telefondan"
+          " qayerdaligingizni faqat siz bosgan paytda so‘raydi: koordinata xaritani sizga tomon "
+          "surish uchun kerak va qurilmangizdan tashqariga chiqmaydi. Shahar va do‘kon manzilini "
+          "xaritada o‘zingiz tanlaysiz.",
       "• Suratga olingan joy. Telefon kamerasi suratga koordinatalarni yozib qo‘yadi. Mahsulot "
           "suratini yuklaganingizda biz uni qayta saqlaymiz va bu ma’lumotlar o‘chib ketadi.",
       "• Kontaktlar, xabarlar, fayllar va qurilmaning reklama identifikatori.",
       "• Reklama va tahlil uchun hech narsa: Domix’da tahlil tizimlari, kuzatuvchilar va reklama "
           "kutubxonalari yo‘q.",
       "• Parollar. Domix’da ular yo‘q: kirish faqat bir martalik kod orqali.",
-      "Google Play’dagi ilova sahifasida geolokatsiyaga ruxsat ko‘rsatilgan bo‘lishi mumkin. Uni "
-          "ilovaga o‘rnatilgan Yandex xaritasi e’lon qiladi. Domix bu ruxsatni so‘ramaydi, "
-          "roziligingizsiz esa Android uni bermaydi.",
+      "Google Play’dagi ilova sahifasidagi geolokatsiya ruxsati — ana shu tugma uchun. Android uni"
+          " birinchi marta bosganingizda so‘raydi, rad etishingiz mumkin, qolgan hamma narsa "
+          "avvalgidek ishlaydi. Fon rejimida joylashuvga ruxsat so‘ramaymiz.",
     ],
   ),
   PolicySection(

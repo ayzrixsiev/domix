@@ -191,6 +191,7 @@ func main() {
 	http.HandleFunc("/api/admin/shops", adminRoute(adminEndpoints.ListShops))
 	http.HandleFunc("/api/admin/shops/{id}", adminRoute(adminEndpoints.RouteShop))
 	http.HandleFunc("/api/admin/shops/{id}/vip", adminRoute(adminEndpoints.SetVIP))
+	http.HandleFunc("/api/admin/shops/{id}/photo", adminRoute(adminEndpoints.RouteShopPhoto))
 	http.HandleFunc("/api/admin/shops/{id}/exclude", adminRoute(adminEndpoints.SetExcluded))
 	http.HandleFunc("/api/admin/shops/{id}/products", adminRoute(adminEndpoints.ListShopProducts))
 	http.HandleFunc("/api/admin/products/{id}", adminRoute(adminEndpoints.UpdateProduct))

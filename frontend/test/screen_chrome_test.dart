@@ -19,6 +19,7 @@ import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/widgets/app_page_header.dart';
 import 'package:frontend/core/widgets/circle_icon_button.dart';
+import 'package:frontend/core/widgets/pill_search_field.dart';
 import 'package:frontend/features/products/data/product_model.dart';
 import 'package:frontend/features/products/presentation/widgets/product_tile.dart';
 import 'package:frontend/core/localization/language_provider.dart';
@@ -27,6 +28,12 @@ import 'package:frontend/features/home/presentation/screens/product_results_scre
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/features/favorites/presentation/controllers/favorites_controller.dart';
+import 'package:frontend/core/widgets/pressable_scale.dart';
+import 'package:frontend/features/home/data/home_content.dart';
+import 'package:frontend/features/home/presentation/widgets/vip_shops_carousel.dart';
+import 'package:frontend/features/stores/data/price_tier.dart';
+import 'package:frontend/features/stores/data/shop_category.dart';
+import 'package:frontend/features/stores/data/shop_model.dart';
 
 /// The narrowest tile the two-per-row grid ever builds: a 360dp phone, the grid's 16dp gutters and
 /// its 12dp column gap.
@@ -122,6 +129,36 @@ void main() {
             (e) => tester.getSize(find.byWidget(e.widget)),
           );
       expect(sizes.toSet().length, 1);
+    });
+
+    testWidgets('and a header carrying a search field sizes its discs to the field', (tester) async {
+      final controller = TextEditingController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          backgroundColor: AppColors.background,
+          appBar: AppPageHeader.custom(
+            action: CircleIconButton(
+              icon: Icons.close_rounded,
+              diameter: AppPageHeader.customDisc,
+              onTap: () {},
+            ),
+            child: PillSearchField(controller: controller, hint: 'Поиск'),
+          ),
+        ),
+      ));
+
+      final field = tester.getSize(find.byType(PillSearchField));
+      for (final disc in find.byType(CircleIconButton).evaluate()) {
+        expect(
+          tester.getSize(find.byWidget(disc.widget)).height,
+          field.height,
+          // a disc 8px shorter than the capsule beside it reads as the lesser half of the bar,
+          // which is what the search screen's back button looked like
+          reason: 'a disc beside a search field is that field\'s height',
+        );
+      }
     });
   });
 
@@ -445,6 +482,81 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text(_strings.categoryFilterNoResultsHint), findsOneWidget);
+    });
+  });
+
+  // ─────────────────────── the VIP card, at its worst ───────────────────────
+  //
+  // The same shape as the product tile above and the same failure mode: a fixed-height card whose
+  // column has to hold a name, two lines of address, the comparison and two figures at the
+  // narrowest width the app supports — and a third of its width is the photograph, so the words
+  // have two thirds of a 320dp phone to fit in. Overflow is loud here and a yellow stripe on a
+  // phone, so raising [VipShopsCarousel.cardHeight] is what adding a line to that card costs.
+  group('the VIP card at 320dp', () {
+    Future<void> pumpCard(WidgetTester tester, HomeShopPreview? slot) async {
+      tester.view.physicalSize = const Size(320 * 3, 800 * 3);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider(
+          create: (_) => LanguageProvider(),
+          child: MaterialApp(
+            home: Scaffold(
+              body: Center(child: VipShopsCarousel(slots: [slot])),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    HomeShopPreview sold() => HomeShopPreview.fromShop(
+          const Shop(
+            id: 1,
+            // the longest real shop name and the longest real address shape: a street, a number,
+            // a district and the city, which is exactly two lines
+            name: 'Строительные материалы Бунёдкор',
+            contactPhone: '+998901112233',
+            address: 'Чорсу майдони, 42, Алмазар тумани, Тошкент шаҳри',
+            category: ShopCategory.universal,
+            latitude: 41.3,
+            longitude: 69.2,
+            priceTier: PriceTier.dearer,
+            priceDifferencePercent: 17,
+            basketPrice: 5600000,
+            isVip: true,
+            productCount: 1284,
+          ),
+        );
+
+    testWidgets('a sold placement fits, down to the last line', (tester) async {
+      await pumpCard(tester, sold());
+
+      // the card is exactly as tall as it says it is: a Column inside one fails by overflowing,
+      // which is silent in release
+      final card = tester.getSize(find.byType(PressableScale).first);
+      expect(card.height, VipShopsCarousel.cardHeight);
+
+      expect(find.text('Строительные материалы Бунёдкор'), findsOneWidget);
+      expect(find.text('1284'), findsOneWidget);
+      expect(find.text(_strings.cardProductsCaption), findsOneWidget);
+      // **there is no rating to show and none is invented**: no reviews table exists, so a real
+      // shop draws a dash and only an unsold slot carries a number
+      expect(find.text(_strings.noFigure), findsOneWidget);
+      expect(find.text(_strings.priceTierDearer(17)), findsOneWidget);
+    });
+
+    testWidgets('an unsold slot fits too, and names its fields', (tester) async {
+      await pumpCard(tester, null);
+
+      expect(tester.getSize(find.byType(PressableScale).first).height, VipShopsCarousel.cardHeight);
+      expect(find.text(_strings.slotShopNameLabel), findsOneWidget);
+      expect(find.text(_strings.slotAddressLabel), findsOneWidget);
+      expect(find.text(_strings.slotComparisonLabel), findsOneWidget);
+      // the one figure on the slot that is a value rather than a field name - it is part of what
+      // the placement is being sold as
+      expect(find.text(kSlotRating), findsOneWidget);
     });
   });
 }

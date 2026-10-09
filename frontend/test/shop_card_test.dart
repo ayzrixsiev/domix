@@ -10,6 +10,7 @@
 // unsold VIP slot must stay inert rather than opening a card about a business that does not exist.
 
 import 'package:flutter/material.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/features/favorites/presentation/controllers/favorites_controller.dart';
@@ -293,33 +294,23 @@ void main() {
     expect(find.textContaining('180 мм · 1ADP · EPA'), findsNothing);
   });
 
+  // over the search threshold, so the row the disc lives on is drawn - under it a catalogue is
+  // already entirely on screen and has nothing to filter
   List<Product> sectioned() => [
+        for (var i = 0; i < 7; i++)
+          _product(
+            id: 20 + i,
+            name: 'Саморез $i',
+            price: 1000 + i,
+            section: ProductSection.fastenersMounting,
+          ),
         _product(id: 10, name: 'Розетка двойная', price: 25000, section: ProductSection.electricalLighting),
         _product(id: 11, name: 'Дюбель', price: 300, section: ProductSection.fastenersMounting),
       ];
 
-  testWidgets('a section chip narrows the grid to that section', (tester) async {
-    await _pumpHome(
-      tester,
-      content: _content(vip: [_shop(id: 1, name: 'Стройбаза', isVip: true)]),
-      products: sectioned(),
-    );
-
-    await tester.tap(find.text('Стройбаза').hitTestable().first);
-    await tester.pumpAndSettle();
-    await _scrollToCatalogue(tester);
-    expect(find.byType(ProductTile), findsNWidgets(2));
-
-    final strings = AppLocalizations(AppLanguage.ru);
-    await tester.tap(find.text(strings.sectionElectricalLighting));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Розетка двойная'), findsOneWidget);
-    expect(find.text('Дюбель'), findsNothing);
-  });
-
-  // the button is the other way to the same choice: the full names, a count each
-  testWidgets('«Категории» opens the full names and a pick narrows the grid', (tester) async {
+  // the chips are gone: the disc beside the field is the one way to the sections, and the sheet is
+  // where the full names and the counts are
+  testWidgets('the sections disc opens the sheet and a pick narrows the grid', (tester) async {
     await _pumpHome(
       tester,
       content: _content(vip: [_shop(id: 1, name: 'Стройбаза', isVip: true)]),
@@ -331,10 +322,10 @@ void main() {
     await _scrollToCatalogue(tester);
 
     final strings = AppLocalizations(AppLanguage.ru);
-    await tester.tap(find.text(strings.sectionsButton));
+    await tester.tap(find.byIcon(LucideIcons.sliders_horizontal));
     await tester.pumpAndSettle();
 
-    // the sheet carries the whole name, which a chip does not
+    // the sheet carries the whole name, which a chip did not
     expect(find.text(strings.sectionFullElectricalLighting), findsOneWidget);
 
     await tester.tap(find.text(strings.sectionFullElectricalLighting));
@@ -342,6 +333,57 @@ void main() {
 
     expect(find.text('Розетка двойная'), findsOneWidget);
     expect(find.text('Дюбель'), findsNothing);
+  });
+
+  // the sections do not ride on the search field's threshold: a catalogue too short to be worth
+  // searching can still be split, and then the sections are a button of their own
+  testWidgets('a short catalogue keeps its sections without a search field', (tester) async {
+    await _pumpHome(
+      tester,
+      content: _content(vip: [_shop(id: 1, name: 'Стройбаза', isVip: true)]),
+      products: [
+        _product(id: 10, name: 'Розетка двойная', price: 25000, section: ProductSection.electricalLighting),
+        _product(id: 11, name: 'Дюбель', price: 300, section: ProductSection.fastenersMounting),
+      ],
+    );
+
+    await tester.tap(find.text('Стройбаза').hitTestable().first);
+    await tester.pumpAndSettle();
+    await _scrollToCatalogue(tester);
+
+    final strings = AppLocalizations(AppLanguage.ru);
+    expect(find.byType(TextField), findsNothing);
+
+    await tester.tap(find.text(strings.sectionsButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(strings.sectionFullElectricalLighting));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Розетка двойная'), findsOneWidget);
+    expect(find.text('Дюбель'), findsNothing);
+  });
+
+  // one section is nothing to choose between, so the field takes the whole line
+  testWidgets('a single-section catalogue gets no sections disc', (tester) async {
+    await _pumpHome(
+      tester,
+      content: _content(vip: [_shop(id: 1, name: 'Стройбаза', isVip: true)]),
+      products: [
+        for (var i = 0; i < 9; i++)
+          _product(
+            id: 20 + i,
+            name: 'Саморез $i',
+            price: 1000 + i,
+            section: ProductSection.fastenersMounting,
+          ),
+      ],
+    );
+
+    await tester.tap(find.text('Стройбаза').hitTestable().first);
+    await tester.pumpAndSettle();
+    await _scrollToCatalogue(tester);
+
+    expect(find.byIcon(LucideIcons.sliders_horizontal), findsNothing);
   });
 
   // **the magnifier is part of the control, and it used not to be.** a TextField only takes focus
@@ -365,7 +407,7 @@ void main() {
     final field = tester.widget<TextField>(find.byType(TextField));
     expect(field.focusNode!.hasFocus, isFalse);
 
-    await tester.tap(find.byIcon(Icons.search_rounded));
+    await tester.tap(find.byIcon(LucideIcons.search));
     await tester.pumpAndSettle();
 
     expect(field.focusNode!.hasFocus, isTrue);

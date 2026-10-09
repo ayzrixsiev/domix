@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
-import 'package:frontend/core/widgets/floating_search_field.dart';
+import 'package:frontend/core/widgets/pill_search_field.dart';
 import 'package:frontend/features/map/data/geocoding_service.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 
@@ -24,6 +24,8 @@ class MapSearchPanel extends StatefulWidget {
     required this.onShopSelected,
     required this.onPlaceSelected,
     this.shopsFailed = false,
+    this.leading,
+    this.action,
   });
 
   /// the shops currently plotted on the map - searched locally, never re-fetched
@@ -31,6 +33,14 @@ class MapSearchPanel extends StatefulWidget {
 
   /// the map's shop list failed to load, so "no shop matched" would be a claim nobody checked
   final bool shopsFailed;
+
+  /// The way out of the full-screen map, on the field's line and to the left of it. Null where
+  /// there is nothing to leave - a MapScreen opened on its own still has a route to pop.
+  final Widget? leading;
+
+  /// A control on the field's line, to the right of it - the category strip's fold-away button.
+  /// Named `action` and not `trailing`, which is already the clear button *inside* the field.
+  final Widget? action;
 
   final AppLocalizations strings;
   final ValueChanged<Shop> onShopSelected;
@@ -196,27 +206,30 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        FloatingSearchField(
-          controller: _textController,
-          focusNode: _focusNode,
-          hint: widget.strings.mapSearchHint,
-          onChanged: _onQueryChanged,
-          onSubmitted: _onSubmitted,
-          trailing: hasQuery
-              ? Tooltip(
-                  message: widget.strings.searchClear,
-                  child: InkWell(
-                    canRequestFocus: false,
-                    borderRadius: BorderRadius.circular(18),
-                    onTap: _clear,
-                    child: const SizedBox(
-                      width: 36,
-                      height: 36,
-                      child: Icon(CupertinoIcons.clear_circled_solid, color: AppColors.textFaint, size: 17),
-                    ),
-                  ),
-                )
-              : null,
+        Row(
+          children: [
+            if (widget.leading case final leading?) ...[
+              leading,
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: PillSearchField(
+                controller: _textController,
+                focusNode: _focusNode,
+                floating: true,
+                hint: widget.strings.mapSearchHint,
+                onChanged: _onQueryChanged,
+                onSubmitted: _onSubmitted,
+                // the panel's own clear: it drops the results list with the text
+                onClear: _clear,
+                clearTooltip: widget.strings.searchClear,
+              ),
+            ),
+            if (widget.action case final action?) ...[
+              const SizedBox(width: 8),
+              action,
+            ],
+          ],
         ),
         // AnimatedSize keeps the dropdown from popping into existence at full height; it grows out
         // from under the field the same way the profile accordion does.
@@ -249,6 +262,60 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
               : const SizedBox(width: double.infinity),
         ),
       ],
+    );
+  }
+}
+
+/// One of the two squares flanking the search field: the way out on the left, the category strip's
+/// fold-away on the right.
+///
+/// **A disc at the field's height, not [CircleIconButton].** The app's one round control is sized
+/// for a header, where it sits alone on a page; here three controls form a single bar over a map,
+/// and a 40px disc beside a 50px capsule reads as a different kind of object dropped next to it.
+class MapBarButton extends StatelessWidget {
+  const MapBarButton({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.turns = 0,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  /// Turns the glyph in place - half a turn flips the fold-away's chevron over. One arrow turning is
+  /// what says the strip is folding away; two glyphs swapped would read as a different button.
+  final double turns;
+
+  /// the search field's height, so the row has one line and not three
+  static const double size = 50;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.hairline),
+            boxShadow: AppShadows.floating,
+          ),
+          child: AnimatedRotation(
+            turns: turns,
+            duration: AppMotion.base,
+            curve: AppMotion.easing,
+            child: Icon(icon, color: AppColors.textDark, size: 20),
+          ),
+        ),
+      ),
     );
   }
 }

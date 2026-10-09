@@ -498,6 +498,11 @@ type adminShopResponse struct {
 	PriceIndex  *int64 `json:"price_index"`
 	BasketPrice *int64 `json:"basket_price"`
 
+	// the storefront a VIP card draws. empty is the whole of "no photo yet", which is what the
+	// placement row nags about - the panel never builds a thumbnail url of its own.
+	ImageURL      string `json:"image_url,omitempty"`
+	ImageThumbURL string `json:"image_thumb_url,omitempty"`
+
 	CreatedAt string `json:"created_at"`
 }
 
@@ -534,6 +539,10 @@ func (a *Admin) ListShops(w http.ResponseWriter, r *http.Request) {
 			TemplateTotal:     row.TemplateTotal,
 			TemplatePriced:    row.TemplatePriced,
 			CreatedAt:         timestampString(row.CreatedAt),
+		}
+		if row.ImagePath.Valid && row.ImagePath.String != "" {
+			shop.ImageURL = a.URLs.Master(row.ImagePath.String)
+			shop.ImageThumbURL = a.URLs.Thumb(row.ImagePath.String)
 		}
 		if row.PriceIndex.Valid {
 			index := row.PriceIndex.Int64
@@ -836,6 +845,161 @@ func (a *Admin) SetVIP(w http.ResponseWriter, r *http.Request) {
 		"id":        updated.ID,
 		"is_vip":    updated.IsVip,
 		"vip_until": timestampString(updated.VipUntil),
+		// **the grant is not refused for a missing photo, it reports one.** a placement is sold
+		// before anybody has the picture to hand, and a card with an empty frame is a worse thing to
+		// discover on the home screen than a nag in the panel - so the panel asks for it here.
+		"needs_photo": updated.IsVip && strings.TrimSpace(updated.ImagePath.String) == "",
+	})
+}
+
+// ─────────────────────────── the storefront photograph ───────────────────────────
+
+// POST /api/admin/shops/{id}/photo stores the picture a VIP card shows; DELETE takes it off.
+//
+// **the panel uploads it, never the owner.** this section of the home screen is the one that is
+// sold, so the photograph is checked by whoever sells the placement. the bytes go through the same
+// decode as every other upload - EXIF stripped, a 1000px master and a 400px thumb - and land under
+// shops/uploads/, which is what puts a storefront behind the same deletion door (imagestore.IsUpload)
+// and the same orphan sweep as a product photo.
+func (a *Admin) RouteShopPhoto(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		a.UploadShopPhoto(w, r)
+	case http.MethodDelete:
+		a.RemoveShopPhoto(w, r)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+// **the ordering is the project's**: write the new file, point the row at it, unlink the old one.
+// any other order can leave a shop naming a file that is gone.
+func (a *Admin) UploadShopPhoto(w http.ResponseWriter, r *http.Request) {
+	adminID, _ := auth.UserIDFromContext(r.Context())
+
+	shopID, ok := adminPathID(w, r, "shop")
+	if !ok {
+		return
+	}
+
+	existing, ok := a.readShopPhoto(w, r, shopID)
+	if !ok {
+		return
+	}
+
+	raw, ok := readUploadedImage(w, r)
+	if !ok {
+		return
+	}
+
+	normalized, err := imagestore.Normalize(raw)
+	if err != nil {
+		writeImageError(w, err)
+		return
+	}
+
+	stored, err := a.Images.Save(r.Context(), normalized)
+	if err != nil {
+		log.Printf("CRITICAL: admin %d could not store the photo of shop %d: %v", adminID, shopID, err)
+		writeAPIError(w, http.StatusInternalServerError, "server_error", "failed to save the photo")
+		return
+	}
+
+	updated, ok := a.pointShopAt(w, r, shopID, pgtype.Text{String: stored, Valid: true})
+	if !ok {
+		// the row still names the old photo, so this one is referenced by nothing
+		if err := a.Images.Remove(r.Context(), stored); err != nil {
+			log.Printf("WARNING: orphaned shop photo %q could not be removed: %v", stored, err)
+		}
+		return
+	}
+
+	a.forgetShopPhoto(r, existing.ImagePath)
+	log.Printf("ADMIN %d set the photo of shop %d to %q", adminID, shopID, stored)
+	a.writeShopPhotoResponse(w, updated)
+}
+
+func (a *Admin) RemoveShopPhoto(w http.ResponseWriter, r *http.Request) {
+	adminID, _ := auth.UserIDFromContext(r.Context())
+
+	shopID, ok := adminPathID(w, r, "shop")
+	if !ok {
+		return
+	}
+
+	existing, ok := a.readShopPhoto(w, r, shopID)
+	if !ok {
+		return
+	}
+
+	updated, ok := a.pointShopAt(w, r, shopID, pgtype.Text{})
+	if !ok {
+		return
+	}
+
+	a.forgetShopPhoto(r, existing.ImagePath)
+	log.Printf("ADMIN %d removed the photo of shop %d", adminID, shopID)
+	a.writeShopPhotoResponse(w, updated)
+}
+
+// the row as it stands, which is both the 404 and the path to unlink afterwards
+func (a *Admin) readShopPhoto(w http.ResponseWriter, r *http.Request, shopID int64) (db.GetShopPhotoRow, bool) {
+	ctx, cancel := dbctx.WithTimeout(r.Context())
+	defer cancel()
+
+	existing, err := a.Queries.GetShopPhoto(ctx, shopID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeAPIError(w, http.StatusNotFound, "shop_not_found", "no shop with that id")
+			return db.GetShopPhotoRow{}, false
+		}
+		log.Printf("CRITICAL: could not read shop %d before a photo change: %v", shopID, err)
+		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not load the shop")
+		return db.GetShopPhotoRow{}, false
+	}
+	return existing, true
+}
+
+func (a *Admin) pointShopAt(w http.ResponseWriter, r *http.Request, shopID int64, rel pgtype.Text) (db.SetShopImageRow, bool) {
+	// a fresh timeout: readShopPhoto's cancel() already fired when it returned
+	ctx, cancel := dbctx.WithTimeout(r.Context())
+	defer cancel()
+
+	updated, err := a.Queries.SetShopImage(ctx, db.SetShopImageParams{ID: shopID, ImagePath: rel})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeAPIError(w, http.StatusNotFound, "shop_not_found", "no shop with that id")
+			return db.SetShopImageRow{}, false
+		}
+		log.Printf("CRITICAL: could not set the photo of shop %d: %v", shopID, err)
+		writeAPIError(w, http.StatusInternalServerError, "server_error", "failed to save the photo")
+		return db.SetShopImageRow{}, false
+	}
+	return updated, true
+}
+
+// unlink what the row used to name. IsUpload is the guard every deletion here goes through, even
+// though only this endpoint ever writes the column: a curated path put there by hand must not take
+// a file every shop of its category draws.
+func (a *Admin) forgetShopPhoto(r *http.Request, previous pgtype.Text) {
+	if !previous.Valid || !imagestore.IsUpload(previous.String) {
+		return
+	}
+	if err := a.Images.Remove(r.Context(), previous.String); err != nil {
+		log.Printf("WARNING: could not remove the replaced shop photo %q: %v", previous.String, err)
+	}
+}
+
+func (a *Admin) writeShopPhotoResponse(w http.ResponseWriter, row db.SetShopImageRow) {
+	out := ShopResponse{ID: row.ID, Name: row.Name}
+	out.setPhoto(a.URLs, row.ImagePath)
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]any{
+		"id":              out.ID,
+		"image_path":      row.ImagePath.String,
+		"image_url":       out.ImageURL,
+		"image_thumb_url": out.ImageThumbURL,
 	})
 }
 

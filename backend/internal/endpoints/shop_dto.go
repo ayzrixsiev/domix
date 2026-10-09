@@ -4,6 +4,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"domix/backend/db"
+	"domix/backend/internal/imagestore"
 	"domix/backend/internal/pricing"
 )
 
@@ -21,11 +22,26 @@ type ShopResponse struct {
 	Latitude               float64 `json:"latitude"`
 	Longitude              float64 `json:"longitude"`
 	ProductCount           int64   `json:"product_count,omitempty"`
+
+	// the storefront, on the reads that carry one (VIP cards). two ready-made urls like a product's:
+	// the app is never told how a thumbnail's path is spelled - see imagestore.ThumbPath.
+	ImageURL      string `json:"image_url,omitempty"`
+	ImageThumbURL string `json:"image_thumb_url,omitempty"`
 }
 
 func ptr(v int64) *int64 {
 	value := v
 	return &value
+}
+
+// the photo, where a read carries one. a stored path is relative and the host is this server's to
+// decide, so the urls are built here and never in the app.
+func (r *ShopResponse) setPhoto(urls imagestore.URLs, rel pgtype.Text) {
+	if !rel.Valid || rel.String == "" {
+		return
+	}
+	r.ImageURL = urls.Master(rel.String)
+	r.ImageThumbURL = urls.Thumb(rel.String)
 }
 
 func (r *ShopResponse) setPricing(index, basketPrice pgtype.Int8) {
@@ -80,7 +96,8 @@ func shopFromOwned(r db.ListShopsByOwnerRow) ShopResponse {
 	return out
 }
 
-func shopFromVip(r db.ListVipShopsRow) ShopResponse {
+// the one mapper that takes the url builder: a VIP card is the only read that draws a storefront.
+func shopFromVip(urls imagestore.URLs, r db.ListVipShopsRow) ShopResponse {
 	out := ShopResponse{
 		ID:           r.ID,
 		Name:         r.Name,
@@ -90,7 +107,9 @@ func shopFromVip(r db.ListVipShopsRow) ShopResponse {
 		IsVIP:        r.IsVip,
 		Latitude:     r.Latitude,
 		Longitude:    r.Longitude,
+		ProductCount: r.ProductCount,
 	}
+	out.setPhoto(urls, r.ImagePath)
 	out.setPricing(r.PriceIndex, r.BasketPrice)
 	return out
 }

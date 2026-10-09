@@ -17,7 +17,7 @@ import 'package:frontend/features/products/data/product_model.dart';
 import 'package:frontend/features/products/data/product_section.dart';
 import 'package:frontend/features/products/presentation/controllers/products_controller.dart';
 import 'package:frontend/features/products/presentation/widgets/product_grid.dart';
-import 'package:frontend/features/products/presentation/widgets/product_section_bar.dart';
+import 'package:frontend/features/products/presentation/widgets/catalogue_search_bar.dart';
 import 'package:frontend/features/products/presentation/widgets/product_tile.dart';
 import 'package:frontend/features/stores/data/price_tier.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
@@ -226,16 +226,13 @@ class _ShopCardViewState extends State<ShopCardView> {
   // held here so the heading, the field and the grid all read one value
   final TextEditingController _search = TextEditingController();
 
-  // owned here, because the field's TextField is not the whole control - see _CatalogueSearchField
-  final FocusNode _searchFocus = FocusNode();
-
   String _query = '';
 
   // null is «Все товары»
   ProductSection? _section;
 
-  // below this the search field is not drawn: two per row means eight is about one screenful, and a
-  // field over a list already entirely on screen filters nothing
+  // below this the search *field* is not drawn: two per row means eight is about one screenful, and
+  // a field over a list already entirely on screen filters nothing. the sections do not go with it
   static const int _searchThreshold = 8;
 
   bool get _isSheet => widget.chrome == ShopCardChrome.sheet;
@@ -254,7 +251,6 @@ class _ShopCardViewState extends State<ShopCardView> {
   @override
   void dispose() {
     _search.dispose();
-    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -371,28 +367,20 @@ class _ShopCardViewState extends State<ShopCardView> {
             child: _ProductsHeading(count: priced.length, strings: strings),
           ),
         ),
-        if (priced.length >= _searchThreshold)
+        // the field and the sections are two separate questions - a short catalogue can still be
+        // split into sections, and then the bar is the «Категории» button on its own
+        if (priced.length >= _searchThreshold || sections.length > 1)
           SliverPadding(
             padding: gutter.add(const EdgeInsets.only(top: 14)),
             sliver: SliverToBoxAdapter(
-              child: _CatalogueSearchField(
+              child: CatalogueSearchBar(
+                searchable: priced.length >= _searchThreshold,
                 controller: _search,
-                focusNode: _searchFocus,
-                strings: strings,
-                onChanged: (value) => setState(() => _query = value),
-              ),
-            ),
-          ),
-        if (sections.length > 1)
-          SliverPadding(
-            padding: const EdgeInsets.only(top: 14),
-            sliver: SliverToBoxAdapter(
-              child: ProductSectionBar(
                 products: priced,
                 selected: section,
                 onSelected: (value) => setState(() => _section = value),
                 strings: strings,
-                gutter: _gutter,
+                onChanged: (value) => setState(() => _query = value),
               ),
             ),
           ),
@@ -893,94 +881,6 @@ class _ProductsHeading extends StatelessWidget {
           ),
         ],
       ],
-    );
-  }
-}
-
-// filters the catalogue already on the phone - it all arrived in one request, so a keystroke costs a
-// `contains`. that is why this is a live field where the home feed's is a button.
-//
-// **the whole well is the tap target**: a TextField only takes focus where the TextField is, so the
-// magnifier and its padding were ~43px of dead surface on something that looks like a button. it is
-// trackGrey with no border and no shadow, the home feed's search bar exactly.
-class _CatalogueSearchField extends StatelessWidget {
-  const _CatalogueSearchField({
-    required this.controller,
-    required this.focusNode,
-    required this.strings,
-    required this.onChanged,
-  });
-
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final AppLocalizations strings;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: focusNode.requestFocus,
-      child: Container(
-        height: 48,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: AppColors.trackGrey,
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 19),
-            const SizedBox(width: 10),
-            Expanded(
-              child: TextField(
-                controller: controller,
-                focusNode: focusNode,
-                onChanged: onChanged,
-                textInputAction: TextInputAction.search,
-                cursorColor: AppColors.primaryOrange,
-                style: const TextStyle(
-                  color: AppColors.textDark,
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w500,
-                ),
-                decoration: InputDecoration(
-                  isDense: true,
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                  hintText: strings.shopProductsSearchHint,
-                  hintStyle: const TextStyle(
-                    color: AppColors.textGrey,
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ),
-            ),
-            // rebuilt off the field itself, so clearing does not rebuild the whole card
-            ValueListenableBuilder<TextEditingValue>(
-              valueListenable: controller,
-              builder: (context, value, _) {
-                if (value.text.isEmpty) return const SizedBox.shrink();
-                return GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    controller.clear();
-                    onChanged('');
-                    // clearing takes the keyboard with it rather than leaving it over the results it just restored
-                    FocusScope.of(context).unfocus();
-                  },
-                  child: const Padding(
-                    padding: EdgeInsets.only(left: 8),
-                    child: Icon(CupertinoIcons.clear_circled_solid,
-                        color: AppColors.textGrey, size: 17),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

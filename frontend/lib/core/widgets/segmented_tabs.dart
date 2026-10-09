@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 
@@ -9,20 +10,39 @@ import 'package:frontend/core/constants/app_theme.dart';
 /// segments the track scrolls at a fixed segment width.
 ///
 /// It takes labels, not a domain enum, so one widget serves shop categories and role views.
+///
+/// [floating] is the same split [CircleIconButton] makes: a recessed grey groove when it sits on the
+/// page, a white capsule lifted off a map when it hovers over one. A grey track over map tiles reads
+/// as part of the map rather than as a control on top of it, which is the whole reason for the
+/// second form.
 class SegmentedTabs extends StatelessWidget {
   const SegmentedTabs({
     super.key,
     required this.labels,
     required this.selected,
     required this.onSelected,
+    this.floating = false,
+    this.clearable = false,
   });
 
   /// already localized, and a fixed list: a control that gains segments between two refreshes moves
   /// under the finger reaching for it
   final List<String> labels;
 
-  final int selected;
+  /// null is "none of them", and the pill fades out rather than parking on a segment nobody picked.
+  /// The map's category filter is the only caller that needs it: with no «Все» segment to land on,
+  /// an empty track is what "every shop" looks like.
+  final int? selected;
+
   final ValueChanged<int> onSelected;
+
+  /// Hovering over a map rather than sitting on the page - see the note above.
+  final bool floating;
+
+  /// **Draws a cross on the picked segment**, for a control whose second tap on it clears the
+  /// selection. Without the cross that gesture is invisible: the map's filter has no «Все» segment
+  /// to go back to, so nothing on screen said the way out was the segment already lit up.
+  final bool clearable;
 
   /// 44 is Apple's minimum touch target and still reads as a filter rather than a row of buttons.
   /// Public because a header that carries this control has to reserve exactly this much room.
@@ -31,6 +51,10 @@ class SegmentedTabs extends StatelessWidget {
   /// the groove around the pill, and the difference between the two radii below - a concentric inner
   /// corner is `outer - gap`, and getting it wrong is what makes a nested rounded rectangle look melted
   static const double _inset = 4;
+
+  /// the floating form's hairline. **A border is laid out inside the box**, so it comes off the room
+  /// the segments have - leave it out of the arithmetic below and the row overflows by exactly 2px.
+  static const double _borderWidth = 1;
 
   static const double _trackRadius = AppRadius.sm; // 14
   static const double _pillRadius = AppRadius.sm - _inset; // 10
@@ -46,17 +70,29 @@ class SegmentedTabs extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final scrolls = labels.length > _fitLimit;
+        // everything between the track's edge and the segments: the groove, plus the hairline the
+        // floating form draws
+        final chrome = _inset * 2 + (floating ? _borderWidth * 2 : 0);
         final segmentWidth = scrolls
             ? _scrollingSegmentWidth
-            : (constraints.maxWidth - _inset * 2) / labels.length;
+            : (constraints.maxWidth - chrome) / labels.length;
+
+        // a capsule when it floats, so the pill inside it reads as a smaller capsule of the same
+        // family - the shape is most of what makes the pair look like one object
+        final trackRadius = floating ? 999.0 : _trackRadius;
+        final pillRadius = floating ? 999.0 : _pillRadius;
 
         final track = Container(
           height: height,
-          width: scrolls ? segmentWidth * labels.length + _inset * 2 : null,
+          width: scrolls ? segmentWidth * labels.length + chrome : null,
           padding: const EdgeInsets.all(_inset),
           decoration: BoxDecoration(
-            color: AppColors.trackGrey,
-            borderRadius: BorderRadius.circular(_trackRadius),
+            color: floating ? AppColors.surfaceWhite : AppColors.trackGrey,
+            borderRadius: BorderRadius.circular(trackRadius),
+            border: floating
+                ? Border.all(color: AppColors.hairline, width: _borderWidth)
+                : null,
+            boxShadow: floating ? AppShadows.floating : null,
           ),
           child: Stack(
             children: [
@@ -65,16 +101,26 @@ class SegmentedTabs extends StatelessWidget {
               AnimatedPositioned(
                 duration: AppMotion.base,
                 curve: Curves.easeOutCubic,
-                left: segmentWidth * selected,
+                // parked where it last was while it fades out, so clearing the selection does not
+                // also slide the pill back to the first segment on its way to invisible
+                left: segmentWidth * (selected ?? 0),
                 top: 0,
                 bottom: 0,
                 width: segmentWidth,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceWhite,
-                    borderRadius: BorderRadius.circular(_pillRadius),
-                    // `card`, not `raised`: a pill lifted out of a groove a few pixels deep, not floating over the page
-                    boxShadow: AppShadows.card,
+                child: AnimatedOpacity(
+                  duration: AppMotion.base,
+                  curve: AppMotion.easing,
+                  opacity: selected == null ? 0 : 1,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      // **the one place the brand colour marks a selection rather than an action.**
+                      // over a map the strip is the only chrome with a state to show, and a dark
+                      // pill was read as a disabled segment rather than the chosen one.
+                      color: floating ? AppColors.primaryOrange : AppColors.surfaceWhite,
+                      borderRadius: BorderRadius.circular(pillRadius),
+                      // `card`, not `raised`: a pill lifted out of a groove a few pixels deep, not floating over the page
+                      boxShadow: floating ? null : AppShadows.card,
+                    ),
                   ),
                 ),
               ),
@@ -86,6 +132,12 @@ class SegmentedTabs extends StatelessWidget {
                       child: _Segment(
                         label: labels[i],
                         isActive: i == selected,
+                        activeColor: floating ? AppColors.textLight : AppColors.textDark,
+                        // the floating form runs a size tighter: it is a filter hovering over a map,
+                        // not a section's own heading, and the point it gives back is what lets
+                        // «Сантехника» fit a quarter of a 360px screen without an ellipsis
+                        dense: floating,
+                        showClear: clearable && i == selected,
                         onTap: () => onSelected(i),
                       ),
                     ),
@@ -113,10 +165,27 @@ class SegmentedTabs extends StatelessWidget {
 /// One segment: a label and a hit target. No background of its own - the pill behind it draws the
 /// selected state, and a second fill would double up and flash during the transition.
 class _Segment extends StatelessWidget {
-  const _Segment({required this.label, required this.isActive, required this.onTap});
+  const _Segment({
+    required this.label,
+    required this.isActive,
+    required this.activeColor,
+    required this.dense,
+    required this.showClear,
+    required this.onTap,
+  });
 
   final String label;
   final bool isActive;
+
+  /// read off the pill underneath: white on the floating track's orange pill, dark on the white
+  /// one that slides in the groove
+  final Color activeColor;
+
+  /// a half-point smaller and tighter against the pill's corners - see the call site
+  final bool dense;
+
+  /// the cross that says a second tap lets this segment go - see [SegmentedTabs.clearable]
+  final bool showClear;
   final VoidCallback onTap;
 
   @override
@@ -131,20 +200,37 @@ class _Segment extends StatelessWidget {
           duration: AppMotion.base,
           curve: Curves.easeOutCubic,
           style: TextStyle(
-            color: isActive ? AppColors.textDark : AppColors.textGrey,
-            fontSize: 13.5,
+            // **the resting label is dark on a floating track.** textGrey is tuned against our own
+            // pale page; over map tiles it reads as switched off, which is what the three unpicked
+            // categories looked like.
+            color: isActive
+                ? activeColor
+                : (dense ? AppColors.textDark : AppColors.textGrey),
+            fontSize: dense ? 12.5 : 13.5,
             height: 1.1,
             letterSpacing: -0.1,
             fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
           ),
           child: Padding(
             // keeps a long label off the pill's rounded corners instead of running into them
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
+            padding: EdgeInsets.symmetric(horizontal: dense ? 6 : 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // **scaleDown rather than an ellipsis.** the cross costs the segment ~15px, and
+                // «Сантехника» only just fits a quarter of a 360px screen as it is - half a point
+                // of type is cheaper than losing the end of the word the filter is named after.
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(label, maxLines: 1, textAlign: TextAlign.center),
+                  ),
+                ),
+                if (showClear) ...[
+                  const SizedBox(width: 3),
+                  Icon(LucideIcons.x, size: 12, color: activeColor),
+                ],
+              ],
             ),
           ),
         ),

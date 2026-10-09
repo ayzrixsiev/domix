@@ -252,6 +252,11 @@ UPDATE shops SET vip_until = '2026-09-03T00:00:00Z' WHERE id = 1;  -- grant
 UPDATE shops SET vip_until = NULL WHERE id = 1;                    -- revoke
 ```
 
+**The storefront photograph is the panel's job** (`editShopPhoto`, `POST`/`DELETE /api/admin/shops/{id}/photo`). The VIP carousel is the part of the home screen that is sold, so the picture on it is checked by whoever sold the placement rather than uploaded by the owner. One photo per shop, nowhere else in the app, the same decode as every other upload.
+
+- **A grant is never refused for a missing photo.** A placement is sold before anybody has the picture to hand, so `SetVIP` answers `needs_photo` and the panel opens the upload window on the back of that answer — the founder's call. The VIP cell on the shops row then carries «без фото» until it has one, which is the only place a blank card is visible from a desk.
+- Its own window rather than a field on «Редактировать магазин»: the file uploads the moment it is picked (multipart, where that form is json) and the server points the row at it, so there is nothing for a «Сохранить» to do.
+
 ### The panel refreshes itself — `liveTick`
 
 `«Обновить»` is a button nobody presses at the moment it would matter, so one `setInterval` (5s tick)

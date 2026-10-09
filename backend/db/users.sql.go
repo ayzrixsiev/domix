@@ -105,10 +105,15 @@ SELECT p.image_path::text AS image_path
 FROM products p
 JOIN shops s ON s.id = p.shop_id
 WHERE s.user_id = $1 AND p.image_path LIKE 'shops/uploads/%'
+UNION
+SELECT s.image_path::text AS image_path
+FROM shops s
+WHERE s.user_id = $1 AND s.image_path LIKE 'shops/uploads/%'
 `
 
-// the photos an owner uploaded, read before the account goes: the delete cascades through shops and
-// products, and after it nothing names these files any more
+// every uploaded photo under an account - its shops' storefronts and their products - read before
+// the account goes: the delete cascades through shops and products, and after it nothing names
+// these files any more
 func (q *Queries) ListUploadedImagesOfUser(ctx context.Context, userID int64) ([]string, error) {
 	rows, err := q.db.Query(ctx, listUploadedImagesOfUser, userID)
 	if err != nil {

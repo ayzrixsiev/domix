@@ -4,10 +4,10 @@ import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:provider/provider.dart';
 
 import 'package:frontend/core/constants/app_colors.dart';
-import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
+import 'package:frontend/core/widgets/pill_search_field.dart';
 import 'package:frontend/features/home/presentation/controllers/home_controller.dart';
 import 'package:frontend/features/home/presentation/widgets/product_results_view.dart';
 import 'package:frontend/core/widgets/app_page_header.dart';
@@ -91,12 +91,19 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
       appBar: AppPageHeader.custom(
         // the field *is* the title here - there is nothing to call this screen that the field does
         // not already say
-        child: _SearchField(
+        child: PillSearchField(
           controller: _controller,
           focusNode: _focusNode,
-          hintText: strings.searchHint,
+          hint: strings.searchHint,
+          // the user tapped a search bar to get here; asking them to tap a second one asks twice
+          autofocus: true,
           onSubmitted: _run,
+          // the server's ceiling, applied where it can be seen - see maxQueryLength
+          inputFormatters: [
+            LengthLimitingTextInputFormatter(ProductSearchScreen.maxQueryLength),
+          ],
           onClear: _clear,
+          clearTooltip: strings.searchClear,
         ),
       ),
       body: SafeArea(top: false, child: _body(strings)),
@@ -144,111 +151,6 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
       emptyIcon: LucideIcons.search,
       emptyTitle: strings.searchNoResults,
       emptyHint: strings.searchNoResultsHint,
-    );
-  }
-}
-
-/// The pill the query is typed into: the same shape and height as the home feed's bar, **in the
-/// other of that bar's two states**.
-///
-/// On the feed the bar is a recessed grey well - it is one row of a page, and a white card there
-/// would read as the first item of the feed. Here it is the screen: it gets the white fill, the
-/// `trackGrey` ring and the soft lift [CircleBackButton] wears, so the two controls beside each
-/// other are visibly the same material instead of a white disc glued to a grey slab.
-class _SearchField extends StatelessWidget {
-  const _SearchField({
-    required this.controller,
-    required this.focusNode,
-    required this.hintText,
-    required this.onSubmitted,
-    required this.onClear,
-  });
-
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final String hintText;
-  final ValueChanged<String> onSubmitted;
-  final VoidCallback onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    // the whole well takes the tap, not only the TextField - the magnifier and its padding are ~40px
-    // that looks like a button. a tap on the field still goes to the field: the innermost wins.
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: focusNode.requestFocus,
-      child: Container(
-        height: 48,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        // white needs the ring *and* the lift to separate from the page: #EFF1F5 against #FFFFFF is
-        // too small a step for a fill alone to read as a raised surface - the same reason the back
-        // button has both.
-        decoration: BoxDecoration(
-          color: AppColors.surfaceWhite,
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          border: Border.all(color: AppColors.trackGrey),
-          boxShadow: AppShadows.card,
-        ),
-        child: Row(
-          children: [
-            // the back button's chevron is textDark; the magnifier is one step under it so the two
-            // glyphs read as a pair without the field looking like it has a second button in it
-            const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 19),
-            const SizedBox(width: 10),
-            Expanded(
-              child: TextField(
-                controller: controller,
-                focusNode: focusNode,
-                // the user tapped a search bar to get here; asking them to tap a second one asks twice
-                autofocus: true,
-                // gives the keyboard a "search" key instead of a newline - without it there is no way to submit
-                textInputAction: TextInputAction.search,
-                textCapitalization: TextCapitalization.sentences,
-                // the server's ceiling, applied where it can be seen - see ProductSearchScreen.maxQueryLength
-                inputFormatters: [
-                  LengthLimitingTextInputFormatter(ProductSearchScreen.maxQueryLength),
-                ],
-                cursorColor: AppColors.primaryOrange,
-                style: const TextStyle(
-                  color: AppColors.textDark,
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w400,
-                ),
-                decoration: InputDecoration(
-                  // strips the ~48px of vertical padding a TextField reserves for a material label; without it the
-                  // field cannot fit the row and the text sits low instead of centred on the magnifier
-                  isCollapsed: true,
-                  border: InputBorder.none,
-                  hintText: hintText,
-                  // textMuted, not the feed bar's textGrey: that shade was picked to sit on the grey
-                  // well, and on white it is the palest thing on the screen
-                  hintStyle: const TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-                onSubmitted: onSubmitted,
-              ),
-            ),
-            // rebuilds only this button as the text changes, rather than the whole bar and its TextField
-            ValueListenableBuilder<TextEditingValue>(
-              valueListenable: controller,
-              builder: (context, value, _) {
-                if (value.text.isEmpty) return const SizedBox.shrink();
-                return GestureDetector(
-                  onTap: onClear,
-                  behavior: HitTestBehavior.opaque,
-                  child: const Padding(
-                    padding: EdgeInsets.only(left: 8),
-                    child: Icon(Icons.close_rounded, color: AppColors.textMuted, size: 18),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

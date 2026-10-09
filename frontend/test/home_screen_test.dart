@@ -163,11 +163,11 @@ void main() {
 
   // ─────────────────────────── the carousel's geometry ───────────────────────────
   //
-  // **`viewportFraction` and `_offCentreScaleDrop` are one dial pulled in opposite directions**, and
-  // the thing they trade against each other is whether a reader can see there are more cards. The
-  // card was widened once already; the next person to widen it will not have the arithmetic in front
-  // of them, so it is pinned here at a real phone's width rather than at the test default of 800.
-  testWidgets('the neighbouring cards stay visible at phone width', (tester) async {
+  // **One card fills the page now, so nothing on screen peeks.** The strip used to show a sliver of
+  // its neighbours, and that sliver was what told a reader there were more placements; the dots
+  // carry that job alone, and there has to be one per slot or the section stops saying how much
+  // inventory it has. Pinned at a real phone's width rather than at the test default of 800.
+  testWidgets('one card across the page, with a dot for every slot under it', (tester) async {
     tester.view.physicalSize = const Size(360 * 3, 800 * 3);
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
@@ -179,36 +179,48 @@ void main() {
       ),
     );
 
-    // one PressableScale per built page; the transform that shrinks an off-centre card sits above
-    // it, so a global rect already has the recede applied
+    // the card is the page, inset by the feed's own gutter on each side
     final cards = find.descendant(
       of: find.byType(VipShopsCarousel),
       matching: find.byType(PressableScale),
     );
-    final rects = tester.widgetList(cards).indexed
-        .map((e) => tester.getRect(cards.at(e.$1)))
-        .toList()
-      ..sort((a, b) => a.left.compareTo(b.left));
-
-    expect(rects.length, greaterThan(1), reason: 'only one card was built - there is no peek at all');
-
-    // the card to the right of the one in the middle: it has to start before the screen ends, or
-    // the strip reads as a single card alone on the page rather than as a row of them
-    final neighbour = rects.firstWhere((r) => r.left > 180);
-    final visible = 360 - neighbour.left;
     expect(
-      visible,
-      greaterThan(8),
-      reason: 'only ${visible.toStringAsFixed(1)}dp of the next card is on screen - widening the '
-          'card or deepening the recede has closed the peek',
+      tester.getRect(cards.first).width,
+      closeTo(360 - VipShopsCarousel.cardGutter * 2, 0.5),
+      reason: 'the card no longer fills the page between the gutters',
     );
+
+    // one dot per slot, sold or not: five dots over one card is the section saying there are four
+    // more placements behind this one
+    final dots = find.descendant(
+      of: find.byType(VipShopsCarousel),
+      matching: find.byType(AnimatedContainer),
+    );
+    expect(dots, findsNWidgets(VipShopsCarousel.slotCount));
+
+    // and exactly one of them is the wide one - at 6px a colour change on its own is a detail
+    // somebody has to go looking for
+    final widths = [
+      for (var i = 0; i < VipShopsCarousel.slotCount; i++) tester.getSize(dots.at(i)).width,
+    ];
+    final widest = widths.reduce((a, b) => a > b ? a : b);
+    expect(
+      widths.where((w) => w == widest),
+      hasLength(1),
+      reason: 'no single dot is marked as the one in front',
+    );
+    expect(widths.where((w) => w != widest), everyElement(lessThan(widest)));
   });
 
   // **The strip moves with nobody touching it**, which is the only thing that makes the four
-  // placements outside the centre worth selling. Two things can move it - the clock and a finger -
+  // placements behind the first one worth selling. Two things can move it - the clock and a finger -
   // and the finger wins: a tick that fired mid-drag would animate the page away from the person
   // holding it, and that is the half of this worth a test.
+  //
+  // The card it leaves is *disposed* rather than pushed aside, now that one card is one whole page,
+  // so "it moved" is the sold card no longer being on screen at all.
   testWidgets('the carousel advances on its own, and a finger on it stops the clock', (tester) async {
+    final strings = AppLocalizations(AppLanguage.ru);
     await _pumpHome(
       tester,
       _FakeHomeRepository(
@@ -216,32 +228,33 @@ void main() {
       ),
     );
 
-    // the sold card opens in the centre - vipSlotRing put it there - so its own position is what
-    // says whether the strip moved
+    // the sold card opens in front - vipSlotRing put it there
     final card = find.text('Настоящий VIP');
-    final opened = tester.getRect(card);
+    expect(card, findsOneWidget);
 
-    // one dwell, then the glide it starts
+    // one dwell with nobody touching anything, and the next slot has the page
     await tester.pump(VipShopsCarousel.autoAdvanceEvery);
     await tester.pumpAndSettle();
-
-    final advanced = tester.getRect(card);
     expect(
-      advanced.left,
-      lessThan(opened.left - 100),
-      reason: 'the centre card is still where it started - the strip never advanced by itself',
+      card,
+      findsNothing,
+      reason: 'the sold card is still on screen - the strip never advanced by itself',
     );
 
-    // and now a finger, held still: the clock is stopped for as long as it is down, so a whole dwell
-    // and a second more must leave the page exactly where the person put it
+    // **now a finger, held still, and it has to win.** on the empty slot the strip has moved to,
+    // which is also what keeps this from opening a shop: an unsold slot is inert. measured after
+    // the press lands, since a card shrinking under a thumb is not the strip moving.
+    final slot = find.text(strings.slotShopNameLabel).first;
     final gesture = await tester.startGesture(tester.getCenter(find.byType(VipShopsCarousel)));
-    final held = tester.getRect(card);
+    await tester.pumpAndSettle();
+    final held = tester.getRect(slot);
+
     await tester.pump(VipShopsCarousel.autoAdvanceEvery + const Duration(seconds: 1));
     // and a settle, because a tick that did fire would only show up on the frames after it
     await tester.pumpAndSettle();
 
     expect(
-      tester.getRect(card),
+      tester.getRect(slot),
       held,
       reason: 'the carousel advanced out from under a finger that was holding it',
     );

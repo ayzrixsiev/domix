@@ -12,4 +12,16 @@ class ApiConfig {
         ? _authBaseUrl.substring(0, _authBaseUrl.length - authSuffix.length)
         : _authBaseUrl;
   }
+
+  /// Turns a photo url as the api sends it into one `Image.network` can fetch.
+  ///
+  /// **The api sends `/images/…` when photos come off its own disk and a full `https://…` when they
+  /// come from R2**, because only the server knows which. A relative path handed straight to
+  /// `Image.network` fails silently - the frame stays empty and nothing anywhere says why - so
+  /// **every photo field from the backend goes through this**, products and storefronts alike.
+  static String? absoluteImageUrl(String? url) {
+    if (url == null || url.isEmpty) return null;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    return '$serverRoot$url';
+  }
 }

@@ -16,6 +16,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:frontend/core/constants/api_config.dart';
 import 'package:frontend/features/home/data/home_content.dart';
 import 'package:frontend/features/stores/data/price_tier.dart';
 import 'package:frontend/features/stores/data/shop_category.dart';
@@ -36,6 +37,54 @@ void main() {
       expect(content.vipShops.single.isVip, isTrue);
       expect(content.vipShops.single.basketPrice, 5000000);
       expect(content.vipShops.single.priceTier, PriceTier.average);
+    });
+
+    // **the bug this test exists for**: the api sends a storefront as `/images/…` when photos come
+    // off its own disk, and `Image.network` cannot fetch a path with no host - it draws an empty
+    // frame and reports nothing. A VIP card then looks exactly like one nobody has photographed,
+    // which is how it reached a phone the first time. The fixture predates the field, so this one
+    // decodes a card of its own rather than being an assertion about a captured body.
+    test('a storefront path from the api becomes a url the app can fetch', () {
+      final card = HomeContent.fromJson({
+        'vip_shops': [
+          {
+            'id': 1,
+            'name': 'Oboi Market',
+            'contact_phone': '998901112233',
+            'address': 'Ташкент',
+            'category': 'wallpaper',
+            'is_vip': true,
+            'latitude': 41.3,
+            'longitude': 69.2,
+            'product_count': 12,
+            'image_thumb_url': '/images/shops/uploads/cd/cde3_thumb.jpg',
+          },
+        ],
+      }).vipShops.single;
+
+      expect(card.imageThumbUrl, '${ApiConfig.serverRoot}/images/shops/uploads/cd/cde3_thumb.jpg');
+      expect(card.productCount, 12);
+    });
+
+    // and a url the server already made absolute - photos served from R2 - is left alone
+    test('an absolute storefront url is passed through untouched', () {
+      final card = HomeContent.fromJson({
+        'vip_shops': [
+          {
+            'id': 1,
+            'name': 'Oboi Market',
+            'contact_phone': '998901112233',
+            'address': 'Ташкент',
+            'category': 'wallpaper',
+            'is_vip': true,
+            'latitude': 41.3,
+            'longitude': 69.2,
+            'image_thumb_url': 'https://img.domix-api.uz/shops/uploads/cd/cde3_thumb.jpg',
+          },
+        ],
+      }).vipShops.single;
+
+      expect(card.imageThumbUrl, 'https://img.domix-api.uz/shops/uploads/cd/cde3_thumb.jpg');
     });
 
     test('best offers arrive grouped into one tab per shop category', () {

@@ -14,6 +14,10 @@ import 'package:frontend/core/constants/app_theme.dart';
 /// **No outer padding.** Where the disc sits on the page is the header's business, not the button's
 /// - see [AppPageHeader]'s gutter constants. The two floating uses pad themselves by [gutterInset].
 ///
+/// **A disc sharing a line with a search field takes that field's height** ([diameter]): the 40
+/// that leads a title reads as a different kind of object set down beside a 48px capsule, which is
+/// the same reason `MapBarButton` is the field's 50 over the map.
+///
 /// [floating] is sitting on a header surface versus hovering over a picture; a third case makes it
 /// an enum.
 class CircleIconButton extends StatelessWidget {
@@ -24,6 +28,7 @@ class CircleIconButton extends StatelessWidget {
     this.iconColor = AppColors.textDark,
     this.tooltip,
     this.floating = false,
+    this.diameter,
   });
 
   final IconData icon;
@@ -39,6 +44,9 @@ class CircleIconButton extends StatelessWidget {
   /// True when the button hovers over content rather than sitting on a header surface.
   final bool floating;
 
+  /// Defaults to [disc]. Passed where the disc shares a line with a search field - see above.
+  final double? diameter;
+
   /// Tap target. Wider than the disc so the touch area clears the 44px accessibility floor.
   static const double target = 44;
 
@@ -50,9 +58,11 @@ class CircleIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final size = diameter ?? disc;
     final button = SizedBox(
-      width: target,
-      height: target,
+      // a disc smaller than the floor keeps the floor; a bigger one is its own target
+      width: size > target ? size : target,
+      height: size > target ? size : target,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -60,8 +70,8 @@ class CircleIconButton extends StatelessWidget {
           onTap: onTap,
           child: Center(
             child: Container(
-              width: disc,
-              height: disc,
+              width: size,
+              height: size,
               decoration: BoxDecoration(
                 color: AppColors.surfaceWhite,
                 shape: BoxShape.circle,
@@ -81,18 +91,22 @@ class CircleIconButton extends StatelessWidget {
 /// The way back out of a pushed screen - [CircleIconButton] with the chevron already in it, so no
 /// screen has to name the icon.
 class CircleBackButton extends StatelessWidget {
-  const CircleBackButton({super.key, this.onTap, this.floating = false});
+  const CircleBackButton({super.key, this.onTap, this.floating = false, this.diameter});
 
   /// Defaults to popping the route. Passed only where "back" means something else.
   final VoidCallback? onTap;
 
   final bool floating;
 
+  /// see [CircleIconButton.diameter]
+  final double? diameter;
+
   @override
   Widget build(BuildContext context) {
     return CircleIconButton(
       icon: CupertinoIcons.back,
       floating: floating,
+      diameter: diameter,
       onTap: onTap ?? () => Navigator.of(context).maybePop(),
     );
   }

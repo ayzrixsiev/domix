@@ -51,6 +51,11 @@ dependencies:
   # the backend can decode.
   image_picker: ^1.2.3
   url_launcher: ^6.3.2
+  # the phone's own gps, behind «Рядом со мной» on the map. the permission dialog is as much of the
+  # reason as the fix is: android hands out no coordinate until the user has said yes, and there is
+  # no way to ask from dart without a plugin. **the coordinate never leaves the device** - it moves
+  # our camera and nothing else, which is what keeps the Play data-safety answer "not collected".
+  geolocator: ^14.1.1
   flutter_secure_storage: ^10.3.1
   provider: ^6.0.8
   yandex_maps_mapkit_lite: ^4.42.0
@@ -82,9 +87,6 @@ flutter:
   # before the network is. product photos are the opposite and come from the api - see images/shops.
   assets:
     - assets/decorations/categories/
-    # the five storefronts behind the VIP carousel - see _SlotPhoto. cut to 1024x512 webp, which is
-    # the card's photo strip on a 3x screen, and the reason the whole set is under 400KB.
-    - assets/decorations/vip/
 
   # the rim of the glass the nav bar is cut from - see GlassSurface. compiled to the device's own
   # shader format at build time, which is why it is declared here and not loaded as an asset.

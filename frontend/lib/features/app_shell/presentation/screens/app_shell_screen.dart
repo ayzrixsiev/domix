@@ -61,6 +61,9 @@ class _AppShellScreenState extends State<AppShellScreen> with WidgetsBindingObse
   /// Named rather than a bare 2 in two places that would have to be changed together.
   static const _mapTabIndex = 2;
 
+  /// where the map's own way out lands, and what the system back button falls back to
+  static const _homeTabIndex = 0;
+
   static const _profileTabIndex = 4;
 
   // built per-frame rather than as a static field: ProfileScreen needs a BuildContext to push
@@ -71,8 +74,10 @@ class _AppShellScreenState extends State<AppShellScreen> with WidgetsBindingObse
     // and it needs to, since its shop list is a snapshot that goes stale. this bool is that signal.
     MapScreen(
       showScaffold: false,
-      bottomPadding: _bottomPadding,
+      // nothing to clear: the nav bar is gone while this tab is open - see the note on _buildNavBar
+      bottomPadding: 0,
       isActive: _currentIndex == _mapTabIndex,
+      onExit: () => _selectTab(_homeTabIndex),
     ),
     const ChatsScreen(showScaffold: false, bottomPadding: _bottomPadding),
     ProfileScreen(
@@ -121,16 +126,32 @@ class _AppShellScreenState extends State<AppShellScreen> with WidgetsBindingObse
   Widget build(BuildContext context) {
     final strings = Provider.of<LanguageProvider>(context).strings;
     final navItems = _buildNavItems(strings);
+    final isMap = _currentIndex == _mapTabIndex;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      extendBody: true,
-      bottomNavigationBar: FloatingBottomNavBar(
-        items: navItems,
-        currentIndex: _currentIndex,
-        onItemSelected: _selectTab,
+    return PopScope(
+      // **only the map takes the back button off the shell.** everywhere else the shell is the root
+      // route and back should still close the app; on the map it is the one screen with no nav bar,
+      // so swallowing the gesture would leave the user holding a full-screen map with one way out.
+      canPop: !isMap,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && isMap) _selectTab(_homeTabIndex);
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        extendBody: true,
+        // **the map is the one tab with no nav bar.** a map is a canvas the user pans and pinches, and
+        // a bar floating over its lower third is both in the way and in the way of the controls that
+        // belong there. the disc left of the search field is the way out, and so is the system back
+        // gesture - see the PopScope above.
+        bottomNavigationBar: isMap
+            ? null
+            : FloatingBottomNavBar(
+                items: navItems,
+                currentIndex: _currentIndex,
+                onItemSelected: _selectTab,
+              ),
+        body: IndexedStack(index: _currentIndex, children: _buildPages(context)),
       ),
-      body: IndexedStack(index: _currentIndex, children: _buildPages(context)),
     );
   }
 }

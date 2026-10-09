@@ -141,6 +141,24 @@ func (q *Queries) GetShopOwner(ctx context.Context, id int64) (int64, error) {
 	return user_id, err
 }
 
+const getShopPhoto = `-- name: GetShopPhoto :one
+SELECT id, name, image_path FROM shops WHERE id = $1
+`
+
+type GetShopPhotoRow struct {
+	ID        int64       `json:"id"`
+	Name      string      `json:"name"`
+	ImagePath pgtype.Text `json:"image_path"`
+}
+
+// read before a photo is written or removed, for the path to unlink afterwards
+func (q *Queries) GetShopPhoto(ctx context.Context, id int64) (GetShopPhotoRow, error) {
+	row := q.db.QueryRow(ctx, getShopPhoto, id)
+	var i GetShopPhotoRow
+	err := row.Scan(&i.ID, &i.Name, &i.ImagePath)
+	return i, err
+}
+
 const listBestOffersInCategory = `-- name: ListBestOffersInCategory :many
 SELECT s.id, s.user_id, s.name, s.contact_phone, s.address, s.category,
        COALESCE(s.vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip,
@@ -339,7 +357,8 @@ const listVipShops = `-- name: ListVipShops :many
 SELECT s.id, s.user_id, s.name, s.contact_phone, s.address, s.category,
        true AS is_vip,
        ST_Y(s.location)::float8 AS latitude, ST_X(s.location)::float8 AS longitude,
-       s.created_at, s.updated_at,
+       s.created_at, s.updated_at, s.image_path,
+       (SELECT COUNT(*) FROM products p WHERE p.shop_id = s.id)::bigint AS product_count,
        bi.price_index, bi.basket_price
 FROM shops s
 LEFT JOIN shop_basket_index bi ON bi.shop_id = s.id
@@ -360,10 +379,14 @@ type ListVipShopsRow struct {
 	Longitude    float64            `json:"longitude"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ImagePath    pgtype.Text        `json:"image_path"`
+	ProductCount int64              `json:"product_count"`
 	PriceIndex   pgtype.Int8        `json:"price_index"`
 	BasketPrice  pgtype.Int8        `json:"basket_price"`
 }
 
+// the photo and the product count are read only here: a VIP card carries both, and the map list
+// would pay for a count per shop to draw neither.
 func (q *Queries) ListVipShops(ctx context.Context, limit int32) ([]ListVipShopsRow, error) {
 	rows, err := q.db.Query(ctx, listVipShops, limit)
 	if err != nil {
@@ -385,6 +408,8 @@ func (q *Queries) ListVipShops(ctx context.Context, limit int32) ([]ListVipShops
 			&i.Longitude,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ImagePath,
+			&i.ProductCount,
 			&i.PriceIndex,
 			&i.BasketPrice,
 		); err != nil {
@@ -398,12 +423,39 @@ func (q *Queries) ListVipShops(ctx context.Context, limit int32) ([]ListVipShops
 	return items, nil
 }
 
+const setShopImage = `-- name: SetShopImage :one
+UPDATE shops
+SET image_path = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, name, image_path
+`
+
+type SetShopImageParams struct {
+	ID        int64       `json:"id"`
+	ImagePath pgtype.Text `json:"image_path"`
+}
+
+type SetShopImageRow struct {
+	ID        int64       `json:"id"`
+	Name      string      `json:"name"`
+	ImagePath pgtype.Text `json:"image_path"`
+}
+
+// the row is pointed at a file that already exists; the old one is unlinked after this returns
+func (q *Queries) SetShopImage(ctx context.Context, arg SetShopImageParams) (SetShopImageRow, error) {
+	row := q.db.QueryRow(ctx, setShopImage, arg.ID, arg.ImagePath)
+	var i SetShopImageRow
+	err := row.Scan(&i.ID, &i.Name, &i.ImagePath)
+	return i, err
+}
+
 const setShopVIP = `-- name: SetShopVIP :one
 UPDATE shops
 SET vip_until = $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, name, vip_until,
+RETURNING id, name, vip_until, image_path,
           COALESCE(vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip
 `
 
@@ -413,12 +465,15 @@ type SetShopVIPParams struct {
 }
 
 type SetShopVIPRow struct {
-	ID       int64              `json:"id"`
-	Name     string             `json:"name"`
-	VipUntil pgtype.Timestamptz `json:"vip_until"`
-	IsVip    bool               `json:"is_vip"`
+	ID        int64              `json:"id"`
+	Name      string             `json:"name"`
+	VipUntil  pgtype.Timestamptz `json:"vip_until"`
+	ImagePath pgtype.Text        `json:"image_path"`
+	IsVip     bool               `json:"is_vip"`
 }
 
+// image_path comes back so the panel can say «загрузите фото» on the same answer that grants the
+// placement: a VIP card is the one card that shows a storefront.
 func (q *Queries) SetShopVIP(ctx context.Context, arg SetShopVIPParams) (SetShopVIPRow, error) {
 	row := q.db.QueryRow(ctx, setShopVIP, arg.ID, arg.VipUntil)
 	var i SetShopVIPRow
@@ -426,6 +481,7 @@ func (q *Queries) SetShopVIP(ctx context.Context, arg SetShopVIPParams) (SetShop
 		&i.ID,
 		&i.Name,
 		&i.VipUntil,
+		&i.ImagePath,
 		&i.IsVip,
 	)
 	return i, err

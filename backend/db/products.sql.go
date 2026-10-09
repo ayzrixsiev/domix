@@ -134,19 +134,32 @@ func (q *Queries) GetProduct(ctx context.Context, id int64) (GetProductRow, erro
 }
 
 const listProductsByCategory = `-- name: ListProductsByCategory :many
-SELECT p.id, p.shop_id, p.name, p.specs, p.price, p.category, p.unit, p.availability, p.template_key,
-       p.image_path, s.name AS shop_name
-FROM products p
-JOIN shops s ON s.id = p.shop_id
-WHERE p.category = $1
-  AND p.price IS NOT NULL
-ORDER BY (p.availability = 'unavailable'), p.price ASC, p.id
-LIMIT $2
+SELECT id, shop_id, name, specs, price, category, unit, availability, template_key, image_path, shop_name
+FROM (
+  SELECT p.id, p.shop_id, p.name, p.specs, p.price, p.category, p.unit, p.availability, p.template_key,
+         p.image_path, s.name AS shop_name,
+         coalesce(p.template_key, lower(p.name || ' ' || p.specs)) AS line,
+         row_number() OVER (
+           PARTITION BY coalesce(p.template_key, lower(p.name || ' ' || p.specs))
+           ORDER BY (p.availability = 'unavailable'), p.price ASC, p.id
+         ) AS offer_rank,
+         min(p.price) OVER (
+           PARTITION BY coalesce(p.template_key, lower(p.name || ' ' || p.specs))
+         ) AS line_price
+  FROM products p
+  JOIN shops s ON s.id = p.shop_id
+  WHERE p.category = $1
+    AND p.price IS NOT NULL
+) offers
+WHERE offer_rank <= $2::bigint
+ORDER BY line_price ASC, line, offer_rank
+LIMIT $3
 `
 
 type ListProductsByCategoryParams struct {
-	Category string `json:"category"`
-	Limit    int32  `json:"limit"`
+	Category      string `json:"category"`
+	OffersPerLine int64  `json:"offers_per_line"`
+	ResultLimit   int32  `json:"result_limit"`
 }
 
 type ListProductsByCategoryRow struct {
@@ -163,8 +176,19 @@ type ListProductsByCategoryRow struct {
 	ShopName     string      `json:"shop_name"`
 }
 
+// **a few offers of one product, then the next product.** Every universal shop prices the same 1kg
+// glue, so ordering the category by price alone answers it with two hundred glues before its second
+// product - the page would have to be scrolled past every shop in Tashkent to find out what else is
+// in it. The cheapest line still leads, so the category opens on the best price in it.
+//
+// A line is the template key: the rows seeded from one curated product, one size each (000007). An
+// owner's own row has no key and lines up on its name and size instead - the only thing two shops'
+// custom rows ever share.
+//
+// **offers_per_line carries a cast or sqlc cannot compile this**: it has no type for a parameter
+// compared against a column a subquery invented, and fails with `column "offer_rank" does not exist`.
 func (q *Queries) ListProductsByCategory(ctx context.Context, arg ListProductsByCategoryParams) ([]ListProductsByCategoryRow, error) {
-	rows, err := q.db.Query(ctx, listProductsByCategory, arg.Category, arg.Limit)
+	rows, err := q.db.Query(ctx, listProductsByCategory, arg.Category, arg.OffersPerLine, arg.ResultLimit)
 	if err != nil {
 		return nil, err
 	}

@@ -1,3 +1,5 @@
+import 'package:frontend/core/constants/api_config.dart';
+
 import 'price_tier.dart';
 import 'shop_category.dart';
 
@@ -16,6 +18,7 @@ class Shop {
     this.basketPrice,
     this.isVip = false,
     this.productCount = 0,
+    this.imageThumbUrl,
   });
 
   final int id;
@@ -49,10 +52,18 @@ class Shop {
   /// and sent as a boolean, so the app never compares a placement against the *device* clock.
   final bool isVip;
 
-  // only /api/shops/mine counts products - the public map list omits the field, so 0 here is a
-  // default rather than "this shop has no products". on the category drill-down it means something
-  // narrower: how many products this shop prices *in that category*.
+  // only /api/shops/mine, the category drill-down and the VIP cards count products - the public map
+  // list omits the field, so 0 here is a default rather than "this shop has no products". on the
+  // drill-down it means something narrower: how many products this shop prices *in that category*.
   final int productCount;
+
+  /// The storefront, on the one read that carries one: a VIP card. Null for every other shop, and
+  /// for a placement nobody has photographed yet - the card then draws an empty frame rather than a
+  /// stand-in, because this is the section that is sold.
+  ///
+  /// **Never built in Dart.** The server sends the ready-made url; an apk that appended `_thumb`
+  /// itself would freeze that convention inside every build already on a phone.
+  final String? imageThumbUrl;
 
   factory Shop.fromJson(Map<String, dynamic> json) {
     return Shop(
@@ -70,6 +81,9 @@ class Shop {
       basketPrice: json['basket_price'] as int?,
       isVip: json['is_vip'] as bool? ?? false,
       productCount: json['product_count'] as int? ?? 0,
+      // through the resolver, like a product's: the api sends `/images/…` off its own disk, and
+      // Image.network cannot fetch a path without a host - it would just draw an empty frame
+      imageThumbUrl: ApiConfig.absoluteImageUrl(json['image_thumb_url'] as String?),
     );
   }
 
@@ -88,6 +102,7 @@ class Shop {
         basketPrice: basketPrice,
         isVip: isVip,
         productCount: productCount ?? this.productCount,
+        imageThumbUrl: imageThumbUrl,
       );
 }
 

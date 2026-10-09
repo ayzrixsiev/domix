@@ -64,7 +64,7 @@ LIMIT $1 OFFSET $2;
 -- name: AdminListShops :many
 SELECT
     s.id, s.name, s.category, s.address, s.contact_phone, s.created_at, s.vip_until,
-    s.excluded_from_index,
+    s.excluded_from_index, s.image_path,
     COALESCE(s.vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip,
     u.id    AS owner_id,
     u.name  AS owner_name,
@@ -302,7 +302,9 @@ GROUP BY p.template_key;
 -- compares the files on disk against this; a path missing from it is a file nothing draws.
 SELECT image_path FROM product_templates WHERE image_path IS NOT NULL AND image_path <> ''
 UNION
-SELECT image_path FROM products WHERE image_path IS NOT NULL AND image_path <> '';
+SELECT image_path FROM products WHERE image_path IS NOT NULL AND image_path <> ''
+UNION
+SELECT image_path FROM shops WHERE image_path IS NOT NULL AND image_path <> '';
 
 -- name: AdminDeleteTemplateItem :one
 DELETE FROM product_templates WHERE id = $1
@@ -436,9 +438,16 @@ ORDER BY s.vip_until
 LIMIT $1;
 
 -- name: AdminUploadedImagePaths :many
--- every products.image_path naming an owner's upload, for the orphan sweep. filtered in SQL because
--- catalogue paths outnumber uploads a hundred to one. the prefix is a parameter so
--- imagestore.UploadDir stays the one declaration of what "uploads/" is.
+-- every uploaded photo any row points at, for the orphan sweep. filtered in SQL because catalogue
+-- paths outnumber uploads a hundred to one. the prefix is a parameter so imagestore.UploadDir stays
+-- the one declaration of what "uploads/" is.
+--
+-- **shops are in it, not only products**: a storefront photo lives in the same directory, and a
+-- sweep that read products alone would delete every VIP card's picture an hour after it was uploaded.
 SELECT image_path::text AS image_path
 FROM products
+WHERE image_path LIKE @prefix::text
+UNION
+SELECT image_path::text AS image_path
+FROM shops
 WHERE image_path LIKE @prefix::text;

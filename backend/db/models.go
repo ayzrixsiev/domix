@@ -67,6 +67,7 @@ type Shop struct {
 	ExcludedFromIndex bool               `json:"excluded_from_index"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	ImagePath         pgtype.Text        `json:"image_path"`
 }
 
 type ShopBasketIndex struct {

@@ -336,6 +336,20 @@ class AppLocalizations {
   // with no number under it, the caption has to name the thing on its own
   String get slotBasketLabel => isRu ? 'Средний чек' : "O'rtacha chek";
 
+  // the two captions under the figures on a VIP card. the word is the unit, so it never agrees with
+  // the number above it - «1 Товаров» is not drawn, the caption is a column heading.
+  String get cardRatingCaption => isRu ? 'Рейтинг' : 'Reyting';
+  String get cardProductsCaption => isRu ? 'Товаров' : 'Mahsulot';
+
+  /// **a figure this build has no source for**, drawn where the number goes. the rating is the
+  /// standing case: there is no reviews table, so a real shop has nothing to show and an invented
+  /// 4.8 over a real shop's name is the one thing the section that is sold cannot carry.
+  String get noFigure => '—';
+
+  // «VIP» stays latin - it is the name of the paid tier, not a word - and the noun beside it is
+  // what tells a customer the card is an advert rather than the cheapest shop they searched for
+  String get vipShopTag => isRu ? 'VIP магазин' : "VIP do'kon";
+
   /// the badge's slot, described rather than shown - see [priceTierCheaper], which fills this line
   String get slotComparisonLabel =>
       isRu ? 'Насколько дешевле рынка' : 'Bozordan qancha arzon';
@@ -635,10 +649,33 @@ class AppLocalizations {
   // map screen (shop pins)
   String get noShopsYet => isRu ? 'Пока нет магазинов' : "Hozircha do'konlar yo'q";
 
-  /// carries the count, because without it an empty map and a city with no shops look identical
-  String zoomInForShops(int count) => isRu
-      ? 'Приблизьте карту · ${shopsCountLabel(count)}'
-      : "Xaritani yaqinlashtiring · ${shopsCountLabel(count)}";
+  /// the four category chips are a filter, so an empty map under one of them is a fact about the
+  /// filter rather than about the city - saying the wrong one of the two sends the user looking for
+  /// a bug
+  String get noShopsInCategory =>
+      isRu ? 'В этой категории пока нет магазинов' : "Bu turdagi do'konlar hozircha yo'q";
+  String get hideCategories => isRu ? 'Скрыть категории' : 'Turlarni yashirish';
+  String get showCategories => isRu ? 'Показать категории' : "Turlarni ko'rsatish";
+
+  // «Рядом со мной» and the four ways the phone can decline to say where it is. two of them end on
+  // a system page, which is what openSettingsButton is for.
+  String get nearMe => isRu ? 'Рядом со мной' : 'Yaqinimda';
+
+  /// the map hides the nav bar, so this disc is the only way back to the rest of the app
+  String get exitMap => isRu ? 'На главную' : 'Bosh sahifaga';
+  String get locationServicesOff => isRu
+      ? 'Включите геолокацию на телефоне'
+      : 'Telefonda joylashuvni yoqing';
+  String get locationDenied =>
+      isRu ? 'Нужен доступ к геолокации' : 'Joylashuvga ruxsat kerak';
+  String get locationDeniedForever => isRu
+      ? 'Доступ к геолокации запрещён — разрешите его в настройках'
+      : 'Joylashuvga ruxsat berilmagan — sozlamalardan ruxsat bering';
+  String get locationUnavailable => isRu
+      ? 'Не удалось определить местоположение'
+      : "Joylashuvni aniqlab bo'lmadi";
+  String get openSettingsButton => isRu ? 'Настройки' : 'Sozlamalar';
+
   String get mapLoadError =>
       isRu ? 'Не удалось загрузить магазины' : "Do'konlarni yuklab bo'lmadi";
   String get loadingShops => isRu ? 'Загружаем магазины...' : "Do'konlar yuklanmoqda...";
@@ -701,12 +738,15 @@ class AppLocalizations {
       ? 'Каталог заполнится готовыми товарами сразу после создания — вам останется указать цены. Категорию нельзя изменить позже.'
       : "Katalog do'kon yaratilgandan so'ng tayyor mahsulotlar bilan to'ladi — sizga faqat narxlarni ko'rsatish qoladi. Turni keyin o'zgartirib bo'lmaydi.";
 
-  String get shopCategoryUniversal => isRu ? 'Универсальный' : 'Universal';
+  // **Short on purpose.** These four share one strip on the map and one on the home screen, every
+  // segment the same width, so a name is capped at about a quarter of a phone's width - the long
+  // forms («Универсальный», «Пиломатериалы») ellipsed on every device we ship to.
+  String get shopCategoryUniversal => isRu ? 'Разное' : 'Universal';
   String get shopCategoryPlumbing => isRu ? 'Сантехника' : 'Santexnika';
-  // the stored code stays 'wood' - renaming it would be a data migration. deliberately the same word
-  // as [categoryLumber]: one is a kind of shop and one is a kind of product, and they never share a
-  // surface.
-  String get shopCategoryWood => isRu ? 'Пиломатериалы' : "Yog'och materiallar";
+  // the stored code stays 'wood' - renaming it would be a data migration. it no longer matches
+  // [categoryLumber] word for word, and that is fine: a kind of shop and a kind of product never
+  // share a surface, and only this one has a quarter of a strip to fit into.
+  String get shopCategoryWood => isRu ? 'Дерево' : "Yog'och";
   String get shopCategoryWallpaper => isRu ? 'Обои' : 'Oboylar';
 
   String get shopCategoryUniversalHint => isRu
@@ -838,8 +878,6 @@ class AppLocalizations {
   // creation, so most of these are about rows that have no price yet. ──
 
   String get productsScreenTitle => isRu ? 'Товары' : 'Mahsulotlar';
-  String get catalogueSearchHint =>
-      isRu ? 'Поиск по товарам магазина' : "Do'kon mahsulotlari bo'yicha qidiruv";
   // the same field spelled for a pill that shares its line with a button - the long hint ellipsised
   String get searchShortHint => isRu ? 'Поиск' : 'Qidiruv';
   String get productsScreenSubtitle =>

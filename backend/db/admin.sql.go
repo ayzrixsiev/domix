@@ -299,7 +299,7 @@ func (q *Queries) AdminGetTemplateItem(ctx context.Context, id int64) (AdminGetT
 const adminListShops = `-- name: AdminListShops :many
 SELECT
     s.id, s.name, s.category, s.address, s.contact_phone, s.created_at, s.vip_until,
-    s.excluded_from_index,
+    s.excluded_from_index, s.image_path,
     COALESCE(s.vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip,
     u.id    AS owner_id,
     u.name  AS owner_name,
@@ -332,6 +332,7 @@ type AdminListShopsRow struct {
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	VipUntil          pgtype.Timestamptz `json:"vip_until"`
 	ExcludedFromIndex bool               `json:"excluded_from_index"`
+	ImagePath         pgtype.Text        `json:"image_path"`
 	IsVip             bool               `json:"is_vip"`
 	OwnerID           int64              `json:"owner_id"`
 	OwnerName         pgtype.Text        `json:"owner_name"`
@@ -361,6 +362,7 @@ func (q *Queries) AdminListShops(ctx context.Context, arg AdminListShopsParams) 
 			&i.CreatedAt,
 			&i.VipUntil,
 			&i.ExcludedFromIndex,
+			&i.ImagePath,
 			&i.IsVip,
 			&i.OwnerID,
 			&i.OwnerName,
@@ -739,6 +741,8 @@ const adminReferencedImagePaths = `-- name: AdminReferencedImagePaths :many
 SELECT image_path FROM product_templates WHERE image_path IS NOT NULL AND image_path <> ''
 UNION
 SELECT image_path FROM products WHERE image_path IS NOT NULL AND image_path <> ''
+UNION
+SELECT image_path FROM shops WHERE image_path IS NOT NULL AND image_path <> ''
 `
 
 // every photo path any row points at, templates and shop catalogues together. the catalogue sweep
@@ -1273,11 +1277,18 @@ const adminUploadedImagePaths = `-- name: AdminUploadedImagePaths :many
 SELECT image_path::text AS image_path
 FROM products
 WHERE image_path LIKE $1::text
+UNION
+SELECT image_path::text AS image_path
+FROM shops
+WHERE image_path LIKE $1::text
 `
 
-// every products.image_path naming an owner's upload, for the orphan sweep. filtered in SQL because
-// catalogue paths outnumber uploads a hundred to one. the prefix is a parameter so
-// imagestore.UploadDir stays the one declaration of what "uploads/" is.
+// every uploaded photo any row points at, for the orphan sweep. filtered in SQL because catalogue
+// paths outnumber uploads a hundred to one. the prefix is a parameter so imagestore.UploadDir stays
+// the one declaration of what "uploads/" is.
+//
+// **shops are in it, not only products**: a storefront photo lives in the same directory, and a
+// sweep that read products alone would delete every VIP card's picture an hour after it was uploaded.
 func (q *Queries) AdminUploadedImagePaths(ctx context.Context, prefix string) ([]string, error) {
 	rows, err := q.db.Query(ctx, adminUploadedImagePaths, prefix)
 	if err != nil {

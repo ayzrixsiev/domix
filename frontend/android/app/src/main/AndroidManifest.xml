@@ -2,6 +2,13 @@
     <!-- unlike the debug/profile manifests, this one is used for release builds too - without this,
          every network call (auth, map tiles, geocoding) would silently fail once shipped -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- «Рядом со мной» on the map, and nothing else - the fix moves the camera and is never sent
+         anywhere. COARSE is declared alongside FINE because from Android 12 the system dialog lets
+         the user grant only the approximate one; a city block is plenty for "what is near me", so
+         asking for FINE alone would turn that choice into a refusal. Foreground only: there is no
+         ACCESS_BACKGROUND_LOCATION here, and adding one would need its own Play declaration. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <!-- the name under the launcher icon. it was "frontend" - the flutter project's folder name -
          which is what every user would have seen on their home screen. -->
     <application

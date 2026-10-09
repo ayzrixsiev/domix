@@ -699,8 +699,9 @@ func TestProductsByCategoryListsEveryShopsPricedRows(t *testing.T) {
 	// blocks stays unpriced everywhere, and must not leak into the mixes list either way
 
 	rows, err := q.ListProductsByCategory(ctx, db.ListProductsByCategoryParams{
-		Category: "mixes",
-		Limit:    100,
+		Category:      "mixes",
+		OffersPerLine: 4,
+		ResultLimit:   100,
 	})
 	if err != nil {
 		t.Fatalf("products by category: %v", err)
@@ -731,14 +732,102 @@ func TestProductsByCategoryListsEveryShopsPricedRows(t *testing.T) {
 
 	// a category nobody prices comes back empty rather than erroring
 	none, err := q.ListProductsByCategory(ctx, db.ListProductsByCategoryParams{
-		Category: "tools",
-		Limit:    100,
+		Category:      "tools",
+		OffersPerLine: 4,
+		ResultLimit:   100,
 	})
 	if err != nil {
 		t.Fatalf("products by an unstocked category: %v", err)
 	}
 	if len(none) != 0 {
 		t.Fatalf("nobody priced a tool, want 0 products, got %d", len(none))
+	}
+}
+
+// **a popular category must not be one product repeated.** Every shop of a market prices the same
+// curated rows, so ordering «Смеси» by price alone lists every shop's glue before its second
+// product. The listing shows a few offers of one line and then moves on to the next line.
+func TestACategoryShowsAFewOffersOfEachProductRatherThanOneProduct(t *testing.T) {
+	ctx, conn, q := beginTx(t)
+
+	const category = "mixes"
+	const perLine = 4
+
+	// six shops, so every line has more offers than the listing may show - and in no particular
+	// order, since what must come back is the cheapest few, not the first few
+	for _, shop := range []struct {
+		name  string
+		price int64
+	}{
+		{"middling", 60_000},
+		{"dearest", 90_000},
+		{"cheapest", 40_000},
+		{"dear", 80_000},
+		{"cheap", 50_000},
+		{"fifth", 70_000},
+	} {
+		id := makeShopTx(t, ctx, conn, q, shop.name, catalog.CategoryUniversal, false)
+		if _, err := conn.Exec(ctx,
+			`UPDATE products SET price = $2 WHERE shop_id = $1 AND category = $3`,
+			id, shop.price, category); err != nil {
+			t.Fatalf("price %s: %v", shop.name, err)
+		}
+	}
+
+	// counted off the template rather than written down: /products.md is the founder's to edit
+	lines := 0
+	for _, item := range catalog.Template(string(catalog.CategoryUniversal)) {
+		if string(item.Category) == category {
+			lines++
+		}
+	}
+	if lines < 2 {
+		t.Fatalf("the универсальный template has %d %q rows - this test needs two lines to tell "+
+			"them apart", lines, category)
+	}
+
+	// room for every line, or a truncated list would hide the thing being asserted
+	rows, err := q.ListProductsByCategory(ctx, db.ListProductsByCategoryParams{
+		Category:      category,
+		OffersPerLine: perLine,
+		ResultLimit:   int32(perLine * lines),
+	})
+	if err != nil {
+		t.Fatalf("products by category: %v", err)
+	}
+
+	sequence := make([]string, 0, len(rows))
+	offers := map[string]int{}
+	for _, row := range rows {
+		sequence = append(sequence, row.TemplateKey.String)
+		offers[row.TemplateKey.String]++
+		// the two dearest shops are the fifth and sixth offer of every line, so a price above the
+		// fourth is a line that leaked more offers than it may show
+		if row.Price.Int64 > 70_000 {
+			t.Fatalf("%q came back at %d: only the %d cheapest offers of a line belong in the list",
+				row.Name, row.Price.Int64, perLine)
+		}
+	}
+
+	if len(offers) != lines {
+		t.Fatalf("want all %d priced lines in the category, got %d", lines, len(offers))
+	}
+	for key, count := range offers {
+		if count > perLine {
+			t.Fatalf("%q came back %d times - the listing shows at most %d shops per product",
+				key, count, perLine)
+		}
+	}
+	// and the offers of one line arrive together: a line left and returned to is the old wall of
+	// one product, merely spread out
+	if blocks := len(slices.Compact(sequence)); blocks != lines {
+		t.Fatalf("the %d lines came back as %d blocks - a product's offers must be contiguous",
+			lines, blocks)
+	}
+	// the cheapest offer in the category still opens the list
+	if rows[0].Price.Int64 != 40_000 || rows[0].ShopName != "cheapest" {
+		t.Fatalf("want the cheapest shop's row first, got %q at %d",
+			rows[0].ShopName, rows[0].Price.Int64)
 	}
 }
 
@@ -802,8 +891,9 @@ func TestCustomProductsAppearInACategoryButNotInTheIndex(t *testing.T) {
 
 	// but it does show up under `tools`
 	tools, err := q.ListProductsByCategory(ctx, db.ListProductsByCategoryParams{
-		Category: "tools",
-		Limit:    100,
+		Category:      "tools",
+		OffersPerLine: 4,
+		ResultLimit:   100,
 	})
 	if err != nil {
 		t.Fatalf("products by tools: %v", err)

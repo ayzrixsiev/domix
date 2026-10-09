@@ -49,6 +49,11 @@ const (
 	categoryProductsLimit = 100
 	searchResultsLimit    = 100
 
+	// how many shops' prices a category shows for one product before moving on to the next one -
+	// two rows of the grid. see ListProductsByCategory: without it a popular category is one product
+	// repeated until the limit, since every shop of a market prices the same curated rows.
+	categoryOffersPerLine = 4
+
 	// three characters in at least one word - the shortest piece the trigram index can look up
 	// (migration 000002). the app enforces the same rule before sending.
 	minSearchWordLen = 3
@@ -141,7 +146,7 @@ func (h *Home) homeContent(ctx context.Context) (HomeResponse, error) {
 	for _, shop := range vip {
 		// its own mapper: ListVipShops LEFT JOINs the index, so a paid placement appears the moment it
 		// is granted and simply carries no price yet
-		response.VipShops = append(response.VipShops, shopFromVip(shop))
+		response.VipShops = append(response.VipShops, shopFromVip(h.URLs, shop))
 	}
 	return response, nil
 }
@@ -162,8 +167,9 @@ func (h *Home) ProductsByCategory(w http.ResponseWriter, r *http.Request) {
 	// the twelve codes are validated above, so the cache's key space is fixed
 	h.Cache.serve(w, r, "category:"+code, "products", func(ctx context.Context) (any, error) {
 		rows, err := h.Queries.ListProductsByCategory(ctx, db.ListProductsByCategoryParams{
-			Category: code,
-			Limit:    categoryProductsLimit,
+			Category:      code,
+			OffersPerLine: categoryOffersPerLine,
+			ResultLimit:   categoryProductsLimit,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("listing products for category %q: %w", code, err)

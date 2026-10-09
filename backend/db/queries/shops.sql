@@ -49,12 +49,26 @@ FROM updated u
 LEFT JOIN shop_basket_index bi ON bi.shop_id = u.id;
 
 -- name: SetShopVIP :one
+-- image_path comes back so the panel can say «загрузите фото» on the same answer that grants the
+-- placement: a VIP card is the one card that shows a storefront.
 UPDATE shops
 SET vip_until = $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, name, vip_until,
+RETURNING id, name, vip_until, image_path,
           COALESCE(vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip;
+
+-- name: GetShopPhoto :one
+-- read before a photo is written or removed, for the path to unlink afterwards
+SELECT id, name, image_path FROM shops WHERE id = $1;
+
+-- name: SetShopImage :one
+-- the row is pointed at a file that already exists; the old one is unlinked after this returns
+UPDATE shops
+SET image_path = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, name, image_path;
 
 -- name: DeleteShop :execrows
 DELETE FROM shops WHERE id = $1;
@@ -72,10 +86,13 @@ WHERE s.user_id = $1
 ORDER BY s.created_at DESC;
 
 -- name: ListVipShops :many
+-- the photo and the product count are read only here: a VIP card carries both, and the map list
+-- would pay for a count per shop to draw neither.
 SELECT s.id, s.user_id, s.name, s.contact_phone, s.address, s.category,
        true AS is_vip,
        ST_Y(s.location)::float8 AS latitude, ST_X(s.location)::float8 AS longitude,
-       s.created_at, s.updated_at,
+       s.created_at, s.updated_at, s.image_path,
+       (SELECT COUNT(*) FROM products p WHERE p.shop_id = s.id)::bigint AS product_count,
        bi.price_index, bi.basket_price
 FROM shops s
 LEFT JOIN shop_basket_index bi ON bi.shop_id = s.id

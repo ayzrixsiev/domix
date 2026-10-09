@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/language_provider.dart';
+import 'package:frontend/core/widgets/pill_search_field.dart';
 import 'package:frontend/features/home/presentation/screens/product_search_screen.dart';
 
 /// The home feed's search bar: a **button that opens [ProductSearchScreen]**, not a field.
@@ -12,7 +14,7 @@ import 'package:frontend/features/home/presentation/screens/product_search_scree
 class SearchAndLikeBar extends StatelessWidget {
   const SearchAndLikeBar({super.key});
 
-  static const double _height = 48;
+  static const double _height = PillSearchField.pageHeight;
 
   /// **The filter button next to it is gone rather than disabled.** There is nothing to filter a
   /// product search by yet, and a control that looks live and does nothing is the specific bug this
@@ -20,7 +22,8 @@ class SearchAndLikeBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = Provider.of<LanguageProvider>(context).strings;
-    final borderRadius = BorderRadius.circular(AppRadius.sm);
+    // the capsule PillSearchField wears: this is a picture of that field, so it is that field's shape
+    final borderRadius = BorderRadius.circular(999);
 
     return Semantics(
       button: true,
@@ -35,21 +38,18 @@ class SearchAndLikeBar extends StatelessWidget {
           ),
           child: Ink(
             height: _height,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            // **white, with the ring and the lift.** It was a recessed grey well for as long as the
-            // page was a cold grey - a white box on #EFF1F5 read as the first content card of the
-            // feed. On the warm page it is the other way round: a grey well is the one muddy patch
-            // on it, and white is what the eye reads as "type here". Exactly the field it opens on
+            padding: const EdgeInsets.only(left: 18, right: 10),
+            // **white and lifted, with no ring.** A grey well is the one muddy patch on this page,
+            // and white is what the eye reads as "type here". Exactly the field it opens on
             // ProductSearchScreen wears, so pressing it reads as the same control moving up.
             decoration: BoxDecoration(
               color: AppColors.surfaceWhite,
               borderRadius: borderRadius,
-              border: Border.all(color: AppColors.trackGrey),
               boxShadow: AppShadows.card,
             ),
             child: Row(
               children: [
-                const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 19),
+                const Icon(LucideIcons.search, color: AppColors.textMuted, size: 18),
                 const SizedBox(width: 10),
                 // styled exactly as the real field's hint on the screen this opens, so pressing it reads as the
                 // same control moving up into that app bar
