@@ -368,6 +368,25 @@ void main() {
       // the title has stepped aside rather than moved over
       expect(find.text('Смеси'), findsNothing);
     });
+
+    testWidgets('the magnifier becomes the field rather than being replaced by one',
+        (tester) async {
+      await pumpCategory(tester);
+      await tester.tap(find.byKey(const ValueKey('open-search')));
+
+      // mid-flight the capsule is neither a disc nor a full-width field, and the heading has
+      // already gone. a frame that overflows or throws here is the morph laid out wrong.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 130));
+      expect(tester.takeException(), isNull);
+      expect(find.text('Смеси'), findsNothing);
+
+      await tester.pumpAndSettle();
+      // and it lands on the page gutter, at the height of the disc it grew out of
+      final field = tester.getRect(find.byType(PillSearchField));
+      expect(field.right, tester.getSize(find.byType(MaterialApp)).width - 16);
+      expect(field.height, CircleIconButton.disc);
+    });
   });
 
   group('searching from a category page', () {
@@ -489,9 +508,10 @@ void main() {
   //
   // The same shape as the product tile above and the same failure mode: a fixed-height card whose
   // column has to hold a name, two lines of address, the comparison and two figures at the
-  // narrowest width the app supports — and a third of its width is the photograph, so the words
-  // have two thirds of a 320dp phone to fit in. Overflow is loud here and a yellow stripe on a
-  // phone, so raising [VipShopsCarousel.cardHeight] is what adding a line to that card costs.
+  // narrowest width the app supports — and **nearly half of its width is now the photograph**, so
+  // the words have a little over half of a 320dp phone to fit in. Overflow is loud here and a
+  // yellow stripe on a phone, so raising [VipShopsCarousel.cardHeight] is what adding a line to
+  // that card costs, and widening the frame costs the comparison sentence its last characters.
   group('the VIP card at 320dp', () {
     Future<void> pumpCard(WidgetTester tester, HomeShopPreview? slot) async {
       tester.view.physicalSize = const Size(320 * 3, 800 * 3);
@@ -545,6 +565,26 @@ void main() {
       // shop draws a dash and only an unsold slot carries a number
       expect(find.text(_strings.noFigure), findsOneWidget);
       expect(find.text(_strings.priceTierDearer(17)), findsOneWidget);
+
+      // **the bars fall because the shop is dearer.** colour is not the only channel on this badge
+      // and neither is the sentence: the glyph is read first, so its direction has to agree with
+      // the tier rather than being decoration that happens to sit beside it.
+      expect(find.byIcon(LucideIcons.chart_no_axes_column_decreasing), findsOneWidget);
+      expect(find.byIcon(LucideIcons.chart_no_axes_column_increasing), findsNothing);
+
+      // and the storefront is the half of the card it was widened into. the frame is the only
+      // ClipRRect inside a slot, and it fills the card's height between its 8dp of padding.
+      final frame = tester.getSize(
+        find
+            .descendant(of: find.byType(PressableScale).first, matching: find.byType(ClipRRect))
+            .first,
+      );
+      expect(frame.height, VipShopsCarousel.cardHeight - 16);
+      expect(
+        frame.width,
+        greaterThan(card.width * 0.4),
+        reason: 'the storefront is back to being a thumbnail beside the words',
+      );
     });
 
     testWidgets('an unsold slot fits too, and names its fields', (tester) async {

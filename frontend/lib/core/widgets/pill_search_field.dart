@@ -113,9 +113,10 @@ class _PillSearchFieldState extends State<PillSearchField> {
           color: AppColors.surfaceWhite,
           borderRadius: BorderRadius.circular(999),
           // over a map the field and the discs either side of it read as one bar only if none of
-          // them is a different kind of object, so it takes the same hairline and lift they do
+          // them is a different kind of object, so it takes the same hairline and lift they do. on
+          // the page it is flat: that shadow pooled in the capsule's corners and read as a grey backing
           border: floating ? Border.all(color: AppColors.hairline) : null,
-          boxShadow: floating ? AppShadows.floating : AppShadows.card,
+          boxShadow: floating ? AppShadows.floating : null,
         ),
         child: Row(
           children: [

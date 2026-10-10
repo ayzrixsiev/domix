@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
@@ -20,6 +21,40 @@ import 'package:frontend/core/widgets/circle_icon_button.dart';
 /// **Scaffold adds `MediaQuery.padding.top` to [preferredSize] itself**, and the `SafeArea` here is
 /// what consumes it, so the reported height is the content's alone. The status bar style comes with
 /// it: with no `AppBar` in the tree nothing else asks for dark icons.
+/// Everything [AppPageHeader.searchable] needs, in one object: the header's other constructors
+/// would otherwise each carry seven null fields.
+class HeaderSearch {
+  const HeaderSearch({
+    required this.open,
+    required this.field,
+    required this.onOpen,
+    required this.onClose,
+    required this.openTooltip,
+    required this.closeTooltip,
+    this.resultsAreSearch = false,
+  });
+
+  /// Whether the field has the header. The header animates *towards* this - it never jumps.
+  final bool open;
+
+  /// The caller's own field, which owns the controller and the focus node. Drawn at
+  /// [CircleIconButton.disc] tall, because a circle can only grow into a capsule of its own height.
+  final Widget field;
+
+  final VoidCallback onOpen;
+
+  /// Puts the field away, and is also what the cross does once a search's results are up: both mean
+  /// "back to the page this was".
+  final VoidCallback onClose;
+
+  /// True once the screen is showing the answer to a submitted search: the disc is a cross rather
+  /// than a magnifier, since undoing that is the only thing left to do.
+  final bool resultsAreSearch;
+
+  final String openTooltip;
+  final String closeTooltip;
+}
+
 class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
   const AppPageHeader({
     super.key,
@@ -30,7 +65,8 @@ class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
     this.onBack,
     this.action,
     this.bottom,
-  }) : child = null;
+  }) : child = null,
+       search = null;
 
   /// For the two headers whose middle is a control rather than a title: the search field, and the
   /// deep-link loader that has nothing to put there until the shop arrives.
@@ -43,7 +79,22 @@ class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
     this.bottom,
   }) : title = null,
        subtitle = null,
-       icon = null;
+       icon = null,
+       search = null;
+
+  /// **A page that searches itself.** The title keeps its magnifier, and the magnifier *becomes*
+  /// the field - see [_searchRow] for why that is one animation rather than two headers.
+  const AppPageHeader.searchable({
+    super.key,
+    required String this.title,
+    this.subtitle,
+    required HeaderSearch this.search,
+    this.bottom,
+  }) : icon = null,
+       showBack = true,
+       onBack = null,
+       action = null,
+       child = null;
 
   final String? title;
 
@@ -68,6 +119,9 @@ class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
 
   /// The middle of the row when it is not a title - see [AppPageHeader.custom].
   final Widget? child;
+
+  /// Non-null only on [AppPageHeader.searchable].
+  final HeaderSearch? search;
 
   /// Fixed rather than intrinsic, so a header is exactly as tall with a subtitle as without one and
   /// the two tabs beside each other cannot disagree. 48 rather than the round controls' own 44
@@ -126,7 +180,10 @@ class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
           children: [
             Padding(
               padding: const EdgeInsets.only(top: _topPadding, bottom: _bottomPadding),
-              child: SizedBox(height: _rowHeight, child: _row()),
+              child: SizedBox(
+                height: _rowHeight,
+                child: search == null ? _row() : _searchRow(search!),
+              ),
             ),
             ?bottom,
           ],
@@ -156,6 +213,161 @@ class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 
+  /// **The magnifier is not swapped for a field, it becomes one.** Flipping the header between a
+  /// title and a search bar is two objects taking turns where there was one: the capsule drew
+  /// itself over the heading and slid back off it, which reads as a panel dropping in rather than
+  /// as a control opening. One object instead - the disc stretches left into the field, the title
+  /// clears out ahead of its edge, and the glyph that was the button ends up being the field's own.
+  ///
+  /// The whole morph is a width: a 40px circle and a 40px capsule have the same radius, so nothing
+  /// has to animate a corner. [TweenAnimationBuilder] rather than a controller because a header is
+  /// rebuilt by its screen, not driven by it - `open` flipping mid-flight resumes from where the
+  /// motion got to.
+  Widget _searchRow(HeaderSearch search) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: search.open ? 1 : 0),
+      duration: AppMotion.base,
+      curve: AppMotion.easing,
+      builder: (context, t, _) => LayoutBuilder(
+        builder: (context, constraints) => _searchStack(search, t, constraints.maxWidth),
+      ),
+    );
+  }
+
+  /// Laid out by hand, in the same gutters [_row] uses, so the title does not shift by a pixel when
+  /// a screen gains a search and the capsule's own edges land on the page's 16px margin.
+  Widget _searchStack(HeaderSearch search, double t, double width) {
+    const capsule = CircleIconButton.disc;
+    // the slack inside a tap target that is wider than its disc - what puts a 40 disc on the gutter
+    const slack = (CircleIconButton.target - capsule) / 2;
+
+    // where the field ends up, and where the disc it grew out of started
+    final fieldLeft = _discGutter + CircleIconButton.target + _discGap;
+    final sourceLeft = width - _discGutter - slack - capsule;
+    final left = sourceLeft + (fieldLeft - sourceLeft) * t;
+    // the right edge never moves: it is the page gutter in both states
+    final capsuleWidth = width - _discGutter - slack - left;
+
+    // gone well before the capsule's edge reaches it: a capsule sliding over live text is what
+    // reads as a panel landing on the heading rather than as the heading making room
+    final titleT = (1 - t / 0.3).clamp(0.0, 1.0);
+
+    return Stack(
+      children: [
+        Positioned(
+          left: _discGutter,
+          top: 0,
+          bottom: 0,
+          // the way out of the field is where the way out of the page was. the glyph changes at the
+          // halfway point, under a capsule in full flight, which is the one moment nobody is
+          // looking at a 20px chevron
+          child: Center(
+            child: t > 0.5
+                ? CircleIconButton(
+                    key: const ValueKey('close-search'),
+                    icon: Icons.close_rounded,
+                    tooltip: search.closeTooltip,
+                    onTap: search.onClose,
+                  )
+                : const CircleBackButton(),
+          ),
+        ),
+        // **gone from the tree, not merely transparent**, once the field has the header: an
+        // invisible heading a screen reader still reads is a header saying two things at once
+        if (titleT > 0)
+          Positioned(
+            left: fieldLeft,
+            right: _discGutter + CircleIconButton.target + 12,
+            top: 0,
+            bottom: 0,
+            child: IgnorePointer(
+              ignoring: titleT < 1,
+              child: Opacity(
+                opacity: titleT,
+                // a few pixels left as it goes, so it reads as stepping aside rather than blinking out
+                child: Transform.translate(
+                  offset: Offset(-10 * (1 - titleT), 0),
+                  child: _TitleBlock(title: title!, subtitle: subtitle),
+                ),
+              ),
+            ),
+          ),
+        Positioned(
+          left: left - slack,
+          width: capsuleWidth + slack * 2,
+          top: 0,
+          bottom: 0,
+          child: Center(child: _morph(search, t, capsuleWidth)),
+        ),
+      ],
+    );
+  }
+
+  /// At rest this is the ordinary header disc - ink, tooltip and all, in exactly the pixels [_row]
+  /// would have put it in. The hand-drawn capsule only exists while the morph is in flight.
+  Widget _morph(HeaderSearch search, double t, double capsuleWidth) {
+    if (t == 0) {
+      return CircleIconButton(
+        // the two keys the chrome tests reach for, and the glyph each of them names
+        key: ValueKey(search.resultsAreSearch ? 'close-search' : 'open-search'),
+        icon: search.resultsAreSearch ? Icons.close_rounded : LucideIcons.search,
+        tooltip: search.resultsAreSearch ? search.closeTooltip : search.openTooltip,
+        onTap: search.resultsAreSearch ? search.onClose : search.onOpen,
+      );
+    }
+
+    // the field's contents arrive only once there is room for them, and the stand-in hands over as
+    // they do: both magnifiers sit 18px from the same edge, so the crossfade is invisible
+    final fieldT = ((t - 0.55) / 0.45).clamp(0.0, 1.0);
+
+    return SizedBox(
+      height: CircleIconButton.disc,
+      width: capsuleWidth,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Opacity(opacity: 1 - fieldT, child: _standIn(t)),
+          // mounted for the whole flight, in both directions: the field has to exist before the
+          // screen can focus it on the way in, and still exist while it shrinks on the way out
+          Opacity(
+            opacity: fieldT,
+            child: ClipRRect(borderRadius: BorderRadius.circular(999), child: search.field),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The disc on its way to being the field: one white surface with one glyph riding its left edge,
+  /// from the middle of a 40px circle to the field's own 18px inset.
+  Widget _standIn(double t) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.surfaceWhite,
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: AppShadows.card,
+          ),
+        ),
+        Positioned(
+          left: 10 + 8 * t,
+          top: 0,
+          bottom: 0,
+          child: Center(
+            child: Icon(
+              LucideIcons.search,
+              // a header glyph is 20 and the field's is 18, so it settles as it travels
+              size: 20 - 2 * t,
+              color: Color.lerp(AppColors.textDark, AppColors.textMuted, t),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   /// Either the title or whatever [AppPageHeader.custom] was given - keyed on *which*, so a header
   /// whose subtitle merely changed (a count landing) updates in place, and one whose middle changes
   /// kind (a title becoming a search field) animates.
@@ -173,14 +385,14 @@ class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
     return const SizedBox.shrink(key: ValueKey('empty'));
   }
 
-  /// **The whole of the "premium transformation".** A category page's magnifier trades places with
-  /// its title, and swapping the two widgets outright is a flicker - one frame of heading, one frame
-  /// of field. Crossed over a slide of a few pixels it reads as the title stepping aside for the
-  /// field, which is one gesture rather than two states.
+  /// What a header's middle does when it changes *kind* - the deep-link loader's empty row becoming
+  /// a shop's name. Swapping the two outright is a flicker; crossed over a slide of a few pixels it
+  /// reads as one arriving in the other's place. A page that searches itself needs more than this,
+  /// and has [_searchRow].
   ///
   /// The layout builder is not decoration: [AnimatedSwitcher]'s default one centres its children in
-  /// a Stack under *loose* constraints, which would let the search field shrink to the width of its
-  /// own hint. `passthrough` hands the row's tight width straight down.
+  /// a Stack under *loose* constraints, which would let a control shrink to the width of its own
+  /// contents. `passthrough` hands the row's tight width straight down.
   static Widget _swap(Widget child) {
     return AnimatedSwitcher(
       duration: AppMotion.base,

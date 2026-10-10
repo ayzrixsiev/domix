@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
-import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/pill_search_field.dart';
 import 'package:frontend/features/home/presentation/screens/product_search_screen.dart';
@@ -39,13 +38,13 @@ class SearchAndLikeBar extends StatelessWidget {
           child: Ink(
             height: _height,
             padding: const EdgeInsets.only(left: 18, right: 10),
-            // **white and lifted, with no ring.** A grey well is the one muddy patch on this page,
-            // and white is what the eye reads as "type here". Exactly the field it opens on
+            // **white and flat, with no ring and no shadow.** A grey well is the one muddy patch
+            // on this page, and white is what the eye reads as "type here"; the card shadow read as
+            // a grey smudge caught in the capsule's corners. Exactly the field it opens on
             // ProductSearchScreen wears, so pressing it reads as the same control moving up.
             decoration: BoxDecoration(
               color: AppColors.surfaceWhite,
               borderRadius: borderRadius,
-              boxShadow: AppShadows.card,
             ),
             child: Row(
               children: [

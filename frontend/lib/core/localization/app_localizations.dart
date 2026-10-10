@@ -1104,6 +1104,14 @@ class AppLocalizations {
       ? 'Не удалось открыть приложение на телефоне'
       : "Telefondagi ilovani ochib bo'lmadi";
 
+  /// the two discs on the shop's cover carry no label, so these exist for a screen reader
+  String get shareShopTooltip => isRu ? 'Поделиться магазином' : "Do'kon bilan ulashish";
+  String get copyPhoneTooltip => isRu ? 'Скопировать номер' : 'Raqamdan nusxa olish';
+
+  /// android 13 and later shows its own clipboard preview, so this doubles up there - and says the
+  /// only thing an older phone says at all
+  String get phoneCopied => isRu ? 'Номер скопирован' : 'Raqam nusxalandi';
+
   // ── the product photo an owner uploads. every product can carry one, template rows included:
   // comparability rests on the row's key, name and unit, none of which a photo touches. ──
 

@@ -225,7 +225,11 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(height: 26),
+            // **14, against the 26 between the sections below.** This gap is not between two
+            // sections: above it is the search bar, which is a control rather than content, and the
+            // VIP strip is the first thing on the page worth reading. 26 under the capsule left the
+            // paid placement floating in the middle of the screen.
+            const SizedBox(height: 14),
             Padding(padding: _gutter, child: SectionHeader(title: strings.vipShops)),
             const SizedBox(height: 12),
             // keyed on the slot count, so the State is rebuilt if the ring ever grows - a PageController's
@@ -237,7 +241,12 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
 
             // the section's own panel is gone: the white surface moved onto the individual cards
-            const SizedBox(height: 26),
+            //
+            // **12 where every other section takes 26, and not a number to normalise back.** The
+            // carousel does not end at its card: under it come 12dp of gap and a row of dots, so
+            // the usual 26 put 47dp of air between the VIP card and this heading - twice what sits
+            // between any other two sections, and it read as a hole in the feed.
+            const SizedBox(height: 10),
             Padding(
               padding: _gutter,
               child: SectionHeader(title: strings.popularCategories),

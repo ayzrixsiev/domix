@@ -69,7 +69,8 @@ class _ProductResultsScreenState extends State<ProductResultsScreen> {
   /// Bumped per search so the results view is re-keyed, which is what re-runs its load.
   int _runs = 0;
 
-  /// Whether the field has taken the title's place - see [_openSearch].
+  /// Whether the field has the header - see [_openSearch]. The animation between the two states
+  /// belongs to [AppPageHeader.searchable], which only ever sees this bool.
   bool _searching = false;
 
   final FocusNode _filterFocus = FocusNode();
@@ -147,82 +148,71 @@ class _ProductResultsScreenState extends State<ProductResultsScreen> {
   Widget build(BuildContext context) {
     final strings = Provider.of<LanguageProvider>(context).strings;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: _searching
-          ? AppPageHeader.custom(
-              // keyed, or the header sees one CircleIconButton throughout and swaps the glyph
-              // without the cross-fade the title beside it is getting
-              action: CircleIconButton(
-                key: const ValueKey('close-search'),
-                icon: Icons.close_rounded,
-                tooltip: strings.cancelButton,
-                // the field beside it is the row's full height, and so is this
-                diameter: AppPageHeader.customDisc,
-                onTap: _closeSearch,
-              ),
-              // **a filter, but the app's one search field** - this used to be its own rounded
-              // rectangle with a ring, which is a third kind of field on the gesture that opens the
-              // same screen one level up. onSubmitted null leaves it a pure filter.
-              child: PillSearchField(
-                controller: _filter,
-                focusNode: _filterFocus,
-                hint: strings.categoryFilterHint,
-                onChanged: (value) => setState(() => _typed = value),
-                onSubmitted: widget.onSearch == null ? null : _search,
-                // clears the text *and* drops back out of a catalogue-wide search into the category
-                onClear: _clearSearch,
-                clearTooltip: strings.searchClear,
-              ),
-            )
-          : AppPageHeader(
-              // after a catalogue-wide search the heading is the query: the results are no longer
-              // this category's, and leaving "Смеси" over them would be a false claim
-              title: _submitted ?? widget.title,
-              subtitle: _submitted != null
-                  ? (_count == null
-                        ? strings.searchAcrossCategories
-                        : '${strings.searchAcrossCategories} · ${strings.productsCountLabel(_count!)}')
-                  : (_count == null
-                        ? widget.subtitle
-                        : strings.productsCountLabel(_count!)),
-              // a magnifier while there is nothing to undo, an × once the screen is showing the
-              // answer to a search - one control, saying the only thing there is to do next
-              action: _submitted == null
-                  ? CircleIconButton(
-                      key: const ValueKey('open-search'),
-                      icon: Icons.search_rounded,
-                      tooltip: strings.searchHint,
-                      onTap: _openSearch,
-                    )
-                  : CircleIconButton(
-                      key: const ValueKey('close-search'),
-                      icon: Icons.close_rounded,
-                      tooltip: strings.cancelButton,
-                      onTap: _closeSearch,
-                    ),
+    return PopScope(
+      // **the system back closes the field before it leaves the page.** a field that only its own
+      // cross can put away is a trap on android, where back is the gesture people reach for
+      canPop: !_searching,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _closeSearch();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppPageHeader.searchable(
+          // after a catalogue-wide search the heading is the query: the results are no longer this
+          // category's, and leaving "Смеси" over them would be a false claim
+          title: _submitted ?? widget.title,
+          subtitle: _submitted != null
+              ? (_count == null
+                    ? strings.searchAcrossCategories
+                    : '${strings.searchAcrossCategories} · ${strings.productsCountLabel(_count!)}')
+              : (_count == null ? widget.subtitle : strings.productsCountLabel(_count!)),
+          search: HeaderSearch(
+            open: _searching,
+            onOpen: _openSearch,
+            onClose: _closeSearch,
+            resultsAreSearch: _submitted != null,
+            openTooltip: strings.searchHint,
+            closeTooltip: strings.cancelButton,
+            // **a filter, but the app's one search field** - this used to be its own rounded
+            // rectangle with a ring, which is a third kind of field on the gesture that opens the
+            // same screen one level up. onSubmitted null leaves it a pure filter.
+            field: PillSearchField(
+              controller: _filter,
+              focusNode: _filterFocus,
+              hint: strings.categoryFilterHint,
+              // the capsule it grew out of was a disc, and a disc can only become a capsule of its
+              // own height
+              height: CircleIconButton.disc,
+              onChanged: (value) => setState(() => _typed = value),
+              onSubmitted: widget.onSearch == null ? null : _search,
+              // clears the text *and* drops back out of a catalogue-wide search into the category
+              onClear: _clearSearch,
+              clearTooltip: strings.searchClear,
             ),
-      body: SafeArea(
-        top: false,
-        child: ProductResultsView(
-          // a fresh key is what re-runs the load: the view fetches from its own initState and holds
-          // the result, so a new State beats racing a second request inside the old one
-          key: ValueKey(_submitted == null ? 'category' : 'search-$_runs'),
-          strings: strings,
-          load: _submitted == null
+          ),
+        ),
+        body: SafeArea(
+          top: false,
+          child: ProductResultsView(
+            // a fresh key is what re-runs the load: the view fetches from its own initState and holds
+            // the result, so a new State beats racing a second request inside the old one
+            key: ValueKey(_submitted == null ? 'category' : 'search-$_runs'),
+            strings: strings,
+            load: _submitted == null
               ? widget.load
               : () => widget.onSearch!(_submitted!),
-          // catalogue-wide results are not narrowed again by the text still sitting in the field -
-          // they already are its answer
-          query: _submitted == null ? _typed : '',
-          canSearchWider: widget.onSearch != null,
-          emptyIcon: widget.emptyIcon,
-          emptyTitle: widget.emptyTitle,
-          emptyHint: widget.emptyHint,
-          // safe: this lands during the child's own post-setState callback, not inside build itself
-          onCountChanged: (count) {
-            if (mounted) setState(() => _count = count);
-          },
+            // catalogue-wide results are not narrowed again by the text still sitting in the field -
+            // they already are its answer
+            query: _submitted == null ? _typed : '',
+            canSearchWider: widget.onSearch != null,
+            emptyIcon: widget.emptyIcon,
+            emptyTitle: widget.emptyTitle,
+            emptyHint: widget.emptyHint,
+            // safe: this lands during the child's own post-setState callback, not inside build itself
+            onCountChanged: (count) {
+              if (mounted) setState(() => _count = count);
+            },
+          ),
         ),
       ),
     );

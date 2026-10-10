@@ -41,15 +41,21 @@ class VipShopsCarousel extends StatefulWidget {
   /// real, not defensive padding: `index % 0` below is a division by zero.
   final List<HomeShopPreview?> slots;
 
-  /// The page is the whole width and the card is inset by this, which is the feed's own gutter -
-  /// so the card's left edge lines up with every heading above and below it. Between two cards
-  /// mid-swipe it reads as twice this.
-  static const double cardGutter = 10;
+  /// The page is the whole width and the card is inset by this. **Deliberately narrower than the
+  /// feed's own 10** - this is the one block on the home screen allowed to break that left edge,
+  /// and the four it buys go where they are worth the most: the storefront and the comparison
+  /// sentence beside it both run out of room before anything else on the card does. Between two
+  /// cards mid-swipe it reads as twice this.
+  static const double cardGutter = 6;
 
   /// Fixed, because a `PageView` needs a bounded height. **A `Column` inside a fixed-height card
   /// fails by overflowing, not by scrolling** - silent in release - so adding a line means raising
   /// this number. **The empty card is built to exactly the same height.**
-  static const double cardHeight = 150;
+  ///
+  /// The storefront is the only thing on the card that grows with it - the three blocks of words
+  /// beside it are a fixed stack spread down the column - so this is the one number that makes the
+  /// photograph bigger without taking width off the sentence under the address.
+  static const double cardHeight = 176;
 
   /// How long a card holds the screen before the strip moves on by itself. **The section is an
   /// advert and it has five slots, so a strip that only ever shows its first card is four fifths
@@ -202,8 +208,8 @@ class _VipShopsCarouselState extends State<VipShopsCarousel> {
 /// Which of the five slots is on screen. **The count is the inventory, not a page count** - five
 /// dots over one card is the section saying there are four more placements, sold or not.
 ///
-/// The active dot is wider rather than a different colour alone: at 7px a hue change is a detail
-/// somebody has to look for, and the row is read at a glance or not at all.
+/// The active dot is brand orange *and* wider: at 7px a hue change alone is a detail somebody has
+/// to look for, and the row is read at a glance or not at all.
 class _SlotDots extends StatelessWidget {
   const _SlotDots({required this.count, required this.active});
 
@@ -227,7 +233,7 @@ class _SlotDots extends StatelessWidget {
             width: i == active ? _activeSize : _size,
             height: i == active ? _activeSize : _size,
             decoration: BoxDecoration(
-              color: i == active ? AppColors.primaryDark : AppColors.trackGrey,
+              color: i == active ? AppColors.primaryOrange : AppColors.trackGrey,
               shape: BoxShape.circle,
             ),
           ),
@@ -260,10 +266,15 @@ class _SlotCard extends StatelessWidget {
 
   final AppLocalizations strings;
 
-  /// What the photograph takes of the card's width. The rest is the only column with words in it,
-  /// so this is as wide as the frame can be before «Чорсу майдони, 42» stops fitting on two lines.
-  static const int _photoFlex = 36;
-  static const int _factsFlex = 64;
+  /// What the photograph takes of the card's width.
+  ///
+  /// **54 is the floor on the other column, not a taste.** The longest line it carries is the
+  /// comparison pill - «Средняя цена по рынку» at 11.5/w600 with its glyph and padding is ~160dp -
+  /// and at 360dp a card is 348 wide, so 54% of the 332 inside its padding leaves 164 once the
+  /// column's own 15dp of padding is off. Any wider a frame and the one sentence a customer reads
+  /// this card for starts ellipsising.
+  static const int _photoFlex = 46;
+  static const int _factsFlex = 54;
 
   @override
   Widget build(BuildContext context) {
@@ -288,40 +299,49 @@ class _SlotCard extends StatelessWidget {
             flex: _factsFlex,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(11, 4, 4, 4),
+              // **spread, not stacked with a single Spacer.** The column is three blocks - who and
+              // where, the comparison, the figures - and on a card this tall all the slack used to
+              // pile up under the address as one hole. spaceBetween splits it into two equal joints.
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Expanded(
-                        child: Text(
-                          shop?.name ?? strings.slotShopNameLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            // a field name, drawn so «Название магазина» cannot be mistaken for a shop called that
-                            color: isPlaceholder ? AppColors.textGrey : AppColors.textDark,
-                            fontSize: 17,
-                            height: 1.15,
-                            letterSpacing: -0.3,
-                            fontWeight: isPlaceholder ? FontWeight.w600 : FontWeight.w700,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              shop?.name ?? strings.slotShopNameLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                // a field name, drawn so «Название магазина» cannot be mistaken for a shop called that
+                                color: isPlaceholder ? AppColors.textGrey : AppColors.textDark,
+                                fontSize: 17,
+                                height: 1.15,
+                                letterSpacing: -0.3,
+                                fontWeight: isPlaceholder ? FontWeight.w600 : FontWeight.w700,
+                              ),
+                            ),
                           ),
-                        ),
+                          // the chevron says the whole card opens something. on an unsold slot there is
+                          // nothing to open, so it is not drawn rather than drawn dead.
+                          if (!isPlaceholder) ...[
+                            const SizedBox(width: 6),
+                            const Icon(LucideIcons.chevron_right, size: 17, color: AppColors.textFaint),
+                          ],
+                        ],
                       ),
-                      // the chevron says the whole card opens something. on an unsold slot there is
-                      // nothing to open, so it is not drawn rather than drawn dead.
-                      if (!isPlaceholder) ...[
-                        const SizedBox(width: 6),
-                        const Icon(LucideIcons.chevron_right, size: 17, color: AppColors.textFaint),
-                      ],
+                      const SizedBox(height: 4),
+                      _AddressLine(
+                        text: shop?.address ?? strings.slotAddressLabel,
+                        color: isPlaceholder ? AppColors.textFaint : AppColors.textGrey,
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  _AddressLine(
-                    text: shop?.address ?? strings.slotAddressLabel,
-                    color: isPlaceholder ? AppColors.textFaint : AppColors.textGrey,
-                  ),
-                  const Spacer(),
 
                   // the comparison already says «рынка» in words - see `priceTierCheaper`. it is the one
                   // reason a customer reads this card rather than scrolling past it.
@@ -347,7 +367,6 @@ class _SlotCard extends StatelessWidget {
                       ),
                     ),
 
-                  const SizedBox(height: 9),
                   _SlotFigures(shop: shop, strings: strings),
                 ],
               ),

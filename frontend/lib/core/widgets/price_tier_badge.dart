@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
@@ -18,11 +19,12 @@ enum PriceTierBadgeSize {
   headline,
 }
 
-/// How a shop's basket compares to its market: a coloured dot and a sentence. The index itself
+/// How a shop's basket compares to its market: three bars and a sentence. The index itself
 /// (96, 104) is never shown - the backend picks both the bucket and the percentage.
 ///
-/// The dot is a Container, not the 🟢 emoji, whose size and hue vary per platform. Colour is never
-/// the only channel: the sentence says "дешевле"/"дороже" in words.
+/// **The bars climb with the shop's standing, not with its prices.** The glyph is read before the
+/// sentence is, so a chart falling next to «дешевле» would say the opposite of the words beside it.
+/// Colour is never the only channel either: the sentence says "дешевле"/"дороже" out loud.
 class PriceTierBadge extends StatelessWidget {
   const PriceTierBadge({
     super.key,
@@ -57,21 +59,25 @@ class PriceTierBadge extends StatelessWidget {
       PriceTier.dearer => strings.priceTierDearer(percent),
     };
 
-    final (double dot, double fontSize, FontWeight weight) = switch (size) {
-      PriceTierBadgeSize.pill => (7, 12, FontWeight.w600),
-      PriceTierBadgeSize.compact => (6, 11, FontWeight.w600),
-      PriceTierBadgeSize.headline => (9, 15.5, FontWeight.w700),
+    final chart = switch (tier) {
+      PriceTier.cheaper => LucideIcons.chart_no_axes_column_increasing,
+      PriceTier.average => LucideIcons.chart_no_axes_column,
+      PriceTier.dearer => LucideIcons.chart_no_axes_column_decreasing,
+    };
+
+    // the glyph runs a step larger than the dot it replaced at every size: lucide is a stroke font,
+    // so it covers far less area than a filled circle of the same nominal width
+    final (double glyph, double gap, double fontSize, FontWeight weight) = switch (size) {
+      PriceTierBadgeSize.pill => (12, 5, 11.5, FontWeight.w600),
+      PriceTierBadgeSize.compact => (11, 5, 11, FontWeight.w600),
+      PriceTierBadgeSize.headline => (17, 7, 15.5, FontWeight.w700),
     };
 
     final content = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: dot,
-          height: dot,
-          decoration: BoxDecoration(color: colour, shape: BoxShape.circle),
-        ),
-        SizedBox(width: dot - 1),
+        Icon(chart, size: glyph, color: colour),
+        SizedBox(width: gap),
         Flexible(
           child: Text(
             label,
@@ -92,7 +98,9 @@ class PriceTierBadge extends StatelessWidget {
     if (size != PriceTierBadgeSize.pill) return content;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      // 7, not 8: the pill's one caller is the VIP card, where «Средняя цена по рынку» has about two
+      // pixels to spare before it ellipsises - see `_SlotCard._factsFlex`
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(AppRadius.xs),

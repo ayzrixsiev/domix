@@ -140,8 +140,8 @@ licence to add it to `ShopResponse`.**
 | --- | --- |
 | **Главная** | three KPIs beside the «Категории магазинов» ring, then «Регистрации за 30 дней» beside the «Заполнение каталогов» gauge, then «Кто дешевле» beside «Средний чек». Three rows, and nothing below the fold |
 | **Аномалии** | prices that disagree with the market for the same basket line |
-| **Пользователи** | edit name and role, delete |
-| **Магазины** | edit the four editable fields, grant/revoke VIP, open the catalogue, delete |
+| **Пользователи** | edit name and role, delete; a role filter in the header |
+| **Магазины** | edit the four editable fields, grant/revoke VIP, open the catalogue, delete; a category filter in the header |
 | **Шаблоны** | two storage strips side by side, a banner when any market is behind its template, then per category a **grid of product cards** with add / sheet import / apply-to-all. The rules are behind the «i» (`templateHelp`), not printed above the grids |
 
 ### The page header — `.topbar`
@@ -157,6 +157,30 @@ on each nav button's `title`, and `aria-current` remains what answers "where am 
 row its height is the two controls it carries. They lived in the sidebar's foot, the corner of the
 screen nobody looks at, and «Обновить» is a button whose whole value is being reachable at the moment
 the numbers look stale. `.side-foot` is gone.
+
+**A filter is not a sort, and Магазины needed both** (2026-10-10). The Категория column header
+sorts, like every other `th.s`, and was read as a broken filter — the founder's words were «есть
+кнопка категории но она странно работает». So each list section carries one `select.fsel` in its
+`.sec`: `Все магазины` + the four shop categories, `Все пользователи` + the three roles. Built by
+`fillFilter` from `SHOP_CATS`/`ROLES` themselves, so a fifth category reaches the dropdown the day
+it is declared. It narrows `state.filter.{users,shops}` in the browser alongside the search, and
+`countLabel` says «Показано: N из M» whenever either is narrowing.
+
+**The sort arrow now shows at 0.4 opacity on `th.s:hover`.** It was invisible until a column was
+*the* sorted one, so nothing on an unsorted header said it could be clicked — which is the other
+half of why the category header read as broken. Sorting by «Магазины» or «Регистрация», ascending
+or descending, is that click and does not get a second control.
+
+**Аномалии carries no count chip.** `#c-anom` is gone: the report is the count, and «Всего: 3»
+beside the title said it a second time.
+
+**And the sidebar carries no counts either** (2026-10-10, the founder's call). Аномалии,
+Пользователи and Магазины each ended in a `.pip` holding their row count, including the loud
+`.pip.hot` on Аномалии. The menu is the wrong place to read a number — «Всего: 58» is already in the
+header of the section it belongs to, and three figures down the side of *every* screen are three
+facts nobody came to the menu for. `nav .pip`, `#pip-*` and the two lines in `loadStats` that fed
+them are gone; the counts themselves are untouched. **Do not put a badge back on a nav button**
+without a reason the header cannot serve.
 
 **The search moved up here and there is exactly one of it.** A header field that mirrored whichever
 list was open stood above a second, identical one inside the section. The sections do not carry
@@ -294,18 +318,35 @@ page either moved behind a number or left.
 
 ### Row 1 — three counts and the shape of the market
 
+**No tile is tinted** (2026-10-10). «Магазины» used to carry `.kpi.hi` — a `--card-hi` fill and a
+solid orange icon — which made one of three independent counts look like the answer the other two
+were asking about. The orange is in the glyph now and it is the same on all three, so the row reads
+as one control again; `--card-hi` went with the class.
+
+The tile is a stack rather than two opposed columns: icon and label on the top line, the number, then
+the delta and `.k-sub` under it at full width. The delta used to be right-aligned on the number's own
+baseline, which left `.k-sub` about 140px and truncated «151 покупателей · 32 владельцев» to «32
+влад…» — a line that is cut off is worse than no line, because the reader stops to work out what was
+there.
+
 - **«Магазины» is the count and nothing else.** Not «16 в сравнении цен» underneath:
   the gauge one row down is about that ratio, and a tile that also states it makes the reader compare
   two renderings of the same thing.
 - **«Пользователи»**, with `покупатели N · владельцы M` underneath — the split says how much of the
   number is demand and how much is supply. Named «Пользователи», matching the sidebar: a tile calling
-  the same set something else is a second name for one thing. The `.k-sub` line sits under the whole
-  `.k-bot` row rather than beside the delta, which is
-  what stops it truncating to «32 влад…».
+  the same set something else is a second name for one thing.
+- **The sparkline is the total rebuilt backwards from today** (`runningTotal`), not the per-day
+  figure «Регистрации за 30 дней» already draws one row below: the tile's subject is `58`, so the
+  line says how `58` got there, and a second copy of the daily series would be the one thing this
+  layout's editing rule forbids. Deletions are not in `signups`, so a removed account tilts the
+  earliest points by one — the line has no axis and is read for its shape, which one row cannot
+  change. VIP has no sparkline: a sold placement is not a cumulative count.
 - **«VIP-места» is a fraction, `2 / 5`, because VIP is inventory.** The denominator is
   `shops.vip_slots`, sent by the server from `home.go`'s `vipShopsLimit` — the carousel draws that
   many places whether or not they are sold (root §7), and a panel with its own copy would keep
-  saying «из 5» the day it grows to six. **Do not hardcode it here.**
+  saying «из 5» the day it grows to six. **Do not hardcode it here.** The `.k-bar` under it draws
+  the same fraction, and it is the only tile that gets one — inventory is the only count on this row
+  with a ceiling, and a ceiling is what a bar can draw.
 - **«Категории магазинов»** — the reference's «Top Categories», and the same question: what is this
   market made of. The ring plus its list is one object, which is why `buildDonut` carries no legend of
   its own. It is `b3 r2`, standing beside the KPI row *and* the chart under it — the only piece of
@@ -315,7 +356,7 @@ page either moved behind a number or left.
 
 Both cards carry `tall`, which is `align-self:stretch` plus a flex column: `align-items:start` is
 right for the rest of the grid and wrong for these two, because they are one row of one subject and a
-card ending 160px short of its neighbour reads as one that failed to load. The gauge's arc and
+card ending 160px short of its neighbour reads as one that failed to load. The gauge's ring and
 sentence sit in a `.grow` that takes the slack, so the two boxes stay pinned to the bottom edge
 rather than leaving fill under them.
 
@@ -336,8 +377,15 @@ rather than leaving fill under them.
     сравнении цен` at every value. **No plural agreement anywhere in it** — «21 магазин», «22
     магазина» and «25 магазинов» are three endings, so the count sits after a preposition where
     russian does not decline it.
-  - **The two boxes are one tinted block split by a hairline**, not two bordered cards: they are one
-    measurement cut in two. `grid-template-columns:repeat(2,minmax(0,1fr))` written the long way is
+  - **It is a full ring, and it was a semicircle until 2026-10-10.** It stands beside the
+    «Категории магазинов» ring, and two readings of the same shape are one idiom where an arc and a
+    ring were two. The remainder is `--track`, not a tint of orange: the part that is missing must
+    not read as a second, paler measurement. The readout is wrapped in one `div` inside `.g-mid` —
+    `place-items:center` gives each child its own grid row, which pushed the figure and its caption
+    apart onto the ring itself.
+  - **The two boxes are one block split by a hairline**, not two bordered cards: they are one
+    measurement cut in two. The block was tinted orange until 2026-10-10, and the fill made the pair
+    read as a third panel. `grid-template-columns:repeat(2,minmax(0,1fr))` written the long way is
     load-bearing — a `1fr` track is `minmax(auto,1fr)`, and `auto` is the child's min-content width,
     which a nowrap label pushes past its share and visibly outside the card's own edge.
   - **«Не заполнены» is a button** and the only way into the list of who has not finished. **It is
@@ -382,15 +430,18 @@ markets look identical.
 
 #### «Средний чек» (`b4`, `buildTrend`)
 
-One row per market: what a basket costs there now (`AdminCategoryBaskets`) and a sparkline of the last
+One row per market: what a basket costs there now — the **mean of every complete shop's own basket
+total** in that category (`AdminCategoryBaskets`, averaged over `shop_basket_index`, so an unfinished
+catalogue is not in it) — and a sparkline of the last
 thirty days beside it (`AdminBasketHistory`). Two halves of one subject — the figure says what the
 category is worth, the line says whether that is moving, and neither carries the other.
 
 - **Not four lines on one chart.** Four oranges crossing each other is a picture nobody reads, and the
   four numbers are not on the same scale anyway.
-- **Dearer is red here and cheaper is green, which is inverted from everywhere else on this panel.**
-  The thing being measured is what a customer pays, so a market getting more expensive is the bad
-  direction — the same convention the price badge uses.
+- **The 30-day change is a line and not a number** (2026-10-10). A «+0,0%» chip beside each
+  sparkline reads as a measurement, and it is `0%` on every market until prices have actually moved —
+  which is every market for the first weeks of any install. The line says the same thing without
+  claiming to have measured it. `em.up`/`em.dn` went with it; `em.fl` stays for «с сегодня».
 - The sparkline has no axes, labels or tooltip: at 78×26 the only thing it can say is which way the
   line went, which is what it is being asked. A flat series draws down the middle rather than dividing
   by zero.
@@ -446,6 +497,23 @@ top bar, and the page title's sentence.
 was once drawn four times over — a KPI, a gauge, two boxes under it, and a funnel's terminal bar — and
 four renderings of one ratio read as four findings. One card draws it now, and the KPI beside it
 stopped repeating it.
+
+**Four things in the 2026-10-10 reference were deliberately not built, and the reference will keep
+showing them.** A date-range picker in the header — the founder's own exclusion, and every query
+behind this screen has its window baked in. A sentence under the page title — deleted once already,
+see «The page header» above. «Подробная статистика →» under «Средний чек» — there is nothing on the
+other end of it. A `+8%` chip beside each sparkline — removed earlier the same day, because it reads
+as a measurement and is `0%` on every market until prices have actually moved. The reference also
+draws the «Кто дешевле» bars from zero, which is the picture root §5 and `buildRace` exist to avoid.
+
+**The dashboard fills the window** (2026-10-10). `main` is a flex column, `#v-dash` takes the slack
+and `.dash` is `grid-template-rows:auto 1fr 1fr` — the KPI row keeps its content height, rows 2 and 3
+share what is left. It used to stop short of the bottom edge, which reads as a page that failed to
+finish. Two things it rests on: every card in rows 2 and 3 is already `.card.tall`
+(`align-self:stretch`), and **`drawSignups` measures `host.clientHeight` instead of writing a height
+down** — a chart drawn at a fixed height inside a stretched card leaves the difference as empty fill
+under it. `1fr` and deliberately **not** `minmax(0,1fr)`: on a window too short for three rows the
+page scrolls, where a zero minimum would clip the ranking inside its own card instead.
 
 **`.dash` is `align-items:start`, not the grid default** — an unfinished card's empty `--card` fill
 reads as a broken panel where the same space left as page reads as the page. The two exceptions are
@@ -570,14 +638,23 @@ delete  rows the shop has and the template no longer does
 - **The catalogue is cards, and a card opens an editor** (2026-10). It was a table whose first column
   was a 38px thumbnail: eight columns of which one was the thing being looked for, and checking that
   five sizes of one shovel share the right picture meant reading a column of postage stamps. The grid
-  is modelled on the photo picker two screens away — `minmax(168px,1fr)`, six across at 1440px, wider
-  than the app's because this is a browser window. A card carries the photograph, the name, `specs`,
-  the unit, one of three basket chips («В корзине» / «можно в корзину» / «вне корзины»), «N / M»
-  priced, and a 3px coverage line along its bottom edge; the key and the section ride on its `title`,
-  because «Ленты, расходники, абразивы и диски» truncates on every card in the grid.
+  is **the app's `ProductTile` drawn again** (2026-10-10, the founder's call: «чтобы визуально было
+  понятно как выглядеть будет») — 174px wide, 230 high, a 6px white frame round a `#F2F2F6` photo
+  panel with the photo `contain`ed, the green «В наличии» badge, name, `specs`, and the price slot.
+  **It stays light in the dark theme** (the app has none) and **carries the app's literals, not the
+  panel's tokens**: change `product_tile.dart` and this moves with it. A template row has no price,
+  so the slot reads «Цена не указана» in orange — exactly a new shop's card — with the unit beside
+  it, which the app would not print there but the panel cannot do without.
+  **Admin facts sit under the card, outside it** — one of three basket chips («В корзине» /
+  «можно в корзину» / «вне корзины»), «N / M» priced, a 3px coverage line — so the card itself is
+  what a customer sees; the key and the section ride on the button's `title`, because «Ленты,
+  расходники, абразивы и диски» truncates on every card in the grid.
   **The whole card is one button** and every field is behind it, which is what stops the row growing
   its own controls again. `tplScroll` restores each grid's scroll position, or saving one product
-  throws the founder back to the top of a hundred cards.
+  throws the founder back to the top of a hundred cards. **`renderTemplates` restores `window.scrollY`
+  as well**: the page scrolls on the window, the rebuild empties `#tpl-list`, and the first grid's
+  `scrollTop` forces a layout while the later categories do not exist, so an edit under «Сантехника»
+  threw the page to the top (2026-10-10).
 - **The editor holds everything and saves once**, with «Похожий размер» and «Удалить» as quiet buttons
   on the far side of the action row's gap — both close the editor before they run. The basket
   checkbox **no longer asks before it is ticked**: ticking it edits the template, and `confirmSync`
@@ -673,6 +750,9 @@ resolving it at the bottom of the file would start every load of a dark panel wi
   surface tints; this is data, and six warm oranges that read on white read better on near-black. A
   ramp that followed the tokens would put the donut's three smallest segments at the colour of the
   card behind them.
+- **Every gradient needs a unique id or the last one rendered wins the page.** `sparkline`'s fill
+  counts its own (`sp1`, `sp2`, …): svg `url(#…)` resolves by document id, so two charts sharing a
+  literal would both paint with whichever `<defs>` was written last.
 - The literals that remain are white *on brand orange* (`--o` is `#FF6F00` in both themes) and the
   map's own controls, which stand on an OpenStreetMap raster tile and are light whatever the panel is.
 
@@ -683,12 +763,27 @@ rather than recoloured, dark does not bring the same frame back in another colou
 
 ## The visual language is deliberately not the app's
 
-The phone app is cool grey on white with soft shadows. This panel is a warm neutral ramp, flat — **no
-shadows on content at all**, separation comes from fill — with a shell floating on beige, a sidebar
-whose active item is an orange pill, and charts along a graduated orange ramp. Same brand orange
-(`#FF6F00`), different surface.
+The phone app is cool grey on white with soft shadows. This panel is a cool neutral ramp, flat — **no
+shadows on content at all**, separation comes from fill — with a sidebar whose active item is an
+orange pill and charts along a graduated orange ramp. Same brand orange (`#FF6F00`), different
+surface.
 
-### The ramp runs beige → `--surface` → `--shell` → `--card`, and the direction is the point
+**The neutrals were warm until 2026-10-10** — `#FCFBFA` / `#F7F7F5` in light, `#1C1917` / `#262220`
+in dark — and are a cool slate now, sampled off the dark reference the founder chose. **The two
+themes moved together, and that is the point**: inverting one alone would have left a warm light
+panel next to a cool dark one, which is two products. The orange ladder, the amber and the reds did
+not move; green went emerald (`#0E9F6E` / `#42D6A0`) because the reference's is, and because the one
+place it carries meaning — a finished catalogue — reads better against the slate.
+
+**`--track` is the empty half of anything that fills up**: the gauge's ring, a race bar, a catalogue
+bar, and the plate under a KPI icon. It is deliberately neutral — an orange remainder reads as a
+second, paler measurement rather than as the part that is missing — and it is in the JS colour
+mirror as `C.track`, because two of its four users are SVG.
+
+`--beige` stays warm and is still only the login page's own ground: one page, with the orange mark
+standing on it, and nothing else on the panel to disagree with.
+
+### The ramp runs `--surface` → `--shell` → `--card`, and the direction is the point
 
 It ran the other way until 2026-08-21: `main` was `--surface` and every dashboard card was
 `.card.plain`, white with a `--line` hairline. **Two fills two units apart is not separation by fill**,
@@ -702,10 +797,13 @@ are its six call sites. Three consequences worth knowing before editing:
 - **`.tbl` stays white with a `--line-2` border.** Standing on `main` it is a white object with a
   visible edge; inside a card it is a lighter block inset into a darker one, which is the same idiom
   the reference dashboards use. `thead` at `--card` gives it its header band either way.
-- **`--card` is used in fifteen other places** — nav pips, `thead`, `.tag.g`, `.empty .bx`, the chat
-  background, several `:hover`s. Anything that sits *inside* a card and used `--card` to differ from
-  white now needs checking. `.btn-g` was the one that broke: grey-on-grey on the storage card, a button
-  you had to look for, so it is `--shell` with a `--card` hover.
+- **`--card` is used in fifteen other places** — `thead`, `.tag.g`, `.empty .bx`, the chat
+  background, both icon buttons, several `:hover`s. Anything that sits *inside* a card and used
+  `--card` to differ from white now needs checking. `.btn-g` was the one that broke: grey-on-grey on
+  the storage card, a button you had to look for, so it is `--shell` with a `--card` hover.
+- **`.ib` and `.ia` are filled with `--card`, not `--shell`** (2026-10-10). `--shell` is lighter than
+  the card in light and *darker* than it in dark, so an outlined control on it was a ring with
+  nothing inside at one end of the ramp and a hole at the other.
 - **`C.line2` exists in the JS colour mirror for the chart grid**, because `--line` on `--card` is a
   gridline nobody can see. Svg attributes cannot read a custom property, which is why that mirror
   exists at all.
@@ -825,3 +923,10 @@ this page, the one path a screenshot cannot stand in for.
 
 > **Headless never applies `:focus` unless `Emulation.setFocusEmulationEnabled` is on.** Checking a
 > focus ring without it shows the resting border and looks like the css is wrong.
+
+**The 2026-10-10 recolour was checked the stub way too**, at 1586×992 to match the reference image
+pixel for pixel: Главная, Магазины, Пользователи, Аномалии and Шаблоны in both themes, the login
+page in both, the shop editor with its map, the 880px column, and the theme button pressed live so
+`readThemeColours` was seen re-reading `--track` and redrawing the gauge, the donut and the race.
+The reference's own colours were sampled out of the two PNGs with ImageMagick rather than guessed.
+**Unseen:** anything that needs the real API — the live poll, an upload, a sync.

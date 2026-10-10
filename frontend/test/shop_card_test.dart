@@ -10,6 +10,7 @@
 // unsold VIP slot must stay inert rather than opening a card about a business that does not exist.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -33,6 +34,7 @@ import 'package:frontend/features/stores/data/price_tier.dart';
 import 'package:frontend/features/stores/data/shop_category.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 import 'package:frontend/features/stores/presentation/screens/shop_card_screen.dart';
+import 'package:frontend/features/stores/presentation/widgets/shop_category_avatar.dart';
 
 /// Stands in for the network. `implements` rather than a subclass, so the fake cannot accidentally
 /// inherit a real http call the day one is added to the repository.
@@ -428,6 +430,82 @@ void main() {
 
     expect(find.byType(ProductTile), findsOneWidget);
     expect(find.byType(TextField), findsNothing);
+  });
+
+  // **the mark on the card and the glyph in the map pin are the same character.** almost every way
+  // into a shop is a pin, and a card that opened under a different mark reads as the wrong shop.
+  testWidgets('the mark carries the shop category the pin does', (tester) async {
+    await _pumpHome(
+      tester,
+      content: _content(vip: [_shop(id: 1, name: 'Стройбаза', isVip: true)]),
+    );
+
+    await tester.tap(find.text('Стройбаза').hitTestable().first);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byType(ShopCategoryAvatar),
+        matching: find.byIcon(ShopCategory.universal.icon),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  // the number is on the card to be used somewhere else - pasted into a chat, saved as a contact -
+  // and a long-press on a Text selects nothing at all
+  testWidgets('the copy disc puts the number on the clipboard', (tester) async {
+    String? copied;
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copied = (call.arguments as Map)['text'] as String;
+      }
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(SystemChannels.platform, null));
+
+    await _pumpHome(
+      tester,
+      content: _content(vip: [_shop(id: 1, name: 'Стройбаза', isVip: true)]),
+    );
+
+    await tester.tap(find.text('Стройбаза').hitTestable().first);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(LucideIcons.copy));
+    await tester.pumpAndSettle();
+
+    expect(copied, '+998901112233');
+  });
+
+  // what the share sheet is handed. there is no page per shop and no deep link, so this text *is*
+  // the share - a url pointing at us would be a promise the build cannot keep.
+  testWidgets('sharing hands over the name, the address, the number and a map link', (tester) async {
+    const channel = MethodChannel('dev.fluttercommunity.plus/share');
+    String? shared;
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      shared = (call.arguments as Map)['text'] as String?;
+      return 'dev.fluttercommunity.plus/share/success';
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+    await _pumpHome(
+      tester,
+      content: _content(vip: [_shop(id: 1, name: 'Стройбаза', isVip: true)]),
+    );
+
+    await tester.tap(find.text('Стройбаза').hitTestable().first);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(LucideIcons.share));
+    await tester.pumpAndSettle();
+
+    expect(shared, contains('Стройбаза'));
+    expect(shared, contains('ул. Навои 12'));
+    expect(shared, contains('+998901112233'));
+    expect(shared, contains('69.2,41.3'));
   });
 
   // the map's half of the card: the same content in a sheet that a downward drag puts away. there is

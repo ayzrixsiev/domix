@@ -59,6 +59,10 @@ dependencies:
   flutter_secure_storage: ^10.3.1
   provider: ^6.0.8
   yandex_maps_mapkit_lite: ^4.42.0
+  # the android share sheet, behind the disc on a shop card's cover. ACTION_SEND needs an Intent,
+  # which there is no way to raise from dart. **text only** - there is no page per shop and no deep
+  # link into the app, so what it hands over is the name, the address, the number and a maps url.
+  share_plus: ^13.3.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

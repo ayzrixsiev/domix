@@ -1,7 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
@@ -22,6 +24,7 @@ import 'package:frontend/features/products/presentation/widgets/product_tile.dar
 import 'package:frontend/features/stores/data/price_tier.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 import 'package:frontend/features/stores/data/stores_repository.dart';
+import 'package:frontend/features/stores/presentation/widgets/shop_category_avatar.dart';
 import 'package:frontend/features/stores/presentation/widgets/shop_category_banner.dart';
 import 'package:frontend/core/widgets/app_page_header.dart';
 import 'package:frontend/core/widgets/circle_icon_button.dart';
@@ -264,6 +267,35 @@ class _ShopCardViewState extends State<ShopCardView> {
     if (!await _tryOpen(Uri.parse('tel:${widget.shop.contactPhone}'))) _reportNothingToOpenWith();
   }
 
+  // **plain text, not a link to us**: there is no page per shop and no deep link into the app, so a
+  // url would be a promise the build cannot keep. the four lines are what somebody needs to find the
+  // place - the last one opens in any browser, which is the only part that has to work on a phone
+  // without Domix on it.
+  Future<void> _share() async {
+    final shop = widget.shop;
+    final text = '${shop.name}\n'
+        '${shop.address}\n'
+        '${shop.contactPhone}\n'
+        'https://yandex.uz/maps/?pt=${shop.longitude},${shop.latitude}&z=17';
+
+    try {
+      // no sharePositionOrigin: it positions the popover an iPad anchors the sheet to, and this app
+      // ships android only
+      await SharePlus.instance.share(ShareParams(text: text, subject: shop.name));
+    } catch (e) {
+      debugPrint('ShopCardView: could not share shop ${shop.id}: $e');
+      _reportNothingToOpenWith();
+    }
+  }
+
+  // the number is the one thing on this card somebody wants in another app, and a long-press on a
+  // Text selects nothing
+  Future<void> _copyPhone() async {
+    await Clipboard.setData(ClipboardData(text: widget.shop.contactPhone));
+    if (!mounted) return;
+    _toast(Provider.of<LanguageProvider>(context, listen: false).strings.phoneCopied);
+  }
+
   // hands the coordinates to whatever maps app the phone has: `geo:` is a platform scheme, so the
   // system shows a chooser, where a yandex url opens a browser on a phone with only Google Maps.
   // `geo:` cannot express "route to it", so the web url underneath covers that and a phone with no
@@ -293,10 +325,13 @@ class _ShopCardViewState extends State<ShopCardView> {
 
   void _reportNothingToOpenWith() {
     if (!mounted) return;
-    final strings = Provider.of<LanguageProvider>(context, listen: false).strings;
+    _toast(Provider.of<LanguageProvider>(context, listen: false).strings.couldNotOpenExternalApp);
+  }
+
+  void _toast(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(strings.couldNotOpenExternalApp),
+        content: Text(message),
         backgroundColor: AppColors.textDark,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
@@ -351,14 +386,13 @@ class _ShopCardViewState extends State<ShopCardView> {
       slivers: [
         // no padding around the cover: full width, hard against the top
         SliverToBoxAdapter(
-          child: ShopCategoryBanner(category: shop.category, height: coverHeight),
-        ),
-        SliverToBoxAdapter(
-          child: _DetailsSurface(
+          child: _ShopHeader(
             shop: shop,
             strings: strings,
+            coverHeight: coverHeight,
             onCall: _dial,
             onRoute: _route,
+            onCopyPhone: _copyPhone,
           ),
         ),
         SliverPadding(
@@ -428,10 +462,38 @@ class _ShopCardViewState extends State<ShopCardView> {
               // floating: it hovers over the cover rather than sitting in a bar
               child: const CircleBackButton(floating: true),
             ),
+            Positioned(
+              top: MediaQuery.paddingOf(context).top + 8,
+              right: CircleIconButton.gutterInset,
+              child: _ShareButton(onTap: _share, strings: strings),
+            ),
           ],
         ),
-      ShopCardChrome.sheet => _SheetSurface(child: scrollView),
+      ShopCardChrome.sheet => _SheetSurface(
+          onShare: _share,
+          strings: strings,
+          child: scrollView,
+        ),
     };
+  }
+}
+
+// the same disc at both ends of the cover, so the sheet and the pushed route offer the shop the
+// same way
+class _ShareButton extends StatelessWidget {
+  const _ShareButton({required this.onTap, required this.strings});
+
+  final VoidCallback onTap;
+  final AppLocalizations strings;
+
+  @override
+  Widget build(BuildContext context) {
+    return CircleIconButton(
+      icon: LucideIcons.share,
+      floating: true,
+      tooltip: strings.shareShopTooltip,
+      onTap: onTap,
+    );
   }
 }
 
@@ -441,9 +503,11 @@ class _ShopCardViewState extends State<ShopCardView> {
 // inside it lands in the map's, underneath the sheet. the grabber floats over the content so the
 // cover can reach the top edge, and IgnorePointer lets a drag on it fall through to the scroll view.
 class _SheetSurface extends StatelessWidget {
-  const _SheetSurface({required this.child});
+  const _SheetSurface({required this.child, required this.onShare, required this.strings});
 
   final Widget child;
+  final VoidCallback onShare;
+  final AppLocalizations strings;
 
   @override
   Widget build(BuildContext context) {
@@ -466,6 +530,13 @@ class _SheetSurface extends StatelessWidget {
               left: 0,
               right: 0,
               child: IgnorePointer(child: Center(child: _SheetGrabber())),
+            ),
+            // there is no back disc on the sheet - a drag down is the way out - so the right end is
+            // the only control on the cover here
+            Positioned(
+              top: 14,
+              right: CircleIconButton.gutterInset,
+              child: _ShareButton(onTap: onShare, strings: strings),
             ),
           ],
         ),
@@ -491,6 +562,66 @@ class _SheetGrabber extends StatelessWidget {
   }
 }
 
+// the cover, the white surface that climbs over it, and the mark sitting on the seam between them.
+//
+// the three are one widget because the geometry is one sum: the surface is lifted [_overlap] into
+// the cover, and the mark is centred on exactly that line. drawn in this order, so the surface
+// covers the cover's bottom edge and the mark covers the surface's top.
+class _ShopHeader extends StatelessWidget {
+  const _ShopHeader({
+    required this.shop,
+    required this.strings,
+    required this.coverHeight,
+    required this.onCall,
+    required this.onRoute,
+    required this.onCopyPhone,
+  });
+
+  final Shop shop;
+  final AppLocalizations strings;
+  final double coverHeight;
+  final VoidCallback onCall;
+  final VoidCallback onRoute;
+  final VoidCallback onCopyPhone;
+
+  /// how far the white surface climbs into the cover. enough for its [AppRadius.lg] corners to read
+  /// as a sheet laid over a picture rather than as a seam that happens to be curved.
+  static const double _overlap = 26;
+
+  @override
+  Widget build(BuildContext context) {
+    const avatar = ShopCategoryAvatar.defaultSize;
+    final surfaceTop = coverHeight - _overlap;
+
+    return Stack(
+      // the Padding is the only unpositioned child, so it is what gives the stack its height
+      children: [
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: ShopCategoryBanner(category: shop.category, height: coverHeight),
+        ),
+        Padding(
+          padding: EdgeInsets.only(top: surfaceTop),
+          child: _DetailsSurface(
+            shop: shop,
+            strings: strings,
+            onCall: onCall,
+            onRoute: onRoute,
+            onCopyPhone: onCopyPhone,
+          ),
+        ),
+        Positioned(
+          left: _gutter,
+          top: surfaceTop - avatar / 2,
+          child: ShopCategoryAvatar(category: shop.category),
+        ),
+      ],
+    );
+  }
+}
+
 // everything the card says about the shop itself, on one white surface - three rounded cards used to
 // do this and made a card about one business read as three things.
 //
@@ -502,12 +633,14 @@ class _DetailsSurface extends StatelessWidget {
     required this.strings,
     required this.onCall,
     required this.onRoute,
+    required this.onCopyPhone,
   });
 
   final Shop shop;
   final AppLocalizations strings;
   final VoidCallback onCall;
   final VoidCallback onRoute;
+  final VoidCallback onCopyPhone;
 
   @override
   Widget build(BuildContext context) {
@@ -516,7 +649,10 @@ class _DetailsSurface extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      color: AppColors.surfaceWhite,
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceWhite,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -533,6 +669,7 @@ class _DetailsSurface extends StatelessWidget {
             strings: strings,
             onCall: onCall,
             onRoute: onRoute,
+            onCopyPhone: onCopyPhone,
           ),
         ],
       ),
@@ -557,69 +694,84 @@ class _Rule extends StatelessWidget {
 
 // whose card this is: the kind of shop, its name, where it is. the name is here rather than on the
 // cover, which has nowhere that white text is safe and nowhere that dark text is either - and the
-// category is an eyebrow rather than a chip, since the glyph is already on the cover.
+// category is an eyebrow rather than a chip, since the glyph is already on the mark.
+//
+// **the eyebrow and the name are indented past [ShopCategoryAvatar], which is not in this widget**:
+// the mark is drawn over the surface by `_ShopHeader`, so nothing here lays it out and the gap has
+// to be held open by hand. the address below it is full width - the mark's lower half ends above it.
 class _Identity extends StatelessWidget {
   const _Identity({required this.shop, required this.strings});
 
   final Shop shop;
   final AppLocalizations strings;
 
+  /// the mark's own width plus the gap after it
+  static const double _markInset = ShopCategoryAvatar.defaultSize + 14;
+
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(_gutter, 20, _gutter, 18),
+      padding: const EdgeInsets.fromLTRB(_gutter, 18, _gutter, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Flexible(
-                child: Text(
-                  shop.category.label(strings).toUpperCase(),
-                  maxLines: 1,
+          Padding(
+            padding: const EdgeInsets.only(left: _markInset),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        shop.category.label(strings).toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 11.5,
+                          height: 1.2,
+                          letterSpacing: 0.9,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    // the placement mark, small enough not to compete with the name. not a capsule - a pill beside an
+                    // eyebrow is a chip, and this block was rebuilt to be rid of chips.
+                    if (shop.isVip) ...[
+                      const SizedBox(width: 10),
+                      const Icon(Icons.star_rounded, color: AppColors.primaryOrange, size: 15),
+                      const SizedBox(width: 3),
+                      const Text(
+                        'VIP',
+                        style: TextStyle(
+                          color: AppColors.primaryOrange,
+                          fontSize: 11.5,
+                          height: 1.2,
+                          letterSpacing: 1.1,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  shop.name,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 11.5,
-                    height: 1.2,
-                    letterSpacing: 0.9,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              // the placement mark, small enough not to compete with the name. not a capsule - a pill beside an
-              // eyebrow is a chip, and this block was rebuilt to be rid of chips.
-              if (shop.isVip) ...[
-                const SizedBox(width: 10),
-                const Icon(Icons.star_rounded, color: AppColors.primaryOrange, size: 15),
-                const SizedBox(width: 3),
-                const Text(
-                  'VIP',
-                  style: TextStyle(
-                    color: AppColors.primaryOrange,
-                    fontSize: 11.5,
-                    height: 1.2,
-                    letterSpacing: 1.1,
+                    color: AppColors.textDark,
+                    fontSize: 23,
+                    height: 1.16,
+                    letterSpacing: -0.6,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
               ],
-            ],
-          ),
-          const SizedBox(height: 7),
-          Text(
-            shop.name,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.textDark,
-              fontSize: 24,
-              height: 1.16,
-              letterSpacing: -0.6,
-              fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -707,21 +859,27 @@ class _BasketPrice extends StatelessWidget {
   }
 }
 
-// the phone number and the two things you can do with a shop you have decided to visit. the address
-// is not here - it is under the name. the number is drawn large and is **not** a control: a tappable
-// number above a button that does the identical thing is two answers to one question.
+// the two things you can do with a shop you have decided to visit, then the number itself. the
+// address is not here - it is under the name.
+//
+// **the actions come before the number**, which is the reverse of how this block started: almost
+// everybody taps «Позвонить», and the few who want the digits want them to copy, which is what the
+// disc on the end of the row is for. the number is still not a control - a tappable number above a
+// button that dials is two answers to one question.
 class _Contacts extends StatelessWidget {
   const _Contacts({
     required this.shop,
     required this.strings,
     required this.onCall,
     required this.onRoute,
+    required this.onCopyPhone,
   });
 
   final Shop shop;
   final AppLocalizations strings;
   final VoidCallback onCall;
   final VoidCallback onRoute;
+  final VoidCallback onCopyPhone;
 
   @override
   Widget build(BuildContext context) {
@@ -730,32 +888,6 @@ class _Contacts extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            strings.phoneLabel,
-            style: const TextStyle(
-              color: AppColors.textFaint,
-              fontSize: 12,
-              height: 1.2,
-              letterSpacing: 0.3,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            shop.contactPhone,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            // positive letter spacing, where every other heading here is negative: a phone number is read in
-            // groups of digits, and tightening it makes one long number out of four short ones
-            style: const TextStyle(
-              color: AppColors.textDark,
-              fontSize: 20,
-              height: 1.2,
-              letterSpacing: 0.3,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 18),
           Row(
             children: [
               Expanded(
@@ -775,6 +907,92 @@ class _Contacts extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 14),
+          _PhoneTile(shop: shop, strings: strings, onCopy: onCopyPhone),
+        ],
+      ),
+    );
+  }
+}
+
+// the number, recessed into the white surface so it reads as a detail of the shop rather than
+// another thing to press. page colour rather than `surfaceMuted`: at this size a 1% step off white
+// is not a panel, it is a printing fault.
+class _PhoneTile extends StatelessWidget {
+  const _PhoneTile({required this.shop, required this.strings, required this.onCopy});
+
+  final Shop shop;
+  final AppLocalizations strings;
+  final VoidCallback onCopy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 6, 12),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: const BoxDecoration(
+              color: AppColors.surfaceWhite,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(LucideIcons.store, color: AppColors.textMuted, size: 19),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  strings.phoneLabel,
+                  style: const TextStyle(
+                    color: AppColors.textFaint,
+                    fontSize: 12,
+                    height: 1.2,
+                    letterSpacing: 0.3,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  shop.contactPhone,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  // positive letter spacing, where every other heading here is negative: a phone number is read in
+                  // groups of digits, and tightening it makes one long number out of four short ones
+                  style: const TextStyle(
+                    color: AppColors.textDark,
+                    fontSize: 18,
+                    height: 1.2,
+                    letterSpacing: 0.3,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Tooltip(
+            message: strings.copyPhoneTooltip,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onCopy,
+                // the 44px accessibility floor, which is wider than the glyph needs
+                child: const SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Icon(LucideIcons.copy, color: AppColors.textMuted, size: 18),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -869,14 +1087,25 @@ class _ProductsHeading extends StatelessWidget {
             fontWeight: FontWeight.w700,
           ),
         ),
+        // in a pill, so a loose number beside a heading is not read as part of it. trackGrey, not
+        // `background`: this heading sits on the page itself, and a pill the page's own colour is
+        // not there at all.
         if (count > 0) ...[
-          const SizedBox(width: 8),
-          Text(
-            '$count',
-            style: const TextStyle(
-              color: AppColors.textFaint,
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
+          const SizedBox(width: 9),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+            decoration: BoxDecoration(
+              color: AppColors.trackGrey,
+              borderRadius: BorderRadius.circular(AppRadius.xs),
+            ),
+            child: Text(
+              '$count',
+              style: const TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 13.5,
+                height: 1.2,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],

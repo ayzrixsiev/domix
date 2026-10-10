@@ -19,24 +19,32 @@
 </script>
 <style>
   /* ─────────────────────────────────────────────────────────────────────────────
-     A warm, flat palette. The phone app's tokens are cool grey on white with soft
-     shadows (core/constants/app_colors.dart); this is the same brand orange on a
-     warm neutral ramp with no shadows on content at all - separation comes from
-     fill, not from lift. Deliberately a different surface, not a different brand:
-     `--o` is the app's #FF6F00 unchanged.
+     A cool, flat palette. Brand orange on a neutral slate ramp, with no shadows on
+     content at all - separation comes from fill, not from lift. `--o` is the phone
+     app's #FF6F00 unchanged; everything around it is this panel's own surface.
 
-     **The ramp runs dark-to-light-to-dark and the direction matters**: beige page,
-     `--surface` sidebar, `--shell` work area, `--card` blocks sitting on it. It ran
-     the other way until 2026-08-21 - white cards on an almost-white `--surface` -
-     and separation by fill cannot work when the fills are two units apart. The
-     principle did not change, only which end of the ramp the content sits at, so
-     there are still no shadows on content: modals, tooltips and the map's own
-     controls are the only things that lift.
+     **The ramp runs dark-to-light-to-dark and the direction matters**: beige login
+     ground, `--surface` sidebar, `--shell` work area, `--card` blocks sitting on it.
+     It ran the other way until 2026-08-21 - white cards on an almost-white
+     `--surface` - and separation by fill cannot work when the fills are two units
+     apart. The principle did not change, only which end of the ramp the content
+     sits at, so there are still no shadows on content: modals, tooltips and the
+     map's own controls are the only things that lift.
+
+     **The neutrals were warm until 2026-10-10** and are cool now, both themes
+     together, from the dark reference the founder chose. They move as a set: a warm
+     light panel beside a cool dark one is two products, which is what inverting one
+     theme alone would have built.
      ───────────────────────────────────────────────────────────────────────────── */
   :root{
-    --beige:#E9DFD2; --shell:#FFFFFF; --surface:#FCFBFA;
-    --card:#F7F7F5; --card-hi:#FDEEDF; --line:#EFEEEB; --line-2:#E6E4E0;
-    --ink:#1A1A1A; --ink-2:#5F5F5A; --muted:#9A9A93; --faint:#B9B8B1;
+    --beige:#E9DFD2; --shell:#FFFFFF; --surface:#FAFAFB;
+    --card:#F4F5F7; --line:#ECEEF1; --line-2:#E1E4E9;
+    --ink:#16191F; --ink-2:#576172; --muted:#8E96A3; --faint:#B0B7C2;
+
+    /* **the empty half of anything that fills up**, and deliberately neutral rather than a tint of
+       orange: a gauge, a race bar and a catalogue bar all say "this much of it is done", and an
+       orange remainder reads as a second, paler measurement instead of as the part that is missing. */
+    --track:#E3E6EB;
 
     /* the orange ladder is **surfaces**, not chart colours: 50-200 are fills a tint of orange
        belongs on, 300-700 are accents. The chart ramp is its own ladder in the javascript and
@@ -47,13 +55,13 @@
        file; they are one idea at two weights, and in dark they have to invert. */
     --o-ink:#9A4A02; --o-ink-2:#A4642C;
 
-    --green:#15803D; --green-bg:#DCFCE7;
+    --green:#0E9F6E; --green-bg:#D7F2E7;
     /* `--red` is the solid fill a destructive button carries, `--red-ink` is red *text* on
        `--red-bg`. They are the same value here and cannot be in dark, where a fill white text
        stands on and a word on a dark tint are opposite ends of the scale. */
     --red:#B91C1C; --red-700:#9C1717; --red-bg:#FEE2E2; --red-ink:#B91C1C; --red-line:#F1BDBD;
     --amber:#A16207; --amber-bg:#FEF3C7; --blue:#1D4ED8; --blue-bg:#DBEAFE;
-    --scrim:rgba(45,38,30,.4);
+    --scrim:rgba(22,25,31,.44);
 
     --r-1:10px; --r-2:14px; --r-3:18px; --r-4:24px; --r-5:30px;
     --ease:cubic-bezier(.22,1,.36,1);
@@ -72,18 +80,20 @@
      while the orange accents (300-700) and `--o-ink` go light; and red splits in two, because
      `.btn-d` needs a fill that white text reads on while `.tag.rd` needs a word on a dark tint. */
   :root[data-theme="dark"]{
-    --beige:#100E0D; --shell:#1C1917; --surface:#161413;
-    --card:#262220; --card-hi:#33240F; --line:#2E2A26; --line-2:#3B3631;
-    --ink:#F5F4F2; --ink-2:#B9B2AA; --muted:#978F87; --faint:#7A736B;
+    --beige:#0A0C0F; --shell:#101316; --surface:#0C0F12;
+    --card:#171B20; --line:#21262D; --line-2:#2A313A;
+    --ink:#E8EAED; --ink-2:#9CA4B1; --muted:#767E8B; --faint:#5C6573;
 
-    --o:#FF6F00; --o-700:#FF8524; --o-600:#F97316; --o-400:#E08A3C;
-    --o-300:#C8792F; --o-200:#4D3219; --o-100:#2F2217; --o-50:#241A12;
-    --o-ink:#F0A95E; --o-ink-2:#C69A6E;
+    --track:#313B47;
 
-    --green:#4ADE80; --green-bg:#163024;
-    --red:#C9342A; --red-700:#A82A22; --red-bg:#331715; --red-ink:#F28B82; --red-line:#5B2A26;
-    --amber:#FBBF24; --amber-bg:#352811; --blue:#8AB4F8; --blue-bg:#17243C;
-    --scrim:rgba(0,0,0,.62);
+    --o:#FF6F00; --o-700:#FF8524; --o-600:#F97316; --o-400:#EE9959;
+    --o-300:#D2854A; --o-200:#4A3220; --o-100:#2C2219; --o-50:#211A14;
+    --o-ink:#F0A95E; --o-ink-2:#C2946C;
+
+    --green:#42D6A0; --green-bg:#0E2A22;
+    --red:#C9342A; --red-700:#A82A22; --red-bg:#2E1A19; --red-ink:#F28B82; --red-line:#53302C;
+    --amber:#FBBF24; --amber-bg:#2F2714; --blue:#8AB4F8; --blue-bg:#17233A;
+    --scrim:rgba(0,0,0,.66);
     color-scheme:dark;
   }
   *,*::before,*::after{box-sizing:border-box}
@@ -205,14 +215,17 @@
      slid underneath, and the section you are already in has nothing to preview anyway. */
   nav button[aria-current],nav button[aria-current]:hover{background:transparent;color:#fff}
   nav button[aria-current] svg{color:#fff}
-  nav button[aria-current] .pip{background:rgba(255,255,255,.28);color:#fff}
-  nav .pip{margin-left:auto;font-size:11.5px;font-weight:700;background:var(--line);color:var(--muted);padding:2px 8px;border-radius:999px;min-width:24px;text-align:center}
-  /* the one pip that is a count of people waiting rather than a count of rows, so it is the one
-     allowed to be loud. the [aria-current] rule above is more specific and still wins, which is
-     what keeps the pip white while its own section is open. */
-  nav .pip.hot{background:var(--o);color:#fff}
+  /* **the sidebar carries no counts.** Each of Аномалии, Пользователи and Магазины used to end in
+     a pip with its own row count in it - the founder's call to remove them, and the menu is the
+     wrong place to read a number: «Всего: 58» is already in the header of the section it belongs
+     to, and three numbers down the side of every screen are three facts nobody came to the menu
+     for. The counts themselves are unchanged; only the second rendering of them is gone. */
 
-  main{flex:1;min-width:0;background:var(--shell);padding:24px 30px 40px}
+  /* **a column, so Главная can be told to fill the window.** Every other section is a list that
+     is as long as it is; only the dashboard has a fixed number of cards and therefore a bottom
+     edge that can be made to land on the window's own. */
+  main{flex:1;min-width:0;background:var(--shell);padding:20px 26px 24px;
+       display:flex;flex-direction:column}
 
   /* ── the page header ──
      one row across the top of the work area on every section: what you are looking at on the left,
@@ -234,19 +247,30 @@
      **and the section's own strip came up with it.** `.bar` - a count, and on two sections a pill
      and an «i» - was a second row under this one, and on Пользователи and Магазины it was 45px of
      empty page carrying one grey word at the far right. The controls are here and the row is gone. */
-  .topbar{display:flex;align-items:center;gap:16px;margin-bottom:22px;min-height:44px}
+  .topbar{display:flex;align-items:center;gap:16px;margin-bottom:16px;min-height:42px}
   .topbar h1{font-size:24px;font-weight:750;letter-spacing:-.035em;margin:0;white-space:nowrap;flex:none}
   /* the open section's count and its own controls, between the title and the search */
   .topbar .sec{display:flex;align-items:center;gap:10px;flex:none;flex-wrap:wrap;min-width:0}
   .topbar .sec .pill{padding:7px 12px}
+  /* the native caret is drawn by the browser in its own language and does not follow the theme, so
+     it is replaced by a data-uri chevron at a mid grey that reads on both the light and dark card.
+     an svg in a `url()` cannot read a custom property, which is why the colour is written here. */
+  .topbar .sec .fsel{
+    appearance:none;-webkit-appearance:none;
+    border:1px solid var(--line-2);background:var(--card);color:var(--ink);border-radius:var(--r-1);
+    padding:7px 28px 7px 11px;font-size:12.5px;font-weight:700;cursor:pointer;outline:none;
+    background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238e96a3' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 9px center;background-size:13px
+  }
+  .topbar .sec .fsel:hover{border-color:var(--o-300)}
   .topbar .search{margin-left:auto;flex:0 1 400px}
   .top-acts{display:flex;gap:10px;flex:none;margin-left:auto}
   /* `:not([hidden])` and not a bare sibling selector: a hidden element is still a sibling, so
      without it the two buttons would jump back to the title's shoulder on Главная. */
   .topbar .search:not([hidden]) + .top-acts{margin-left:0}
-  .ib{width:40px;height:40px;border-radius:50%;border:1px solid var(--line-2);background:var(--shell);display:grid;place-items:center;cursor:pointer;position:relative;
+  .ib{width:40px;height:40px;border-radius:50%;border:1px solid var(--line-2);background:var(--card);display:grid;place-items:center;cursor:pointer;position:relative;
       transition:background .16s var(--ease),border-color .16s,transform .11s var(--ease)}
-  .ib:hover{background:var(--card)}
+  .ib:hover{background:var(--line)}
   /* the press has to move the control. a background swap alone is invisible on a 40px circle under
      a fingertip, which is why the refresh button read as dead even while it was working. */
   .ib:active{transform:scale(.88)}
@@ -267,8 +291,8 @@
      units apart, which is to say no fill separation at all - and every card on the dashboard asked
      for it. inverting the ramp made it meaningless, so it is gone rather than left as a class that
      no longer changes anything. */
-  .card{background:var(--card);border:1px solid var(--line-2);border-radius:var(--r-4);padding:20px 22px}
-  .card > header{flex:none;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:18px}
+  .card{background:var(--card);border:1px solid var(--line-2);border-radius:var(--r-4);padding:15px 18px}
+  .card > header{flex:none;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:13px}
   .card h2{font-size:16.5px;font-weight:750;letter-spacing:-.02em;margin:0}
   .card .cap{font-size:12.5px;color:var(--muted);margin-top:3px}
   .pill{
@@ -289,7 +313,17 @@
      empty `--card` - and empty *fill* reads as a broken panel, where the same space left as page
      reads as the page. The KPI row opts back in below: those four are one control, and one of them
      ending short because its label wrapped would look like a fault rather than like breathing. */
-  .dash{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;align-items:start}
+  /* ── the dashboard fills the window ──
+     **three rows and the last one ends where the page does.** It used to stop ~80px short on a
+     1030px window, which reads as a page that failed to finish rather than as breathing room. The
+     KPI row keeps its content height and rows 2 and 3 share whatever is left, so a taller monitor
+     gives the chart and the ranking more room instead of leaving a band of empty `--shell`.
+
+     `align-items:start` still governs row 1; every card in rows 2 and 3 is `.card.tall`, which is
+     `align-self:stretch` and already knew how to grow. */
+  #v-dash{flex:1;min-height:0;display:flex;flex-direction:column}
+  .dash{display:grid;grid-template-columns:repeat(12,1fr);grid-template-rows:auto 1fr 1fr;
+        gap:12px;align-items:start;flex:1;min-height:0}
   .kpi{grid-column:span 3}
   .b3{grid-column:span 3}
   .b6{grid-column:span 6}
@@ -300,33 +334,46 @@
      stretched to the two rows it spans. */
   .r2{grid-row:span 2}
 
-  .kpi{align-self:stretch;background:var(--card);border:1px solid var(--line-2);border-radius:var(--r-4);padding:20px 22px}
-  .kpi.hi{background:var(--card-hi);border-color:var(--o-200)}
-  .kpi .k-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:15px}
-  .kpi .k-lab{font-size:13.5px;font-weight:600;color:var(--ink-2)}
-  .kpi.hi .k-lab{color:var(--o-ink)}
-  .kpi .k-ico{width:36px;height:36px;border-radius:12px;background:var(--shell);display:grid;place-items:center;flex:none}
-  .kpi.hi .k-ico{background:var(--o);}
-  .kpi .k-ico svg{width:17px;height:17px;color:var(--ink-2)}
-  .kpi.hi .k-ico svg{color:#fff}
-  .kpi .k-bot{display:flex;align-items:flex-end;justify-content:space-between;gap:10px}
-  .kpi .k-main{min-width:0}
-  .kpi .k-val{font-size:33px;font-weight:750;letter-spacing:-.04em;line-height:1}
-  /* the second fact about the same thing, under the number rather than in a tile of its own.
-     «Магазины» and «сколько из них активны» are one question asked twice, and two tiles side by
-     side made the reader compare them - which is the funnel's job, with the whole market in it. */
-  /* under the whole row rather than beside the delta: sharing the line with `.k-side` left it about
-     140px, which truncated «151 покупателей · 32 владельцев» to «32 влад…» - a line that is cut off
-     is worse than no line, because the reader stops to work out what was there. */
-  .kpi .k-sub{font-size:12px;font-weight:650;color:var(--muted);margin-top:12px;
+  /* ── the three counts ──
+     **no tile is tinted.** One of them used to be `--card-hi` with a solid orange icon, which made
+     «Магазины» look like the answer to a question the other two were asking - they are three
+     independent counts and none of them is the headline. The orange is in the glyph now and it is
+     the same on all three, so the row reads as one control again.
+
+     The icon and the label share the top line, the number owns the middle, and everything that
+     qualifies it hangs under the number rather than opposite it: the delta used to sit right-aligned
+     on the same baseline as a 33px numeral, which left «151 покупателей · 32 владельцев» about 140px
+     and truncated it to «32 влад…». A line that is cut off is worse than no line. */
+  .kpi{align-self:stretch;background:var(--card);border:1px solid var(--line-2);border-radius:var(--r-4);
+       padding:14px 18px;display:flex;flex-direction:column}
+  .kpi .k-head{display:flex;align-items:center;gap:11px;margin-bottom:11px;min-width:0}
+  .kpi .k-ico{width:34px;height:34px;border-radius:11px;background:var(--o-100);display:grid;place-items:center;flex:none}
+  .kpi .k-ico svg{width:17px;height:17px;color:var(--o)}
+  .kpi .k-lab{font-size:13.5px;font-weight:650;color:var(--ink-2);min-width:0;
               white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .kpi.hi .k-sub{color:var(--o-ink-2)}
-  .kpi .k-side{text-align:right;flex:none}
-  .kpi .k-d{font-size:12.5px;font-weight:750}
-  .kpi .k-d.up{color:var(--green)}
-  .kpi .k-d.dn{color:var(--red-ink)}
-  .kpi .k-d.fl{color:var(--muted)}
-  .kpi .k-note{font-size:11px;color:var(--muted);margin-top:1px}
+  .kpi .k-body{flex:1;display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+  /* **only VIP carries one, and it says what the fraction above it means.** «Пользователи» had
+     «покупатели 51 · владельцы 32» here and it is gone - the founder's call: the count is the whole
+     tile, and a split under it is a second measurement nobody asked the tile for. */
+  .kpi .k-sub{font-size:12px;font-weight:650;color:var(--muted);margin-top:9px;
+              white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .kpi .k-main{min-width:0}
+  .kpi .k-val{font-size:29px;font-weight:750;letter-spacing:-.04em;line-height:1}
+  /* the arrow and the figure are the news; «за 7 дней» is the ruler it was measured with and stays
+     grey, or the eye reads a four-word sentence as the finding */
+  .kpi .k-d{display:flex;align-items:center;gap:5px;margin-top:11px;font-size:12px;
+            font-weight:650;color:var(--muted)}
+  .kpi .k-d svg{width:13px;height:13px;flex:none;color:var(--green)}
+  .kpi .k-d b{font-weight:750;color:var(--green)}
+  .kpi .k-d.fl svg,.kpi .k-d.fl b{color:var(--muted)}
+  /* **the shape of how the count got here, not the daily figure.** The chart one row down already
+     draws the per-day registrations; this says what the tile's own number has been doing. */
+  .kpi .k-spark{flex:none;align-self:flex-end}
+  .kpi .k-spark svg{display:block}
+  /* VIP is inventory, so the tile draws how much of it is gone. The other two have nothing to fill
+     up - there is no denominator for «сколько пользователей бывает». */
+  .kpi .k-bar{height:7px;border-radius:99px;background:var(--track);margin-top:13px;overflow:hidden}
+  .kpi .k-bar i{display:block;height:100%;border-radius:99px;background:var(--o)}
 
   .card .foot{margin-top:16px;padding-top:14px;border-top:1px solid var(--line-2);font-size:12.5px;color:var(--ink-2);font-weight:600}
 
@@ -337,14 +384,14 @@
   .tip{
     position:absolute;pointer-events:none;opacity:0;transform:translate(-50%,-116%);
     background:var(--shell);border:1px solid var(--line-2);border-radius:var(--r-1);padding:8px 12px;
-    font-size:12.5px;white-space:nowrap;box-shadow:0 8px 22px rgba(60,50,40,.13);transition:opacity .12s;z-index:5;line-height:1.5
+    font-size:12.5px;white-space:nowrap;box-shadow:0 8px 22px rgba(10,13,17,.16);transition:opacity .12s;z-index:5;line-height:1.5
   }
   .tip .t-d{color:var(--muted);font-size:11px;font-weight:650;display:block;margin-bottom:3px}
   .tip .t-r{display:flex;align-items:center;gap:7px;font-weight:650}
   .tip .t-r i{width:8px;height:8px;border-radius:2px;flex:none}
 
   /* donut */
-  .donut{position:relative;margin:0 auto;width:196px;height:196px}
+  .donut{position:relative;margin:0 auto;width:172px;height:172px}
   .donut .d-mid{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
   .donut .d-mid span{font-size:11.5px;color:var(--muted);font-weight:600;display:block}
   .donut .d-mid b{font-size:23px;font-weight:750;letter-spacing:-.03em;display:block;margin-top:2px}
@@ -365,6 +412,7 @@
      the arc takes the slack, the boxes stay pinned to the bottom edge. */
   .card.tall{align-self:stretch;display:flex;flex-direction:column}
   .card.tall .grow{flex:1;display:flex;flex-direction:column;justify-content:center;min-height:0}
+  .card.tall .chart{flex:1;min-height:0}
   /* **the rows take the slack, not the gaps between them.** These two are one row of one subject
      like the pair above them, so the shorter card is stretched - and `space-between` on a list of
      two would park one row at the top and one at the bottom with a hole in the middle. Growing the
@@ -372,40 +420,42 @@
   .card.tall .race,.card.tall .trend{flex:1}
   .card.tall .race .rc,.card.tall .trend .tr{flex:1}
 
-  .gauge{position:relative;margin:2px auto 0;width:100%;max-width:240px}
+  .gauge{position:relative;margin:0 auto;width:100%;max-width:150px}
   .gauge svg{display:block;width:100%;height:auto}
-  /* the readout sits inside the arc's own opening rather than under it - the arc is a container,
+  /* the readout sits inside the ring's own opening rather than under it - the ring is a container,
      and a number below it would read as a caption of a picture instead of the picture's subject */
-  .gauge .g-mid{position:absolute;left:0;right:0;bottom:6px;text-align:center}
-  .gauge .g-mid b{display:block;font-size:32px;font-weight:750;letter-spacing:-.04em;line-height:1}
-  .gauge .g-mid span{display:block;margin-top:5px;font-size:11.5px;font-weight:650;color:var(--muted)}
-  .g-note{text-align:center;font-size:12.5px;color:var(--ink-2);line-height:1.5;margin-top:14px}
+  .gauge .g-mid{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
+  .gauge .g-mid > div{max-width:66%}
+  .gauge .g-mid b{display:block;font-size:25px;font-weight:750;letter-spacing:-.04em;line-height:1}
+  .gauge .g-mid span{display:block;margin-top:6px;font-size:10.5px;font-weight:650;color:var(--muted);line-height:1.3}
+  .g-note{text-align:center;font-size:12.5px;color:var(--ink-2);line-height:1.5;margin-top:12px}
   .g-note b{font-weight:750;color:var(--ink)}
 
-  /* **one tinted block split in two, not two bordered boxes.** The two halves are the same
-     measurement cut in two, so they belong inside one shape - two separate cards invited reading
-     them as two findings, and the pair sat noticeably outside the card's own edge: a grid track of
+  /* **one block split in two, not two bordered boxes.** The two halves are the same measurement cut
+     in two, so they belong inside one shape - two separate cards invited reading them as two
+     findings. It was a tinted orange block until 2026-10-10; the fill made the pair look like a
+     third panel, and a hairline off the card's own `--line-2` separates them just as well.
+
+     The pair sat noticeably outside the card's own edge before `minmax(0,1fr)`: a grid track of
      `1fr` is `minmax(auto, 1fr)`, and `auto` is the child's min-content width, which a nowrap label
-     pushes past its share. `minmax(0,1fr)` is the fix and the reason it is written the long way. */
-  .g-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin-top:18px;
-         background:var(--o-100);border-radius:var(--r-2);overflow:hidden}
-  .g-two > *{padding:12px 10px;text-align:center;min-width:0;border:0;background:transparent;
+     pushes past its share. That is why it is written the long way. */
+  .g-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin-top:13px;
+         border-top:1px solid var(--line-2)}
+  .g-two > *{padding:11px 2px 0;text-align:left;min-width:0;border:0;background:transparent;
              font:inherit;color:inherit}
-  .g-two > * + *{box-shadow:inset 1px 0 0 rgba(255,111,0,.24)}
-  .g-two .gl{font-size:11.5px;font-weight:650;color:var(--o-ink-2);white-space:nowrap;overflow:hidden;
+  .g-two > * + *{padding-left:16px;box-shadow:inset 1px 0 0 var(--line-2)}
+  .g-two .gl{font-size:11.5px;font-weight:650;color:var(--muted);white-space:nowrap;overflow:hidden;
              text-overflow:ellipsis}
-  .g-two .gv{margin-top:4px;font-size:20px;font-weight:750;letter-spacing:-.035em;line-height:1}
+  .g-two .gv{margin-top:5px;font-size:20px;font-weight:750;letter-spacing:-.035em;line-height:1}
   /* the half that is a button. it opens the list of who has not finished, so it says so - an
-     underline on hover rather than a border, which would make one half a different shape */
-  .g-two button{cursor:pointer;transition:background .16s var(--ease)}
-  .g-two button:hover{background:rgba(255,111,0,.14)}
-  .g-two button .gl{text-decoration:underline;text-decoration-color:currentColor;
+     underline rather than a border or a fill, either of which would make one half a different shape */
+  .g-two button{cursor:pointer}
+  .g-two button .gl{color:var(--o-ink);text-decoration:underline;text-decoration-color:currentColor;
                     text-underline-offset:3px}
   /* nothing to show when nobody is unfinished, so it stops looking like a control - it keeps its
      colour rather than fading, because it is still one half of a measurement */
   .g-two button:disabled{cursor:default}
-  .g-two button:disabled:hover{background:transparent}
-  .g-two button:disabled .gl{text-decoration:none}
+  .g-two button:disabled .gl{color:var(--muted);text-decoration:none}
 
   /* ── the race for the cheapest basket ──
      **the panel's one competitive picture.** A single leader per market said who was cheapest and
@@ -419,13 +469,13 @@
      place has no spread worth a badge. */
   .tabs{display:flex;gap:6px;flex-wrap:wrap}
   .tabs button{border:1px solid var(--line-2);background:var(--shell);color:var(--ink-2);
-               border-radius:999px;padding:7px 14px;font-size:12.5px;font-weight:650;cursor:pointer;
+               border-radius:999px;padding:6px 13px;font-size:12.5px;font-weight:650;cursor:pointer;
                white-space:nowrap;transition:background .16s var(--ease),color .16s,border-color .16s}
   .tabs button:hover{background:var(--card)}
   .tabs button[aria-current]{background:var(--o);border-color:var(--o);color:#fff}
 
   .race{display:flex;flex-direction:column}
-  .rc{display:flex;align-items:center;gap:14px;padding:12px 0;background:none;border:0;width:100%;
+  .rc{display:flex;align-items:center;gap:14px;padding:8px 0;background:none;border:0;width:100%;
       font:inherit;color:inherit;text-align:left;cursor:pointer;border-radius:var(--r-1);
       transition:background .16s var(--ease)}
   .rc + .rc{box-shadow:inset 0 1px 0 var(--line)}
@@ -443,7 +493,7 @@
      So the axis is the average: everyone's own market is the middle of the bar, cheaper goes left,
      dearer goes right, and the length is `|индекс − 100|` against the largest gap on screen. The
      centre tick repeated down every row is what makes it read as one line rather than five bars. */
-  .rc .rb{flex:1 1 auto;min-width:90px;position:relative;height:12px;background:var(--o-50);
+  .rc .rb{flex:1 1 auto;min-width:90px;position:relative;height:12px;background:var(--track);
           border-radius:99px}
   .rc .rb::after{content:"";position:absolute;top:-4px;bottom:-4px;left:50%;margin-left:-1px;
                  width:2px;border-radius:2px;background:var(--ink-2);opacity:.32}
@@ -455,12 +505,12 @@
   .rc .rb i.dear{background:var(--o-200)}
   .rc .rp{flex:none;font-weight:750;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
   .rc .rx{flex:none;width:64px;text-align:right}
-  .race-foot{display:flex;align-items:center;gap:8px;margin-top:14px;padding-top:13px;
+  .race-foot{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;
              border-top:1px solid var(--line-2);font-size:12.5px;color:var(--ink-2);font-weight:600}
   .race-foot i{width:2px;height:13px;border-radius:2px;background:var(--ink-2);opacity:.32;flex:none}
   /* the tabs sit on their own row rather than in the card's header slot: four category names is
      ~560px of pills, which wraps inside the card's header and takes the title with it */
-  .race-tabs{margin-bottom:6px}
+  .race-tabs{margin-bottom:2px}
 
   /* ── the average basket, per market and over time ──
      the figure says what a category is worth; the sparkline beside it says whether that is moving,
@@ -468,7 +518,7 @@
      oranges crossing each other is a picture nobody reads, and these four numbers are not on the
      same scale anyway - an Обои basket is ten lines and a Универсальный one is a hundred. */
   .trend{display:flex;flex-direction:column;gap:2px}
-  .tr{display:flex;align-items:center;gap:12px;padding:11px 0}
+  .tr{display:flex;align-items:center;gap:12px;padding:7px 0}
   .tr + .tr{box-shadow:inset 0 1px 0 var(--line)}
   .tr .tn{flex:1;min-width:0}
   .tr .tn b{display:block;font-size:13.5px;font-weight:650;white-space:nowrap;overflow:hidden;
@@ -478,8 +528,6 @@
   .tr .tg{flex:none;width:78px;display:flex;flex-direction:column;align-items:flex-end;gap:5px}
   .tr .tg svg{display:block}
   .tr .tg em{font-style:normal;font-size:11px;font-weight:700}
-  .tr .tg em.up{color:var(--red-ink)}
-  .tr .tg em.dn{color:var(--green)}
   .tr .tg em.fl{color:var(--muted)}
 
   /* it moved off the dashboard and under Шаблоны on 2026-08-22 - it is maintenance rather than a
@@ -502,42 +550,42 @@
   @media (max-width:1240px){ #tpl-storage{grid-template-columns:1fr} }
   .stor-act{display:flex;gap:10px;align-items:center;margin-left:auto;flex:none}
 
-  /* ── the catalogue, as cards ──
-     **a template is a hundred products, and a product is mostly its photograph.** It was a table:
-     a 38px thumbnail in the first column, the name, the size, the unit, a switch and a fraction -
-     eight columns of which exactly one was the thing the founder was looking for. Checking that
-     five sizes of one shovel share the right picture meant reading a column of postage stamps.
-     The model is the photo picker two screens away, which had the answer already: a grid of
-     pictures, big enough to recognise, with the words underneath.
-
-     Wider than the app's grid on purpose - this is a 1440px browser window, not a phone, so the
-     track is ~170px and six fit across. A card is one button: the whole of it opens the editor,
-     because every field is in there and a row with its own inline controls is how the table got
-     to eight columns. */
-  .tpl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:12px}
-  .tpl-scroll{max-height:64vh;overflow-y:auto;overflow-x:hidden;padding:2px}
-  .tcard{display:flex;flex-direction:column;background:var(--shell);border:1px solid var(--line-2);
-         border-radius:var(--r-3);padding:0;overflow:hidden;cursor:pointer;text-align:left;
-         font:inherit;color:inherit;transition:border-color .16s var(--ease)}
-  .tcard:hover{border-color:var(--o-300)}
-  /* the photograph, at the size a photograph is for. square because the catalogue is shot square
-     and a grid of mixed ratios reads as a grid that failed to load. */
-  .tcard .tc-ph{width:100%;aspect-ratio:1;object-fit:cover;background:var(--card);display:block}
-  .tcard .tc-ph.none{display:grid;place-items:center;color:var(--faint)}
-  .tcard .tc-b{padding:10px 11px 0;flex:1;min-width:0}
-  .tcard .tc-n{font-size:13px;font-weight:650;line-height:1.35;display:block;
-               overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;
-               -webkit-box-orient:vertical}
-  .tcard .tc-s{display:block;margin-top:3px;font-size:11.5px;color:var(--muted);line-height:1.4;
-               overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .tcard .tc-f{display:flex;align-items:center;gap:8px;padding:9px 11px 10px}
-  .tcard .tc-f .tag{padding:3px 7px;font-size:10.5px}
-  .tcard .tc-f .tc-cov{margin-left:auto;font-size:11px;font-weight:700;color:var(--ink-2);
-                       font-variant-numeric:tabular-nums;white-space:nowrap}
-  /* **how many shops have priced it, along the bottom edge.** The fraction beside it is the number;
-     this is what makes a hundred of them scannable at once, and it costs three pixels instead of a
-     row of its own. Green at the full market, which is «можно в корзину» in one glance. */
-  .tcard .tc-m{height:3px;background:var(--line-2);flex:none}
+  /* ── the catalogue, as the app's cards ──
+     **the card is a preview, so it is `ProductTile` drawn again** - same size, frame, panel colour,
+     type and badge - and stays light in the dark theme because the app has no dark one. Facts for
+     the admin (basket, how many priced) sit under it, outside it, so the card itself is what a
+     shop's customer sees. A template row has no price: the slot shows what a new shop shows. */
+  .tpl-grid{display:grid;grid-template-columns:repeat(auto-fill,174px);gap:16px 12px;justify-content:start}
+  .tpl-scroll{max-height:64vh;overflow-y:auto;overflow-x:hidden;padding:6px 8px 22px}
+  .tcard{display:flex;flex-direction:column;width:174px;padding:0;background:none;border:0;
+         cursor:pointer;text-align:left;font:inherit;color:inherit}
+  .tcard .tc-app{height:230px;box-sizing:border-box;padding:6px 6px 0;background:#fff;border-radius:20px;
+                 box-shadow:0 6px 20px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.03);
+                 display:flex;flex-direction:column;overflow:hidden;
+                 transition:box-shadow .16s var(--ease),transform .16s var(--ease)}
+  .tcard:hover .tc-app{box-shadow:0 0 0 2px var(--o-300),0 8px 24px rgba(16,24,40,.1);transform:translateY(-2px)}
+  .tcard .tc-ph{position:relative;height:100px;flex:none;border-radius:14px;overflow:hidden;
+                background:#F2F2F6;display:grid;place-items:center;color:#AFAFB8}
+  .tcard .tc-ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+  .tcard .tc-av{position:absolute;top:7px;left:7px;padding:3.5px 7px;border-radius:8px;
+                font-size:9.5px;font-weight:700;line-height:1.2;color:#fff;background:#0E9F6E}
+  .tcard .tc-b{flex:1;min-height:0;display:flex;flex-direction:column;padding:10px 6px 11px}
+  .tcard .tc-n{font-size:13.5px;font-weight:700;line-height:1.25;letter-spacing:-.15px;color:#17171C;
+               display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .tcard .tc-s{margin-top:2px;font-size:11.5px;font-weight:500;line-height:1.3;color:#8A8A93;
+               display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .tcard .tc-p{margin-top:auto;display:flex;align-items:baseline;gap:4px;min-width:0;line-height:1.5}
+  .tcard .tc-p b{font-size:12px;font-weight:600;color:#FF6F00;white-space:nowrap;
+                 overflow:hidden;text-overflow:ellipsis}
+  .tcard .tc-p span{font-size:11px;font-weight:500;color:#AFAFB8;white-space:nowrap}
+  .tcard .tc-meta{display:flex;flex-direction:column;gap:7px;padding:9px 4px 0}
+  .tcard .tc-row{display:flex;align-items:center;gap:8px}
+  .tcard .tc-row .tag{padding:3px 7px;font-size:10.5px}
+  .tcard .tc-cov{margin-left:auto;font-size:11px;font-weight:700;color:var(--ink-2);
+                 font-variant-numeric:tabular-nums;white-space:nowrap}
+  /* how many shops have priced it, as a line: scannable across a hundred cards. green at the
+     full market, which is «можно в корзину» at a glance */
+  .tcard .tc-m{height:3px;border-radius:2px;background:var(--line-2);overflow:hidden}
   .tcard .tc-m i{display:block;height:100%;background:var(--amber)}
   .tcard .tc-m.full i{background:var(--green)}
   .tpl-banner .sb p{color:var(--ink-2)}
@@ -609,6 +657,7 @@
   thead th.s{cursor:pointer}
   thead th.s:hover{color:var(--ink-2)}
   thead th .ar{opacity:0;margin-left:4px;font-size:9px}
+  thead th.s:hover .ar{opacity:.4}
   thead th[data-dir] .ar{opacity:1;color:var(--o)}
   tbody td{padding:13px 16px;border-bottom:1px solid var(--line);vertical-align:middle}
   tbody tr:last-child td{border-bottom:0}
@@ -645,7 +694,7 @@
   .tag.vip{background:var(--o);color:#fff}
 
   .prog{display:flex;align-items:center;gap:9px;min-width:118px}
-  .prog .t{flex:1;height:6px;background:var(--o-100);border-radius:99px;overflow:hidden}
+  .prog .t{flex:1;height:6px;background:var(--track);border-radius:99px;overflow:hidden}
   .prog .t i{display:block;height:100%;border-radius:99px;background:var(--o)}
   /* a finished catalogue, in the one colour that means it. a class rather than a style written from
      the javascript colour mirror: nothing in a list then has to be redrawn when the theme changes. */
@@ -653,12 +702,12 @@
   .prog .p{font-size:11.5px;font-weight:750;color:var(--ink-2);min-width:32px;text-align:right;font-variant-numeric:tabular-nums}
 
   .acts{display:inline-flex;gap:6px}
-  .ia{width:31px;height:31px;border:1px solid var(--line-2);background:var(--shell);border-radius:9px;display:grid;place-items:center;cursor:pointer;color:var(--muted);transition:all .14s}
+  .ia{width:31px;height:31px;border:1px solid var(--line);background:var(--card);border-radius:9px;display:grid;place-items:center;cursor:pointer;color:var(--muted);transition:all .14s}
   .ia:hover{color:var(--o);border-color:var(--o-300);background:var(--o-50)}
   .ia.dg:hover{color:var(--red-ink);border-color:var(--red-line);background:var(--red-bg)}
   .ia svg{width:15px;height:15px}
   .ia:disabled{opacity:.35;cursor:not-allowed}
-  .ia:disabled:hover{color:var(--muted);border-color:var(--line-2);background:var(--shell)}
+  .ia:disabled:hover{color:var(--muted);border-color:var(--line);background:var(--card)}
 
   .empty{padding:54px 24px;text-align:center;color:var(--muted)}
   .empty .bx{width:54px;height:54px;border-radius:17px;background:var(--card);display:grid;place-items:center;margin:0 auto 14px}
@@ -763,7 +812,6 @@
     nav{flex-direction:row;gap:4px}
     nav button{padding:10px 12px;white-space:nowrap}
     nav button .lb2{display:none}
-    nav .pip{display:none}
     main{padding:18px 16px 36px}
     /* the title keeps the two buttons company on the first line and the search takes the second -
        a 400px field beside a 24px heading is what makes this row overflow first, and putting the
@@ -830,12 +878,20 @@
            row, which on Пользователи and Магазины was 45px of empty page holding one grey word at
            the far right. Shown by setView, one at a time. -->
       <div class="sec" id="sec-anomalies" hidden>
-        <span class="count" id="c-anom"></span>
         <button class="pill" id="an-th" type="button"></button>
         <button class="ib sm" id="anom-info" title="Как читать этот отчёт"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button>
       </div>
-      <div class="sec" id="sec-users" hidden><span class="count" id="c-users"></span></div>
-      <div class="sec" id="sec-shops" hidden><span class="count" id="c-shops"></span></div>
+      <!-- a filter narrows *which rows exist* on screen; the column headers sort them. Two
+           questions, two controls - the Категория column used to be the only thing resembling a
+           filter here and it sorts, which is what made it read as broken. -->
+      <div class="sec" id="sec-users" hidden>
+        <select class="fsel" id="f-users" aria-label="Роль"></select>
+        <span class="count" id="c-users"></span>
+      </div>
+      <div class="sec" id="sec-shops" hidden>
+        <select class="fsel" id="f-shops" aria-label="Категория"></select>
+        <span class="count" id="c-shops"></span>
+      </div>
       <div class="sec" id="sec-templates" hidden>
         <span class="count" id="c-tpl"></span>
         <button class="ib sm" id="tpl-info" title="Как это работает"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button>
@@ -932,7 +988,7 @@ var RAMP = ["#FF6F00","#FB8C3C","#FDA968","#FDC48F","#FEDCB6","#FFEDD5"];
 // place any colour is declared. `line2` and not `line`, because the cards are `--card` and `--line`
 // against it is a gridline nobody can see.
 var THEME_COLOURS = { o:"--o", o3:"--o-300", o1:"--o-100", line2:"--line-2",
-                      faint:"--faint", card:"--card" };
+                      faint:"--faint", card:"--card", track:"--track" };
 var C = {};
 function readThemeColours() {
   var cs = getComputedStyle(document.documentElement);
@@ -972,6 +1028,8 @@ var state = {
   // the busiest category when the one it names stops having anybody in the comparison.
   view:"dash", threshold:0.5, raceCat:null,
   q:{ users:"", shops:"", anom:"", tpl:"" },
+  // "" is every row; otherwise a role or a shop category. these are filters, not the sort.
+  filter:{ users:"", shops:"" },
   sort:{ users:{key:"created_at",dir:-1}, shops:{key:"created_at",dir:-1}, anom:{key:"deviation_percent",dir:-1} },
 };
 
@@ -1024,6 +1082,10 @@ var ICONS = {
   tpl:["M4 4h16v5H4z","M4 13h7v7H4z","M15 13h5v7h-5z"],
   box:["M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z","m3.3 7 8.7 5 8.7-5","M12 22V12"],
   scale:["M3 3v16a2 2 0 0 0 2 2h16","m19 9-5 5-4-4-3 3"],
+  // the two a KPI delta can carry. there is no `down` arrow: `new_7d` is a count of rows that
+  // appeared in the last week and cannot be negative, so the only other state is nothing happened.
+  up:["M12 19V5","m5 12 7-7 7 7"],
+  flat:["M5 12h14"],
   edit:["M12 20h9","M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"],
   trash:["M3 6h18","M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6","M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2","M10 11v6","M14 11v6"],
   crown:["m5 16-3-9 5.5 4L12 4l4.5 7L22 7l-3 9Z","M5 20h14"],
@@ -1227,7 +1289,6 @@ function buildNav() {
     b.appendChild(el("span","lb2",item.label));
     // the sentence that used to be printed under the page title, at no vertical cost
     b.title = item.sub;
-    if (item.v==="users"||item.v==="shops"||item.v==="anomalies") { var p=el("span","pip","—"); p.id="pip-"+item.v; b.appendChild(p); }
     b.addEventListener("click", function(){ setView(item.v); });
     nav.appendChild(b);
   });
@@ -1438,8 +1499,6 @@ function refresh(o) {
 function loadStats() {
   return api("/api/admin/stats").then(function (d) {
     state.stats = d;
-    if ($("#pip-users")) $("#pip-users").textContent = nf(d.users.total);
-    if ($("#pip-shops")) $("#pip-shops").textContent = nf(d.shops.total);
     if (state.view === "dash") drawDash();
   }).catch(function(e){ if(!guard(e)) toast("Не удалось загрузить статистику", true); });
 }
@@ -1469,30 +1528,40 @@ function legend(items) {
 }
 
 function kpi(o) {
-  var c = el("div", "kpi" + (o.hi ? " hi" : ""));
-  var top = el("div","k-top");
-  top.appendChild(el("div","k-lab",o.label));
-  var ic = el("div","k-ico"); ic.appendChild(ico(o.icon,17)); top.appendChild(ic);
-  c.appendChild(top);
+  var c = el("div","kpi");
 
-  var bot = el("div","k-bot");
+  var head = el("div","k-head");
+  var ic = el("div","k-ico"); ic.appendChild(ico(o.icon,17));
+  head.appendChild(ic);
+  head.appendChild(el("div","k-lab",o.label));
+  c.appendChild(head);
+
+  var body = el("div","k-body");
   var main = el("div","k-main");
   main.appendChild(el("div","k-val num",o.value));
-  bot.appendChild(main);
-  var side = el("div","k-side");
-  if (o.delta !== undefined && o.delta !== null) {
-    side.appendChild(el("div","k-d "+(o.delta>0?"up":"fl"), (o.delta>0?"+":"")+nf(o.delta)));
-    side.appendChild(el("div","k-note",o.note||"за 7 дней"));
-  } else if (o.note) {
-    side.appendChild(el("div","k-note",o.note));
-  }
-  bot.appendChild(side);
-  c.appendChild(bot);
 
-  // the same subject, one level down: «Магазины» over «16 в сравнении цен». it is not a second
-  // measurement - a tile of its own for that number would invite comparing the two, which is what
-  // the gauge below does properly, with the whole market in the picture.
-  if (o.sub) { var sb = el("div","k-sub",o.sub); sb.title = o.subTitle || o.sub; c.appendChild(sb); }
+  if (o.delta !== undefined && o.delta !== null) {
+    var d = el("div","k-d" + (o.delta > 0 ? "" : " fl"));
+    d.appendChild(ico(o.delta > 0 ? ICONS.up : ICONS.flat, 13));
+    d.appendChild(el("b", null, (o.delta > 0 ? "+" : "") + nf(o.delta)));
+    d.appendChild(el("span", null, "за 7 дней"));
+    main.appendChild(d);
+  }
+  body.appendChild(main);
+
+  if (o.spark && o.spark.length >= 2) {
+    var sp = el("div","k-spark"); sp.appendChild(sparkline(o.spark, 96, 40, true));
+    body.appendChild(sp);
+  }
+  c.appendChild(body);
+
+  if (o.sub) c.appendChild(el("div","k-sub",o.sub));
+
+  if (o.bar !== undefined && o.bar !== null) {
+    var bar = el("div","k-bar"), fill = el("i");
+    fill.style.width = Math.max(0, Math.min(100, o.bar)) + "%";
+    bar.appendChild(fill); c.appendChild(bar);
+  }
   return c;
 }
 
@@ -1514,20 +1583,20 @@ function drawDash() {
 
   // ── row 1: three counts, and the shape of the market beside them ──
   g.appendChild(kpi({ label:"Магазины", value:nf(s.shops.total), delta:s.shops.new_7d,
-    icon:ICONS.shops, hi:true }));
+    icon:ICONS.shops, spark:runningTotal(s.signups, "shops", s.shops.total) }));
 
-  g.appendChild(kpi({ label:"Пользователи", value:nf(s.users.total),
-    sub:"покупатели " + nf(s.users.customers) + " · владельцы " + nf(s.users.shop_owners),
-    delta:s.users.new_7d, icon:ICONS.users }));
+  g.appendChild(kpi({ label:"Пользователи", value:nf(s.users.total), delta:s.users.new_7d,
+    icon:ICONS.users, spark:runningTotal(s.signups, "users", s.users.total) }));
 
   // **VIP is inventory, so it is a fraction and not a count.** `vip_slots` comes from the server
   // (home.go's vipShopsLimit) rather than being written here: the carousel draws that many places
   // whether or not they are sold, and a panel with its own copy would keep saying «из 5» the day
-  // the carousel grows.
+  // the carousel grows. The bar is the same fact as the fraction, which is the point - inventory is
+  // the one count on this row with a ceiling, and a ceiling is what a bar can draw.
   var slots = s.shops.vip_slots || 0, sold = s.shops.vip || 0, free = Math.max(slots - sold, 0);
   g.appendChild(kpi({ label:"VIP-места", value:nf(sold) + " / " + nf(slots),
     sub: slots === 0 ? "мест нет" : free === 0 ? "все места проданы" : nf(free) + " свободно",
-    note:"в карусели", icon:ICONS.crown }));
+    icon:ICONS.crown, bar: pct(sold, slots) }));
 
   g.appendChild(buildCategories(s));
 
@@ -1599,8 +1668,10 @@ function buildCategories(s) {
 // people to phone, and that list is «Кому позвонить» two rows down, with a name and a number on
 // every row.
 //
-// The arc is one stroked semicircle with a dasharray rather than two wedges: `stroke-linecap:round`
-// gives the end its cap for free, and the whole value is a single number.
+// It is one stroked ring with a dasharray rather than two wedges: the whole value is a single
+// number, and the remainder is `--track` rather than a tint of orange - the part that is missing
+// should not read as a second, paler measurement. **It was a semicircle until 2026-10-10**; a full
+// ring stands beside the «Категории магазинов» ring as one idiom instead of two.
 function buildGauge(f) {
   // **no caption under the title.** «Магазин попадает в сравнение, только когда заполнен целиком» is
   // the rule the whole card is about, and printing it every time is explaining the same thing to the
@@ -1610,28 +1681,27 @@ function buildGauge(f) {
   var total = f.shops || 0, done = f.complete || 0, left = Math.max(total - done, 0);
   var share = pct(done, total);
 
-  var W = 240, H = 136, stroke = 22, r = (W - stroke) / 2, cx = W / 2, cy = W / 2;
-  var len = Math.PI * r;
-  var arc = "M " + (cx - r) + " " + cy + " A " + r + " " + r + " 0 0 1 " + (cx + r) + " " + cy;
+  var size = 150, stroke = 15, r = (size - stroke) / 2, cx = size / 2, circ = 2 * Math.PI * r;
 
-  // the arc and the sentence take the slack when this card is stretched to the chart's height
+  // the ring and the sentence take the slack when this card is stretched to the chart's height
   var mid = el("div","grow");
 
   var box = el("div","gauge");
-  var svg = sv("svg",{viewBox:"0 0 " + W + " " + H, width:W, height:H});
-  svg.appendChild(sv("path",{ d:arc, fill:"none", stroke:C.o1, "stroke-width":stroke, "stroke-linecap":"round" }));
+  var svg = sv("svg",{viewBox:"0 0 " + size + " " + size, width:size, height:size});
+  svg.appendChild(sv("circle",{ cx:cx, cy:cx, r:r, fill:"none", stroke:C.track, "stroke-width":stroke }));
   if (share > 0) {
-    svg.appendChild(sv("path",{ d:arc, fill:"none", stroke:C.o, "stroke-width":stroke,
-      "stroke-linecap":"round", "stroke-dasharray": (len * share / 100) + " " + (len * 2) }));
+    svg.appendChild(sv("circle",{ cx:cx, cy:cx, r:r, fill:"none", stroke:C.o, "stroke-width":stroke,
+      "stroke-dasharray": (circ * share / 100) + " " + circ, "stroke-linecap":"round",
+      transform:"rotate(-90 " + cx + " " + cx + ")" }));
   }
   box.appendChild(svg);
 
-  // inside the arc's own opening, not under it: the arc is a container, and a number below it would
-  // read as the caption of a picture rather than as the picture's subject
-  var readout = el("div","g-mid");
-  readout.appendChild(el("b","num", share + "%"));
-  readout.appendChild(el("span", null, "каталогов заполнено"));
-  box.appendChild(readout);
+  // inside the ring's own opening, not under it: the ring is a container, and a number below it
+  // would read as the caption of a picture rather than as the picture's subject
+  var readout = el("div","g-mid"), inner = el("div");
+  inner.appendChild(el("b","num", share + "%"));
+  inner.appendChild(el("span", null, "каталогов заполнено"));
+  readout.appendChild(inner); box.appendChild(readout);
   mid.appendChild(box);
 
   // **the count, always, and never a compliment.** This line used to congratulate a finished market
@@ -1898,14 +1968,10 @@ function buildTrend(s) {
     var side = el("div","tg");
     var series = byCat[b.category] || [];
     if (series.length >= 2) {
+      // the line and nothing beside it. the 30-day change was a number that reads as a finding and
+      // is «0%» on every market until prices have actually moved; the line says the same thing
+      // without claiming to have measured anything.
       side.appendChild(sparkline(series, 78, 26));
-      var first = series[0], last = series[series.length - 1];
-      var move = first > 0 ? Math.round((last - first) / first * 1000) / 10 : 0;
-      // **dearer is red here, and that is not a mistake.** Everywhere else on this panel a rising
-      // number is good news; the thing being measured is what a customer pays, so a market getting
-      // more expensive is the bad direction - the same convention the price badge uses.
-      side.appendChild(el("em", move > 0 ? "up" : move < 0 ? "dn" : "fl",
-        (move > 0 ? "+" : "") + String(move).replace(".", ",") + "%"));
     } else {
       var wait = el("em","fl", "с сегодня");
       wait.title = "История пишется раз в час — график появится через несколько дней";
@@ -1924,7 +1990,18 @@ function buildTrend(s) {
 // a chart with no axes, no labels and no tooltip: at this size the only thing it can say is which
 // way the line went, which is exactly what it is being asked. Padded by 2px top and bottom so a
 // flat series does not sit on the edge of its own box.
-function sparkline(values, w, h) {
+// **the total rebuilt backwards from today**, not the per-day figure «Регистрации за 30 дней»
+// already draws one row down: the tile's subject is `58`, and this says how it got there.
+// Deletions are not in `signups`, so a removed account tilts the earliest points by one - the line
+// carries no axis and is read for its shape, which one row cannot change.
+function runningTotal(days, key, total) {
+  if (!days || !days.length) return [];
+  var out = new Array(days.length), running = total;
+  for (var i = days.length - 1; i >= 0; i--) { out[i] = running; running -= days[i][key] || 0; }
+  return out;
+}
+
+function sparkline(values, w, h, fill) {
   var svg = sv("svg",{width:w,height:h,viewBox:"0 0 "+w+" "+h});
   var lo = Math.min.apply(null, values), hi = Math.max.apply(null, values);
   var span = hi - lo;
@@ -1936,7 +2013,22 @@ function sparkline(values, w, h) {
       y: span === 0 ? h / 2 : 2 + (1 - (v - lo) / span) * (h - 4)
     };
   });
-  svg.appendChild(sv("path",{ d:smooth(pts, 0.15), fill:"none", stroke:C.o,
+  var line = smooth(pts, 0.15);
+  // the fill is the line's own area, closed on the svg's floor rather than on the lowest point:
+  // closing on the minimum draws a wedge that pinches to nothing wherever the series dips. It fades
+  // out downwards, because a flat tint under a 40px line reads as a filled block with a lid on it -
+  // the gradient needs an id, and the id has to be unique or every sparkline on the page paints
+  // with whichever one rendered last.
+  if (fill) {
+    var gid = "sp" + (sparkline.n = (sparkline.n || 0) + 1);
+    var defs = sv("defs"), grad = sv("linearGradient",{id:gid,x1:"0",y1:"0",x2:"0",y2:"1"});
+    grad.appendChild(sv("stop",{offset:"0%","stop-color":C.o,"stop-opacity":".22"}));
+    grad.appendChild(sv("stop",{offset:"100%","stop-color":C.o,"stop-opacity":"0"}));
+    defs.appendChild(grad); svg.appendChild(defs);
+    svg.appendChild(sv("path",{ d: line + "L" + pts[pts.length-1].x + " " + h + "L" + pts[0].x + " " + h + "Z",
+      fill:"url(#" + gid + ")" }));
+  }
+  svg.appendChild(sv("path",{ d:line, fill:"none", stroke:C.o,
     "stroke-width":1.8, "stroke-linecap":"round", "stroke-linejoin":"round" }));
   var end = pts[pts.length - 1];
   svg.appendChild(sv("circle",{ cx:end.x, cy:end.y, r:2.4, fill:C.o }));
@@ -2093,11 +2185,11 @@ function openShopById(id) {
 // the same category name against a swatch painted from the same `shade(i, n)`. a legend here would
 // be a second copy of that column standing two centimetres away from it.
 function buildDonut(values, total, unit) {
-  var size = 196, stroke = 26, r = (size-stroke)/2, cx = size/2, circ = 2*Math.PI*r;
+  var size = 172, stroke = 23, r = (size-stroke)/2, cx = size/2, circ = 2*Math.PI*r;
 
   var d = el("div","donut");
   var svg = sv("svg",{width:size,height:size,viewBox:"0 0 "+size+" "+size});
-  svg.appendChild(sv("circle",{cx:cx,cy:cx,r:r,fill:"none",stroke:C.o1,"stroke-width":stroke}));
+  svg.appendChild(sv("circle",{cx:cx,cy:cx,r:r,fill:"none",stroke:C.track,"stroke-width":stroke}));
 
   var sum = values.reduce(function(a,v){ return a+v; },0);
   var off = 0;
@@ -2152,7 +2244,10 @@ function drawSignups(days) {
   // sweep and that one has three lines in it. it was 330 when this chart sat next to the funnel and
   // had to fill a taller cell; left there it would have stretched a card of three lines to the
   // height of a chart nobody scrolls down to read.
-  var W = Math.max(host.clientWidth, 320), H = 300;
+  // measured, not written down: the card is stretched to whatever the row got, and a chart drawn
+  // at a fixed height would leave the difference as empty fill under it. 180 is the floor for the
+  // first paint, before the grid has resolved.
+  var W = Math.max(host.clientWidth, 320), H = Math.max(host.clientHeight, 180);
   var padL = 38, padR = 12, padT = 12, padB = 30;
   var pw = W-padL-padR, ph = H-padT-padB;
 
@@ -2261,9 +2356,23 @@ function emptyBox(title, text) {
   return b;
 }
 
-function countLabel(q, shown, loaded) {
-  if (q) return "Найдено: " + nf(shown) + " из " + nf(loaded);
+function countLabel(narrowed, shown, loaded) {
+  if (narrowed) return "Показано: " + nf(shown) + " из " + nf(loaded);
   return "Всего: " + nf(shown) + (loaded === 500 ? " (первые 500)" : "");
+}
+
+// the two list filters are built from the same maps the rows are rendered with, so a fifth shop
+// category appears in the dropdown the day it is added and nowhere else.
+function fillFilter(sel, allLabel, map, key) {
+  var o = el("option", null, allLabel); o.value = ""; sel.appendChild(o);
+  Object.keys(map).forEach(function (k) {
+    var x = el("option", null, map[k]); x.value = k; sel.appendChild(x);
+  });
+  sel.value = state.filter[key];
+  sel.addEventListener("change", function () {
+    state.filter[key] = sel.value;
+    (key === "users" ? renderUsers : renderShops)();
+  });
 }
 
 function iconBtn(icon, title, cls, onClick) {
@@ -2286,17 +2395,18 @@ function renderUsers() {
   var body = $("#t-users tbody"), box = $("#s-users");
   clear(body); clear(box); box.className = "";
 
-  var q = state.q.users.trim().toLowerCase();
+  var q = state.q.users.trim().toLowerCase(), role = state.filter.users;
   var rows = (state.users||[]).filter(function (u) {
+    if (role && u.role !== role) return false;
     if (!q) return true;
     return String(u.id)===q || (u.name||"").toLowerCase().indexOf(q)>=0 || (u.phone||"").toLowerCase().indexOf(q)>=0;
   });
   rows = sortRows(rows, state.sort.users);
-  $("#c-users").textContent = countLabel(q, rows.length, (state.users||[]).length);
+  $("#c-users").textContent = countLabel(q||role, rows.length, (state.users||[]).length);
   markSort("#t-users", state.sort.users);
 
-  if (!rows.length) { box.appendChild(emptyBox(q?"Ничего не найдено":"Пользователей пока нет",
-    q?"Попробуйте другой запрос.":"Здесь появятся все, кто вошёл в приложение.")); return; }
+  if (!rows.length) { box.appendChild(emptyBox((q||role)?"Ничего не найдено":"Пользователей пока нет",
+    role&&!q?"С этой ролью пока никого нет.":q?"Попробуйте другой запрос.":"Здесь появятся все, кто вошёл в приложение.")); return; }
 
   rows.forEach(function (u) {
     var tr = el("tr");
@@ -2413,18 +2523,19 @@ function renderShops() {
   var body = $("#t-shops tbody"), box = $("#s-shops");
   clear(body); clear(box); box.className = "";
 
-  var q = state.q.shops.trim().toLowerCase();
+  var q = state.q.shops.trim().toLowerCase(), cat = state.filter.shops;
   var rows = (state.shops||[]).filter(function (s) {
+    if (cat && s.category !== cat) return false;
     if (!q) return true;
     return String(s.id)===q || (s.name||"").toLowerCase().indexOf(q)>=0 || (s.address||"").toLowerCase().indexOf(q)>=0
       || (s.owner_name||"").toLowerCase().indexOf(q)>=0 || (s.owner_phone||"").toLowerCase().indexOf(q)>=0;
   });
   rows = sortRows(rows, state.sort.shops, shopSortValue);
-  $("#c-shops").textContent = countLabel(q, rows.length, (state.shops||[]).length);
+  $("#c-shops").textContent = countLabel(q||cat, rows.length, (state.shops||[]).length);
   markSort("#t-shops", state.sort.shops);
 
-  if (!rows.length) { box.appendChild(emptyBox(q?"Ничего не найдено":"Магазинов пока нет",
-    q?"Попробуйте другой запрос.":"Магазины появятся здесь, как только их создадут в приложении.")); return; }
+  if (!rows.length) { box.appendChild(emptyBox((q||cat)?"Ничего не найдено":"Магазинов пока нет",
+    cat&&!q?"В этой категории пока нет магазинов.":q?"Попробуйте другой запрос.":"Магазины появятся здесь, как только их создадут в приложении.")); return; }
 
   rows.forEach(function (s) {
     var tr = el("tr");
@@ -2842,7 +2953,6 @@ function loadAnomalies() {
   if (!state.anomalies) { $("#s-anom").className="skel"; $("#s-anom").textContent="Загрузка…"; }
   return api("/api/admin/anomalies?threshold="+state.threshold).then(function (d) {
     state.anomalies = d.anomalies || [];
-    if ($("#pip-anomalies")) $("#pip-anomalies").textContent = nf(state.anomalies.length);
     renderAnomalies();
     if (state.view === "dash" && state.stats) drawDash();
   }).catch(function(e){ if(!guard(e)){ $("#s-anom").className="skel"; $("#s-anom").textContent="Не удалось загрузить отчёт"; } });
@@ -2894,7 +3004,6 @@ function renderAnomalies() {
   rows = sortRows(rows, state.sort.anom, function (a, k) {
     return k === "deviation_percent" ? Math.abs(a.deviation_percent) : a[k];
   });
-  $("#c-anom").textContent = countLabel(q, rows.length, (state.anomalies||[]).length);
   markSort("#t-anom", state.sort.anom);
 
   if (!rows.length) {
@@ -3034,6 +3143,10 @@ function renderTemplates() {
   // only remember where an unfiltered grid stood: a filtered one is a different list, and writing
   // its scroll position down would land the founder somewhere arbitrary when he clears the field
   if (!q) $$("#tpl-list .tpl-scroll").forEach(function (box) { tplScroll[box.dataset.cat] = box.scrollTop; });
+  // **the page's own position, or a save under «Сантехника» lands back at the top.** Setting a
+  // grid's scrollTop below forces layout while only the first categories exist, the document is
+  // short, and the browser clamps the window up with it
+  var pageY = window.scrollY;
   clear(host);
 
   var rows = state.templates.reduce(function (n, t) { return n + t.size; }, 0);
@@ -3118,54 +3231,64 @@ function renderTemplates() {
   });
 
   if (q && !found) host.appendChild(emptyBox("Ничего не найдено","Попробуйте другой запрос."));
+  window.scrollTo(0, pageY);
 }
 
-// one product, as the app draws it and as the picker next door draws a file: the photograph first,
-// then the two lines of words that tell two sizes of one product apart.
+// one product as the app's ProductTile draws it, with the admin's own facts underneath.
 //
-// **the whole card is the button.** Every field is in the editor behind it, so there is nothing a
-// row needs its own controls for - and inline controls on a grid of a hundred cards is the table
-// this replaced, with the columns stacked.
+// **the whole card is the button.** Every field is in the editor behind it, so a row needs no
+// controls of its own - inline controls on a hundred cards is the table this replaced.
 function templateCard(t, it) {
   var b = el("button","tcard");
   b.type = "button";
-  // the key and the section on hover: both are permanent facts about the row and neither is worth a
-  // line of its own here - «Ленты, расходники, абразивы и диски» truncates on every card in the grid
+  // the key and the section are permanent facts about the row, and neither earns a line here
   b.title = it.key + (it.section ? "\n" + sectionName(it.section) : "");
   b.addEventListener("click", function () { editTemplateItem(t, it); });
 
+  var card = el("div","tc-app");
+
+  var ph = el("div","tc-ph");
   if (it.image_thumb_url) {
-    var img = el("img","tc-ph"); img.src = it.image_thumb_url; img.alt = ""; img.loading = "lazy";
-    b.appendChild(img);
-  } else {
-    var none = el("div","tc-ph none"); none.appendChild(ico(ICONS.box,26)); b.appendChild(none);
-  }
+    var img = el("img"); img.src = it.image_thumb_url; img.alt = ""; img.loading = "lazy";
+    img.addEventListener("error", function () { img.remove(); });
+    ph.appendChild(img);
+  } else ph.appendChild(ico(ICONS.box,30));
+  // a new shop's rows are in stock until the owner says otherwise (column default)
+  ph.appendChild(el("span","tc-av","В наличии"));
+  card.appendChild(ph);
 
   var body = el("div","tc-b");
   body.appendChild(el("span","tc-n", it.name));
-  // the size lives in the description, because one size is one row - so this line is what says
-  // which of five identical-looking cards this one is
+  // one size is one row, so this line is what tells five alike cards apart
   if (it.specs) body.appendChild(el("span","tc-s", it.specs));
-  body.appendChild(el("span","tc-s", it.unit));
-  b.appendChild(body);
+  var price = el("div","tc-p");
+  price.appendChild(el("b",null,"Цена не указана"));
+  price.appendChild(el("span",null,"/ " + it.unit));
+  body.appendChild(price);
+  card.appendChild(body);
+  b.appendChild(card);
 
   var share = t.shops > 0 ? it.priced / t.shops : 0;
 
-  var foot = el("div","tc-f");
+  var meta = el("div","tc-meta");
+  var row = el("div","tc-row");
   // three states and never a blank: in the basket, ready to be voted in, or out of it
-  foot.appendChild(it.in_basket ? el("span","tag o","В корзине")
+  row.appendChild(it.in_basket ? el("span","tag o","В корзине")
     : share >= BASKET_READY ? el("span","tag gr","можно в корзину")
     : el("span","tag g","вне корзины"));
   if (t.shops > 0) {
     var cov = el("span","tc-cov", nf(it.priced) + " / " + nf(t.shops));
     cov.title = "Цену указали " + nf(it.priced) + " из " + nf(t.shops) + " магазинов";
-    foot.appendChild(cov);
+    row.appendChild(cov);
   }
-  b.appendChild(foot);
+  meta.appendChild(row);
 
-  var meter = el("div","tc-m" + (share >= 1 ? " full" : ""));
-  var fill = el("i"); fill.style.width = Math.round(share * 100) + "%";
-  meter.appendChild(fill); b.appendChild(meter);
+  if (t.shops > 0) {
+    var meter = el("div","tc-m" + (share >= 1 ? " full" : ""));
+    var fill = el("i"); fill.style.width = Math.round(share * 100) + "%";
+    meter.appendChild(fill); meta.appendChild(meter);
+  }
+  b.appendChild(meta);
   return b;
 }
 
@@ -4097,6 +4220,9 @@ $("#q-global").addEventListener("input", function (e) {
   state.q[find.q] = e.target.value;
   find.render();
 });
+fillFilter($("#f-users"), "Все пользователи", ROLES, "users");
+fillFilter($("#f-shops"), "Все магазины", SHOP_CATS, "shops");
+
 $("#anom-info").addEventListener("click", anomalyHelp);
 
 $("#an-th").addEventListener("click", function () {
