@@ -1,16 +1,14 @@
-// The guest flow, at the things that were wrong about it on a real phone.
+// The guest flow, at three things that only show up on a real phone.
 //
-// **The footer moved between steps.** «Далее» and «Назад» were laid out under a conditional error
-// line and a conditional back button, so the pair sat at three different heights across five steps
-// and walked up and down the screen as you advanced. The fix is that both slots are always drawn
-// and the error lives in the scrolling content instead - and the assertion here is a measurement,
-// because nothing throws when a button is 40px lower than it was.
+// **The footer sits at one height on every step**: both slots are always drawn and the error lives in
+// the scrolling content, or the pair walks up and down the screen as you advance. The assertion is a
+// measurement, because nothing throws when a button is 40px lower than it was.
 //
-// **The footer was behind the phone's own bar.** A gesture-navigation phone draws a home indicator
-// over the bottom of the screen, and the back button was underneath it.
+// **The footer clears the phone's own bar** - a gesture-navigation phone draws a home indicator over
+// the bottom of the screen.
 //
-// **The flow was a tab.** It is a route over the shell now, so it can be closed from any step and
-// it takes itself off the screen once an account exists.
+// **It is a route over the shell**, so it can be closed from any step and takes itself off the screen
+// once an account exists.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

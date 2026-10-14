@@ -16,19 +16,16 @@ const (
 	dirPerm  = 0o755
 )
 
-// Disk writes into `root`/shops/uploads, under the same images root the api serves /images/ from.
-// **not the legacy implementation**: it is what runs on the laptop and in `go test ./...`, which is
-// the argument for [Storage] being an interface at all.
+// Disk writes into `root`/shops/uploads. **not the legacy implementation**: it is what runs on the laptop
+// and in `go test ./...`, which is the argument for [Storage] being an interface at all.
 type Disk struct {
 	root string
 }
 
-// compile-time proof that this satisfies the interface
 var _ Storage = (*Disk)(nil)
 
 // creates the uploads directory at startup rather than on the first upload: a directory the process
-// cannot write is a misconfigured deployment, and the first shop owner should not be the one to find
-// that out
+// cannot write is a misconfigured deployment, and a shop owner should not be the one to find out
 func NewDisk(root string) (*Disk, error) {
 	dir := filepath.Join(root, UploadDir)
 	if err := os.MkdirAll(dir, dirPerm); err != nil {

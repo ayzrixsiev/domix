@@ -1,12 +1,9 @@
 package endpoints
 
-// The storefront photograph: the one picture a VIP card draws, uploaded from the admin panel.
-//
-// Two things here would fail silently in production. A shop photo lives in the same directory as a
-// product photo, so the orphan sweep deletes it an hour after it is uploaded unless the query that
-// protects live files reads `shops` as well as `products` — and the card would be blank with the
-// database perfectly consistent. And the grant answers `needs_photo`, which is the only thing that
-// tells the panel to ask for one; without it a sold placement reaches the home screen empty.
+// The storefront photograph: the one picture a VIP card draws, uploaded from the admin panel. Two
+// things here fail silently. A shop photo lives in the same directory as a product photo, so the orphan
+// sweep deletes it an hour after upload unless the query protecting live files reads `shops` as well as
+// `products`. And `needs_photo` is the only thing that tells the panel to ask for one.
 
 import (
 	"bytes"

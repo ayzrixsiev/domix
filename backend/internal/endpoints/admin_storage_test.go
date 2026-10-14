@@ -69,16 +69,12 @@ func exists(t *testing.T, root, rel string) bool {
 	return err == nil
 }
 
-// **Rules 2 and 3 together, and rule 3 is the one that would have been a market-wide outage.**
+// **Rules 2 and 3 together, and rule 3 would be a market-wide outage.** Only the master's path is in
+// the database, so a sweep matching paths literally would find every `_thumb` unreferenced and blank
+// every grid in the app on its first run, with the database perfectly consistent throughout.
 //
-// Only the master's path is in the database - the thumbnail's is derived - so a sweep that matched
-// paths literally would find every `_thumb` file unreferenced and delete the thumbnail of every
-// product in every shop on its first run. Every grid in the app would go blank at once, and the
-// database would be perfectly consistent throughout.
-//
-// Rule 2 is the second half of this test: a file written a moment ago is left alone whether or not
-// anything points at it, because the window between "the file exists" and "the row exists" is one
-// upload request long.
+// Rule 2 is the second half: a file written a moment ago is left alone whether or not anything points
+// at it, because the window between "the file exists" and "the row exists" is one upload request.
 func TestASweepKeepsThumbnailsAndAnythingWrittenRecently(t *testing.T) {
 	admin, root, ctx, tx, q := sweepUnderTest(t)
 
@@ -149,11 +145,9 @@ func TestASweepKeepsThumbnailsAndAnythingWrittenRecently(t *testing.T) {
 	}
 }
 
-// **The catalogue is not reachable from here, and that is a property rather than a check.** A
-// curated shot is one file every shop of a category draws, and no products row will ever name it as
-// an upload - so a sweep that walked the whole photo root would find all 200 of them unreferenced by
-// its own test and delete the entire catalogue. What stops it is that the uploads sweep lists only
-// uploads/ and RemoveFile refuses anything else. The catalogue has its own sweep, tested below.
+// **The catalogue is not reachable from here, and that is a property rather than a check**: a sweep
+// that walked the whole photo root would find every curated file unreferenced as an upload and delete
+// the catalogue. The uploads sweep lists only uploads/ and RemoveFile refuses anything else.
 func TestASweepCannotReachTheCuratedCatalogue(t *testing.T) {
 	admin, root, ctx, tx, q := sweepUnderTest(t)
 

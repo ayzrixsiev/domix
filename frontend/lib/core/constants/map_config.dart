@@ -2,11 +2,9 @@ import 'package:flutter/foundation.dart';
 
 /// Where the map comes from, and whether it can run at all on this machine.
 ///
-/// Yandex MapKit renders natively and bills per monthly active user, so panning is free - and its
-/// licence forbids pulling tiles outside the SDK. The Free tier holds only while the app stays free
-/// to download, unnavigated and undispatched. `_lite` is that free-licence package; address search
-/// and reverse geocoding stay on Nominatim. Android and iOS only, which is what
-/// [isSupportedPlatform] exists for.
+/// Yandex MapKit renders natively and its licence forbids pulling tiles outside the SDK. the free
+/// tier holds only while the app stays free to download, unnavigated and undispatched. `_lite` is that
+/// package; address search stays on OpenStreetMap. Android and iOS only - see [isSupportedPlatform].
 class MapConfig {
   /// The MapKit API key, compiled in with `--dart-define` (`env.json` / `env.prod.json`). It ships
   /// inside the APK and can be read out of it, so it is abusable rather than leakable - it is still

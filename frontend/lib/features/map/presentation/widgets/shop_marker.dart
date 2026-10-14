@@ -9,11 +9,9 @@ import 'package:frontend/features/stores/data/shop_category.dart';
 
 // teardrop pin in brand orange, shared between ShopMarker and the location picker's centre pin.
 //
-// [category] decides what sits inside the circle, and the two answers are different *kinds* of
-// thing: a plotted shop shows what it sells, while the picker passes null and gets a plain капля -
-// the mark every map app uses for "this exact point". that is why it is nullable rather than
-// defaulting to универсальный: the picker points at a yard or a stretch of road, and a building
-// glyph would make a claim about the place and look like a fifth shop category.
+// [category] is nullable rather than defaulting to универсальный: a plotted shop shows what it sells,
+// while the picker gets a plain капля, because it points at a yard or a stretch of road and a building
+// glyph would both claim something about the place and read as a fifth shop category.
 class MapPinIcon extends StatelessWidget {
   const MapPinIcon({super.key, this.size = 40, this.category});
 
@@ -55,12 +53,11 @@ class MapPinIcon extends StatelessWidget {
   }
 }
 
-// a MapPinIcon that reacts to taps. two channels about one shop: the pin says what kind of shop it
-// is, the label says how its basket compares - or nothing, which since migration 000013 means any
-// shop that has not priced its whole catalogue.
+// two channels about one shop: the pin says what kind of shop it is, the label how its basket
+// compares - or nothing, which means it has not priced its whole catalogue.
 //
-// it takes the tier and the percentage rather than a formatted string: the colour is derived from
-// the tier, so two callers could otherwise disagree about which number is green.
+// it takes the tier and the percentage rather than a formatted string: the colour is derived from the
+// tier, so two callers could otherwise disagree about which number is green.
 class ShopMarker extends StatelessWidget {
   const ShopMarker({
     super.key,
@@ -114,13 +111,12 @@ class ShopMarker extends StatelessWidget {
 
 /// What a shop is drawn as while the map is zoomed out: a plain dot.
 ///
-/// **Not "no pin at all", which is what this replaced.** At city zoom the category glyph is too
-/// small to read and seventy price labels overlap into a wall of white pills - but an empty map is
-/// a worse answer than a scatter of dots, because the scatter is the one thing the user came to see:
-/// where the shops are. The glyph and the price arrive on their own as soon as the map is zoomed in.
+/// at city zoom the glyph is unreadable and seventy price labels overlap into a wall of white pills,
+/// but **an empty map is a worse answer than a scatter of dots** - the scatter is what the user came
+/// to see. the glyph and the price arrive on zoom-in.
 ///
-/// Every dot draws identically, so the whole city costs MapKit **one** raster - see
-/// [MapPin.visualKey], which is why [visualKey] is a constant here rather than built per shop.
+/// every dot draws identically, so the whole city costs MapKit **one** raster, which is why
+/// [visualKey] is a constant here rather than built per shop.
 class ShopDot extends StatelessWidget {
   const ShopDot({super.key});
 

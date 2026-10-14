@@ -9,18 +9,15 @@ import 'package:frontend/core/widgets/circle_icon_button.dart';
 /// The header every titled screen wears: back disc, title with an optional subtitle, at most one
 /// action.
 ///
-/// **It sits flat on the page, in the page's own colour, with no surface and no shadow of its
-/// own.** A band of a second colour with a shadow under it read as a toolbar bolted onto the screen;
-/// the white discs and the title are enough to say "this is the header", which is how iOS does it.
+/// **It sits flat on the page, in the page's own colour, with no surface and no shadow of its own**: a
+/// band of a second colour with a shadow under it reads as a toolbar bolted onto the screen.
 ///
-/// **One widget for both ways a screen is drawn.** A tab inside the shell is a child of an
-/// `IndexedStack` with no `Scaffold` of its own, so it cannot hang an `AppBar`; a pushed screen has
-/// a Scaffold and wants its header in the `appBar:` slot. This implements [PreferredSizeWidget] for
-/// the second case and is an ordinary column child in the first, so the two cannot drift apart.
+/// **One widget for both ways a screen is drawn.** A tab inside the shell has no `Scaffold` and cannot
+/// hang an `AppBar`; a pushed screen wants its header in the `appBar:` slot. This implements
+/// [PreferredSizeWidget] for the second case and is a column child in the first, so they cannot drift.
 ///
-/// **Scaffold adds `MediaQuery.padding.top` to [preferredSize] itself**, and the `SafeArea` here is
-/// what consumes it, so the reported height is the content's alone. The status bar style comes with
-/// it: with no `AppBar` in the tree nothing else asks for dark icons.
+/// **Scaffold adds `MediaQuery.padding.top` to [preferredSize] itself** and the `SafeArea` here
+/// consumes it, so the reported height is the content's alone. The status bar style comes with it.
 /// Everything [AppPageHeader.searchable] needs, in one object: the header's other constructors
 /// would otherwise each carry seven null fields.
 class HeaderSearch {
@@ -213,16 +210,13 @@ class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 
-  /// **The magnifier is not swapped for a field, it becomes one.** Flipping the header between a
-  /// title and a search bar is two objects taking turns where there was one: the capsule drew
-  /// itself over the heading and slid back off it, which reads as a panel dropping in rather than
-  /// as a control opening. One object instead - the disc stretches left into the field, the title
-  /// clears out ahead of its edge, and the glyph that was the button ends up being the field's own.
+  /// **The magnifier is not swapped for a field, it becomes one**: two objects taking turns read as a
+  /// panel dropping in rather than as a control opening. the disc stretches left into the field and
+  /// the glyph that was the button ends up being the field's own.
   ///
-  /// The whole morph is a width: a 40px circle and a 40px capsule have the same radius, so nothing
-  /// has to animate a corner. [TweenAnimationBuilder] rather than a controller because a header is
-  /// rebuilt by its screen, not driven by it - `open` flipping mid-flight resumes from where the
-  /// motion got to.
+  /// the whole morph is a width - a 40px circle and a 40px capsule share a radius, so no corner has to
+  /// animate. [TweenAnimationBuilder] rather than a controller, because a header is rebuilt by its
+  /// screen rather than driven by it, so `open` flipping mid-flight resumes from where it got to.
   Widget _searchRow(HeaderSearch search) {
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: search.open ? 1 : 0),
@@ -385,14 +379,13 @@ class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
     return const SizedBox.shrink(key: ValueKey('empty'));
   }
 
-  /// What a header's middle does when it changes *kind* - the deep-link loader's empty row becoming
-  /// a shop's name. Swapping the two outright is a flicker; crossed over a slide of a few pixels it
-  /// reads as one arriving in the other's place. A page that searches itself needs more than this,
-  /// and has [_searchRow].
+  /// What a header's middle does when it changes *kind* - a loader's empty row becoming a shop's name.
+  /// swapping outright is a flicker; crossed over a few pixels of slide it reads as one arriving in the
+  /// other's place.
   ///
-  /// The layout builder is not decoration: [AnimatedSwitcher]'s default one centres its children in
-  /// a Stack under *loose* constraints, which would let a control shrink to the width of its own
-  /// contents. `passthrough` hands the row's tight width straight down.
+  /// the layout builder is not decoration: [AnimatedSwitcher]'s default centres children under *loose*
+  /// constraints, which lets a control shrink to its own contents. `passthrough` hands the row's tight
+  /// width straight down.
   static Widget _swap(Widget child) {
     return AnimatedSwitcher(
       duration: AppMotion.base,

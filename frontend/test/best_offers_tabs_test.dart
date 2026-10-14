@@ -1,11 +1,9 @@
 // The category filter in "Лучшие предложения", its fixed slots, and the badge on its rows.
 //
-// Four rules here are easy to break by accident and silent when broken: the filter must show every
-// shop category whatever the backend sent (including on the empty database the app launches
-// against), every segment must be the same width whatever its label, a tab must hold a fixed number
-// of places whether or not shops have earned them, and the raw Basket Price Index must never reach
-// a screen. All four are pinned by rendering rather than by reading the widget, because all four are
-// about what a person sees.
+// Four rules, each silent when broken: the filter shows every shop category whatever the backend sent
+// (including on an empty database), every segment is the same width whatever its label, a tab holds a
+// fixed number of places whether or not shops earned them, and **the raw Basket Price Index never
+// reaches a screen**. Pinned by rendering, because all four are about what a person sees.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

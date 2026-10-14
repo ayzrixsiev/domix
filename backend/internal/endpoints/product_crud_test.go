@@ -1,19 +1,15 @@
 package endpoints
 
-// обои are the one shop category whose template names slots instead of products, and the whole
-// difference between the two lives in a single `switch` inside Products.Update. these pin both
-// halves of it, because each half fails silently in its own way:
+// обои are the one category whose template names slots instead of products, and the difference lives
+// in one `switch` inside Products.Update. both halves fail silently:
 //
-//   - if a slot stopped being recognised, an обои owner would find the name locked to "Обои премиум
-//     (Россия)" with a 200 coming back and nothing anywhere saying why their edit vanished;
-//   - if the recognition leaked to the other three templates, one shop could rename "Кнауф Ротбанд,
-//     25 кг" to anything at all, and the basket index would go on comparing the renamed row against
-//     everyone else's Ротбанд as though they were still the same product.
+//   - a slot that stopped being recognised locks the name to "Обои премиум (Россия)" with a 200 and
+//     nothing saying why the owner's edit vanished;
+//   - recognition leaking to the other templates lets one shop rename "Кнауф Ротбанд, 25 кг" while the
+//     basket index goes on comparing it against everyone else's Ротбанд as the same product.
 //
-// they go through the real auth.RequireAuth with a real signed token rather than calling the
-// handlers directly: the ownership check and the slot check are separate answers to separate
-// questions, and testing one without the other leaves half the path unexercised. going through the
-// real middleware also means these exercise its user-still-exists lookup for free.
+// they go through the real auth.RequireAuth with a signed token: ownership and the slot rule are
+// separate answers, and testing one without the other leaves half the path unexercised.
 
 import (
 	"context"
@@ -342,16 +338,11 @@ func TestWallpaperShopIsSeededWithTenSlots(t *testing.T) {
 	}
 }
 
-// deleting a user cuts their app off immediately, rather than four months later when their token
-// expires.
+// deleting a user cuts their app off immediately, rather than four months later when the token expires.
+// this is the whole reason RequireAuth reads the database instead of trusting the signature: a JWT is a
+// claim frozen when it was signed, and there is no revocation list.
 //
-// this is the whole reason RequireAuth reads the database instead of trusting the signature alone. a
-// JWT is a claim frozen at the moment it was signed: nothing in it changes when the row it names is
-// deleted, and there is no revocation list, so without the lookup a deleted owner keeps editing
-// products from a phone that never noticed. the founder found this by deleting a user and watching
-// the app carry on.
-//
-// the distinct `account_deleted` code matters as much as the 401: the app clears its stored token on
+// the distinct `account_deleted` code matters as much as the 401 - the app clears its stored token on
 // seeing it, which is the difference between "you are signed out" and a screen that retries forever.
 func TestADeletedUserIsRefusedImmediately(t *testing.T) {
 	p, ctx, tx, q := productsUnderTest(t)

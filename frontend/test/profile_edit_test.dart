@@ -1,10 +1,9 @@
 // The profile editor at the three rules that are not visible from the outside:
 //
-//   * **a role goes one way.** A customer may become a shop owner; a shop owner may become nothing
-//     else. Going back would leave a shop owner holding shops they are no longer
-//     authorized to edit - a state no screen in the app can get them out of. The server refuses it
-//     too (PATCH /api/me answers `role_locked`), so what is tested here is that the app explains
-//     the rule rather than offering a control the server will reject.
+//   * **a role goes one way**: going back would leave a shop owner holding shops they are no longer
+//     authorized to edit, a state no screen can get them out of. The server refuses it too
+//     (`role_locked`), so what is tested is that the app explains the rule rather than offering a
+//     control the server will reject.
 //   * **the number is not a field.** It is the account's identity, and moving it costs a paid sms
 //     and a code typed back. A «Сохранить» that sometimes sends a message is a button nobody can
 //     predict, so the change lives behind its own step.

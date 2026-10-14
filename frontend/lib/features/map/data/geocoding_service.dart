@@ -30,17 +30,16 @@ class ReverseGeocodeResult {
 
 // two free openstreetmap services, one per direction, because each one's terms fit one job.
 //
-// **typed text -> places is Photon** (photon.komoot.io), which exists for search-as-you-type: the
-// map's field asks on every pause in typing, and Nominatim's policy forbids exactly that on its public
-// api, whatever the volume - a block there lands on every copy of the app at once, since they block by
-// User-Agent. Photon asks only to "be fair", so the panel keeps its debounce, its three-letter floor and
-// the session cache below. it has no russian `lang`, and needs none: the default answers in local
-// names and still matches a cyrillic query against `name:ru`.
+// **typed text -> places is Photon** (photon.komoot.io), built for search-as-you-type: Nominatim's
+// policy forbids that at any volume, and a block there lands on every copy of the app at once, since
+// they block by User-Agent. Photon asks only to "be fair", hence the debounce, the three-letter floor
+// and the session cache. it needs no russian `lang`: the default answers in local names and still
+// matches a cyrillic query against `name:ru`.
 //
-// **a picked point -> an address stays on Nominatim**: one request per pin drop is well inside its
-// one-a-second rule, and its `addressdetails` is what splits out the city the home header shows.
+// **a picked point -> an address stays on Nominatim**: one request per pin drop is inside its
+// one-a-second rule, and its `addressdetails` splits out the city the home header shows.
 //
-// both are OpenStreetMap data, so the credit line under the results covers both.
+// both are OpenStreetMap data, so one credit line covers both.
 class GeocodingService {
   static const _userAgent = 'DomixApp/1.0 (domix.support@gmail.com)';
   static const _photonUrl = 'https://photon.komoot.io/api/';
@@ -64,14 +63,12 @@ class GeocodingService {
   /// Places matching a query. [submitted] is true when the person pressed search rather than paused
   /// in typing.
   ///
-  /// **Photon first, and Nominatim only on a submit.** The public Photon instance has no promise of
-  /// speed - it has been measured answering in twenty seconds - so a typed lookup gives up quickly
-  /// and says so; a *submitted* one then asks Nominatim, whose policy allows exactly that: one search
-  /// a person asked for, not a stream of them per keystroke.
+  /// **Photon first, and Nominatim only on a submit.** the public Photon instance promises no speed -
+  /// measured once at twenty seconds - so a typed lookup gives up quickly and says so, and a submitted
+  /// one asks Nominatim, whose policy allows exactly that.
   ///
-  /// **Throws when the lookup itself fails** - no connection, or the service refusing - instead of
-  /// answering with an empty list: "no such address" and "could not ask" are different sentences on
-  /// screen, and returning `[]` for both made them the same one.
+  /// **Throws when the lookup itself fails** rather than answering with an empty list: "no such
+  /// address" and "could not ask" are different sentences on screen.
   Future<List<GeocodeResult>> search(String query, {bool submitted = false}) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return const [];

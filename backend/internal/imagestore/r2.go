@@ -13,12 +13,10 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-// Cloudflare R2, which speaks the S3 API, through **minio-go rather than aws-sdk-go-v2**: this file
-// needs three calls against one endpoint with one static key pair, and the aws sdk's dozen modules
-// exist to resolve a region, an endpoint and a credential chain we are all hardcoding anyway.
-//
-// the cost: minio-go follows MinIO's reading of S3, so anything exotic would need checking against
-// R2 rather than assumed. none of it is used here, and this file is the whole boundary.
+// Cloudflare R2, which speaks the S3 API, through **minio-go rather than aws-sdk-go-v2**: three calls
+// against one endpoint with one static key pair, where the aws sdk's modules exist to resolve a region,
+// an endpoint and a credential chain we hardcode anyway. the cost is that minio-go follows MinIO's
+// reading of S3, so anything exotic would need checking against R2 - and this file is the whole boundary.
 
 const (
 	// R2 has no regions; "auto" only ever appears inside the SigV4 signature
@@ -53,12 +51,10 @@ const (
 	EnvR2Bucket    = "R2_BUCKET"
 )
 
-// the second return is whether *any* of the four was set: none means a laptop and the disk,
-// anything else is a deployment that meant to use R2.
+// the second return is whether *any* of the four was set: none means a laptop and the disk.
 //
-// **a partial configuration is an error rather than a silent fall back to the disk**: writing photos
-// onto the container's filesystem gives a server that works perfectly until it is restarted, at
-// which point every photo uploaded since the last deploy is gone.
+// **a partial configuration is an error rather than a silent fall back to the disk**: writing photos onto
+// the container's filesystem works perfectly until a restart takes every photo since the last deploy.
 func R2ConfigFromEnv() (R2Config, bool, error) {
 	cfg := R2Config{
 		AccountID: strings.TrimSpace(os.Getenv(EnvR2AccountID)),
@@ -100,9 +96,8 @@ func plural(n int, one, many string) string {
 	return many
 }
 
-// the S3 host for this account, without a scheme. derived rather than taken as a fifth setting,
-// which would be a fifth thing that can be wrong - and getting it wrong fails at the first upload
-// and nowhere earlier, which is why it has a test.
+// the S3 host for this account. derived rather than taken as a fifth setting that can be wrong - and it
+// would fail at the first upload and nowhere earlier, which is why it has a test.
 func (c R2Config) Endpoint() string {
 	return c.AccountID + ".r2.cloudflarestorage.com"
 }
@@ -118,16 +113,15 @@ type R2 struct {
 
 var _ Storage = (*R2)(nil)
 
-// no network call here, so a wrong key is discovered at the first upload rather than at boot -
-// deliberately: a HeadBucket at startup would refuse to boot the whole api during a Cloudflare
-// incident, when everything except photo upload would still work.
+// no network call here, so a wrong key is discovered at the first upload rather than at boot: a HeadBucket
+// at startup would refuse to boot the whole api during a Cloudflare incident.
 func NewR2(cfg R2Config) (*R2, error) {
 	client, err := minio.New(cfg.Endpoint(), &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
 		Secure: true,
 		Region: r2Region,
-		// R2 addresses a bucket as a path segment. minio-go's automatic mode guesses the same, and
-		// "the SDK guessed right" is not what to rely on in the one path that cannot be tested offline.
+		// R2 addresses a bucket as a path segment. minio-go's automatic mode guesses the same, and "the SDK
+		// guessed right" is not what to rely on in the one path that cannot be tested offline.
 		BucketLookup: minio.BucketLookupPath,
 	})
 	if err != nil {
@@ -212,8 +206,8 @@ func (r *R2) List(ctx context.Context, prefix string) ([]Object, error) {
 	defer cancel()
 
 	var out []Object
-	// ListObjects fills a channel from a goroutine, and ranging to the end is what closes it - so an
-	// error returns after the loop rather than from inside it
+	// ListObjects fills a channel from a goroutine and ranging to the end is what closes it, so an error
+	// has to come back after the loop rather than from inside it
 	var listErr error
 	for obj := range r.client.ListObjects(ctx, r.bucket, minio.ListObjectsOptions{
 		Prefix:    strings.TrimSuffix(prefix, "/") + "/",

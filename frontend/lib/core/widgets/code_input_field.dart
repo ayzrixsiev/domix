@@ -6,16 +6,12 @@ import 'package:frontend/core/constants/app_theme.dart';
 
 /// The SMS code, drawn as one box per digit.
 ///
-/// **Six boxes over one field, not six fields.** A field per box means a controller and a focus node
-/// per box and code that hops between them, and it breaks on everything people actually do with a
-/// code: pasting it, tapping the keyboard's autofill suggestion, holding backspace. Each of those
-/// arrives as a single edit against a single value. So the boxes here are decoration - the value
-/// lives in one hidden [TextField] stretched over them, which is also what makes
-/// [AutofillHints.oneTimeCode] work at all.
+/// **Six boxes over one field, not six fields.** pasting, the keyboard's autofill suggestion and a
+/// held backspace all arrive as a single edit against a single value, so the boxes are decoration
+/// over one hidden [TextField] - which is also what makes [AutofillHints.oneTimeCode] work at all.
 ///
-/// **Nothing is submitted here.** Filling the last box only fills the last box; the flow's
-/// «Подтвердить» is what spends the attempt, because a code that verifies itself as the sixth digit
-/// lands gives the reader no moment to check what they typed.
+/// **Nothing is submitted here**: «Подтвердить» spends the attempt, because a code that verifies
+/// itself as the sixth digit lands gives the reader no moment to check what they typed.
 class CodeInputField extends StatefulWidget {
   const CodeInputField({
     super.key,

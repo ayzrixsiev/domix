@@ -11,19 +11,15 @@ import '../../data/product_section.dart';
 /// The one row over a catalogue grid, on a shop's card and on the owner's «Товары» alike: the field
 /// the catalogue is searched with, and the disc that opens the sections.
 ///
-/// **It replaces the chips rather than sitting above them.** A scrolling strip of section pills and
-/// a «Категории» button under it were the same choice offered twice, cost two rows of height before
-/// the first product, and still had to be dragged sideways to find the sixth section. The sheet
-/// holds every section with a count each, so nothing was lost; the disc goes orange while a section
-/// is picked, which is what the chips were really saying.
+/// **There are no section chips.** a scrolling strip of pills plus a «Категории» button under it was
+/// the same choice offered twice and cost two rows before the first product. the sheet holds every
+/// section with a count each, and the disc goes orange while one is picked.
 ///
-/// A catalogue with one section has nothing to choose between, so the disc is gone and the field
-/// takes the whole width - with the long hint, since there is now room to say what it searches.
+/// A catalogue with one section has nothing to choose between, so the field takes the whole width.
 ///
-/// **The field and the sections are two separate questions.** A short catalogue gets no field (it
-/// is already on screen, so there is nothing to narrow) but may still be split into sections, and
-/// then [searchable] is false: the disc has no field to sit beside, and an unlabelled disc alone on
-/// a line says nothing, so it is drawn as the «Категории» pill instead.
+/// **The field and the sections are two separate questions**: a catalogue too short to be worth
+/// searching can still be split, and then [searchable] is false and the disc is drawn as the
+/// «Категории» pill, because an unlabelled disc alone on a line says nothing.
 class CatalogueSearchBar extends StatelessWidget {
   const CatalogueSearchBar({
     super.key,

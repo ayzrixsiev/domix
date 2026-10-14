@@ -1,13 +1,9 @@
 // Does the Flutter side decode what the Go side actually sends?
 //
-// `test/fixtures/api_home_response.json` is not hand-written: it is the literal body captured from
-// `GET /api/home` on a running server with four seeded shops - three Универсальный and one Обои, so
-// the fixture covers both a multi-tab strip and a category with a single shop in it.
-//
-// Captured rather than typed, because a fixture someone typed out is a test of what they believed
-// the backend sends, and the belief is the thing most likely to be wrong. The Go side has its own
-// tests for the shape (`internal/endpoints/home_test.go`); this one checks that the two sides
-// agree, which is the seam neither can test alone.
+// **`test/fixtures/api_home_response.json` is captured, never typed**: a fixture somebody typed is a
+// test of what they believed the backend sends, and the belief is what is most likely to be wrong. It
+// is the body of `GET /api/home` with four seeded shops, so it covers a multi-tab strip and a
+// single-shop category. The Go side tests the shape; this checks the two sides agree.
 //
 // Re-capture it with:
 //   curl -s localhost:8080/api/home > test/fixtures/api_home_response.json
@@ -195,11 +191,9 @@ void main() {
 
   // ─────────────────────────── slots ───────────────────────────
   //
-  // Where a paid placement lands is a commercial rule, not a layout detail, so it is tested here
-  // rather than through a carousel: **the founder must never have to swipe past an empty card to
-  // reach a shop that is paying for the section.** With one placement sold, that shop is what a
-  // customer sees when the section comes into view, and the carousel opens on the middle position -
-  // so "fills from the centre" and "opens on a real shop" are the same statement.
+  // Where a paid placement lands is a commercial rule, not a layout detail: **nobody should have to
+  // swipe past an empty card to reach the shop paying for the section.** the carousel opens on the
+  // middle position, so "fills from the centre" and "opens on a real shop" are one statement.
 
   group('vipSlotRing', () {
     HomeShopPreview shop(String name) => HomeShopPreview.fromShop(Shop(

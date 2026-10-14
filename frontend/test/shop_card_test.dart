@@ -1,13 +1,12 @@
 // One shop card, reached from three places.
 //
-// Before it existed only the map could open a shop, as a sheet built inside `map_screen.dart` - so a
-// VIP card the founder had been paid to place, and every row of Лучшие предложения, was a tap that
-// did nothing. That is a failure with no error anywhere: the app looks finished and simply ignores
-// the finger. These pin the two routes into it, and the one row that must *not* open one.
+// **a route that does not open the card is a tap that does nothing** - no error anywhere, the app
+// looks finished and ignores the finger. These pin the two routes into it, and the one row that must
+// *not* open one.
 //
-// The empty-slot case is the subtle one. Both home sections draw a fixed number of places whether or
-// not shops have filled them, so the feed is full of card-shaped things that are not shops - and an
-// unsold VIP slot must stay inert rather than opening a card about a business that does not exist.
+// The empty-slot case is the subtle one: both home sections draw a fixed number of places whether or
+// not shops filled them, so an unsold VIP slot must stay inert rather than opening a card about a
+// business that does not exist.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

@@ -13,22 +13,17 @@ import 'package:frontend/features/home/data/home_content.dart';
 import 'package:frontend/features/stores/data/shop_category.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 
-/// The five VIP slots: **one card across the page**, swiped sideways, with a row of dots under it.
+/// The five VIP slots: one card across the page, swiped sideways, with a row of dots under it.
 ///
 /// **Five cards, always, sold or not** - an unsold slot is what tells an owner scrolling past that a
 /// place is available, so it is drawn as the real card with its values missing.
 ///
 /// **The loop**: `PageView.builder` is unbounded *forwards* only, so it starts deep inside a virtual
-/// range and maps the index onto the real list with a modulo. The starting page is a multiple of the
-/// slot count **plus the centre offset**, and Dart's `%` is Euclidean.
+/// range and maps the index back with a modulo (Dart's `%` is Euclidean). It advances on its own, so
+/// every placement is seen by somebody who never touches the strip; a finger outranks the clock.
 ///
-/// **It advances on its own**, forwards, into that unbounded range - see [autoAdvanceEvery]. Every
-/// placement in the section gets shown to somebody who never touches the strip, and a finger on it
-/// always outranks the clock.
-///
-/// **The dots are what say there are more cards.** The strip used to show a sliver of its
-/// neighbours instead; a card this wide has no room left for one, so the row of dots carries that
-/// job on its own and the count in it is the inventory.
+/// **The dots are what say there are more cards** - a card this wide has no room for a sliver of its
+/// neighbour - and the count in them is the inventory.
 class VipShopsCarousel extends StatefulWidget {
   const VipShopsCarousel({super.key, required this.slots, this.onShopTap});
 
@@ -48,13 +43,10 @@ class VipShopsCarousel extends StatefulWidget {
   /// cards mid-swipe it reads as twice this.
   static const double cardGutter = 6;
 
-  /// Fixed, because a `PageView` needs a bounded height. **A `Column` inside a fixed-height card
-  /// fails by overflowing, not by scrolling** - silent in release - so adding a line means raising
-  /// this number. **The empty card is built to exactly the same height.**
-  ///
-  /// The storefront is the only thing on the card that grows with it - the three blocks of words
-  /// beside it are a fixed stack spread down the column - so this is the one number that makes the
-  /// photograph bigger without taking width off the sentence under the address.
+  /// Fixed, because a `PageView` needs a bounded height. **a `Column` inside a fixed-height card fails
+  /// by overflowing, not by scrolling** - silent in release - so adding a line means raising this
+  /// number, and the empty card is built to exactly the same height. it is also the one number that
+  /// grows the photograph without taking width off the sentence under the address.
   static const double cardHeight = 176;
 
   /// How long a card holds the screen before the strip moves on by itself. **The section is an
@@ -246,16 +238,14 @@ class _SlotDots extends StatelessWidget {
 // differ. the unsold one was drawn recessed for a while and rejected on sight - four faded frames
 // around one real card made the strip look broken rather than available. ──
 
-/// One VIP slot: the storefront on the left, and on the right who and where, how the basket compares
-/// and two figures about the shop.
+/// One VIP slot: the storefront, then who and where, how the basket compares, and two figures.
 ///
-/// **The photograph is uploaded from the admin panel, never generated.** A placement nobody has
-/// photographed yet draws an empty frame with the shop's category glyph in it - an invented shop
-/// front over a real shop's name is the one thing the section that is *sold* cannot show.
+/// **The photograph is uploaded from the admin panel, never generated** - an unphotographed placement
+/// draws an empty frame with its category glyph, because an invented shop front over a real shop's
+/// name is the one thing the section that is *sold* cannot show.
 ///
-/// The facts run in the order a buyer checks them: who, where, then the comparison, then the
-/// figures. **«Рейтинг» has no source in this build** - there is no reviews table - so a real shop
-/// draws a dash there and only the empty slot shows a number, which is part of what is being sold.
+/// **«Рейтинг» has no source in this build** (no reviews table), so a real shop draws a dash and only
+/// an empty slot shows a number, which is part of what is being sold.
 class _SlotCard extends StatelessWidget {
   const _SlotCard({required this.shop, required this.strings});
 
@@ -268,11 +258,9 @@ class _SlotCard extends StatelessWidget {
 
   /// What the photograph takes of the card's width.
   ///
-  /// **54 is the floor on the other column, not a taste.** The longest line it carries is the
-  /// comparison pill - «Средняя цена по рынку» at 11.5/w600 with its glyph and padding is ~160dp -
-  /// and at 360dp a card is 348 wide, so 54% of the 332 inside its padding leaves 164 once the
-  /// column's own 15dp of padding is off. Any wider a frame and the one sentence a customer reads
-  /// this card for starts ellipsising.
+  /// **a floor set by the other column, not a taste**: the comparison pill needs ~160dp, which is what
+  /// is left beside the frame on a 360dp screen. any wider and the one sentence a customer reads this
+  /// card for starts ellipsising.
   static const int _photoFlex = 46;
   static const int _factsFlex = 54;
 
@@ -474,12 +462,11 @@ class _Figure extends StatelessWidget {
 
 /// The photograph, and the «VIP магазин» tag riding on it.
 ///
-/// `cover`, unlike a product tile's `contain`: this is a building, and a band of panel colour down
-/// either side of it would read as a broken image rather than as a shot of a whole object.
+/// `cover`, unlike a product tile's `contain`: this is a building, and bands of panel colour either
+/// side would read as a broken image.
 ///
-/// **An empty frame is a real state, not a loading one.** Only an admin can put a photo here, so a
-/// placement sold this morning has none - the frame then carries the shop's category glyph, which
-/// says what kind of shop it is without inventing what it looks like.
+/// **An empty frame is a real state, not a loading one** - only an admin can put a photo here, so the
+/// frame carries the category glyph instead of inventing what the shop looks like.
 class _Storefront extends StatelessWidget {
   const _Storefront({required this.url, required this.category, required this.strings});
 
@@ -492,8 +479,8 @@ class _Storefront extends StatelessWidget {
     final url = this.url;
 
     return DecoratedBox(
-      // **a panel inside the card, not a hole in it**: `photoPanel` is the page's own colour, so a
-      // frame running into the card's edge in it reads as a bite taken out of the card.
+      // **a panel inside the card, not a hole in it**: `photoPanel` sits within a hair of the page's
+      // colour, so a frame running into the card's edge in it reads as a bite taken out of the card.
       decoration: BoxDecoration(
         color: AppColors.cardGrey,
         borderRadius: BorderRadius.circular(AppRadius.sm),

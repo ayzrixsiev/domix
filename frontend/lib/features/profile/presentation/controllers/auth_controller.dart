@@ -99,12 +99,11 @@ class AuthController extends ChangeNotifier {
   }
 
   /// Asks the server whether this session is still real, on launch and on every return to the
-  /// foreground - which is what makes a deleted account land on the guest screen by itself. The cached
-  /// hydration happens first on purpose, so a cold start does not wait on a check that almost always
-  /// passes.
+  /// foreground, which is what lands a deleted account on the guest screen by itself. the cached
+  /// hydration happens first, so a cold start does not wait on a check that almost always passes.
   ///
-  /// **Only [SessionExpiredException] signs anyone out** - a timeout, a 500 or a tunnel is not
-  /// evidence about the token.
+  /// **Only [SessionExpiredException] signs anyone out** - a timeout or a 500 is not evidence about
+  /// the token.
   Future<void> verifySession() async {
     if (_profileState.isGuest) return;
 
@@ -157,12 +156,11 @@ class AuthController extends ChangeNotifier {
 
   /// Step one of signing in: ask the server to send a one-time code to [phone].
   ///
-  /// Returns the number in the server's own canonical spelling (`998XXXXXXXXX`) - [verifyCode] must
-  /// be called with that, not with whatever was typed. Throws [AuthApiException] carrying the
-  /// server's refusal code, which the screen turns into a sentence.
+  /// Returns the number in the server's canonical spelling (`998XXXXXXXXX`), which is what
+  /// [verifyCode] must be called with. Throws [AuthApiException] carrying the server's refusal code.
   ///
-  /// **Nothing is stored and no state changes here.** Until a code comes back verified there is no
-  /// account, which is the same reason the server keeps pending codes out of its database.
+  /// **Nothing is stored and no state changes here**: until a code comes back verified there is no
+  /// account, which is why the server keeps pending codes out of its database too.
   Future<CodeRequestResult> requestCode({
     required String phone,
     required String name,

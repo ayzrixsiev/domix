@@ -22,21 +22,17 @@ import 'package:frontend/features/profile/data/account_role.dart';
 
 /// The five screens between opening Domix for the first time and having an account.
 ///
-/// **One widget rather than five routes.** Every step reads or writes the same four values - the
-/// language, the accepted policy version, the name and role, the phone - and a route per step means
-/// either passing all four forward and back or holding them somewhere above the routes anyway. The
-/// steps are also not independently reachable: there is no deep link to "enter your code", because
-/// a code only exists as the tail of a request made on the previous screen.
+/// **One widget rather than five routes**: every step reads or writes the same four values, and no
+/// step is independently reachable - a code only exists as the tail of a request made on the
+/// previous screen.
 ///
-/// **Nothing is persisted until the code verifies.** The account does not exist until then - the
-/// server keeps the pending code in RAM for the same reason - so abandoning this flow at any step
-/// leaves nothing behind but the language, which is a device preference rather than an account.
+/// **Nothing is persisted until the code verifies** - the account does not exist until then, and the
+/// server keeps the pending code in RAM for the same reason - so abandoning the flow leaves nothing
+/// behind but the language, which is a device preference.
 ///
-/// **A route over the shell, not a tab inside it.** Registering with the nav bar still on screen
-/// read as a half-open door: the app was offering four other places to be while asking for a phone
-/// number. This is pushed full screen instead, so the only things on it are the step and its two
-/// controls - and the X in the header, which is the one way out that does not walk back through
-/// every step.
+/// **A route over the shell, not a tab inside it**: registering with the nav bar still on screen
+/// offers four other places to be while asking for a phone number. The X in the header is the one
+/// way out that does not walk back through every step.
 /// **One flow for both, because the server has one path.** `/verify` finds the account or creates
 /// it - see `upsertUser` - so signing in and registering are the same five steps and the same two
 /// requests. There is no shorter door to offer.
@@ -364,21 +360,15 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         _Step.code => _codeStep(strings),
       };
 
-  /// Every step but the policy is a short form on a scrollable page - short today, and one line of
-  /// help text away from not being short on a 4-inch phone with the keyboard up.
+  /// **The error is drawn here and not in the footer**: in the footer it changed the footer's height,
+  /// which moved «Далее» up and down between steps.
   ///
-  /// **The error is drawn here and not in the footer.** In the footer it changed the footer's
-  /// height, which moved «Далее» up and down between steps; here it pushes content that was already
-  /// scrollable and the buttons do not move at all.
+  /// [body] is for the two steps that have something to say. The others are the controls alone,
+  /// because "выберите язык" above a list of two languages explains nothing the list does not.
   ///
-  /// [body] is for the two steps that have something to say - that there is no account yet, and
-  /// which number the code went to. The others are the controls alone, because "выберите язык" above
-  /// a list of two languages explains nothing that the list does not.
-  ///
-  /// **Centred when it fits, scrolled when it does not.** Every step but the policy is two or three
-  /// controls, and against a whole screen of its own they hung off the top edge with the rest of the
-  /// page empty under them. The minimum height is the viewport's, so the same column centres itself
-  /// on the short steps and falls back to an ordinary scroll on the long one and under a keyboard.
+  /// **Centred when it fits, scrolled when it does not**: the minimum height is the viewport's, so
+  /// two controls centre themselves instead of hanging off the top edge, and the long step and a
+  /// raised keyboard fall back to an ordinary scroll.
   Widget _scrollableStep({String? body, required List<Widget> children}) {
     const padding = EdgeInsets.fromLTRB(20, 20, 20, 8);
 
@@ -438,11 +428,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   /// The policy step: the document's name, the one-paragraph summary, a way in to the full text,
   /// and the tick.
   ///
-  /// **The full text is behind «Читать полностью» rather than filling the step**, and almost nobody
-  /// will open it. That is the honest design: what the law and both stores require is that the
-  /// policy be *available* before consent, not that a wall of it be scrolled past - and a step that
-  /// is nine screens of legal text teaches people to scroll blindly, which is worse than a summary
-  /// they actually read plus a door to the rest.
+  /// **The full text is behind «Читать полностью» rather than filling the step**: the law and both
+  /// stores require the policy to be *available* before consent, not scrolled past, and nine screens
+  /// of legal text teach people to scroll blindly.
   Widget _policyStep(AppLocalizations strings) {
     final language = context.watch<LanguageProvider>().language;
 
@@ -687,14 +675,10 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   }
 
 
-  /// The two controls, at the same height on every step.
-  ///
-  /// **Both slots are always drawn**, the back one empty on the first step, and the error moved out
-  /// of here into the scrolling content - otherwise the footer was three different heights across
-  /// five steps and «Далее» walked up and down the screen as you advanced.
-  ///
-  /// The bottom inset is the system's own - the home indicator on a gesture-navigation phone -
-  /// plus [_footerGap], so the back button is not sitting on the bar the phone draws over it.
+  /// **Both slots are always drawn**, the back one empty on the first step, and the error lives in the
+  /// scrolling content - otherwise the footer is three heights across five steps and «Далее» walks up
+  /// and down the screen. The bottom inset is the system's own plus [_footerGap], so the back button
+  /// does not sit on the bar the phone draws over it.
   Widget _footer(AppLocalizations strings) {
     final label = switch (_step) {
       _Step.phone => strings.sendCodeButton,

@@ -1,13 +1,11 @@
 package endpoints
 
-// the json contract behind the home screen, checked at the http boundary rather than at the query
-// boundary (db/home_queries_test.go does that part).
+// the json contract behind the home screen, at the http boundary (db/home_queries_test.go does the
+// query half).
 //
-// what these are really guarding is the *shape*: field names, and which of them may be null. the
-// flutter side decodes this by hand, so a renamed key or a `null` where a list was expected is a
-// runtime crash in the app with nothing on the server to show for it - and that is precisely the
-// class of bug that only appears once there is no data, which is the state the database is in right
-// now.
+// what they guard is the *shape*: field names, and which may be null. the flutter side decodes by hand,
+// so a renamed key or a `null` where a list was expected is a crash in the app with nothing on the
+// server to show for it.
 
 import (
 	"context"
@@ -230,9 +228,8 @@ func TestHomeRanksAndCountsRealData(t *testing.T) {
 // the wire half of the LEFT JOIN: a shop that has been granted a placement is in the carousel from
 // the moment it is granted, carrying explicit nulls rather than being missing.
 //
-// this is the same shape TestHomeSerializesAbsentIndexAsNull checks for the map, and it is here as
-// well because the two lists used to disagree - the map showed an unfinished shop and the carousel,
-// which is the one somebody paid for, silently did not.
+// the same shape TestHomeSerializesAbsentIndexAsNull checks for the map, pinned here too because the
+// carousel is the list somebody paid for and the two must not disagree.
 func TestAPaidPlacementIsInTheCarouselWithOrWithoutAPrice(t *testing.T) {
 	home, ctx, tx, q := homeUnderTest(t)
 
@@ -266,7 +263,7 @@ func TestAPaidPlacementIsInTheCarouselWithOrWithoutAPrice(t *testing.T) {
 			t.Fatalf("an unpriced VIP shop must serialize %s as null, got %s", key, got)
 		}
 	}
-	// and the raw index stays server-side here too (§5)
+	// and the raw index stays server-side here too
 	if _, present := raw.VipShops[0]["price_index"]; present {
 		t.Fatal("price_index must not be serialized - the app renders a tier, never the number")
 	}
@@ -479,11 +476,9 @@ func priceAll(t *testing.T, ctx context.Context, tx pgx.Tx, shopID int64, price 
 	}
 }
 
-// the templates live in `product_templates` since migration 000014 and are held in memory by
-// internal/catalog, loaded once at startup by main.go. tests do not run main.go, so every harness
-// that seeds a shop has to load them first - without it catalog.Template returns nothing and every
-// shop is created with an empty catalogue, which fails as a wrong *count* three assertions later
-// rather than as a missing setup step.
+// the templates live in `product_templates`, held in memory by internal/catalog and loaded at startup
+// by main.go. tests do not run main.go, so every harness that seeds a shop has to load them first, or
+// every shop is created empty and it fails as a wrong *count* three assertions later.
 // the same mapping as endpoints.loadCatalogue - keep the two in step, or a column added to
 // product_templates arrives in production and not in these tests
 func loadTemplates(t *testing.T, ctx context.Context, q *db.Queries) {

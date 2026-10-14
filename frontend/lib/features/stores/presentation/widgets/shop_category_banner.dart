@@ -124,7 +124,7 @@ class _CoverPainter extends CustomPainter {
     // catalogue underneath, which looks like a rendering fault rather than a layout one.
     canvas.clipRect(rect);
 
-    // 1. the ground. white at the top, where the status bar sits, into the category's own tint.
+    // the ground: white at the top, where the status bar sits, into the category's own tint
     canvas.drawRect(
       rect,
       Paint()
@@ -136,7 +136,7 @@ class _CoverPainter extends CustomPainter {
         ).createShader(rect),
     );
 
-    // 2. the draughting grid, in the category's own hue
+    // the draughting grid, in the category's own hue
     final grid = Paint()
       ..color = art.bandTo.withValues(alpha: 0.07)
       ..strokeWidth = 1;
@@ -147,9 +147,9 @@ class _CoverPainter extends CustomPainter {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
     }
 
-    // 3. the band and what is stacked on it, in one rotated frame so they cannot drift out of
-    // alignment. deliberately over-drawn on every side: the rotation swings the corners outward, and a
-    // band cut to the box would leave a pale wedge in the bottom-left at some screen widths.
+    // the band and its contents in one rotated frame, so they cannot drift out of alignment.
+    // deliberately over-drawn on every side: the rotation swings the corners outward, and a band cut to
+    // the box leaves a pale wedge in the bottom-left at some widths.
     canvas.save();
     canvas.translate(size.width / 2, size.height / 2);
     canvas.rotate(ShopCategoryBanner._tiltDegrees * math.pi / 180);

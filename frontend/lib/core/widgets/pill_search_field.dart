@@ -5,19 +5,15 @@ import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 
-/// **The app's one search field**: a white capsule, a magnifier on the left, a cross on the right
-/// once there is something to clear. Every screen that searches wears this and nothing else - a
-/// recessed grey well, a rounded rectangle and a capsule used to be three different answers to the
-/// same question on three screens of one app.
+/// **The app's one search field**: a white capsule, a magnifier, a cross once there is text. Every
+/// screen that searches wears this and nothing else.
 ///
-/// [floating] is the same split `CircleIconButton` and `SegmentedTabs` make: hovering over map tiles
-/// it takes a hairline and the heavier shadow, and its glyphs go a step darker, because the grey
-/// that reads as "placeholder" on our pale page reads as "disabled" over a street.
+/// [floating] is the same split `CircleIconButton` and `SegmentedTabs` make: over map tiles it takes a
+/// hairline, the heavier shadow and darker glyphs, because the grey that reads as "placeholder" on the
+/// page reads as "disabled" over a street.
 ///
-/// **The whole capsule takes the tap, not only the TextField**: the magnifier and its padding are
-/// ~40px that looks like a button, and a field that does nothing when its own icon is pressed is
-/// the whole of "the search does not work". That is also why the focus node is optional - a caller
-/// that does not need one still gets the behaviour.
+/// **The whole capsule takes the tap, not only the TextField**: the magnifier is ~40px that looks like
+/// a button, and a field that ignores its own icon is the whole of "the search does not work".
 class PillSearchField extends StatefulWidget {
   const PillSearchField({
     super.key,

@@ -1,18 +1,12 @@
-// The profile screen at the two things a session actually decides: **which account this is** and
-// **what its buttons do**.
+// The profile screen at the two things a session decides: **which account this is** and **what its
+// buttons do**. Neither failure looks like a crash from the outside:
 //
-// Both were broken at once, and neither looked like a crash from the outside:
-//
-//   * an `admin` signing in got the *customer* profile. the server had them right - it authorizes
-//     admin exactly like shop_owner - but the app compared the role against the single literal
-//     `shop_owner`, so an administrator with ten shops on the map was shown a screen with no way
-//     into any of them. it reads as "registering as a shop owner did not work".
-//   * «Удалить аккаунт» did nothing at all. the handler's first line read the localized copy through
-//     a *listening* `Provider.of`, which asserts outside of a build - and an assertion thrown inside
-//     a gesture callback surfaces in the console and nowhere else. no dialog, no error, a dead row.
-//
-// So the two tests here are: a role that is not `shop_owner` still reaching the owner's screen, and
-// a tap on the most destructive button in the app reaching its confirmation.
+//   * **any role that is not `customer` gets the owner's screen** - the server authorizes admin
+//     exactly like shop_owner, so comparing against the single literal `shop_owner` hides every shop
+//     from an administrator and reads as "registering as a shop owner did not work".
+//   * **a gesture callback must not read a listening `Provider.of`** - it asserts outside of a build,
+//     and an assertion thrown in a callback surfaces in the console and nowhere else: no dialog, no
+//     error, a dead row.
 
 import 'dart:convert';
 

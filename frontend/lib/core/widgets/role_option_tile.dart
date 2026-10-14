@@ -5,9 +5,9 @@ import 'package:frontend/core/constants/app_theme.dart';
 
 /// One choosable role: an icon tile, a name, a line of what it does here, and a radio.
 ///
-/// A full-width row rather than a square in a grid - three squares divide the width into thirds,
-/// where «Владелец магазина» wraps and its subtitle has no room. Selection is carried by tint,
-/// border *and* a filled radio, since a tint this pale is invisible in bright sun.
+/// A full-width row rather than a square in a grid: in thirds of the width «Владелец магазина» wraps
+/// and its subtitle has no room. Selection is carried by tint, border *and* a filled radio, since a
+/// tint this pale is invisible in bright sun.
 ///
 /// [isSelected] null is a third state: a list that commits on tap gets a chevron, not a radio.
 class RoleOptionTile extends StatelessWidget {

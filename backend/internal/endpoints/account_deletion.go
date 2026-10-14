@@ -25,11 +25,10 @@ import (
 //	POST /api/account-deletion/request-code  {phone}        -> a code goes to that number
 //	POST /api/account-deletion/confirm       {phone, code}  -> the account, its shops and products
 //
-// **the answer is identical whether or not an account exists, and a code is only sent when one
-// does.** anything else turns a public page into a way to ask from a browser whether any number in
-// the country is registered with Domix, and into a way to make us pay for codes aimed at numbers
-// that never signed up. the pending entry is minted either way, so the cooldown cannot be used to
-// tell the two apart either.
+// **the answer is identical whether or not an account exists, and a code is only sent when one does.**
+// anything else turns a public page into a way to ask whether a number is registered with Domix, and
+// into a way to make us pay for codes aimed at numbers that never signed up. the pending entry is
+// minted either way, so the cooldown cannot be used to tell the two apart.
 type AccountDeletion struct {
 	Queries *db.Queries
 	Codes   *auth.CodeManager
@@ -168,12 +167,12 @@ func (d *AccountDeletion) accountExists(ctx context.Context, phone string) (bool
 // long enough for a shop's worth of photos on R2 (two round trips each), short of nginx's 60s cut
 const photoRemovalBudget = 30 * time.Second
 
-// eraseAccount deletes an account and then the photos its owner uploaded - the app's path and the
-// web page's both end here. the admin panel's own delete calls the two halves around its statement.
+// eraseAccount deletes an account and then the photos its owner uploaded; the app's path and the web
+// page's both end here.
 //
-// **the paths are read before the delete**: it cascades through shops and products, and afterwards
-// no row names those files. **the rows go before the files**, so a failure part-way leaves files
-// nothing points at, which the admin's orphan sweep collects - never a row naming a file that is gone.
+// **the paths are read before the delete**, which cascades through shops and products and leaves no
+// row naming those files. **the rows go before the files**, so a failure part-way leaves orphans for
+// the sweep rather than a row naming a file that is gone.
 func eraseAccount(ctx context.Context, q *db.Queries, images imagestore.Storage, userID int64) error {
 	uploads, err := q.ListUploadedImagesOfUser(ctx, userID)
 	if err != nil {

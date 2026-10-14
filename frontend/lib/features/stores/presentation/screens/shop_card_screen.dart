@@ -32,12 +32,12 @@ import 'package:frontend/core/widgets/circle_icon_button.dart';
 // one shop, in full. every route into a shop ends here - a map pin, a VIP card, a Лучшие
 // предложения row.
 //
-// two chromes over identical content: a draggable sheet over the map (showShopCardSheet), so
-// comparing three nearby shops does not rebuild the map three times, and a full-screen route
-// everywhere else. both are a CustomScrollView, which is what makes the catalogue a sliver.
+// two chromes over identical content: a draggable sheet over the map (showShopCardSheet), so comparing
+// three nearby shops does not rebuild the map three times, and a full-screen route everywhere else.
+// both are a CustomScrollView, which is what makes the catalogue a sliver.
 //
-// the cover is full-bleed to the very top and the details sit on one white surface separated by
-// inset rules; the catalogue keeps the grey page under it - above is this shop, below is its goods.
+// the details sit on one white surface and the catalogue keeps the page under it: above is this shop,
+// below is its goods.
 class ShopCardScreen extends StatelessWidget {
   const ShopCardScreen({super.key, required this.shop});
 

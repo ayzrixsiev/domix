@@ -65,14 +65,12 @@ enum ProductCategory {
   /// The product shot the home screen's category tile is built on, or null for a category that has
   /// no artwork yet.
   ///
-  /// **Nullable, and that nullability is the rule that picks the popular eight** - see
-  /// [PopularCategoriesGrid]. A tile whose whole design is a photograph cannot fall back to a glyph
-  /// without the grid looking half-finished, so a category without a shot simply is not on it; it is
-  /// reachable through "Все категории" like every other. Shooting the missing four is what promotes
-  /// them.
+  /// **Nullable, and that nullability is the rule that picks the grid's categories** (see
+  /// [PopularCategoriesGrid]): a tile whose whole design is a photograph cannot fall back to a glyph,
+  /// so a category without a shot is not on the grid and is reached through search instead.
   ///
-  /// Still an exhaustive switch: a thirteenth category has to say here whether it has a photo, rather
-  /// than silently inheriting a default.
+  /// Still an exhaustive switch: a new category has to say here whether it has a photo rather than
+  /// silently inheriting a default.
   String? get photo => switch (this) {
         ProductCategory.mixes => 'assets/decorations/categories/building_materials.webp',
         ProductCategory.blocks => null,

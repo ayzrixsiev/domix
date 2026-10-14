@@ -5,15 +5,12 @@ import 'package:frontend/features/stores/data/shop_category.dart';
 
 /// The four kinds of shop over the map: one long capsule with a pill sliding inside it.
 ///
-/// **The same control as «Лучшие предложения» on the home screen**, in its floating form - the four
-/// shop categories are one idea, so they are one shape wherever they appear, and a strip that has to
-/// be dragged sideways to find the fourth option is not a filter anyone uses. Equal segment widths
-/// come with it: a long label ellipses rather than stealing room from the others.
+/// **The same control as «Лучшие предложения» on the home screen**, in its floating form: the four
+/// categories are one idea, so they are one shape wherever they appear.
 ///
-/// **There is no «Все» segment: the picked one is the way back.** Tapping the active category clears
-/// the filter and the pill fades out, which is what "every shop" looks like here - a fifth segment
-/// would take a quarter of the width to say what an empty track already says. The cross on the lit
-/// segment (`clearable`) is what makes that second tap findable.
+/// **There is no «Все» segment: the picked one is the way back.** tapping the active category clears
+/// the filter, and a fifth segment would take a quarter of the width to say what an empty track
+/// already says. the cross on the lit segment (`clearable`) makes that second tap findable.
 class MapCategoryBar extends StatelessWidget {
   const MapCategoryBar({
     super.key,

@@ -11,10 +11,8 @@ import 'package:frontend/core/constants/app_theme.dart';
 ///
 /// It takes labels, not a domain enum, so one widget serves shop categories and role views.
 ///
-/// [floating] is the same split [CircleIconButton] makes: a recessed grey groove when it sits on the
-/// page, a white capsule lifted off a map when it hovers over one. A grey track over map tiles reads
-/// as part of the map rather than as a control on top of it, which is the whole reason for the
-/// second form.
+/// [floating] is the same split [CircleIconButton] makes: a recessed groove on the page, a white
+/// capsule over a map - a grey track over map tiles reads as part of the map.
 class SegmentedTabs extends StatelessWidget {
   const SegmentedTabs({
     super.key,

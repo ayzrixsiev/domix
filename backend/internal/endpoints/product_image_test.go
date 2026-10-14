@@ -27,12 +27,9 @@ import (
 	"domix/backend/internal/imagestore"
 )
 
-// The photo endpoints, through the real RequireAuth with a real signed token - the same shape the
-// rest of this package's tests use, and for the same reason: ownership and the rule being tested are
-// separate answers, and exercising one without the other leaves half the path unchecked.
-//
-// The bytes are real jpegs built in memory rather than a fixture on disk, because the handler
-// decodes what it is given: a fixture would be testing that a file the author picked is still there.
+// The photo endpoints, through the real RequireAuth with a signed token: ownership and the rule being
+// tested are separate answers. The bytes are real jpegs built in memory rather than a fixture, because
+// the handler decodes what it is given.
 
 // a Products whose uploads land in a directory that disappears with the test
 func imageProductsUnderTest(t *testing.T) (*Products, string, context.Context, pgx.Tx, *db.Queries) {
@@ -194,17 +191,12 @@ func TestAnOwnerPutsAPhotoOnTheirOwnProduct(t *testing.T) {
 	t.Fatal("the product is missing from its own shop's catalogue")
 }
 
-// **the founder's rule, positive half: an owner photographs what the catalogue has not.**
+// **the positive half of the rule: an owner photographs what the catalogue has not.** an обои slot
+// names a *kind* of wallpaper, so there is no such object to photograph and the shop's own roll is the
+// only picture that could be on the tile.
 //
-// An обои slot names a *kind* of wallpaper - "премиум (Россия)" - and there is no such object to
-// photograph, so the shop's own roll is the only picture that could ever be on that tile. It is the
-// only category on this side of the rule and the only one that can never leave it: древесные rows
-// were the second case, permitted only because nobody had shot them, and migration 000005 moved them
-// across by taking the pictures.
-//
-// The rule is read off the template rather than off a list of categories (see templateFlags), which
-// is what let that happen with no test to update but this one - so what this pins is that a slot
-// with no photograph to share lands on the permissive side of it.
+// the rule is read off the template rather than a list of categories (templateFlags), so a category
+// leaves this side of it the day somebody photographs it - with no test to update but this one.
 func TestAnOwnerPhotographsWhatTheCatalogueHasNot(t *testing.T) {
 	products, root, ctx, tx, q := imageProductsUnderTest(t)
 
@@ -229,14 +221,12 @@ func TestAnOwnerPhotographsWhatTheCatalogueHasNot(t *testing.T) {
 	}
 }
 
-// **the founder's rule, refusing half.** a универсальный row points at a photograph we took, shared
-// by every универсальный shop in the market - and the basket index says that row is *the same
-// product* as its counterpart across the road. An owner replacing the picture makes two tiles of one
-// product show two different objects, and it is the customer comparing the two shops who is misled.
+// **the refusing half.** a универсальный row points at a photograph we took and shared with every shop
+// of that market, and the index calls it the *same product* as its counterpart across the road - so an
+// owner replacing the picture misleads the customer comparing the two shops.
 //
 // The 403 has to arrive before the bytes do, which is why the check sits above the rate limiter and
-// above readUploadedImage: refusing a six-megabyte upload after receiving it spends exactly what the
-// refusal exists to save.
+// readUploadedImage: refusing a six-megabyte upload after receiving it spends what it exists to save.
 func TestTheCataloguesOwnPhotographCannotBeReplaced(t *testing.T) {
 	products, _, ctx, tx, q := imageProductsUnderTest(t)
 
@@ -321,16 +311,12 @@ func TestReplacingAPhotoUnlinksTheOneItReplaced(t *testing.T) {
 	}
 }
 
-// **the guard that protects the catalogue.** a seeded universal row points at a photo shared by
-// every universal shop; removing the owner's own upload must put that path back and must not touch
-// the file it names.
+// **the guard that protects the catalogue**: removing an owner's upload from a seeded row must put the
+// shared catalogue path back and must not touch the file it names.
 //
-// **The upload is written straight onto the row rather than posted**, because the endpoint refuses
-// exactly this combination now (see TestTheCataloguesOwnPhotographCannotBeReplaced) - and removal is
-// deliberately *not* gated by the same rule, for the case this test is standing in for: rows that
-// were photographed by their owner before the rule existed, and rows whose catalogue is shot after
-// the fact. Those are the ones with something to restore to, and with the delete path closed as well
-// their owners would be stuck with a picture the catalogue is supposed to override.
+// **The upload is written straight onto the row rather than posted**, because the endpoint refuses that
+// combination - and removal is deliberately *not* gated by the same rule, for rows photographed by
+// their owner before the rule existed. Those are the ones with something to restore to.
 func TestRemovingAPhotoRestoresTheCatalogueShot(t *testing.T) {
 	products, root, ctx, tx, q := imageProductsUnderTest(t)
 
@@ -425,11 +411,9 @@ func TestOnlyTheShopsOwnerMayChangeAProductsPhoto(t *testing.T) {
 	}
 }
 
-// the extension and the Content-Type are both written by the client, so the only real check is the
-// decode - and its failure has to reach the owner as a sentence about the file, not as a 500.
-//
-// on a product of the owner's own, because a seeded универсальный row is refused a step earlier now
-// and would answer template_photo whatever bytes were attached to it.
+// the extension and Content-Type are both written by the client, so the only real check is the decode,
+// and its failure has to reach the owner as a sentence about the file rather than a 500. on the owner's
+// own row, because a seeded универсальный one is refused a step earlier whatever bytes it carries.
 func TestSomethingThatIsNotAPhotoIsRefused(t *testing.T) {
 	products, _, ctx, tx, q := imageProductsUnderTest(t)
 

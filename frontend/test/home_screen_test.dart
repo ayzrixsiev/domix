@@ -1,11 +1,9 @@
 // The home feed, tested where it matters: on screen.
 //
-// **The rule these exist for is that nothing here is invented.** There used to be a file of
-// plausible shops the controller substituted whenever the backend came back empty or unreachable,
-// and these tests pinned that substitution. It is deleted, and what replaced it is the harder thing
-// to keep right: five VIP places and fifteen per category are drawn whether or not anybody has
-// earned them, so the screen is now full of card-shaped things that must never acquire a name, an
-// address or a price.
+// **The rule these exist for is that nothing here is invented**: no plausible shop is ever
+// substituted for an empty or unreachable backend. five VIP places and fifteen per category are drawn
+// whether or not anybody has earned them, so the screen is full of card-shaped things that must never
+// acquire a name, an address or a price.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -212,13 +210,10 @@ void main() {
     expect(widths.where((w) => w != widest), everyElement(lessThan(widest)));
   });
 
-  // **The strip moves with nobody touching it**, which is the only thing that makes the four
-  // placements behind the first one worth selling. Two things can move it - the clock and a finger -
-  // and the finger wins: a tick that fired mid-drag would animate the page away from the person
-  // holding it, and that is the half of this worth a test.
-  //
-  // The card it leaves is *disposed* rather than pushed aside, now that one card is one whole page,
-  // so "it moved" is the sold card no longer being on screen at all.
+  // **The strip moves with nobody touching it**, which is what makes the four placements behind the
+  // first one worth selling - and **the finger wins over the clock**, because a tick firing mid-drag
+  // would animate the page away from the person holding it. one card is one whole page, so "it moved"
+  // is the sold card no longer being on screen at all.
   testWidgets('the carousel advances on its own, and a finger on it stops the clock', (tester) async {
     final strings = AppLocalizations(AppLanguage.ru);
     await _pumpHome(

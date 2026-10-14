@@ -17,10 +17,9 @@ import (
 	"testing"
 )
 
-// This package is pure - no database, no network - so these run everywhere, unlike the endpoint
-// suites. What they pin is the four things Normalize promises, each of which fails silently in its
-// own way: a photo that is too heavy to scroll past, a photo lying on its side, a product floating
-// on black, and a shop owner's home coordinates riding along inside a public url.
+// This package is pure - no database, no network - so these run everywhere. They pin the four things
+// Normalize promises, each failing silently in its own way: a photo too heavy to scroll past, one lying
+// on its side, a product floating on black, and a shop owner's home coordinates inside a public url.
 
 // a photo-shaped source: a coloured quadrant on white, so a rotation is detectable afterwards
 func testImage(width, height int, quadrant color.RGBA) image.Image {
@@ -99,13 +98,9 @@ func TestASmallPhotoIsNotUpscaled(t *testing.T) {
 	}
 }
 
-// **the file the grid actually loads.** Nearly all of this api's image traffic is thumbnails: one
-// shop card is up to a hundred tiles and one edit screen is one photo, so a master served into a
-// grid is the difference between a catalogue that scrolls and one that stalls on mobile data.
-//
-// The two are checked together because they are stored together and the failure being guarded
-// against is a pair that disagrees - a thumbnail cropped differently from the photo it opens into,
-// or a "thumbnail" that is the master under another name.
+// **the file the grid actually loads**: nearly all of this api's image traffic is thumbnails, so a master
+// served into a grid is the difference between a catalogue that scrolls and one that stalls on mobile
+// data. The two are checked together because the failure being guarded against is a pair that disagrees.
 func TestAThumbnailIsStoredBesideTheMaster(t *testing.T) {
 	source := encodeJPEG(t, testImage(2000, 1000, color.RGBA{R: 30, G: 150, B: 90, A: 255}))
 
@@ -131,9 +126,8 @@ func TestAThumbnailIsStoredBesideTheMaster(t *testing.T) {
 	}
 }
 
-// jpeg has no alpha channel and go's encoder composites what it is given against black, so a png
-// shot on a transparent background - which is what a product cut out in an editor looks like - would
-// arrive as a product on a black square in a grid of white tiles.
+// jpeg has no alpha and go's encoder composites against black, so a png shot on a transparent background
+// - a product cut out in an editor - would arrive on a black square in a grid of white tiles.
 func TestTransparencyIsFlattenedOntoWhite(t *testing.T) {
 	source := image.NewRGBA(image.Rect(0, 0, 400, 400))
 	draw.Draw(source, image.Rect(0, 0, 200, 400), image.NewUniform(color.RGBA{R: 10, G: 160, B: 90, A: 255}), image.Point{}, draw.Src)
@@ -175,9 +169,8 @@ func TestAPhotoIsTurnedTheRightWayUpBeforeItIsStored(t *testing.T) {
 	assertColour(t, result, 100, 100, color.RGBA{R: 255, G: 255, B: 255}, "where the quadrant was")
 }
 
-// re-encoding is what strips EXIF, and EXIF is where a phone writes the GPS coordinates a photo was
-// taken at. this asserts the stripping rather than trusting it, because the failure is invisible:
-// the tile looks identical either way and the coordinates only surface if somebody goes looking.
+// re-encoding is what strips EXIF, where a phone writes the GPS coordinates a photo was taken at. asserted
+// rather than trusted, because the tile looks identical either way.
 func TestMetadataDoesNotSurviveIntoTheStoredCopy(t *testing.T) {
 	source := withEXIFOrientation(t, encodeJPEG(t, testImage(600, 600, color.RGBA{B: 200, A: 255})), 3)
 
@@ -235,9 +228,8 @@ func TestAnEnormousImageIsRefusedFromItsHeaderAlone(t *testing.T) {
 	}
 }
 
-// one photo is two files on disk, and both halves of every operation have to account for both. the
-// master's path is the only one stored anywhere, so a thumbnail that is not written, or not deleted,
-// is invisible to the database and shows up as a blank tile or as a file nobody can reach.
+// one photo is two files, and the master's path is the only one stored anywhere - so a thumbnail that is
+// not written, or not deleted, is invisible to the database and shows up as a blank tile.
 func TestAStoredPhotoIsTwoFilesUnderTheUploadsDirectory(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
@@ -290,9 +282,8 @@ func TestAStoredPhotoIsTwoFilesUnderTheUploadsDirectory(t *testing.T) {
 	}
 }
 
-// what the admin panel's sweep sees. It compares these paths against products.image_path, so a
-// listing that spelled them any other way - absolute, backslashed, prefixed with the root - would
-// match nothing and report the whole market as orphaned.
+// what the admin panel's sweep sees. It compares these paths against products.image_path, so any other
+// spelling - absolute, backslashed, root-prefixed - would match nothing and report the market as orphaned.
 func TestListingNamesFilesTheWayTheDatabaseDoes(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
@@ -359,9 +350,8 @@ func TestRemoveFileTakesOneHalfOfAPair(t *testing.T) {
 	}
 }
 
-// **the guard that matters.** products.image_path holds curated catalogue photos too, and those are
-// shared by every shop of a category - one owner clearing their photo must not unlink the file the
-// other forty draw.
+// **the guard that matters**: products.image_path holds curated photos too, shared by every shop of a
+// category, so one owner clearing their photo must not unlink the file the other forty draw.
 func TestRemoveRefusesAnythingOutsideUploads(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
@@ -424,10 +414,8 @@ func withEXIFOrientation(t *testing.T, jpegBytes []byte, orientation uint16) []b
 	return append(out, jpegBytes[2:]...)
 }
 
-// **the two deletion doors must not overlap.** an owner's photo and a curated one are deleted by
-// different sweeps for different reasons; if either method accepted the other kind, a bug in one
-// sweep would reach files that belong to the other - and a curated file is drawn by every shop of a
-// category at once.
+// **the two deletion doors must not overlap**: if either method accepted the other kind, a bug in one
+// sweep would reach the other's files - and a curated file is drawn by every shop of a category.
 func TestTheTwoDeletionDoorsDoNotOverlap(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()

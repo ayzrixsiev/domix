@@ -1,9 +1,7 @@
 // package verify delivers a one-time code to a phone number.
 //
-// **one interface with one method, because that is the entire contract.** the provider is the part
-// most likely to change, and switching it costs one line in main.go - nothing in internal/auth or
-// internal/endpoints knows a provider exists. nothing here generates, stores or checks a code:
-// that is auth.CodeManager.
+// **one interface with one method, because that is the entire contract.** switching provider costs one
+// line in main.go, and nothing here generates, stores or checks a code - that is auth.CodeManager.
 package verify
 
 import (
@@ -94,9 +92,8 @@ func New(s Settings) (Sender, string, error) {
 // the distinction lives in the log line rather than in the type
 var errRefused = errors.New("verify: the provider refused the message")
 
-// consoleSender prints the code instead of delivering it. **not a stub, the development provider**:
-// the whole login flow can be walked on a laptop with an empty .env. it shouts on every send,
-// because a server quietly printing everybody's login codes into its log must be impossible to miss.
+// consoleSender prints the code instead of delivering it. **not a stub, the development provider**: it
+// shouts on every send, because a server printing everybody's login codes must be impossible to miss.
 type consoleSender struct{}
 
 func (c *consoleSender) Send(_ context.Context, phone, code string) error {

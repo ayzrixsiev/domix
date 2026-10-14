@@ -28,9 +28,8 @@ import (
 // the admin panel's api: the dashboard's statistics, moderation, the template editor and the
 // orphaned-photo sweep.
 //
-// **the whole privileged surface is deliberately in one file, middleware included.** it is the only
-// place in the api where one caller acts on another user's data, so "read this file and you have
-// read the entire privileged path" is worth more here than tidy layering.
+// **the whole privileged surface is deliberately in one file, middleware included**: it is the only
+// place in the api where one caller acts on another user's data.
 type Admin struct {
 	// the pool, not just Queries, because the template sync is three statements that must land
 	// together - see SyncTemplate
@@ -62,13 +61,11 @@ const (
 // agrees with it; built from imagestore.UploadDir so there is still one declaration of the prefix.
 const uploadPathPattern = imagestore.UploadDir + "/%"
 
-// RequireAdmin refuses anyone whose role is not `admin` - the only thing between a logged-in shop
-// owner and everybody else's account. it must be composed *inside* auth.RequireAuth, which is what
-// puts the caller's id on the context.
+// RequireAdmin refuses anyone whose role is not `admin`. it must be composed *inside* auth.RequireAuth,
+// which is what puts the caller's id on the context.
 //
-// **the role is read from the database on every request and never from the token**: jwt.go carries
-// no role claim, so a demoted admin stops administering immediately rather than when their token
-// expires.
+// **the role is read from the database on every request and never from the token**: a demoted admin
+// stops administering immediately rather than when their four-month token expires.
 func (a *Admin) RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := auth.UserIDFromContext(r.Context())
@@ -408,11 +405,9 @@ func (a *Admin) ListUsers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"users": users, "limit": limit, "offset": offset})
 }
 
-// DELETE /api/admin/users/{id} - an admin destroying somebody else's account.
-//
-// the same cascade DELETE /api/me runs: the shops go, and each takes its products. a hard delete for
-// the same reason - a row nobody can reach is still a phone number somebody asked to have erased.
-// the only account it refuses is the last admin, which is the one state with no way back.
+// DELETE /api/admin/users/{id} - the same cascade DELETE /api/me runs: the shops go, and each takes its
+// products. a hard delete, because a row nobody can reach is still a phone number somebody asked to have
+// erased. the only account it refuses is the last admin, the one state with no way back.
 func (a *Admin) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	adminID, _ := auth.UserIDFromContext(r.Context())
 
@@ -622,19 +617,14 @@ func timestampString(ts pgtype.Timestamptz) string {
 
 // the roles an admin may assign through the panel.
 //
-// **`admin` is in this set, which means a stolen admin token is a permanent compromise** rather than
-// one that ends when the token expires. the founder asked for the power; this is the cost of it.
-//
-// what must not change: **nothing unauthenticated can assign it.** the login maps anything that is
-// not shop_owner to customer, and only ever upgrades customer -> shop_owner.
+// **`admin` is in this set, so a stolen admin token is a permanent compromise** rather than one that ends
+// when the token expires - the known cost of the power. **nothing unauthenticated can assign it, and that
+// must not change**: the login maps anything that is not shop_owner to customer.
 var assignableRoles = map[string]bool{"customer": true, "shop_owner": true, "admin": true}
 
-// anotherAdminRemains is the whole of what stops the panel destroying its own access. **409 rather
-// than 403 on purpose**: the panel signs itself out on a 403, and this is not a revoked admin - it
-// is a request that was understood, allowed and impossible in the current state.
-//
-// the count and the write are not one transaction: two admins demoting each other in the same second
-// could both pass, which at one machine is not a race worth a lock.
+// anotherAdminRemains is what stops the panel destroying its own access. **409 rather than 403**: the
+// panel signs itself out on a 403, and this is a request that was understood, allowed and impossible
+// right now. the count and the write are not one transaction, which at one machine is no race worth a lock.
 func (a *Admin) anotherAdminRemains(w http.ResponseWriter, adminID, targetID int64, ctx context.Context) bool {
 	admins, err := a.Queries.AdminCountAdmins(ctx)
 	if err != nil {
@@ -790,11 +780,9 @@ func (a *Admin) UpdateShop(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"id": updated.ID, "name": updated.Name, "updated": true})
 }
 
-// PUT /api/admin/shops/{id}/vip - grant or revoke a paid placement.
-//
-// logged like a deletion, because it is a commercial decision with money behind it and "when did
-// this shop become VIP" is a question somebody will ask. `days` rather than an absolute date,
-// because the panel's realistic input is "sold them a month"; zero or missing revokes.
+// PUT /api/admin/shops/{id}/vip - grant or revoke a paid placement. logged like a deletion, because it is
+// a commercial decision somebody will ask the date of. `days` rather than an absolute date, since the
+// panel's realistic input is "sold them a month"; zero or missing revokes.
 func (a *Admin) SetVIP(w http.ResponseWriter, r *http.Request) {
 	adminID, _ := auth.UserIDFromContext(r.Context())
 
@@ -856,11 +844,9 @@ func (a *Admin) SetVIP(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/admin/shops/{id}/photo stores the picture a VIP card shows; DELETE takes it off.
 //
-// **the panel uploads it, never the owner.** this section of the home screen is the one that is
-// sold, so the photograph is checked by whoever sells the placement. the bytes go through the same
-// decode as every other upload - EXIF stripped, a 1000px master and a 400px thumb - and land under
-// shops/uploads/, which is what puts a storefront behind the same deletion door (imagestore.IsUpload)
-// and the same orphan sweep as a product photo.
+// **the panel uploads it, never the owner**: this section of the home screen is the one that is sold. the
+// bytes take the same decode as every other upload and land under shops/uploads/, which is what puts a
+// storefront behind the same deletion door and the same orphan sweep as a product photo.
 func (a *Admin) RouteShopPhoto(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
@@ -1005,9 +991,8 @@ func (a *Admin) writeShopPhotoResponse(w http.ResponseWriter, row db.SetShopImag
 
 // PUT /api/admin/shops/{id}/exclude - pull a shop out of its market's comparison, or put it back.
 //
-// separate from catalogue completeness on purpose: shop_basket_index answers "is every product
-// priced" and is derived from products, where this flag is an admin's own decision and has to win
-// even when every price is filled in. flipping the column is all this does - a trigger recomputes.
+// separate from catalogue completeness on purpose: shop_basket_index answers "is every product priced",
+// where this is an admin's own decision and has to win even when every price is filled in.
 func (a *Admin) SetExcluded(w http.ResponseWriter, r *http.Request) {
 	adminID, _ := auth.UserIDFromContext(r.Context())
 
@@ -1083,8 +1068,7 @@ func (a *Admin) ListShopProducts(w http.ResponseWriter, r *http.Request) {
 //
 // **an admin gets the same three-way rule the owner gets, not a bypass of it.** the rule is data
 // integrity rather than permissions: a renamed template row stops being the same product as its
-// counterpart down the road, and an admin breaks the comparison exactly as thoroughly as an owner.
-// what an admin actually needs here is the price, and that is editable on every row.
+// counterpart down the road. what an admin needs here is the price, editable on every row.
 func (a *Admin) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	adminID, _ := auth.UserIDFromContext(r.Context())
 
@@ -1394,22 +1378,20 @@ func (a *Admin) Templates(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"templates": out})
 }
 
-// POST /api/admin/templates/{category}/sync - push the current template into every existing shop of
-// that category. seeding happens once at creation, so without this a template edit reaches nobody.
+// POST /api/admin/templates/{category}/sync - push the current template into every existing shop of that
+// category. seeding happens once at creation, so without this a template edit reaches nobody.
 //
 //	insert  - rows the template has and the shop does not, unpriced
 //	update  - names/units/categories/photos for rows both have, prices untouched
 //	delete  - rows the shop has and the template no longer does
 //
-// **a shop's own uploaded photo survives the update** - see the comment on AdminSyncTemplateUpdate.
-// It is the half of the обои rule that lives in SQL; checkTemplatePhoto is the other half.
+// **a shop's own uploaded photo survives the update** - the half of the обои rule that lives in SQL.
 //
-// **the transaction is not decoration**: a shop left with the new rows inserted but the stale ones
-// still there holds two versions of its own basket, and the index would total both.
+// **the transaction is not decoration**: a shop left with the new rows inserted but the stale ones still
+// there holds two versions of its own basket, and the index would total both.
 //
-// **two consequences worth knowing before pressing it**: adding a product drops every shop of the
-// category out of the comparison until its owner prices the new row, and deleting one takes whatever
-// price the owner had typed, with no undo.
+// **it drops every shop of the category out of the comparison** until each owner prices the new row, and
+// deleting a row takes whatever price the owner had typed, with no undo.
 func (a *Admin) SyncTemplate(w http.ResponseWriter, r *http.Request) {
 	// both write, so a GET must not reach them - a prefetching browser would otherwise run a sync
 	if r.Method != http.MethodPost {
@@ -1645,15 +1627,11 @@ func (req templateItemRequest) clean(shopCategory string) (templateItemRequest, 
 	return req, nil
 }
 
-// **a photo path is a file of this category's own catalogue folder, or it is refused.** The column
-// used to accept any string, and a path that names nothing is a blank tile in every shop of a
-// market with nothing anywhere saying why - `shops/plumbing/x.jpg` on a universal row looked exactly
-// as right in the table as the row beside it.
+// reloadTemplates re-reads product_templates into internal/catalog's in-memory copy.
 //
-// **a category whose names the owner writes carries no photo at all.** The right to photograph a row
-// is granted by the template not having a photo (templateFlags in product_crud.go), so one picture
-// put on an обои slot from here takes that right away from every обои shop at once - and the next
-// sync replaces the roll of wallpaper each of them photographed with that one picture.
+// **every handler that writes that table must call this before responding**: seeding, IsOwnerNamedSlot
+// and the sync payload all read from memory, so a write that skips it leaves the process serving the old
+// list until it restarts.
 func checkTemplatePhoto(shopCategory, imagePath string) *accessError {
 	if imagePath == "" {
 		return nil
@@ -1911,14 +1889,12 @@ type templateImportResult struct {
 	Applied bool                   `json:"applied"`
 }
 
-// POST /api/admin/templates/{category}/import - a category's whole template, pasted from a sheet.
-// `apply: false` answers with the difference and writes nothing; `apply: true` writes it in one
-// transaction.
+// **a photo path is a file of this category's own catalogue folder, or it is refused**: a path that names
+// nothing is a blank tile in every shop of a market, with nothing anywhere saying why.
 //
-// **the list is the whole template, so a row missing from it is a row to delete** - that is what lets
-// one paste add, change and remove at once, and why the panel always shows the difference first.
-// like every template edit it touches no shop: the sync stays the second, louder step. new rows join
-// at the end in paste order; existing rows keep their place, because a shop's catalogue sorts by id.
+// **a category whose names the owner writes carries no photo at all.** the right to photograph a row is
+// granted by the template not having one (templateFlags), so a picture put on an обои slot from here
+// takes that right from every обои shop and the next sync overwrites each of their own photographs.
 func (a *Admin) ImportTemplate(w http.ResponseWriter, r *http.Request) {
 	// both write, so a GET must not reach them - a prefetching browser would otherwise run a sync
 	if r.Method != http.MethodPost {
@@ -2156,18 +2132,12 @@ func (a *Admin) RouteTemplateItem(w http.ResponseWriter, r *http.Request) {
 
 // ─────────────────────────── adding a photo to the catalogue ───────────────────────────
 
-// POST /api/admin/catalogue/{category}/photo - one curated photo, from the panel.
+// POST /api/admin/templates/{category}/import - a category's whole template, pasted from a sheet.
+// `apply: false` answers with the difference and writes nothing.
 //
-// **this is what replaced converting a file by hand and copying it into images/.** The same single
-// decode into two JPEGs every owner upload goes through, so a catalogue shot and an owner's shot are
-// the same kind of file: EXIF stripped, rotation applied, a 1000px master and a 400px thumb, and no
-// original kept. It writes through [imagestore.Storage], so the laptop's disk and the R2 bucket get
-// byte-identical object keys with no second code path.
-//
-// **the file is written before any row names it, which is the project's ordering and not a leak.**
-// An admin who closes the editor without saving leaves a file nothing points at - exactly what
-// «Фото каталога без товара» below is for, and the harmless direction to fail in. The other order
-// would mean a row naming a file that does not exist.
+// **the list is the whole template, so a row missing from it is a row to delete** - which is why the
+// panel always shows the difference first. like every template edit it touches no shop; the sync stays
+// the second, louder step. new rows join at the end, existing rows keep their place.
 func (a *Admin) UploadCataloguePhoto(w http.ResponseWriter, r *http.Request) {
 	// a prefetching browser must not write a file
 	if r.Method != http.MethodPost {
@@ -2220,28 +2190,25 @@ func (a *Admin) UploadCataloguePhoto(w http.ResponseWriter, r *http.Request) {
 
 // ─────────────────────────── orphaned photo files ───────────────────────────
 
-// Files with no product behind them, and the button that clears them. They come from a deleted shop
-// - the schema cascades, the products go, and the uploaded files are not in Postgres to go with them.
+// Files with no product behind them, and the button that clears them. They come from a deleted shop: the
+// schema cascades, the products go, and the uploaded files are not in Postgres to go with them.
 //
 // **Three rules, and each is a way this could eat a live photo:**
 //
-//  1. **files are listed first, the database second.** In that order a row committed between the two
-//     reads is seen, so its file is protected. Reversed, the sweep would delete a live photo.
-//  2. **nothing younger than [orphanMinAge] is touched**, because the window between "the file
-//     exists" and "the row exists" is one upload request.
+//  1. **files are listed first, the database second**, so a row committed between the two reads is seen
+//     and its file protected. Reversed, the sweep deletes a photo a product points at.
+//  2. **nothing younger than [orphanMinAge] is touched**: the window between "the file exists" and "the
+//     row exists" is one upload request.
 //  3. **a referenced master claims its thumbnail.** Only the master's path is in the database, so a
 //     literal path match would find every `_thumb` unreferenced and delete the whole market's grid.
 //
-// And a property rather than a rule: imagestore only lists and deletes under uploads/, so the
-// curated catalogue is unreachable from here even by a bug in this file.
+// imagestore only lists and deletes under uploads/, so the curated catalogue is unreachable from here.
 const (
 	orphanMinAge = time.Hour
 
-	// **how long one press may spend deleting, and it is a deadline rather than a count.** each
-	// deletion on R2 is a network round trip of unpredictable length, so a count alone cannot bound
-	// the wall clock - and nginx cuts a proxied request off at 60s, which would leave the panel
-	// showing a network error on a sweep that was working. a large backlog takes several presses
-	// instead, and the response says how many are left so the panel can say so too.
+	// **how long one press may spend deleting, and it is a deadline rather than a count**: each R2 delete is
+	// a network round trip, and nginx cuts a proxied request off at 60s. a large backlog takes several
+	// presses, and the response says how many are left.
 	orphanSweepBudget = 30 * time.Second
 
 	// a ceiling underneath the deadline, so a local disk store (where deletions are instant) does

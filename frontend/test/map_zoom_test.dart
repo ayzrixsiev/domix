@@ -1,25 +1,16 @@
 // Two things the map decides for itself, both silent when they break.
 //
-// **The zoom decides how a shop is drawn, never whether it is drawn.** Below MapScreen's threshold
-// a shop is a dot, above it a full teardrop with its category glyph and its price label. Get the
-// threshold wrong in either direction and the screen still renders, still pans, still looks like a
-// working map: set it above every zoom a user reaches and the city is permanently a scatter of
-// anonymous dots; set it below the opening zoom and seventy labelled pins overlap into noise on the
-// first frame. Nothing crashes, so nothing tells you.
+// **The zoom decides how a shop is drawn, never whether it is drawn.** a wrong threshold still
+// renders, still pans and still looks like a working map: too high and the city is permanently
+// anonymous dots, too low and seventy labelled pins overlap into noise on the first frame.
 //
-// **The category chips are a filter over the same list.** A chip that filtered nothing, or one that
-// could not be un-picked, would also just look like a map.
+// **The category chips are a filter over the same list** - one that filtered nothing, or could not be
+// un-picked, would also just look like a map.
 //
-// It drives the camera through `DomixMap.onZoomChanged` rather than through a pinch gesture. A
-// synthesized gesture would be testing MapKit's native gesture handling, which is not ours; the
-// contract that *is* ours is "given a camera at this zoom, hand the map these pins", and that
-// callback is exactly where the two meet.
-//
-// It also asserts on `DomixMap.pins` rather than on ShopMarker widgets in the tree, and that is
-// forced rather than chosen: MapKit rasterizes a pin off-screen and draws the bitmap natively, so a
-// ShopMarker is never mounted and `find.byType` would report nothing at any zoom - the test would
-// pass for the wrong reason. The list of MapPins is the last thing on our side of the boundary,
-// which makes it the right thing to check.
+// It drives the camera through `DomixMap.onZoomChanged` rather than a pinch, because a synthesized
+// gesture tests MapKit's gesture handling rather than ours, and asserts on `DomixMap.pins` rather
+// than on widgets: **MapKit rasterizes a pin off-screen, so a ShopMarker is never mounted** and
+// `find.byType` would report nothing at any zoom - passing for the wrong reason.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';

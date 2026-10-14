@@ -90,10 +90,9 @@ func (l *Limiter) sweep(idleTTL time.Duration) {
 
 // Keyed buckets by `identity` instead of by network address.
 //
-// **an address is the wrong unit for anything a signed-in user does.** uzbek mobile operators put
-// thousands of subscribers behind one public address, so an address bucket throttles a whole carrier
-// as though it were one person - and the failure is invisible in testing, because a laptop and an
-// office wifi each get an address of their own. main.go passes the caller's account id.
+// **an address is the wrong unit for anything a signed-in user does**: uzbek operators put thousands of
+// subscribers behind one, and the failure is invisible in testing, where a laptop has an address to
+// itself. main.go passes the caller's account id.
 func (l *Limiter) Keyed(identity func(*http.Request) string) *Limiter {
 	l.identity = identity
 	return l
@@ -132,10 +131,9 @@ func TrustProxy() bool {
 	return on
 }
 
-// ClientIP is the caller's network address. behind a proxy it is the **last** X-Forwarded-For entry
-// - the proxy appends the address it saw, so anything before it was written by the caller and
-// reading the first one hands anybody a fresh bucket per request. without TRUST_PROXY the header is
-// ignored entirely.
+// ClientIP is the caller's network address. behind a proxy it is the **last** X-Forwarded-For entry: the
+// proxy appends what it saw, so anything before it was written by the caller and reading the first one
+// hands anybody a fresh bucket per request. without TRUST_PROXY the header is ignored.
 func ClientIP(r *http.Request) string {
 	if TrustProxy() {
 		// Values, not Get: a header sent twice arrives as two values and the proxy's is the last

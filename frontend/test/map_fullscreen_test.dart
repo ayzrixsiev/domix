@@ -1,14 +1,12 @@
 // The map is the one tab that takes the whole screen: opening it hides the shell's nav bar, and the
 // disc left of the search field is what brings both the home screen and the bar back.
 //
-// It is pinned here because the failure is a trap rather than a glitch. The nav bar going missing is
-// obvious; the bar failing to *come back* leaves the user on a full-screen map with no way out of
-// it, and that is reachable by any change to the shell's index handling - a guard that returns
-// early, a tab index renumbered, the PopScope swallowing a pop it should not. None of it throws.
+// **the failure is a trap rather than a glitch**: the bar failing to *come back* leaves the user on a
+// full-screen map with no way out, which any change to the shell's index handling can cause - a guard
+// returning early, a tab renumbered, PopScope swallowing a pop. None of it throws.
 //
-// The whole shell is built rather than MapScreen alone, because the rule being checked belongs to
-// neither on its own: the screen only reports "the user pressed the way out", and the shell decides
-// what that means.
+// The whole shell is built rather than MapScreen alone: the screen only reports "the user pressed the
+// way out" and the shell decides what that means.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

@@ -15,9 +15,8 @@ import 'package:frontend/core/widgets/app_page_header.dart';
 /// The screen the home search bar opens: a field, and below it every priced product whose name
 /// contains every word of the query.
 ///
-/// **A screen rather than an inline field**: the bar used to be a live `TextField` on the home feed
-/// with no way to put the keyboard away - nothing there unfocuses on tap and there was no route to
-/// pop.
+/// **A screen rather than an inline field**: a live `TextField` on the home feed has no way to put the
+/// keyboard away - nothing there unfocuses on tap and there is no route to pop.
 ///
 /// Nothing is searched until the search key is pressed: as-you-type would turn every keystroke into a
 /// request against the api's most expensive read.

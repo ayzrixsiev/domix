@@ -12,8 +12,8 @@ import 'package:frontend/features/home/presentation/widgets/home_shop_row.dart';
 /// **Tabbed rather than one list, because a price comparison is only meaningful inside a category**:
 /// stacking the badges in one column would invite 4% to be compared against 6% off two baselines.
 ///
-/// The ranking happens in Postgres; this widget renders whatever order it is handed. **The strip is
-/// always all four categories** - see [groups] - and each tab holds [slotCount] places.
+/// The ranking happens in Postgres; this widget renders the order it is handed. **The strip is always
+/// all four categories** and each tab holds [slotCount] places.
 class BestOffersList extends StatefulWidget {
   const BestOffersList({super.key, required this.groups, this.onShopTap});
 

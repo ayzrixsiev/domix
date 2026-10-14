@@ -59,11 +59,9 @@ func RequireAuth(jwtSecret string, users UserStore, next http.HandlerFunc) http.
 	}
 }
 
-// UserIDFromRequest reads the account id straight off the Authorization header, verifying the
-// signature but touching no database. It exists for the rate limiter, which runs *before*
-// RequireAuth and therefore before anything has been put on the context - and which only needs a
-// stable key, not an authorization decision. A forged token fails the signature check and falls
-// back to the caller's address.
+// UserIDFromRequest reads the account id off the Authorization header, verifying the signature but
+// touching no database. for the rate limiter, which runs *before* RequireAuth and only needs a stable
+// key: a forged token fails the signature check and falls back to the caller's address.
 func UserIDFromRequest(r *http.Request, jwtSecret string) (int64, bool) {
 	header := r.Header.Get("Authorization")
 	if !strings.HasPrefix(header, bearerPrefix) {
@@ -76,7 +74,6 @@ func UserIDFromRequest(r *http.Request, jwtSecret string) (int64, bool) {
 	return claims.UserID, true
 }
 
-// reads back the user id RequireAuth put on the request context
 func UserIDFromContext(ctx context.Context) (int64, bool) {
 	userID, ok := ctx.Value(userIDContextKey).(int64)
 	return userID, ok

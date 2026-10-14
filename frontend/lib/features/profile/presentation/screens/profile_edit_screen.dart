@@ -22,13 +22,12 @@ import '../controllers/auth_controller.dart';
 /// Editing an account that already exists: the display name and the role on one form, the phone
 /// number behind a code sent to the number being claimed.
 ///
-/// **The number is not a field on the form, and that is the design.** Name and role are ours to
-/// change on the user's say-so; the phone is the account's identity - it is what every login looks
-/// the row up by - so moving it needs the new number proven, which is a paid message and two round
-/// trips. Bundling it into «Сохранить» would mean one button that sometimes sends an sms.
+/// **The number is not a field on the form, and that is the design**: the phone is the account's
+/// identity, so moving it needs the new number proven - a paid message and two round trips. Bundling
+/// it into «Сохранить» would mean one button that sometimes sends an sms.
 ///
-/// **A full-screen route with an X, like the registration flow.** Nothing here auto-submits: the X
-/// abandons whatever step is open and «Назад» walks one step back inside the phone change.
+/// **A full-screen route with an X, like the registration flow.** Nothing auto-submits: the X abandons
+/// whatever step is open and «Назад» walks one step back.
 enum _Step { form, phone, code }
 
 /// Clear air under the footer's lowest control, over the system inset.

@@ -30,7 +30,6 @@ import (
 
 func main() {
 
-	// 1. loading env attributes
 	if err := godotenv.Load("../.env"); err != nil {
 		log.Println("WARNING: No .env file found")
 	}
@@ -49,28 +48,20 @@ func main() {
 		log.Fatal("Critical error: JWT_SECRET must be configured")
 	}
 
-	// 2. postgresql connection pool (configured) set up and handed over to the Queries struct
 	dbPool := mustConnectDB(dbURL)
-	// and returned an address to it
 	queries := db.New(dbPool)
-	// loading templates from the db into golang map for fast look ups
 	mustLoadTemplates(queries)
 
-	// 3. login codes live in ram, never in the database (internal/auth/code.go). the sender is opened
-	// first: it decides whether the send budgets are armed - the console sender is free.
+	// the sender is opened first: it decides whether the send budgets are armed - console is free
 	codeSender, paidDelivery := mustOpenCodeSender()
 	reviewPhone, reviewCode := mustReadReviewAccount()
 	codeMgr := auth.NewCodeManager(paidDelivery).WithReviewAccount(reviewPhone, reviewCode)
 
-	// where photos are written and where the app fetches them from - two settings that have to
-	// agree, see mustOpenPhotoStorage. opened here because deleting an account deletes its photos
+	// opened here because deleting an account deletes its photos, not only its rows
 	productImages, imageURLs := mustOpenPhotoStorage()
 
-	// 4. rate limiters.
-	//
-	// **a signed-in caller is bucketed by account, everybody else by address** - see byCaller. every
-	// number below is per bucket, and none of them is the thing protecting the code-sending bill:
-	// that is the per-phone and daily budgets in auth.CodeManager, which no caller can spread around.
+	// **signed-in callers by account, others by address**: one carrier IP fronts thousands of users.
+	// none of these guards the code-sending bill - the per-phone and daily budgets in auth.CodeManager do.
 	byCaller := func(r *http.Request) string {
 		if id, ok := auth.UserIDFromRequest(r, jwtSecret); ok {
 			return "user:" + strconv.FormatInt(id, 10)
@@ -81,34 +72,24 @@ func main() {
 	apiLimiter := ratelimit.New(20, 60, 10*time.Minute).Keyed(byCaller)
 	uploadLimiter := ratelimit.New(1, 20, 30*time.Minute) // keyed by account inside Products.allowUpload
 
-	// **the buckets below are by address, and an address is not a person here**: a whole mobile
-	// carrier sits behind one, so anything public has to be loose enough that a crowd of honest
-	// strangers never reaches it. they are floors against a flood, and the real bound on each of
-	// these lives elsewhere - publicCache for the browsing reads, Home.SearchSlots for search, and
-	// the per-phone and daily budgets for codes.
+	// **public buckets are floors against a flood, not fine control**: a whole carrier sits behind one
+	// address. the real bound is publicCache, Home.SearchSlots and the code budgets.
 	publicLimiter := ratelimit.New(50, 200, 10*time.Minute)
 	loginLimiter := ratelimit.New(5, 60, 10*time.Minute)
 	searchLimiter := ratelimit.New(3, 30, 10*time.Minute)
 
-	// the browsing reads - the home screen, the map, a category listing - held in memory for a few
-	// seconds, which is what makes publicLimiter affordable at those numbers. see
-	// endpoints.publicCache for what is in it and what deliberately is not.
+	// held in memory for a few seconds, which is what makes publicLimiter affordable at those numbers
 	publicReads := endpoints.NewPublicCache(20 * time.Second)
 
-	// tighter, because every call here can spend money: one address cannot walk through numbers
-	// faster than this however many it has.
+	// tighter, because every call here can spend money
 	codeLimiter := ratelimit.New(0.5, 10, 30*time.Minute)
 
-	// 5. wire up http routes - this section's job is just plugging dependencies into each endpoint
-
-	// the login: a code to the number, typed back, mints the jwt. request-code spends money so it
-	// sits behind codeLimiter; verify only reads ram.
+	// request-code spends money so it sits behind codeLimiter; verify only reads ram
 	phoneAuth := &endpoints.PhoneAuth{Queries: queries, Codes: codeMgr, Sender: codeSender, JWTSecret: jwtSecret}
 	http.HandleFunc("/api/auth/request-code", endpoints.WithJSON(codeLimiter.Wrap(phoneAuth.RequestCode)))
 	http.HandleFunc("/api/auth/verify", endpoints.WithJSON(loginLimiter.Wrap(phoneAuth.Verify)))
 
-	// changing the number on an account that already exists: the same two steps and the same two
-	// buckets, with RequireAuth on top because this edits an account rather than opening one.
+	// the same two steps and buckets, with RequireAuth on top: this edits an account rather than opening one
 	http.HandleFunc("/api/me/phone/request-code", endpoints.WithJSON(codeLimiter.Wrap(
 		auth.RequireAuth(jwtSecret, queries, phoneAuth.RequestPhoneChangeCode))))
 	http.HandleFunc("/api/me/phone/verify", endpoints.WithJSON(loginLimiter.Wrap(
@@ -117,16 +98,13 @@ func main() {
 	authEndpoints := &endpoints.Auth{Queries: queries, Images: productImages}
 	http.HandleFunc("/api/me", endpoints.WithJSON(apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, authEndpoints.RouteMe))))
 
-	// the /delete-account page Google Play requires: the same code, typed on a web page. public, so
-	// request-code sits behind the money bucket exactly as the login's does.
+	// the /delete-account page Google Play requires: public, so request-code takes the money bucket too
 	deletionEndpoints := &endpoints.AccountDeletion{Queries: queries, Codes: codeMgr, Sender: codeSender, Images: productImages}
 	http.HandleFunc("/api/account-deletion/request-code", endpoints.WithJSON(codeLimiter.Wrap(deletionEndpoints.RequestCode)))
 	http.HandleFunc("/api/account-deletion/confirm", endpoints.WithJSON(loginLimiter.Wrap(deletionEndpoints.Confirm)))
 
-	// **a path that answers a public GET and an authenticated write needs two buckets, not one.**
-	// browsing has to survive a carrier's worth of strangers; creating a shop seeds a hundred rows in
-	// a transaction and is metered per account. one limit for both would either throttle the crowd
-	// or hand an account a hundred shops a second.
+	// **a public GET and an authenticated write on one path need two buckets**: browsing must survive a
+	// carrier's worth of strangers, while creating a shop seeds a hundred rows and is metered per account.
 	browse := func(handler http.HandlerFunc) http.HandlerFunc {
 		read, write := publicLimiter.Wrap(handler), apiLimiter.Wrap(handler)
 		return func(w http.ResponseWriter, r *http.Request) {
@@ -152,8 +130,7 @@ func main() {
 	}
 	http.HandleFunc("/api/shops/{id}/products", endpoints.WithJSON(browse(productsEndpoints.RouteByShop)))
 	http.HandleFunc("/api/products/{id}", endpoints.WithJSON(apiLimiter.Wrap(productsEndpoints.RouteByID)))
-	// its own pattern rather than folded into RouteByID: a different body (multipart) and a
-	// different limit
+	// its own pattern: a multipart body and a different limit
 	http.HandleFunc("/api/products/{id}/image", endpoints.WithJSON(apiLimiter.Wrap(productsEndpoints.RouteImage)))
 
 	homeEndpoints := &endpoints.Home{
@@ -165,17 +142,15 @@ func main() {
 	}
 	http.HandleFunc("/api/home", endpoints.WithJSON(publicLimiter.Wrap(homeEndpoints.Get)))
 	http.HandleFunc("/api/categories/{code}/products", endpoints.WithJSON(publicLimiter.Wrap(homeEndpoints.ProductsByCategory)))
-	// the one public read whose cost the caller chooses, so it is the one that is not cached: its own
-	// bucket on top of the public one, and Home.SearchSlots underneath both.
+	// the one public read whose cost the caller chooses, so the one that is not cached
 	http.HandleFunc("/api/products/search", endpoints.WithJSON(publicLimiter.Wrap(searchLimiter.Wrap(homeEndpoints.SearchProducts))))
 
-	// the heart on a product tile. authenticated throughout - a favourite belongs to an account.
 	favoritesEndpoints := &endpoints.Favorites{Queries: queries, URLs: imageURLs}
 	http.HandleFunc("/api/favorites", endpoints.WithJSON(apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, favoritesEndpoints.Route))))
 	http.HandleFunc("/api/favorites/{id}", endpoints.WithJSON(apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, favoritesEndpoints.RouteByID))))
 
-	// the admin api. one chain built once, so no route can quietly forget RequireAdmin. the order is
-	// load-bearing: RequireAuth puts the caller's id on the context, RequireAdmin reads it.
+	// **one chain built once, so no route can quietly forget RequireAdmin.** the order is load-bearing:
+	// RequireAuth puts the caller's id on the context, RequireAdmin reads it.
 	adminEndpoints := &endpoints.Admin{Pool: dbPool, Queries: queries, URLs: imageURLs, Images: productImages}
 	adminRoute := func(handler http.HandlerFunc) http.HandlerFunc {
 		return endpoints.WithJSON(apiLimiter.Wrap(
@@ -196,30 +171,27 @@ func main() {
 	http.HandleFunc("/api/admin/shops/{id}/products", adminRoute(adminEndpoints.ListShopProducts))
 	http.HandleFunc("/api/admin/products/{id}", adminRoute(adminEndpoints.UpdateProduct))
 
-	// the templates themselves, in product_templates. every write reloads internal/catalog's
-	// in-memory copy, or the process keeps seeding shops from the list it booted with.
+	// every write reloads internal/catalog, or the process keeps seeding shops from the list it booted with
 	http.HandleFunc("/api/admin/templates", adminRoute(adminEndpoints.Templates))
 	http.HandleFunc("/api/admin/templates/{category}/items", adminRoute(adminEndpoints.RouteTemplateItems))
-	// a separate path: go's mux refuses /templates/items/{id} alongside /templates/{category}/items
+	// a separate path: go's mux refuses /templates/items/{id} beside /templates/{category}/items
 	http.HandleFunc("/api/admin/template-items/{id}", adminRoute(adminEndpoints.RouteTemplateItem))
 	// editing a template decides what the next shop gets; the sync pushes it into existing shops
 	http.HandleFunc("/api/admin/templates/{category}/sync", adminRoute(adminEndpoints.SyncTemplate))
 	// a whole template pasted from a sheet: the difference first, the write only on apply
 	http.HandleFunc("/api/admin/templates/{category}/import", adminRoute(adminEndpoints.ImportTemplate))
-	// a curated photo, straight from the editor - the only way one enters images/shops/<category>/
+	// the only way a photo enters images/shops/<category>/
 	http.HandleFunc("/api/admin/catalogue/{category}/photo", adminRoute(adminEndpoints.UploadCataloguePhoto))
 
-	// photos no row points at. GET measures, DELETE sweeps - owner uploads and the curated catalogue
-	// through two separate doors, see sweepScope
+	// photos no row points at. uploads and the curated catalogue go through two doors, see sweepScope
 	http.HandleFunc("/api/admin/storage/orphans", adminRoute(adminEndpoints.RouteOrphans))
 	http.HandleFunc("/api/admin/storage/catalogue", adminRoute(adminEndpoints.RouteCatalogueFiles))
 
 	http.Handle(imagestore.DefaultURLPrefix, staticFiles(imagestore.DefaultURLPrefix, productImagesDir()))
 	http.HandleFunc("/health", healthCheck(dbPool))
 
-	// the public site, deliberately not behind WithJSON - a json content type would make a browser
-	// download a page instead of rendering it. the policy and the deletion page are Google Play
-	// requirements: their urls go into the console and into support replies, hence the aliases.
+	// deliberately not behind WithJSON: a json content type makes a browser download a page instead of
+	// rendering it
 	site, err := webui.NewSite(webui.SiteConfig{
 		SupportEmail:  supportEmail,
 		PolicyVersion: policyVersion,
@@ -244,18 +216,12 @@ func main() {
 	http.HandleFunc("/admin", webui.Page("admin.html"))
 	http.HandleFunc("/admin/", webui.Redirect("/admin"))
 
-	// 6. run the http server in its own goroutine, so main() is free to wait for a shutdown signal
+	// ReadHeaderTimeout is the slowloris guard. **ReadTimeout and WriteTimeout are deliberately absent -
+	// do not add them**: both budget the whole request, and a 6 MiB photo is over five minutes on 3G.
+	// nginx bounds the body instead (client_body_timeout).
 	//
-	// ReadHeaderTimeout is the slowloris guard: a connection that dribbles its headers one byte at a
-	// time holds a goroutine forever, and the log stays empty because no request ever finishes.
-	//
-	// **ReadTimeout and WriteTimeout are deliberately absent - do not add them.** both budget the
-	// whole request, body included, and a 6 MiB photo is over five minutes on 3G: a whole-request
-	// limit would break upload for exactly the owners with the worst connection. nginx bounds the
-	// body instead (client_body_timeout, deploy/nginx.conf).
-	//
-	// behind a proxy the api listens on loopback only, or anybody could skip the proxy, write
-	// X-Forwarded-For themselves and hand the rate limiter any address they liked.
+	// behind a proxy the api listens on loopback only, or a caller could skip the proxy and write
+	// X-Forwarded-For themselves.
 	addr := ":" + port
 	if ratelimit.TrustProxy() {
 		addr = "127.0.0.1:" + port
@@ -272,27 +238,21 @@ func main() {
 		}
 	}()
 
-	// the second goroutine: one row per market per day, so the admin panel can draw what a basket
-	// cost last week. see startBasketHistory.
+	// one row per market per day, so the panel can draw what a basket cost last week
 	go startBasketHistory(queries)
 
-	// 7. block here until the os asks us to stop (ctrl+c locally, or however this
-	// gets stopped in production), then shut down cleanly instead of being killed mid-request
 	waitForShutdown(srv, dbPool)
 
 }
 
 // startBasketHistory keeps `basket_history` current: one row per shop category per day.
 //
-// **the basket price is the one number here that cannot be recomputed.** shop_basket_index always
-// answers about *now*, so yesterday's total is gone the moment an owner retypes a price.
-//
-// hourly rather than nightly, because the upsert is idempotent per (day, category) and a server
-// restarted at the wrong moment would otherwise skip whole days. a failure is logged and ignored.
+// **the basket price is the one number here that cannot be recomputed** - shop_basket_index always
+// answers about *now*. hourly rather than nightly, because the upsert is idempotent per (day,
+// category) and a server restarted at the wrong moment would otherwise skip whole days.
 func startBasketHistory(queries *db.Queries) {
 	record := func() {
-		// an unrecovered panic in a goroutine takes the *whole process* with it, api included. a
-		// chart is not worth that, so this one dies alone and the next hour tries again.
+		// an unrecovered panic in a goroutine takes the whole process with it, api included
 		defer func() {
 			if problem := recover(); problem != nil {
 				log.Printf("CRITICAL: panic recording basket history: %v\n%s", problem, debug.Stack())
@@ -316,13 +276,10 @@ func startBasketHistory(queries *db.Queries) {
 	}
 }
 
-// mustOpenCodeSender picks who delivers login codes, from the environment.
-//
-// the default is the console - a laptop with an empty .env still has a working login, printed into
-// this log. a *half-filled* provider is fatal (verify.New), because quietly printing everybody's
-// codes into a production log is the worst outcome available here.
-//
-// the second return is whether a send costs money, which is what arms the per-phone budget.
+// mustOpenCodeSender picks who delivers login codes. the console default keeps a laptop with an empty
+// .env working; a *half-filled* provider is fatal (verify.New), because printing everybody's codes
+// into a production log is the worst outcome available. the second return is whether a send costs
+// money, which is what arms the per-phone budget.
 func mustOpenCodeSender() (verify.Sender, bool) {
 	sender, kind, err := verify.New(verify.SettingsFromEnv())
 	if err != nil {
@@ -340,24 +297,20 @@ func mustOpenCodeSender() (verify.Sender, bool) {
 	}
 }
 
-// **the policy's date and the address have to match the app's copy of the policy**
-// (privacy_policy.dart): it prints both, and two copies of one document that disagree read as two
-// different policies. webui's TestTheAppCarriesThePublishedPolicy compares the texts.
+// **the policy's date and the support address have to match the app's copy** (privacy_policy.dart):
+// two copies of one document that disagree read as two different policies.
 const (
 	policyVersion = "2026-10-08"
 	termsVersion  = "2026-10-08"
 	supportEmail  = "domix.support@gmail.com"
 )
 
-// the one account Google's reviewer signs in with, read from the environment. Without it the review
-// stops on the login screen: the code goes to Telegram, which a reviewer has no account on for the
-// number they type, and an app that cannot be opened is refused as broken.
+// the one account Google's reviewer signs in with: without it the review stops on the login screen,
+// because the code goes to a Telegram account the reviewer does not have, and an app that cannot be
+// opened is refused as broken.
 //
-// **A half-filled configuration is the dangerous state**, so it is fatal rather than ignored: one
-// variable set reads as armed in the deployment and behaves as unarmed on the phone, which is
-// discovered by a rejection weeks later. The code is never logged; the number is masked.
-//
-// **Unset both once the review is over** - see auth.CodeManager.WithReviewAccount.
+// **a half-filled configuration is fatal rather than ignored**: one variable set reads as armed in the
+// deployment and behaves as unarmed on the phone. **unset both once the review is over.**
 func mustReadReviewAccount() (phone, code string) {
 	phone = strings.TrimSpace(os.Getenv("PLAY_REVIEW_PHONE"))
 	code = strings.TrimSpace(os.Getenv("PLAY_REVIEW_CODE"))
@@ -368,8 +321,8 @@ func mustReadReviewAccount() (phone, code string) {
 		log.Fatalf("PLAY_REVIEW_PHONE and PLAY_REVIEW_CODE have to be set together, or neither")
 	}
 
-	// canonical, because that is what the pending codes are keyed by: a number stored in any other
-	// spelling would arm an account nobody can reach
+	// canonical, because that is what pending codes are keyed by: any other spelling arms an account
+	// nobody can reach
 	canonical, ok := auth.CanonicalPhone(phone)
 	if !ok {
 		log.Fatalf("PLAY_REVIEW_PHONE is not an uzbek phone number")
@@ -420,18 +373,17 @@ func mustLoadTemplates(queries *db.Queries) {
 	log.Printf("Loaded %d product template rows (%s)", len(rows), strings.Join(sizes, ", "))
 }
 
-// connection pool configuration
 func mustConnectDB(dbURL string) *pgxpool.Pool {
 	config, err := pgxpool.ParseConfig(dbURL)
 	if err != nil {
 		log.Fatalf("Invalid DB_URL: %v", err)
 	}
 
-	config.MaxConns = envInt("DB_MAX_CONNS", 10) // max connections pool holds
-	config.MinConns = envInt("DB_MIN_CONNS", 2)  // minimum ready to use connetion, avoid cold-start latency
-	config.MaxConnLifetime = time.Hour           // every connection that has been used longer than 1 hour should be cleaned
-	config.MaxConnIdleTime = 30 * time.Minute    // every connection that was not used at all gets cleaned
-	config.HealthCheckPeriod = time.Minute       // every minute check on the connections and remove "bad" ones
+	config.MaxConns = envInt("DB_MAX_CONNS", 10)
+	config.MinConns = envInt("DB_MIN_CONNS", 2)
+	config.MaxConnLifetime = time.Hour
+	config.MaxConnIdleTime = 30 * time.Minute
+	config.HealthCheckPeriod = time.Minute
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -449,7 +401,6 @@ func mustConnectDB(dbURL string) *pgxpool.Pool {
 	return pool
 }
 
-// an int32 setting read from the environment, or the default when it is missing or unparseable
 func envInt(key string, def int32) int32 {
 	raw := os.Getenv(key)
 	if raw == "" {
@@ -469,17 +420,15 @@ func productImagesDir() string {
 	return filepath.Join("..", "images")
 }
 
-// where product photos are stored, and what address the api tells the app to fetch them from.
-//
-// **two settings that have to agree.** storage follows the R2 keys, the address follows
-// IMAGE_BASE_URL, and the wrong pairing - photos in a bucket, urls pointing at local disk - is a
-// server whose /health is green and whose every product tile is blank. so it refuses to boot.
+// **storage and urls are two settings that have to agree**: photos in a bucket with urls pointing at
+// local disk is a server whose /health is green and whose every product tile is blank. so it refuses
+// to boot.
 func mustOpenPhotoStorage() (imagestore.Storage, imagestore.URLs) {
 	urls := imagestore.NewURLs(os.Getenv("IMAGE_BASE_URL"))
 
 	r2cfg, wanted, err := imagestore.R2ConfigFromEnv()
 	if err != nil {
-		// a partly-filled .env: falling back to local disk would lose every photo on the next redeploy
+		// a partly-filled .env: falling back to disk would lose every photo on the next redeploy
 		log.Fatalf("Cannot configure photo storage: %v", err)
 	}
 
@@ -513,7 +462,6 @@ func mustOpenPhotoStorage() (imagestore.Storage, imagestore.URLs) {
 	return bucket, urls
 }
 
-// check whether images folder available
 func staticFiles(prefix, dir string) http.Handler {
 	if _, err := os.Stat(dir); err != nil {
 		log.Printf("WARNING: product images directory %q is unreadable (%v) - photos will 404", dir, err)
@@ -530,9 +478,8 @@ func staticFiles(prefix, dir string) http.Handler {
 	})
 }
 
-// noListing is http.Dir with directories hidden: http.FileServer renders an index page for any
-// directory it can open, which would hand anybody who guessed the path a browsable index of every
-// uploaded photo in the market.
+// noListing is http.Dir with directories hidden: http.FileServer renders an index for any directory it
+// can open, handing anybody who guessed the path a list of every uploaded photo in the market.
 type noListing struct{ dir http.Dir }
 
 func (n noListing) Open(name string) (http.File, error) {
@@ -552,8 +499,7 @@ func (n noListing) Open(name string) (http.File, error) {
 	return file, nil
 }
 
-// load balaner will hit /health http enpoint to see whether this server's db connection is fine
-// to decide whether it can route traffic here
+// a load balancer hits /health to decide whether this instance can serve traffic
 func healthCheck(dbPool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
@@ -569,8 +515,7 @@ func healthCheck(dbPool *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-// blocks until the os asks us to stop, then finishes the in-flight requests and closes the pool
-// instead of everything being killed mid-request.
+// finishes the in-flight requests and closes the pool instead of everything being killed mid-request
 func waitForShutdown(srv *http.Server, dbPool *pgxpool.Pool) {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)

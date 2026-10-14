@@ -1,16 +1,12 @@
-// The two pieces of screen chrome that can be present in the widget tree and still paint nothing.
+// The two pieces of screen chrome that can be in the widget tree and still paint nothing.
 //
-// The header is the reason this file exists. It began as a 1px rule added to every pushed screen
-// and invisible on all of them: a childless ColoredBox takes the smallest size its constraints
-// allow, and `AppBar.bottom` hands down *loose* ones, so it laid out 1px tall and 0px wide. Nothing
-// threw, no test failed, and the only symptom was a header that looked exactly as it had before -
-// which is why the checks here are on measured geometry rather than on a widget being findable.
-// The rule is gone now; what separates a header from the page is a surface, and the same class of
-// bug would be a surface that is the page's own colour or has no height, so that is what is pinned.
+// **The checks are on measured geometry, not on a widget being findable.** a childless ColoredBox
+// takes the smallest size its constraints allow and `AppBar.bottom` hands down *loose* ones, so a
+// header piece can lay out 1px tall and 0px wide with nothing thrown and nothing failing. The same
+// class of bug is a surface the colour of the page, or one with no height.
 //
-// The product card is the other shape: a fixed-height tile that has to hold a two-line name, a
-// price, a shop line and a button at the narrowest width the app supports. Its failure mode is a
-// RenderFlex overflow, which is loud in a test and a yellow stripe on a phone.
+// The product card is the other shape: a fixed-height tile holding a two-line name, a price, a shop
+// line and a button at the narrowest width the app supports. Its failure is a RenderFlex overflow.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -506,12 +502,10 @@ void main() {
 
   // ─────────────────────── the VIP card, at its worst ───────────────────────
   //
-  // The same shape as the product tile above and the same failure mode: a fixed-height card whose
-  // column has to hold a name, two lines of address, the comparison and two figures at the
-  // narrowest width the app supports — and **nearly half of its width is now the photograph**, so
-  // the words have a little over half of a 320dp phone to fit in. Overflow is loud here and a
-  // yellow stripe on a phone, so raising [VipShopsCarousel.cardHeight] is what adding a line to
-  // that card costs, and widening the frame costs the comparison sentence its last characters.
+  // the same shape and failure mode as the product tile: a fixed-height card holding a name, two
+  // lines of address, the comparison and two figures at the narrowest width - with **nearly half the
+  // width taken by the photograph**. adding a line to that card costs a raise of
+  // [VipShopsCarousel.cardHeight], and widening the frame costs the comparison its last characters.
   group('the VIP card at 320dp', () {
     Future<void> pumpCard(WidgetTester tester, HomeShopPreview? slot) async {
       tester.view.physicalSize = const Size(320 * 3, 800 * 3);

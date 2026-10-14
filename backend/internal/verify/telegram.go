@@ -9,12 +9,11 @@ import (
 	"net/http"
 )
 
-// Telegram Gateway - core.telegram.org/gateway/api. a paid delivery api that puts a code into the
-// user's Telegram without them leaving the Domix app, at a fraction of what an sms costs here.
+// Telegram Gateway - core.telegram.org/gateway/api. a paid delivery api that puts a code into the user's
+// Telegram without them leaving the app, at a fraction of what an sms costs here.
 //
-// it carries **our own code** rather than asking Telegram to generate and check one, which the api
-// also offers: that would put the source of truth about who is logged in inside somebody else's
-// service, and no second provider could be swapped in behind this interface afterwards.
+// it carries **our own code** rather than letting Telegram generate and check one: that would put the
+// source of truth about who is logged in inside somebody else's service.
 const telegramGatewayURL = "https://gatewayapi.telegram.org/sendVerificationMessage"
 
 type telegramGateway struct {

@@ -21,9 +21,8 @@ const (
 	// grid. what the *edit screen* loads - a grid loads [ThumbMaxSide].
 	OutputMaxSide = 1000
 
-	// what a catalogue grid loads, which is very nearly all the image traffic this api will serve:
-	// one shop card is up to a hundred tiles. turns a 100-tile catalogue from ~15 MB into ~2.5 MB.
-	// 400 rather than the ~180dp it is painted at, so it survives a 3x screen.
+	// what a catalogue grid loads, which is nearly all the image traffic here: one shop card is up to a
+	// hundred tiles. 400 rather than the ~180dp it is painted at, so it survives a 3x screen.
 	ThumbMaxSide = 400
 
 	// where JPEG stops paying for itself: the file roughly doubles between 85 and 95 and the
@@ -33,10 +32,8 @@ const (
 	// under this it is an icon or a screenshot fragment, and the grid would upscale it into mush
 	minSourceSide = 64
 
-	// **these two bound the decode, and that is their whole job.** a compressed file well inside
-	// MaxUploadBytes can describe hundreds of millions of pixels, and decoding allocates four bytes
-	// per pixel whatever the file weighed. DecodeConfig reads only the header, so both are answered
-	// before a single pixel is allocated.
+	// **these two bound the decode, and that is their whole job**: a file well inside MaxUploadBytes can
+	// describe hundreds of millions of pixels. DecodeConfig reads only the header, so both are checked first.
 	maxSourceSide   = 12000
 	maxSourcePixels = 60_000_000
 )
@@ -52,17 +49,14 @@ var (
 
 // turns whatever arrived into the two files this api stores: JPEGs, no alpha, no metadata.
 //
-// four things happen here and each is load-bearing:
-//
-//   - **it decodes.** Content-Type and extension are both written by the client, so the only honest
-//     answer to "is this a photo" is to parse it.
-//   - **it re-encodes**, which is what strips EXIF - and EXIF routinely carries the GPS coordinates
-//     a picture was taken at, which off a public url publishes a shop owner's home address.
+//   - **it decodes**, because Content-Type and extension are both written by the client.
+//   - **it re-encodes**, which is what strips EXIF - routinely carrying the GPS coordinates a picture
+//     was taken at, which off a public url publishes a shop owner's home address.
 //   - **it applies the EXIF orientation first** (exif.go), or every portrait photo arrives sideways.
 //   - **it flattens transparency onto white**, because Go's jpeg encoder composites against black.
 //
-// **the thumbnail is scaled from the master, not the source**: the expensive work happens once, and
-// the two files are guaranteed to frame the product identically.
+// **the thumbnail is scaled from the master, not the source**: the expensive work happens once, and the
+// two files frame the product identically.
 func Normalize(src []byte) (Photo, error) {
 	// header only - no pixels are allocated until the two bounds below have been checked
 	cfg, format, err := image.DecodeConfig(bytes.NewReader(src))
@@ -125,8 +119,7 @@ func fit(src image.Image, maxSide int) *image.RGBA {
 	draw.Draw(dst, dst.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
 
 	if width == bounds.Dx() && height == bounds.Dy() {
-		// running the scaler at 1:1 would still filter every pixel and soften a photo that needed
-		// nothing done to it
+		// running the scaler at 1:1 would still filter every pixel and soften a photo that needed nothing
 		draw.Draw(dst, dst.Bounds(), src, bounds.Min, draw.Over)
 		return dst
 	}
@@ -137,10 +130,8 @@ func fit(src image.Image, maxSide int) *image.RGBA {
 	return dst
 }
 
-// applies one of the eight EXIF orientations. 5-8 transpose, so width and height swap.
-//
-// a pixel loop rather than a library: the eight cases *are* the specification, and the image is
-// already down to at most a megapixel by the time this runs.
+// applies one of the eight EXIF orientations. 5-8 transpose, so width and height swap. a pixel loop
+// rather than a library: the eight cases *are* the specification, and the image is at most a megapixel.
 func orient(img *image.RGBA, orientation int) *image.RGBA {
 	if orientation <= 1 || orientation > 8 {
 		return img // 1 is "already upright", and anything unrecognised is treated as such

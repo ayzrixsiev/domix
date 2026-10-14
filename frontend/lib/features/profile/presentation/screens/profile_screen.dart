@@ -17,7 +17,6 @@ import '../controllers/auth_controller.dart';
 import 'about_screen.dart';
 import 'profile_edit_screen.dart';
 
-// 2. profile state and account type models
 enum ProfileAccountState {
   guest('StateGUEST'),
   client('StateCLIENT'),
@@ -55,7 +54,6 @@ class ProfileViewState {
   bool get isVendor => state == ProfileAccountState.vendor;
 }
 
-// 3. main interactive screen widget
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
     super.key,
@@ -245,11 +243,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   /// The app's one modal error: an icon, a headline, a sentence, and an OK.
   ///
-  /// **It takes its wording from the caller.** It used to take a `message`, ignore it, and print the
-  /// *login* strings - so a failed account deletion told the user to check their Telegram install, and
-  /// nothing could catch it since `message` was used in the `debugPrint`.
+  /// **It draws the wording the caller passes** - a dialog that printed one flow's strings for every
+  /// caller told the user the wrong thing with nothing able to catch it.
   ///
-  /// [detail] is logged and never drawn: the line that debugs this is the line no shop owner can act on.
+  /// [detail] is logged and never drawn: the line that debugs this is the line no owner can act on.
   void _showErrorDialog({required String title, required String body, String? detail}) {
     if (detail != null) debugPrint('Auth error: $detail');
 
@@ -312,12 +309,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  /// Opens the editor and, when it changed something, says so.
-  ///
-  /// **A route rather than a sheet**, like the registration flow it shares its steps with: editing
-  /// the number is a two-step code flow, and half of it under the nav bar with four other places to
-  /// be would read as a half-open door. Nothing here has to reload the profile - both writes go
-  /// through [AuthController], which has already notified this screen by the time the route pops.
+  /// **A route rather than a sheet**, like the registration flow it shares its steps with: editing the
+  /// number is a two-step code flow, and half of it under the nav bar reads as a half-open door.
+  /// nothing here reloads the profile - both writes go through [AuthController], which has notified
+  /// this screen by the time the route pops.
   Future<void> _openEditor() async {
     final outcome = await ProfileEditScreen.open(context);
     if (outcome == null || !mounted) return;
@@ -383,15 +378,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           // every account operation in one card, ending with the two that close it.
           //
-          // **No «Поддержка» row.** Support is a tab in the nav bar, always one tap away from
-          // anywhere; a second door to the same screen buried in a settings list is one more thing
-          // to keep in step for no reach it does not already have.
-          //
-          // **Only «Удалить аккаунт» is red.** Signing out is undone by signing back in, so danger
-          // colours on it spent the alarm the list has on the one row that is not alarming - which
-          // left the row below it, the one that is genuinely irreversible, looking like more of the
-          // same. Deletion still asks before it acts; the colour is the only warning the other one
-          // needs to not have.
+          // **Only «Удалить аккаунт» is red.** Signing out is undone by signing back in, so a danger
+          // colour on it spends the list's one alarm on the row that is not alarming, and leaves the
+          // irreversible row below looking like more of the same.
           _MenuGroupCard(
             rows: [
               _MenuRowData(
@@ -459,14 +448,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
   /// Who this account is, in three lines that read downward.
   ///
-  /// **Stacked rather than laid beside the avatar.** The avatar and the way in to editing take the
-  /// top row between them, and the name then gets the card's whole width underneath - which is what
-  /// lets it be set at a size that reads as the subject of the screen rather than as a label on a
-  /// picture. The old arrangement put a 20px name in the ~200px left beside a 76px disc, where a
-  /// two-part Uzbek name ellipsed on any phone narrower than a Pixel.
-  ///
-  /// The role and the number share the last line because they answer the same question - which
-  /// account this is - and neither needs a line of its own to do it.
+  /// **Stacked rather than laid beside the avatar**: the name gets the card's whole width, which is
+  /// what lets it read as the subject of the screen. Beside a 76px disc a two-part Uzbek name ellipsed
+  /// on any phone narrower than a Pixel. The role and the number share the last line because they
+  /// answer the same question.
   Widget _buildAccountHeaderCard(ProfileViewState profile) {
     final role = AccountRole.of(isVendor: profile.isVendor);
 

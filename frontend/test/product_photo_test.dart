@@ -5,13 +5,11 @@ import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/features/products/data/product_model.dart';
 import 'package:frontend/features/products/presentation/widgets/product_tile.dart';
 
-// **Which of a product's two photos each surface loads.** A shop card is up to a hundred tiles, so
-// a grid that reaches for the full-size copy is ~15 MB down a mobile connection instead of ~2.5 MB
-// — and it fails invisibly: every picture is correct, the screen just takes six times as long over
-// a link nobody in the office is testing on.
+// **Which of a product's two photos each surface loads.** a shop card is up to a hundred tiles, so a
+// grid reaching for the full-size copy is ~15 MB down a mobile connection instead of ~2.5 MB - and it
+// fails invisibly: every picture is correct, the screen is just six times slower.
 //
-// The server sends both addresses ready-made and the app never builds one, which is what these
-// pin: the model's preference and its fallback, and the tile actually using them.
+// The server sends both addresses ready-made and **the app never builds one**.
 
 Map<String, dynamic> _json({String? image, String? thumb}) => {
       'id': 7,

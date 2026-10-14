@@ -1,12 +1,10 @@
 // package pricing turns the Basket Price Index into something a customer can read.
 //
-// **the raw index never reaches the app** - the card says "на 4% дешевле рынка", not "96". the
-// thresholds live here rather than in Flutter because every one of them is a guess until there is
-// real data: moving them on the server is a deploy, moving them in the app is a Play release and
-// months of phones disagreeing about what "average" means.
+// **the raw index never reaches the app** - the card says "на 4% дешевле рынка", not "96". the thresholds
+// live here and not in Flutter because moving them on the server is a deploy, where moving them in the
+// app is a Play release and months of phones disagreeing about what "average" means.
 //
-// ROADMAP: making the band adapt to the real distribution - derived from the spread of indices in a
-// category rather than a fixed ±2 - is a change to this file and nothing else.
+// ROADMAP: a band derived from the real spread of indices in a category is a change to this file alone.
 package pricing
 
 // which of the three buckets a shop's basket falls in. the string values are the wire contract.
@@ -26,7 +24,6 @@ const (
 	DearerAbove  = 102
 )
 
-// TierFor buckets an index.
 func TierFor(index int64) Tier {
 	switch {
 	case index < CheaperBelow:

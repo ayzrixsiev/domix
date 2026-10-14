@@ -19,12 +19,10 @@ import 'package:frontend/features/stores/data/shop_model.dart';
 import 'package:frontend/features/stores/presentation/screens/shop_card_screen.dart';
 import 'package:frontend/features/products/data/product_category.dart';
 
-/// The page gutter every block on this feed shares, header included, so the DOMIX pill, the search
-/// bar and every heading line up down one left edge.
-///
-/// 10, set against the nav bar's own inset (22): the bar has to look narrower than the page it
-/// floats over. **Not applied here** - each block takes it itself, which lets [VipShopsCarousel] opt
-/// out and bleed to the screen edges.
+/// The page gutter every block on this feed shares, header included, so everything lines up down one
+/// left edge. set against the nav bar's own inset, which has to look narrower than the page it floats
+/// over. **Not applied here** - each block takes it itself, so [VipShopsCarousel] can opt out and
+/// bleed to the screen edges.
 const EdgeInsets _gutter = EdgeInsets.symmetric(horizontal: 10);
 
 /// How far the feed has to be dragged before letting go actually refreshes, and how tall the gap
@@ -137,12 +135,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(backgroundColor: AppColors.background, body: body);
   }
 
-  /// What sits inside the gap while it is open.
-  ///
-  /// One spinner family for the whole app: the same [CircularProgressIndicator] the cold start
-  /// draws, in brand orange. It is *determinate* while the finger is still down - the ring fills as
-  /// the gap opens, so the gesture shows its own progress and letting go early is visibly early -
-  /// and switches to the indeterminate spin once the request is actually in flight.
+  /// one spinner family for the whole app, in brand orange. *determinate* while the finger is down, so
+  /// the gesture shows its own progress and letting go early is visibly early, then indeterminate once
+  /// the request is in flight.
   Widget _buildRefreshIndicator(
     BuildContext context,
     RefreshIndicatorMode mode,
@@ -170,12 +165,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// The feed below the search bar, as slivers.
-  ///
-  /// Three states, and only ever one of them on screen: starting up, failed, or the feed itself.
-  /// **A failure replaces the feed rather than being appended under it** - five empty VIP slots and
-  /// fifteen empty rows followed by "не удалось загрузить" reads as a working screen with a
-  /// complaint stapled to the bottom, and buries the retry a full scroll away from the problem.
+  /// Three states, and only ever one on screen: starting up, failed, or the feed. **a failure replaces
+  /// the feed rather than being appended under it** - empty slots followed by "не удалось загрузить"
+  /// reads as a working screen with a complaint stapled on, and buries the retry a scroll away.
   List<Widget> _feed(HomeController home, AppLocalizations strings) {
     // the very first paint, before the fetch has come back. a spinner rather than a full screen of
     // empty slots flashing past and then filling in.
@@ -240,12 +232,9 @@ class _HomeScreenState extends State<HomeScreen> {
               onShopTap: _openShop,
             ),
 
-            // the section's own panel is gone: the white surface moved onto the individual cards
-            //
-            // **12 where every other section takes 26, and not a number to normalise back.** The
-            // carousel does not end at its card: under it come 12dp of gap and a row of dots, so
-            // the usual 26 put 47dp of air between the VIP card and this heading - twice what sits
-            // between any other two sections, and it read as a hole in the feed.
+            // **12 where every other section takes 26, and not a number to normalise back**: the
+            // carousel does not end at its card - a gap and the row of dots come under it, so the usual
+            // 26 leaves twice the air of any other section break and reads as a hole in the feed.
             const SizedBox(height: 10),
             Padding(
               padding: _gutter,

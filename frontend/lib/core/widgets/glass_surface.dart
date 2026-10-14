@@ -13,16 +13,12 @@ const bool _refraction = true;
 /// A sheet of frosted glass: it blurs what is behind it, bends it at the rim, and tints the result
 /// so the thing on top of it stays readable.
 ///
-/// **Glass is not a colour, it is a relationship with what is underneath**, so this is only worth
-/// using over something that moves - the nav bar with the feed scrolling under it, an overlay on the
-/// map. Put it on a flat page and it is an expensive way to draw [AppColors.surfaceRaised].
+/// **Glass is not a colour, it is a relationship with what is underneath**, so it is only worth using
+/// over something that moves. On a flat page it is an expensive way to draw [AppColors.surfaceRaised].
 ///
-/// Three draws stack inside the clip, in this order: the backdrop filter, the tint that makes the
-/// blur legible, and the sheen that gives the pane a lit top edge.
-///
-/// **A platform view is not part of Flutter's backdrop.** On the Карта tab the Yandex map is a
-/// native view, so the filter has nothing of it to sample and the bar falls back to its tint alone -
-/// which is why [tint] carries real opacity instead of a trace.
+/// **A platform view is not part of Flutter's backdrop**: on the Карта tab the Yandex map is native,
+/// so the filter has nothing to sample and the bar falls back to its tint - which is why [tint]
+/// carries real opacity rather than a trace.
 class GlassSurface extends StatefulWidget {
   const GlassSurface({
     super.key,

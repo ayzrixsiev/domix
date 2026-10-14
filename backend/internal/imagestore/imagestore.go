@@ -1,14 +1,12 @@
-// package imagestore owns where a product photo lives: the bytes, the paths, and the addresses
-// those paths are served from.
+// package imagestore owns where a product photo lives: the bytes, the paths, and the addresses those
+// paths are served from.
 //
-// **curated catalogue photos and owner uploads share one namespace.** the shots under
-// shops/<category>/ are checked into the project and shared by every shop seeded from that
-// template; what [Storage.Save] writes belongs to exactly one products row. both land in
-// products.image_path, and [UploadDir] is what tells them apart - every deletion here refuses
-// anything outside it, which is what stops "replace my photo" unlinking a file forty shops draw.
+// **curated catalogue photos and owner uploads share one namespace** - both land in products.image_path,
+// and [UploadDir] is what tells them apart. every deletion here refuses anything outside its own door,
+// which is what stops "replace my photo" unlinking a file forty shops draw.
 //
 // nothing here touches the database: the handler owns the ordering, which is what decides whether a
-// failure leaves a harmless orphan file or a row pointing at a file that does not exist.
+// failure leaves a harmless orphan or a row pointing at a file that does not exist.
 package imagestore
 
 import (
@@ -22,33 +20,26 @@ import (
 	"time"
 )
 
-// the prefix every owner-uploaded products.image_path starts with. forward slashes throughout: this
-// goes into a database column, a url and an S3 object key, not only onto a disk.
-//
-// under `shops/` with the curated catalogue, so the images root has room for a second kind of image
-// without either of them moving again.
+// the prefix every owner-uploaded products.image_path starts with. forward slashes throughout: this goes
+// into a database column, a url and an S3 object key, not only onto a disk.
 const UploadDir = "shops/uploads"
 
-// where the curated catalogue lives: `shops/<shop category>/<file>`, one photo shared by every shop
-// seeded from that template. [UploadDir] sits under the same root, which is what [IsCatalogue] has to
-// exclude.
+// the curated catalogue: `shops/<shop category>/<file>`, one photo shared by every shop seeded from that
+// template. [UploadDir] sits under the same root, which is what [IsCatalogue] has to exclude.
 const CatalogueRoot = "shops"
 
-// the most that will be read off the network for one photo - a ceiling on the request, not on the
-// stored file, which [Normalize] re-encodes to 100-200 KB. above a full-quality 12MP phone photo,
-// and the app resizes before sending anyway.
+// the most that will be read off the network for one photo - a ceiling on the request, not on the stored
+// file, which [Normalize] re-encodes to 100-200 KB.
 const MaxUploadBytes = 6 << 20
 
-// what a deletion answers for a path that is not ours - a catalogue photo, or anything with a .. in
-// it. a programming error rather than a user one, so it is loud rather than skipped quietly.
+// what a deletion answers for a path that is not ours. a programming error, so it is loud rather than skipped.
 var ErrOutsideUploads = errors.New("imagestore: refusing to delete a path outside the uploads directory")
 
 // what a catalogue deletion answers for anything that is not shaped like a curated photo
 var ErrOutsideCatalogue = errors.New("imagestore: refusing to delete a path outside the curated catalogue")
 
-// one accepted upload in the two sizes that get stored. a pair rather than two arguments because
-// **the two files are one fact**: a signature that let a caller store a master without its thumbnail
-// would eventually be called that way, leaving a blank grid tile on every phone in the market.
+// one accepted upload in the two sizes that get stored. a pair rather than two arguments because **the two
+// files are one fact**: a master stored without its thumbnail is a blank grid tile on every phone.
 type Photo struct {
 	// the 1000px copy, what the edit screen and any full-size view load
 	Master []byte
@@ -65,37 +56,31 @@ type Object struct {
 	Modified time.Time
 }
 
-// where product photos are kept. two implementations, both used every day, which is what makes the
-// interface worth having: [Disk] runs on the laptop and in every test, [R2] runs in production, and
-// main.go picks by whether the R2 keys are in the environment.
+// where product photos are kept. two implementations, both used every day: [Disk] on the laptop and in
+// every test, [R2] in production, picked in main.go by whether the R2 keys are set.
 type Storage interface {
 	// writes both files and returns the *master's* relative path, which is what goes into
 	// products.image_path - the thumbnail's is not stored anywhere, it is [ThumbPath] of this one
 	Save(ctx context.Context, photo Photo) (string, error)
 
-	// the same, into `shops/<category>/` instead. **a second write door rather than an argument on
-	// the one above**, mirroring the two deletion doors: a curated photo is drawn by every shop of a
-	// category and an upload by exactly one row, so the two namespaces are never reachable by the
-	// same call. the returned path passes [IsCatalogue] or nothing is written.
+	// the same, into `shops/<category>/` instead. **a second write door rather than an argument on the one
+	// above**, mirroring the two deletion doors: a curated photo is drawn by every shop of a category and
+	// an upload by exactly one row. the returned path passes [IsCatalogue] or nothing is written.
 	SaveCatalogue(ctx context.Context, category string, photo Photo) (string, error)
 
 	// unlinks a master and its thumbnail. a file already gone is a success; anything outside
 	// [UploadDir] is [ErrOutsideUploads].
 	Remove(ctx context.Context, rel string) error
 
-	// every file under `prefix` - "shops/uploads" for the owner-upload sweep, "shops" for the
-	// catalogue one. only those two sweeps call it.
+	// every file under `prefix` - "shops/uploads" for one sweep, "shops" for the other. only they call it.
 	List(ctx context.Context, prefix string) ([]Object, error)
 
 	// exactly one file, assuming nothing about its partner - the sweep collects stray thumbnails
 	// whose master is already gone, which [Remove] would refuse to handle
 	RemoveFile(ctx context.Context, rel string) error
 
-	// exactly one *curated* file. **a second door with its own guard rather than relaxing the one
-	// above**: an owner's photo and a catalogue photo are deleted for different reasons by different
-	// code, and neither method accepts a path of the other kind - so a bug in one sweep cannot reach
-	// the other's files. curated photos became deletable when sizes of one product started sharing a
-	// photo, which leaves the ones they replaced referenced by nothing.
+	// exactly one *curated* file. **a second door with its own guard rather than relaxing the one above**:
+	// neither method accepts a path of the other kind, so a bug in one sweep cannot reach the other's files.
 	RemoveCatalogueFile(ctx context.Context, rel string) error
 
 	// where photos are going, for one line in the startup log
@@ -106,16 +91,14 @@ type Storage interface {
 // a build that appended "_thumb" itself would freeze the convention inside every apk on a phone.
 const thumbSuffix = "_thumb"
 
-// the thumbnail beside a stored master. it applies to curated catalogue paths too, which is not
-// incidental: the catalogue is what most tiles in most grids show.
+// the thumbnail beside a stored master. it applies to curated paths too, which is what most grids show.
 func ThumbPath(rel string) string {
 	ext := path.Ext(rel)
 	return strings.TrimSuffix(rel, ext) + thumbSuffix + ext
 }
 
-// whether a stored path is an owner upload rather than a curated catalogue photo. the `..` check is
-// what makes the prefix test mean anything: "uploads/../../etc/passwd" starts with the right nine
-// characters and points somewhere else entirely.
+// whether a stored path is an owner upload rather than a curated photo. the `..` check is what makes the
+// prefix test mean anything: "uploads/../../etc/passwd" starts with the right characters.
 func IsUpload(rel string) bool {
 	if rel == "" || strings.Contains(rel, "..") {
 		return false
@@ -138,11 +121,9 @@ const DefaultURLPrefix = "/images/"
 
 // turns a stored relative path into the addresses the app fetches it from.
 //
-// **the database stores a relative path and never a full url**: the host differs between the tunnel,
-// a laptop and img.domix-api.uz, so a stored absolute url would have to be rewritten row by row the
-// day it changes - and a production dump would point every local tile at production.
-//
-// the zero value serves from this api's own /images/, so every test behaves as before.
+// **the database stores a relative path and never a full url**: the host differs between the tunnel, a
+// laptop and img.domix-api.uz, and a production dump would otherwise point every local tile at
+// production. the zero value serves from this api's own /images/.
 type URLs struct {
 	// "" means DefaultURLPrefix; otherwise an absolute origin with no trailing slash
 	base string
@@ -167,11 +148,8 @@ func (u URLs) Master(rel string) string {
 // the 400px copy: every catalogue grid
 func (u URLs) Thumb(rel string) string { return u.Master(ThumbPath(rel)) }
 
-// **random rather than derived from the product id, and that is a caching decision**: photos are
-// served immutable for a year, so reusing "product-42.jpg" would leave every device that loaded the
-// old one showing it - reported as "my new photo did not save". a new name is a new url.
-//
-// long enough that guessing one is not a way to enumerate the market's photos.
+// **random rather than derived from the product id, and that is a caching decision**: photos are served
+// immutable for a year, so reusing a name leaves every device that cached it showing the old photo.
 func randomName() (string, error) {
 	raw := make([]byte, 16)
 	if _, err := rand.Read(raw); err != nil {
@@ -180,9 +158,8 @@ func randomName() (string, error) {
 	return hex.EncodeToString(raw), nil
 }
 
-// the two paths one saved photo occupies, under a two-character shard so no single directory
-// collects every photo in the market. identical on disk and in an R2 object key, which is what lets
-// a database dump move between the two backends.
+// the two paths one saved photo occupies, under a two-character shard so no single directory collects
+// every photo in the market. identical on disk and as an R2 object key.
 func newPaths() (master, thumb string, err error) {
 	name, err := randomName()
 	if err != nil {
@@ -192,13 +169,10 @@ func newPaths() (master, thumb string, err error) {
 	return master, ThumbPath(master), nil
 }
 
-// the same for a curated photo: `shops/<category>/<random>.jpg`, flat because [IsCatalogue] is
-// exactly three segments - the shard the uploads use would take it out of its own scope.
-//
-// **the name is random here too, for the reason it is random there**: a replaced catalogue shot is
-// drawn by every shop of the market, and reusing `001.jpg` would leave every phone that cached it
-// showing the photo it replaced. the [IsCatalogue] check is what turns a category of "../uploads"
-// into an error instead of a write.
+// the same for a curated photo: `shops/<category>/<random>.jpg`, flat because [IsCatalogue] is exactly
+// three segments. **the name is random here too, and for a stronger reason**: a replaced catalogue shot
+// is drawn by every shop of the market. the [IsCatalogue] check turns a category of "../uploads" into
+// an error instead of a write.
 func newCataloguePaths(category string) (master, thumb string, err error) {
 	name, err := randomName()
 	if err != nil {

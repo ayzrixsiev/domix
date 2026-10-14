@@ -159,7 +159,6 @@ class AuthService {
     }
   }
 
-  // 1. send the collected name and role to the backend and get back a telegram link
   Future<AuthInitResult> initSession({required String name, required String role}) async {
     return _executeWithRetry(
       () async {
@@ -184,7 +183,6 @@ class AuthService {
     );
   }
 
-  // 2. ask the server whether the login completed
   Future<AuthStatusResult> checkStatus(String sessionId) async {
     return _executeWithRetry(
       () async {
@@ -211,7 +209,7 @@ class AuthService {
     );
   }
 
-  // 3. save jwt, role, name and phone in hardware-encrypted storage
+  // hardware-encrypted storage: a stolen phone must not yield a four-month token
   Future<void> saveSession({
     required String token,
     required String role,
@@ -283,12 +281,9 @@ class AuthService {
   }
   /// `PATCH /api/me` - the name, and the one role change the server allows.
   ///
-  /// **Both arguments are nullable and a null is not sent**, which is the whole reason this is a
-  /// PATCH: the server tells an omitted field from a field set to empty, so saving a role change
-  /// cannot blank the name and vice versa.
-  ///
-  /// The session cache is rewritten before this returns, so a screen reading from storage never
-  /// disagrees with one reading from the controller.
+  /// **Both arguments are nullable and a null is not sent**, which is the whole reason this is a PATCH:
+  /// the server tells an omitted field from one set to empty, so saving a role cannot blank the name.
+  /// The session cache is rewritten before this returns, so storage never disagrees with the controller.
   Future<MeResult> updateProfile({String? name, String? role}) async {
     final token = await getToken();
     if (token == null || token.isEmpty) throw const SessionExpiredException();
@@ -410,9 +405,9 @@ class AuthService {
   /// of the number is the server's to decide - it is what `/verify` must be called with, and what
   /// the "we sent a code to ..." line should show.
   ///
-  /// **Not wrapped in [_executeWithRetry], and that is deliberate.** Every one of these sends a real
-  /// message that costs real money; a blind retry on a timeout bills twice and can deliver two codes
-  /// of which only the second works. A failure here is reported, not retried.
+  /// **Not wrapped in [_executeWithRetry], deliberately**: every one of these sends a message that
+  /// costs money, and a blind retry on a timeout bills twice and delivers two codes of which only the
+  /// second works.
   Future<CodeRequestResult> requestCode({
     required String phone,
     required String name,
@@ -484,7 +479,6 @@ class AuthService {
   Future<String?> getName() async => await _storage.read(key: _nameKey);
   Future<String?> getPhone() async => await _storage.read(key: _phoneKey);
 
-  // 4. wipe every cached key on logout
   Future<void> logout() async {
     await _storage.delete(key: _jwtKey);
     await _storage.delete(key: _roleKey);

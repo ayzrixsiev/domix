@@ -46,11 +46,9 @@ class ProductGrid extends StatelessWidget {
 
 /// The same grid as a **sliver**, for a screen with other content above it.
 ///
-/// **`shrinkWrap: true` is not a layout convenience, it is a network decision**: a shrink-wrapped
-/// grid lays out every child to measure itself, so a 100-product catalogue mounts 100 tiles and
-/// fires 100 image requests - and the symptom is a **failed price save**, not slow images.
-///
-/// **Reach for this whenever the grid is not the only thing on the page.**
+/// **`shrinkWrap: true` is a network decision, not a layout convenience**: it lays out every child to
+/// measure itself, so a 100-product catalogue fires 100 image requests at once - and the symptom is a
+/// **failed price save**, not slow images. Reach for the sliver whenever the grid is not alone.
 class ProductSliverGrid extends StatelessWidget {
   const ProductSliverGrid({super.key, required this.tiles});
 

@@ -24,13 +24,12 @@ import (
 //	POST   /api/products/{id}/image  - owner uploads or replaces one photo (multipart, field "image")
 //	DELETE /api/products/{id}/image  - owner removes it
 //
-// **an owner may photograph anything we have not photographed, and nothing we have** - their own
-// products always, and обои slots, which name a *kind* of wallpaper and have nothing to shoot. the
-// answer comes from the template rather than the shop's category, so photographing a catalogue
-// locks its rows by itself: see templateFlags.
+// **an owner may photograph anything we have not photographed, and nothing we have** - their own rows
+// always, and обои slots, which name a *kind* of wallpaper. the answer comes from the template rather
+// than the shop's category, so photographing a catalogue locks its rows by itself (templateFlags).
 //
-// a separate endpoint rather than a field on PUT: a photo arrives as multipart bytes while the rest
-// of the form is json, and it saves the instant it is picked rather than on "сохранить".
+// a separate endpoint rather than a field on PUT: multipart bytes where the rest of the form is json,
+// and it saves the instant the photo is picked.
 func (p *Products) RouteImage(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
@@ -99,12 +98,11 @@ func (p *Products) UploadImage(w http.ResponseWriter, r *http.Request) {
 	p.writeProductResponse(w, http.StatusOK, updated)
 }
 
-// RemoveImage takes the owner's photo off a product. **on a seeded row it restores the catalogue
-// shot rather than clearing the column** - that file is still on disk and shared by every shop of
-// the category.
+// RemoveImage takes the owner's photo off a product. **on a seeded row it restores the catalogue shot
+// rather than clearing the column** - that file is shared by every shop of the category.
 //
-// deliberately not gated by the rule UploadImage enforces: removal can only move a row *towards* the
-// catalogue, and gating it would strand an owner who uploaded before we photographed that category.
+// deliberately not gated by UploadImage's rule: removal can only move a row *towards* the catalogue,
+// and gating it would strand an owner who uploaded before we photographed their category.
 func (p *Products) RemoveImage(w http.ResponseWriter, r *http.Request) {
 	existing, ok := p.authorizeProductAccess(w, r)
 	if !ok {

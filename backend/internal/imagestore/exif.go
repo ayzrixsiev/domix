@@ -7,11 +7,9 @@ import (
 
 // one number out of a JPEG's EXIF block: the orientation tag.
 //
-// **why this is here rather than a dependency.** a phone stores the sensor's own raster plus a tag
-// saying which of eight ways up it goes. Go's jpeg decoder hands back the raw raster and re-encoding
-// drops the tag, so a portrait photo - most of them - would be stored on its side with nothing in
-// any log to explain it. the full spec is large; this is one 16-bit integer at a known place, parsed
-// with a bound at every step, and anything unexpected answers 1 ("upright").
+// **here rather than a dependency**: a phone stores the sensor's raster plus a tag saying which of eight
+// ways up it goes, and Go's decoder drops the tag, so portrait photos would be stored on their side with
+// nothing in any log. one 16-bit integer at a known place, bounded at every step, 1 on anything odd.
 func orientationOf(src []byte) int {
 	block, ok := exifBlock(src)
 	if !ok {

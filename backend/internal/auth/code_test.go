@@ -7,14 +7,12 @@ import (
 	"time"
 )
 
-// The code login's rules, pinned. Every one of these is a rule that costs money or hands out a
-// token when it is wrong, and none of them is visible from the outside: a broken attempt cap and a
-// working one look identical until somebody is brute-forcing the endpoint.
+// The code login's rules, pinned. Each one costs money or hands out a token when it is wrong, and none
+// is visible from outside: a broken attempt cap and a working one look identical until somebody is
+// brute-forcing the endpoint.
 
-// CanonicalPhone is the single spelling everything else is keyed by - the pending code map, and
-// users.phone for every account this flow creates. Two spellings of one number is a map miss on the
-// way in (reported to the user as "you never asked for a code") and a duplicate account on the way
-// out, on a row that owns none of the original's shops.
+// CanonicalPhone is the spelling everything else is keyed by. Two spellings of one number is a map miss
+// on the way in (read as "you never asked for a code") and a duplicate account on the way out.
 func TestCanonicalPhone(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -32,8 +30,7 @@ func TestCanonicalPhone(t *testing.T) {
 		{"a few digits", "12345", "", false},
 		{"a russian number", "79161234567", "", false},
 		{"a ukrainian number, right length wrong country", "380501234567", "", false},
-		// ambiguous: "8" could be a trunk prefix or an operator code, and guessing wrong sends a paid
-		// message to a stranger
+		// ambiguous: "8" could be a trunk prefix or an operator code, and guessing wrong bills a stranger
 		{"a national trunk prefix", "8901234567", "", false},
 		{"one digit too many", "9989012345678", "", false},
 	}
@@ -64,10 +61,9 @@ func issueFor(t *testing.T, m *CodeManager, phone string) string {
 	return code
 }
 
-// backdate ages a pending entry, which is how expiry and the resend cooldown are tested without a
-// test that sleeps for five minutes. Reaching into the struct rather than injecting a clock: the
-// test lives in this package, and a clock field on CodeManager would be production code shaped
-// around a test.
+// backdate ages a pending entry, which is how expiry and the cooldown are tested without sleeping.
+// Reaching into the struct rather than injecting a clock: a clock field would be production code
+// shaped around a test.
 func backdate(t *testing.T, m *CodeManager, phone string, by time.Duration) {
 	t.Helper()
 
@@ -116,8 +112,7 @@ func TestVerifyingACode(t *testing.T) {
 			want:  ErrCodeMismatch,
 		},
 		{
-			// the right code, arriving a minute after it died. the sweeper runs on a timer, so Verify
-			// has to notice this itself or a code stays usable until the next sweep
+			// the sweeper runs on a timer, so Verify has to notice this itself
 			name: "the right code, too late",
 			typed: func(t *testing.T, m *CodeManager, sent string) string {
 				backdate(t, m, testPhone, CodeTTL+time.Minute)
@@ -140,8 +135,7 @@ func TestVerifyingACode(t *testing.T) {
 				return
 			}
 
-			// what a correct code proves travels back with it: the name and role typed on the phone
-			// screen, which is the only place they were ever collected
+			// what a correct code proves travels back with it: the name and role typed on the phone screen
 			if pending.Phone != testPhone || pending.Name != "Тест" || pending.Role != "customer" {
 				t.Fatalf("a correct code returned %+v", pending)
 			}
@@ -149,11 +143,9 @@ func TestVerifyingACode(t *testing.T) {
 	}
 }
 
-// Two flows send codes to phones - signing in, and moving an existing account onto a new number -
-// and they share one pending map because the cooldown and the budget are per-number. The purpose is
-// what keeps them from spending each other's codes: a login code typed into the phone-change
-// endpoint has to read as "no code was requested", and the entry has to survive it, or the flow
-// that *is* waiting on that code would be broken by the one that is not.
+// The login and the phone change share one pending map, because the cooldown and budget are per-number.
+// A login code typed into the phone-change endpoint has to read as "no code was requested" *and* leave
+// the entry alive, or the flow that is waiting on it breaks.
 func TestACodeCannotBeSpentOnTheWrongFlow(t *testing.T) {
 	m := NewCodeManager(true)
 	sent := issueFor(t, m, testPhone) // a login code
@@ -172,9 +164,8 @@ func TestACodeCannotBeSpentOnTheWrongFlow(t *testing.T) {
 	}
 }
 
-// A number nobody has asked for a code for. Distinct from a wrong code on purpose - the app sends
-// the user back to the phone screen for this one instead of leaving them typing into a keypad that
-// will never accept anything.
+// A number nobody asked for a code for. Distinct from a wrong code on purpose: the app sends the user
+// back to the phone screen instead of leaving them typing into a keypad that will never accept anything.
 func TestVerifyingWithoutHavingAskedForACode(t *testing.T) {
 	m := NewCodeManager(true)
 
@@ -198,8 +189,7 @@ func TestACorrectCodeCannotBeUsedTwice(t *testing.T) {
 }
 
 // **The one test standing between this endpoint and a brute-force.** Six digits is a million
-// possibilities; without a cap, a script guessing at the rate limiter's pace walks through them.
-// Three tries and the entry dies, so an attacker has to pay for a new sms every three guesses.
+// possibilities; three tries and the entry dies, so an attacker pays for a new sms every three guesses.
 func TestThreeWrongGuessesKillTheCode(t *testing.T) {
 	m := NewCodeManager(true)
 	sent := issueFor(t, m, testPhone)
@@ -215,8 +205,7 @@ func TestThreeWrongGuessesKillTheCode(t *testing.T) {
 		t.Fatalf("guess %d returned %v, want ErrTooManyAttempts", MaxCodeAttempts, err)
 	}
 
-	// and the entry is gone, so the code that *was* correct is worthless too - otherwise an attacker
-	// who exhausted the cap could simply carry on where they left off
+	// the entry is gone, so an attacker who exhausted the cap cannot carry on where they left off
 	if _, err := m.Verify(CodeLogin, testPhone, sent); !errors.Is(err, ErrNoPendingCode) {
 		t.Fatalf("the real code still worked after the cap: %v", err)
 	}
@@ -245,9 +234,8 @@ func TestResendingIsHeldOffForAMinute(t *testing.T) {
 	}
 }
 
-// The second half of the per-phone limit. The cooldown alone only makes an attacker wait a minute
-// between sends - still around 1400 paid messages a day aimed at one number - so the budget caps
-// how many a single number can ever cost us.
+// The second half of the per-phone limit: the cooldown alone still allows ~1400 paid messages a day at
+// one number, so the budget caps what a single number can ever cost.
 func TestOneNumberCannotBeMadeToCostForever(t *testing.T) {
 	m := NewCodeManager(true)
 
@@ -267,10 +255,8 @@ func TestOneNumberCannotBeMadeToCostForever(t *testing.T) {
 	}
 }
 
-// The budget guards the sms bill, so where there is no bill there is nothing to guard - and the
-// cost of arming it anyway is real: the console sender prints codes into the log, and a developer
-// testing the login screen would spend the five sends in a couple of minutes and then be refused on
-// their own number for an hour, by a limiter only a restart clears.
+// Where there is no bill there is nothing to guard, and arming it anyway would refuse a developer their
+// own number for an hour after a few sends, from a limiter only a restart clears.
 func TestFreeDeliveryHasNoSendCeiling(t *testing.T) {
 	m := NewCodeManager(false)
 
@@ -282,8 +268,7 @@ func TestFreeDeliveryHasNoSendCeiling(t *testing.T) {
 		issueFor(t, m, testPhone)
 	}
 
-	// the cooldown is not part of the deal, though: it is about not sending a second code to somebody
-	// who already has one, which is true whoever is paying
+	// the cooldown is not part of the deal: it is about not replacing a code somebody is still typing
 	if _, wait, err := m.Issue(Pending{Purpose: CodeLogin, Phone: testPhone, Name: "Тест", Role: "customer"}); !errors.Is(err, ErrResendTooSoon) || wait <= 0 {
 		t.Fatalf("an immediate resend returned (%v, %v), want ErrResendTooSoon with a countdown", wait, err)
 	}
@@ -330,8 +315,7 @@ func TestThePlaintextCodeIsNeverKept(t *testing.T) {
 	if entry.digest != hashCode(entry.salt, sent) {
 		t.Fatal("the stored digest is not the hash of the code that was sent")
 	}
-	// the salt is what makes the digest useless to an attacker who dumps it: six digits is a 10^6
-	// space, so an unsalted sha256 would be reversed by brute force in milliseconds
+	// six digits is a 10^6 space, so an unsalted sha256 would be reversed by brute force in milliseconds
 	if entry.salt == [16]byte{} {
 		t.Fatal("the entry has no salt")
 	}
@@ -351,10 +335,8 @@ func TestMaskPhone(t *testing.T) {
 	}
 }
 
-// **the ceiling on the bill, and the only limit an attacker cannot spread around.** The per-phone
-// budget stops one number being made to cost money and the per-address one stops a single machine
-// walking through numbers - but a thousand numbers hit once each from a thousand addresses passes
-// both of those and bills us for a thousand messages.
+// **the ceiling on the bill, and the only limit an attacker cannot spread around**: a thousand numbers
+// hit once each from a thousand addresses passes both of the others.
 func TestTheDailyBudgetCapsWhatEverybodyTogetherCanSpend(t *testing.T) {
 	codes := NewCodeManager(true)
 
@@ -392,9 +374,7 @@ func TestNoBudgetIsEnforcedWhenSendingIsFree(t *testing.T) {
 
 // ── the Play review account ──
 //
-// **This is a login bypass, so the tests are about its edges rather than its happy path.** It exists
-// because a Google reviewer cannot receive a Telegram code on a number they do not own, and an app
-// whose first screen cannot be passed is refused as broken.
+// **This is a login bypass, so the tests are about its edges rather than its happy path.**
 
 const reviewPhone, reviewCode = "998901110000", "424242"
 
@@ -453,9 +433,8 @@ func TestAnUnarmedManagerExemptsNobody(t *testing.T) {
 	}
 }
 
-// Nothing is sent for this number, so neither budget has a bill to protect - and a reviewer locked
-// out by an hourly limiter mid-review is a rejection. The cooldown still applies: that one is about
-// not replacing a code somebody is in the middle of typing.
+// Nothing is sent for this number, so neither budget has a bill to protect, and a reviewer locked out
+// mid-review is a rejection. The cooldown still applies.
 func TestTheReviewAccountIsNotBudgeted(t *testing.T) {
 	m := NewCodeManager(true).WithReviewAccount(reviewPhone, reviewCode)
 

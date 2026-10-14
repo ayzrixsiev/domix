@@ -1,14 +1,11 @@
 package db_test
 
-// the home screen's three sections are the first thing in this project whose *correctness is a
-// number* rather than a rendered widget - "which shop is cheapest" is either right or it silently
-// isn't, and no amount of looking at the app tells you which. so these run against a real postgres
-// with the real schema, not against a mock: the whole point is to check what the database computes,
-// and a mock of the database would be checking what this test believes it computes.
+// the home screen's correctness is a *number* - "which shop is cheapest" is either right or silently
+// wrong, and looking at the app tells you nothing. so these run against a real postgres with the real
+// schema: a mock of the database would check what this test believes it computes.
 //
-// every test opens a transaction and rolls it back, so the founder's own data is never touched -
-// nothing here commits. that also means each test sees only the rows it inserted, which is what lets
-// them assert on exact list contents.
+// every test opens a transaction and rolls it back, so each sees only the rows it inserted, which is
+// what lets them assert on exact list contents.
 
 import (
 	"context"
@@ -26,11 +23,8 @@ import (
 	"domix/backend/internal/catalog"
 )
 
-// begins a transaction against the local database and registers its rollback.
-//
 // t.Skip rather than t.Fatal when there is no database: `go test ./...` has to stay runnable on a
-// machine that has never set one up (and in a CI job that has no postgres), so a missing DB_URL
-// means "not applicable here", not "broken".
+// machine that has never set one up, so a missing DB_URL means "not applicable here", not "broken".
 func beginTx(t *testing.T) (context.Context, pgx.Tx, *db.Queries) {
 	t.Helper()
 
@@ -60,15 +54,10 @@ func beginTx(t *testing.T) (context.Context, pgx.Tx, *db.Queries) {
 	// row these tests write stops existing
 	t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
 
-	// and this is how every row that *already* existed stops existing, for the length of the test.
-	//
-	// the Basket Price Index is a comparison against every other shop in the market, so unlike the
-	// old per-shop average it cannot be asserted on without controlling the whole population - one
-	// shop left over on the founder's laptop would shift every index in every test below, and the
-	// failure would look like arithmetic being wrong rather than like data being present. the
-	// transaction never commits, so nothing is actually deleted; it does hold row locks on shops for
-	// the second or two the test runs, which a locally running server would notice only if it tried
-	// to write in that window.
+	// the index compares a shop against every other shop in its market, so it cannot be asserted on
+	// without controlling the whole population: one shop left over on this laptop shifts every index
+	// below, and the failure reads as arithmetic being wrong rather than data being present. the
+	// transaction never commits, but it does hold row locks on shops while the test runs.
 	if _, err := tx.Exec(ctx, "DELETE FROM shops"); err != nil {
 		t.Fatalf("clear shops for the duration of the transaction: %v", err)
 	}
@@ -163,14 +152,13 @@ func priceProducts(t *testing.T, ctx context.Context, conn pgx.Tx, shopID int64,
 	}
 }
 
-// The point of products.in_basket, in one test: extending the catalogue must not cost every shop in
-// the market its badge, and voting the new row in must.
+// The point of products.in_basket: extending the catalogue must not cost every shop its badge, and
+// voting the new row in must.
 //
 // **both halves fail in a way nobody would report.** without the in_basket filter in
-// refresh_basket_index the first half breaks - the founder adds a product and every badge in the
-// market quietly disappears, which is what made the catalogue unextendable. without in_basket in
-// basket_index_after_product_update's watch list the second half breaks - the row is voted in and the
-// index keeps answering about the old basket until some unrelated write happens to move it.
+// refresh_basket_index, adding a product makes every badge in the market quietly disappear; without
+// in_basket in basket_index_after_product_update's watch list, a vote leaves the index answering about
+// the old basket until some unrelated write moves it.
 func TestAProductOutsideTheBasketDoesNotCostAnybodyTheirBadge(t *testing.T) {
 	ctx, conn, q := beginTx(t)
 
@@ -233,17 +221,13 @@ func TestAProductOutsideTheBasketDoesNotCostAnybodyTheirBadge(t *testing.T) {
 	}
 }
 
-// the founder's worked example, run against the real view.
+// the worked example, run against the real view: four shops at 100 / 106 / 98 / 96 thousand per item
+// average to 100 thousand, so the indices are 100 / 106 / 98 / 96.
 //
-// four stores whose per-item prices are 100 / 106 / 98 / 96 thousand average out to 100 thousand, so
-// the indices are 100 / 106 / 98 / 96. every shop here prices its whole template, which since 000013
-// is the only way to be in the view at all - so this is the arithmetic in the spec run unmodified,
-// and it is the case where the implementation and the specification have to agree digit for digit.
-//
-// the four indices are literals while the four baskets are computed, and that asymmetry is the real
-// content of the example: a basket is n items, so it moves when the template does, but the index
-// divides one basket by the average of the others and n cancels out of both sides. an index that
-// changed when a product was added to /products.md would mean the view was measuring the wrong thing.
+// **the indices are literals while the baskets are computed, and that asymmetry is the content of the
+// example**: a basket is n items and moves when the template does, but the index divides one basket by
+// the average of the others and n cancels. an index that changed when a product was added would mean
+// the view is measuring the wrong thing.
 func TestBasketIndexReproducesTheWorkedExample(t *testing.T) {
 	ctx, conn, q := beginTx(t)
 
@@ -285,14 +269,10 @@ func TestBasketIndexReproducesTheWorkedExample(t *testing.T) {
 	}
 }
 
-// a shop with one unpriced product is out of the index *and* out of the market it would otherwise
-// have been averaged into.
-//
-// the second half is the part worth pinning. excluding a shop from the rankings is the obvious
-// reading of the rule; excluding it from everyone else's baseline is what makes the remaining
-// numbers honest. the partial shop here is priced at a tenth of the market, so if its half-empty
-// basket leaked into the average, the finished shop's index would land far above 100 and it would
-// advertise "дороже рынка" against a market that is really just one unfinished neighbour.
+// a shop with one unpriced product is out of the index *and* out of the market it would have been
+// averaged into. the second half is the part worth pinning: the partial shop here is priced at a tenth
+// of the market, so a half-empty basket leaking into the average would have the finished shop
+// advertise "дороже рынка" against a market that is really one unfinished neighbour.
 func TestBasketIndexExcludesShopsWithAnIncompleteBasket(t *testing.T) {
 	ctx, conn, q := beginTx(t)
 
@@ -328,11 +308,9 @@ func TestBasketIndexExcludesShopsWithAnIncompleteBasket(t *testing.T) {
 	}
 }
 
-// the boundary is the last product, straddled from both sides.
-//
-// "all of them" sounds like a rule with no off-by-one in it, but the view expresses it as
-// `COUNT(price) = COUNT(*)`, and a `>=` slipped in there would pass every test that prices a
-// comfortable amount on each side of a line.
+// the boundary is the last product, straddled from both sides: "all of them" sounds like a rule with no
+// off-by-one in it, but the view expresses it as `COUNT(price) = COUNT(*)`, and a `>=` slipped in there
+// would pass every test that prices a comfortable amount on each side of a line.
 func TestBasketIndexNeedsEveryTemplateProductPriced(t *testing.T) {
 	ctx, conn, q := beginTx(t)
 
@@ -365,22 +343,15 @@ func TestBasketIndexNeedsEveryTemplateProductPriced(t *testing.T) {
 	}
 }
 
-// the direction the other tests never travel: a shop that **is** in the comparison and then stops
-// being in it, because the template grew under it.
+// the direction the other tests never travel: a shop that **is** in the comparison and stops being in
+// it, because the template grew under it. This is what AdminSyncTemplateInsert does to every shop in a
+// market the moment a row is added to a template.
 //
-// This is a real event, not a hypothetical - it is what AdminSyncTemplateInsert does to every shop
-// in a market the moment the founder adds a row to products.md. Every one of them is suddenly one
-// unpriced item short of a complete basket, and the badge has to go out until its owner prices the
-// new row.
-//
-// **It is here because of how the index is kept up to date.** The table is maintained
-// by triggers, and the insert trigger deliberately does *not* recompute when an unpriced template
-// row arrives at a shop that has no index row - that is what stops Shops.Create's hundred seeding
-// inserts from recomputing the whole market a hundred times inside one transaction. The guard is
-// only sound in that one direction, and this test is the other one: arrive at a shop that *does*
-// have an index row, and the market must be recomputed and that row taken away. A guard written one
-// clause too wide would leave the old badge standing on the map - not missing, which somebody would
-// notice, but *wrong*, which nobody would.
+// **It is here because of how the index is kept up to date.** The insert trigger deliberately does not
+// recompute when an unpriced template row arrives at a shop with no index row - that is what stops
+// Shops.Create's hundred seeding inserts recomputing the market a hundred times in one transaction. The
+// guard is sound in that direction only, and a clause too wide would leave the old badge standing on
+// the map: not missing, which somebody would notice, but *wrong*, which nobody would.
 func TestAGrowingTemplateTakesAShopOutOfTheComparison(t *testing.T) {
 	ctx, conn, q := beginTx(t)
 
@@ -401,11 +372,10 @@ func TestAGrowingTemplateTakesAShopOutOfTheComparison(t *testing.T) {
 		t.Fatalf("a fully priced catalogue should publish an index before the template grows")
 	}
 
-	// the founder adds one product to the универсальный template and syncs. the same statement the
-	// admin endpoint runs, one unpriced row into a shop that is currently ranked.
+	// the same statement the sync endpoint runs: one unpriced row into a shop that is currently ranked.
 	//
-	// **in_basket: true is what makes this the losing case.** a row added *outside* the basket is the
-	// default now and leaves every badge standing - see the test below.
+	// **in_basket: true is what makes this the losing case** - a row added outside the basket is the
+	// default and leaves every badge standing, which is the test below.
 	if err := q.SeedTemplateProduct(ctx, db.SeedTemplateProductParams{
 		ShopID:      shop,
 		Name:        "новый товар",
@@ -439,11 +409,9 @@ func TestAGrowingTemplateTakesAShopOutOfTheComparison(t *testing.T) {
 
 // ─────────────────────────── the paid placements ───────────────────────────
 
-// **the one that would cost real money if it broke.** ListVipShops used to inner-join the basket
-// index, so a placement that had been granted and paid for did not appear in the carousel until its
-// owner had priced every last template row - and nothing anywhere said so. it was a left join on the
-// map the whole time (ListShops), which is why the bug was invisible: the shop was on the map, just
-// not in the thing somebody had bought.
+// **the one that would cost real money if it broke**: ListVipShops LEFT JOINs the basket index, so a
+// placement that has been paid for appears in the carousel whether or not its owner has priced every
+// template row. an inner join hides it there while leaving it on the map, which is invisible.
 func TestAPaidPlacementAppearsBeforeItsCatalogueIsPriced(t *testing.T) {
 	ctx, conn, q := beginTx(t)
 
@@ -489,16 +457,13 @@ func TestAPaidPlacementAppearsBeforeItsCatalogueIsPriced(t *testing.T) {
 	}
 }
 
-// the centre of the carousel is the most valuable position in the section and it is being sold, so
-// which row leads this list is a commercial decision rather than an ordering detail. the rule is
-// "the cheapest basket leads" - the centre answers the question the customer opened the app with,
-// and the placement is what got a shop into the running for it.
+// the centre of the carousel is the position being sold, so which row leads is a commercial decision
+// rather than an ordering detail: the cheapest basket leads.
 //
-// **the unpriced placement is the half of this that costs money if it breaks.** ListVipShops
-// left-joins the basket index on purpose, so a shop that has paid but not finished pricing has a
-// null where its basket goes. it has nothing to rank, so it belongs at the back of a price ordering
-// - but it still belongs *in the list*, and a null sorting to the front would hand the slot that is
-// sold on comparison to the one card that cannot make one.
+// **the unpriced placement is the half that costs money if it breaks.** ListVipShops left-joins the
+// index, so a shop that has paid but not finished pricing has a null where its basket goes: it belongs
+// at the back of a price ordering but still *in the list*, and a null sorting to the front would hand
+// the slot sold on comparison to the one card that cannot make one.
 func TestTheVipCarouselLeadsWithTheCheapestBasket(t *testing.T) {
 	ctx, conn, q := beginTx(t)
 
@@ -553,7 +518,7 @@ func TestTheVipCarouselTieBreaksOnTheLongerPlacement(t *testing.T) {
 	setVIP(t, ctx, q, short, time.Now().Add(7*24*time.Hour))
 	setVIP(t, ctx, q, long, time.Now().Add(90*24*time.Hour))
 	// yesterday: the placement is over, and it leaves the carousel on its own with nobody doing
-	// anything - which is the whole reason vip_until is a date and not a boolean (§6)
+	// anything - which is the whole reason vip_until is a date and not a boolean
 	setVIP(t, ctx, q, lapsed, time.Now().Add(-24*time.Hour))
 
 	shops, err := q.ListVipShops(ctx, 5)
@@ -629,16 +594,11 @@ func TestBestOffersExcludeShopsWithNoIndex(t *testing.T) {
 	}
 }
 
-// **the ordering is the entire meaning of this section**, so it gets a test of its own rather than
-// riding along inside the scoping test above.
+// **the ordering is the entire meaning of this section**, so it gets its own test.
 //
-// what is really being pinned is that ordering by `price_index` and ordering by `basket_price` are
-// the *same* ordering inside one shop category. the index is `basket ÷ that category's average
-// basket`, and every row this query returns is in the same category, so the divisor is one positive
-// constant - dividing a list by a constant cannot reorder it. the query uses the index only because
-// the view already carries it.
-//
-// worth stating as a test because the two look like independent choices, and somebody reading
+// what is pinned is that ordering by `price_index` and by `basket_price` are the *same* ordering inside
+// one category: the index is basket ÷ that category's average basket, so the divisor is one positive
+// constant. worth a test because the two look like independent choices, and somebody reading
 // "ORDER BY price_index" with the raw sums in front of them will eventually be tempted to "fix" it.
 func TestBestOffersRankByPriceWhicheverNumberYouUse(t *testing.T) {
 	ctx, conn, q := beginTx(t)
@@ -831,14 +791,12 @@ func TestACategoryShowsAFewOffersOfEachProductRatherThanOneProduct(t *testing.T)
 	}
 }
 
-// a product the owner added themselves shows up in the category drill-down - "can I buy плитка
-// here" is answered just as truthfully by their own row - but never moves the basket index, which
-// has to stay a comparison of the same shared basket.
+// a product the owner added themselves shows up in the category drill-down but never moves the basket
+// index, which has to stay a comparison of the same shared basket.
 //
-// since 000013 there is a second, sharper reason to hold this line. the index now requires every row
-// of the basket to be priced, so if the owner's own products were ever counted as part of it, a
-// single custom row left without a price would silently delete the shop's badge - and the owner
-// would have no way to connect the two.
+// the sharper reason: the index requires every basket row to be priced, so if an owner's own products
+// counted towards it, one custom row left unpriced would silently delete the shop's badge with nothing
+// connecting the two.
 func TestCustomProductsAppearInACategoryButNotInTheIndex(t *testing.T) {
 	ctx, conn, q := beginTx(t)
 
@@ -955,11 +913,9 @@ func offerIndices(shops []db.ListBestOffersInCategoryRow) []int64 {
 	return out
 }
 
-// the templates live in `product_templates` since migration 000014 and are held in memory by
-// internal/catalog, loaded once at startup by main.go. tests do not run main.go, so every harness
-// that seeds a shop has to load them first - without it catalog.Template returns nothing and every
-// shop is created with an empty catalogue, which fails as a wrong *count* three assertions later
-// rather than as a missing setup step.
+// the templates live in `product_templates`, held in memory by internal/catalog and loaded at startup
+// by main.go. tests do not run main.go, so every harness that seeds a shop has to load them first, or
+// every shop is created empty and it fails as a wrong *count* three assertions later.
 // the same mapping as endpoints.loadCatalogue - keep the two in step, or a column added to
 // product_templates arrives in production and not in these tests
 func loadTemplates(t *testing.T, ctx context.Context, q *db.Queries) {

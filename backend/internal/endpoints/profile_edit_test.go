@@ -1,11 +1,9 @@
 package endpoints
 
-// editing an account that already exists: the name and the role through PATCH /api/me, the number
-// through the two-step code flow at /api/me/phone.
-//
-// Every one of these is a rule that either costs money when it is wrong (a message sent for a
-// change that cannot land) or hands one account another account's identity - users.phone is what
-// every login looks a row up by.
+// editing an account that already exists: name and role through PATCH /api/me, the number through the
+// two-step code flow at /api/me/phone. each rule here either costs money when it is wrong (a message
+// sent for a change that cannot land) or hands one account another's identity, since users.phone is
+// what every login looks a row up by.
 
 import (
 	"context"

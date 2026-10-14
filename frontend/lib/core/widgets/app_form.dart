@@ -7,10 +7,9 @@ import 'package:frontend/core/constants/app_theme.dart';
 /// The four pieces every multi-step form in the app is built from: a field's decoration, the label
 /// over it, the refusal under it, and the full-width button at the foot.
 ///
-/// **They live here because two flows now wear them.** Registration and the profile editor ask for
-/// the same name and the same phone number, one to create an account and one to change it - and a
-/// second copy of an input's border colours is how two screens that must look identical stop
-/// looking identical.
+/// **They live here because two flows wear them**: registration and the profile editor ask for the
+/// same name and number, and a second copy of an input's border colours is how two screens that must
+/// look identical stop looking identical.
 
 /// Filled, hairline-bordered, orange when focused. Used for every free-text field in a form.
 InputDecoration appFieldDecoration({required String hint, Widget? prefix}) {

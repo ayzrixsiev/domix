@@ -146,9 +146,8 @@ func productImage(urls imagestore.URLs, path pgtype.Text) (url, thumb *string, o
 // the three flags, in one function so the five response sites and the Update branch cannot disagree
 // about what a slot is. an invalid key is the owner's own row: (false, true, true).
 //
-// **photoEditable asks the catalogue, not the shop's category**: the rule is "an owner may
-// photograph what we have not photographed". Everywhere else the picture is one file shared by every
-// shop of the category, and replacing it would make two rows the index calls identical look different.
+// **photoEditable asks the catalogue, not the shop's category**: an owner may photograph what we have
+// not photographed, and a curated file is shared by every shop of the category.
 func templateFlags(key pgtype.Text) (isTemplate, nameEditable, photoEditable bool) {
 	if !key.Valid {
 		return false, true, true

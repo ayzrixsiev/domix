@@ -15,10 +15,9 @@ import 'package:frontend/core/constants/map_config.dart';
 /// The whole surface between Domix and Yandex MapKit: **everything that knows MapKit exists lives
 /// in this file**, which is why swapping the provider touched two screens rather than twenty.
 ///
-/// **The pins are still Flutter widgets** - [ymk.ViewProvider] lays one out off-screen and hands
-/// MapKit the raster. Two consequences: **no `InheritedWidget`s reach it**, so a pin must be
-/// self-contained or it throws off-screen and nowhere else; and **a `GestureDetector` inside it does
-/// nothing**, which is why [MapPin.onTap] is a field.
+/// **The pins are still Flutter widgets**: [ymk.ViewProvider] lays one out off-screen and hands MapKit
+/// the raster, so **no `InheritedWidget` reaches a pin** (it throws off-screen and nowhere else) and
+/// **a `GestureDetector` inside one does nothing**, which is why [MapPin.onTap] is a field.
 class DomixMap extends StatefulWidget {
   const DomixMap({
     super.key,

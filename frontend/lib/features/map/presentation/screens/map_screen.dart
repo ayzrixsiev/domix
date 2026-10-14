@@ -68,10 +68,9 @@ class _MapScreenState extends State<MapScreen> {
   /// the whole city fits at this zoom, which is why the map opens here
   static const _initialZoom = 12.0;
 
-  /// Below this zoom a shop is a [ShopDot] and above it a full [ShopMarker]. **Not a cutoff where
-  /// pins disappear**, which is what this used to be: at city scale the category glyph is too small
-  /// to read and seventy price labels overlap into noise, but *where the shops are* is exactly what
-  /// a zoomed-out map is for, so the dots stay and only the detail is withheld.
+  /// Below this zoom a shop is a [ShopDot] and above it a full [ShopMarker]. **not a cutoff where pins
+  /// disappear**: at city scale the glyph is unreadable and seventy price labels overlap into noise,
+  /// but *where the shops are* is what a zoomed-out map is for, so only the detail is withheld.
   ///
   /// 13 and not 12: the map opens at [_initialZoom] showing the scatter, and one pinch turns it into
   /// pins that can be read.
@@ -369,14 +368,11 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ),
 
-        // **viewPaddingOf, not paddingOf**: the second collapses to zero while the keyboard is up,
-        // which would drop the button onto the gesture bar every time the search field is tapped.
-        // Drawn whatever MapConfig says - on a desktop preview there is no map to centre, but the
-        // button is still part of the layout being reviewed, and pressing it just says it could not
-        // find a position.
+        // **viewPaddingOf, not paddingOf**: the second collapses to zero while the keyboard is up and
+        // would drop the button onto the gesture bar every time the search field is tapped.
         //
-        // Right-hand side and clear of the foot: MapKit draws Yandex's logo along the bottom as a
-        // condition of the licence, and [_logoClearance] is the strip left for it.
+        // clear of the foot because MapKit draws Yandex's logo along the bottom as a condition of the
+        // licence - [_logoClearance] is the strip left for it.
         Positioned(
           right: 16,
           bottom: widget.bottomPadding + MediaQuery.viewPaddingOf(context).bottom + _logoClearance,

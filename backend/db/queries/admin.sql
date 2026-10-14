@@ -193,17 +193,14 @@ WHERE s.category = $1
 ON CONFLICT (shop_id, template_key) DO NOTHING;
 
 -- name: AdminSyncTemplateUpdate :execrows
--- price and availability are absent from the SET list and that is why this is safe to run at all.
--- **in_basket is here**, though: membership is the template's decision, not the shop's, and a row
--- the panel voted into the basket that stayed out of it in half the shops would mean two markets
--- totalling different baskets under one badge.
+-- **price and availability are absent from the SET list, and that is why this is safe to run at all.**
+-- in_basket is here: membership is the template's decision, and a row voted in that stayed out in half
+-- the shops would mean two markets totalling different baskets under one badge.
 --
--- **a shop pointing at its own upload keeps it ($4 is imagestore.UploadDir + '/%').** The owner
--- photographed the roll of wallpaper actually standing in their shop; the template row it sits
--- under names a kind of product, not a product. Overwriting that would replace every real photo in
--- the market with one picture and send the files they replaced to the orphan sweep - silently, with
--- the row count looking exactly as it should. The rule is the prefix rather than the category, so a
--- second slot-based category is covered the day it exists.
+-- **a shop pointing at its own upload keeps it ($4 is imagestore.UploadDir + '/%')**: the owner
+-- photographed the roll standing in their shop, where the template row names a kind of product.
+-- overwriting it would replace every real photo in the market with one picture, silently. the guard is
+-- the prefix rather than the category, so a second slot-based category is covered the day it exists.
 UPDATE products p
 SET name          = CASE WHEN $3::boolean THEN t.name ELSE p.name END,
     category      = t.category,
@@ -362,12 +359,12 @@ ORDER BY (COUNT(p.id) - COUNT(p.price)), s.created_at
 LIMIT $1;
 
 -- name: AdminMarketRankings :many
--- the cheapest few shops in every market, in order, because the question the panel exists to answer
--- is **whether anybody is competing**: 4.61/4.63/4.65 is a fight, 4.6/5.4/6.2 is one shop with no
--- pressure on it, and the two look identical if you print only the winner.
+-- the cheapest few shops in every market, in order, because the question is **whether anybody is
+-- competing**: 4.61/4.63/4.65 is a fight, 4.6/5.4/6.2 is one shop with no pressure on it, and printing
+-- only the winner makes them look identical.
 --
 -- CROSS JOIN LATERAL and not a window function: sqlc cannot compile a ROW_NUMBER() filtered from an
--- outer WHERE, and the lateral is the shape postgres wants anyway.
+-- outer WHERE.
 SELECT c.category,
        r.shop_id,
        r.shop_name,
@@ -438,12 +435,11 @@ ORDER BY s.vip_until
 LIMIT $1;
 
 -- name: AdminUploadedImagePaths :many
--- every uploaded photo any row points at, for the orphan sweep. filtered in SQL because catalogue
--- paths outnumber uploads a hundred to one. the prefix is a parameter so imagestore.UploadDir stays
--- the one declaration of what "uploads/" is.
+-- every uploaded photo any row points at, for the orphan sweep. the prefix is a parameter so
+-- imagestore.UploadDir stays the one declaration of what "uploads/" is.
 --
--- **shops are in it, not only products**: a storefront photo lives in the same directory, and a
--- sweep that read products alone would delete every VIP card's picture an hour after it was uploaded.
+-- **shops are in it, not only products**: a storefront photo lives in the same directory, and a sweep
+-- reading products alone would delete every VIP card's picture an hour after it was uploaded.
 SELECT image_path::text AS image_path
 FROM products
 WHERE image_path LIKE @prefix::text

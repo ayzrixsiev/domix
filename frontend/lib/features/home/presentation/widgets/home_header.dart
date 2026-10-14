@@ -73,21 +73,15 @@ class HomeHeader extends StatelessWidget {
 // pill-shaped rather than on the radius scale, which governs rectangles: a full stadium reads as a
 // chip.
 //
-// **Both chips are white and lifted, and both are lit.** Filling them with the search bar's grey was
-// tried and is gone: two grey lozenges over a grey bar over a grey page flattened the whole top of
-// the screen into one wash, and the pills stopped reading as things you can press.
+// **Both chips are white and lifted, and lit rather than merely bright** - a grey fill over a grey
+// bar over a grey page flattens the top of the screen into one wash and the pills stop reading as
+// things you can press:
 //
-// What makes them premium rather than merely white is the same trick as the category tiles - a
-// surface is convincing when it is *lit*, not when it is bright:
-//
-//   - a near-vertical gradient, white at the top easing to [AppColors.surfaceMuted] at the bottom,
-//     so the pill has a lit edge and a shaded one instead of one flat fill
-//   - **and no shadow at all.** Both `raised` and the tighter `card` were tried, and on a #EFF1F5
-//     page a black shadow at any alpha is simply a grey shape: soft-edged, but plainly visible
-//     behind a 40px chip and reading as a second box sitting behind it. The gradient and the
-//     hairline do the whole job - a lit surface does not need a cast shadow to look raised
-//   - the hairline stays, and it is doing real work here - it is the only thing defining the pill's
-//     edge where the gradient's top end meets the page
+//   - a near-vertical gradient, white at the top easing to [AppColors.surfaceMuted], so the pill has
+//     a lit edge and a shaded one instead of one flat fill
+//   - **and no shadow at all**: on this page a black shadow at any alpha is a visible grey shape
+//     behind a 40px chip, reading as a second box behind it
+//   - the hairline is the only thing defining the pill's edge where the gradient meets the page
 
 /// The lit fill both chips share. Kept here rather than repeated, so the round one and the long one
 /// cannot drift apart.

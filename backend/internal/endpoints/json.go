@@ -6,13 +6,11 @@ import (
 	"runtime/debug"
 )
 
-// wraps a handler so every json api response carries the right content type, and so a panic inside
-// it becomes a logged 500 rather than a dropped connection. no CORS headers: the app is a native
-// client and both web pages call this api same-origin.
+// the json content type on every api response, and a panic turned into a logged 500. no CORS headers:
+// the app is a native client and both web pages call this api same-origin.
 //
-// **net/http already stops a panic from killing the process, but it answers nothing**: it closes the
-// connection, so the app sees a network failure it retries forever and the only record is a stack
-// trace nobody correlated with a request. this turns it into an error the app can show.
+// **net/http already stops a panic from killing the process, but it answers nothing** - it closes the
+// connection, so the app sees a network failure it retries forever. this turns it into an error.
 func WithJSON(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -6,20 +6,16 @@ import 'package:frontend/core/constants/app_theme.dart';
 
 /// The one round control in the app: a glyph inside a white disc lifted by a soft shadow.
 ///
-/// Every header control is built from this - the back chevron on the left, the action on the right -
-/// so the two ends of a header are the same object at the same size and weight, and only the glyph's
-/// colour says which one is the primary action. **No ring**: white on the off-white page is already
-/// a shape, and an outline around it is what made the old disc look like a sticker.
+/// Every header control is built from this, so the two ends of a header are the same object at the
+/// same size and only the glyph's colour says which is primary. **No ring**: white on the off-white
+/// page is already a shape, and an outline makes the disc look like a sticker.
 ///
-/// **No outer padding.** Where the disc sits on the page is the header's business, not the button's
-/// - see [AppPageHeader]'s gutter constants. The two floating uses pad themselves by [gutterInset].
+/// **No outer padding** - where the disc sits is the header's business, not the button's.
 ///
-/// **A disc sharing a line with a search field takes that field's height** ([diameter]): the 40
-/// that leads a title reads as a different kind of object set down beside a 48px capsule, which is
-/// the same reason `MapBarButton` is the field's 50 over the map.
+/// **A disc sharing a line with a search field takes that field's height** ([diameter]): a 40 beside
+/// a 48 capsule reads as a different kind of object, which is why `MapBarButton` is 50 over the map.
 ///
-/// [floating] is sitting on a header surface versus hovering over a picture; a third case makes it
-/// an enum.
+/// [floating] is sitting on a header surface versus hovering over a picture.
 class CircleIconButton extends StatelessWidget {
   const CircleIconButton({
     super.key,

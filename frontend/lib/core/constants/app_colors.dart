@@ -36,7 +36,7 @@ class AppColors {
   // **the colour every catalogue photo is shot on.** the photo sits `contain`ed on this panel, so
   // the bars either side of a shot are invisible only if the background matches to the digit.
   // deliberately its own token and not `background`: the page can be retuned without a reshoot.
-  static const Color photoPanel = Color(0xFFF2F2F6);
+  static const Color photoPanel = Color(0xFFEFF0F5);
 
   // Text
   static const Color textDark = Color(0xFF17171C);

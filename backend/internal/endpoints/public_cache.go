@@ -13,25 +13,20 @@ import (
 
 // publicCache holds the answer to a read whose bytes are the same for everybody.
 //
-// **the home screen, the map and a category listing do not depend on who is asking**, and they are
-// exactly what a crowd opens at once. without this, a thousand people opening the app is five
-// thousand queries against a pool of ten connections. with it, it is one set of queries per [ttl]
-// however many people arrive - which is also what lets the per-address limit in front of those
-// routes be a floor against a flood rather than fine control, since there is no per-caller cost
-// left to meter (CLAUDE.md §4).
+// **the home screen, the map and a category listing do not depend on who is asking**, and they are what
+// a crowd opens at once: without this, a thousand people opening the app is five thousand queries
+// against a pool of ten. with it there is no per-caller cost left to meter, which is what lets the
+// per-address limit in front of those routes be a floor rather than fine control.
 //
-// **per-shop reads are deliberately not in here.** an owner typing a price into their own catalogue
-// has to see it on the next screen, and a crowd spreads across shops rather than piling onto one
-// answer - so those stay one indexed read each.
+// **per-shop reads are deliberately not in here**: an owner typing a price has to see it on the next
+// screen, and a crowd spreads across shops rather than piling onto one answer.
 //
 // the nil cache builds every time, which is what the tests construct.
 type publicCache struct {
 	ttl time.Duration
 
-	// how far past the ttl a copy may still be served when the rebuild itself fails. **this is what
-	// keeps a database blip from emptying the home screen**: the alternative is answering 500 to
-	// everybody while a perfectly good twenty-second-old copy sits in memory. bounded, because past
-	// a few minutes "the app is showing something" stops being better than "the app says it failed".
+	// how far past the ttl a copy may still be served when the rebuild fails. **this is what keeps a
+	// database blip from emptying the home screen**, bounded because stale eventually beats nothing.
 	staleFor time.Duration
 
 	mu      sync.Mutex
@@ -50,11 +45,9 @@ func NewPublicCache(ttl time.Duration) *publicCache {
 	return &publicCache{ttl: ttl, staleFor: 5 * time.Minute, entries: make(map[string]*cachedAnswer)}
 }
 
-// serve answers from memory while the last copy is still fresh, and otherwise builds one - **once**.
-// callers arriving during a rebuild wait for that answer rather than starting their own, which is
-// the difference between a cache and a stampede on the moment it expires.
-//
-// `what` names the thing for the log line and for the error the app shows.
+// serve answers from memory while the last copy is fresh, and otherwise builds one - **once**. callers
+// arriving during a rebuild wait for that answer rather than starting their own, which is the difference
+// between a cache and a stampede at the moment it expires. `what` names the thing for the log line.
 func (c *publicCache) serve(w http.ResponseWriter, r *http.Request, key, what string, build func(context.Context) (any, error)) {
 	body, ok := c.body(w, r, key, what, build)
 	if !ok {
@@ -115,9 +108,7 @@ func (c *publicCache) entryFor(key string) *cachedAnswer {
 	return entry
 }
 
-// builds one answer and encodes it.
-//
-// **the build gets a context of its own rather than the request's.** the answer belongs to everybody
+// **the build gets a context of its own rather than the request's**: the answer belongs to everybody
 // waiting on it, so the first caller hanging up must not cancel it for the rest.
 func buildBody(r *http.Request, build func(context.Context) (any, error)) ([]byte, error) {
 	ctx, cancel := dbctx.WithTimeout(context.WithoutCancel(r.Context()))

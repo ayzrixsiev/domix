@@ -4,13 +4,9 @@ import 'package:frontend/core/constants/app_theme.dart';
 
 /// One short bar per step, filled up to the step being shown - how many are left, read at a glance.
 ///
-/// **Segments rather than a single continuous bar.** A `LinearProgressIndicator` at 50% says "half
-/// done" without saying half of *what*; four segments say there are four things and you are on the
-/// second, which is the question somebody being asked for a phone number actually has.
-///
-/// The filled segments animate, so advancing is visible even when the step's content changes
-/// completely underneath it - two screens of text with no motion between them read as a redraw
-/// rather than as progress.
+/// **Segments rather than one continuous bar**: 50% says "half done" without saying half of *what*,
+/// where four segments say there are four things and you are on the second. the fill animates, so
+/// advancing is visible even when the step's content changes completely underneath it.
 class StepProgressBar extends StatelessWidget {
   const StepProgressBar({
     super.key,

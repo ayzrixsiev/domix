@@ -73,10 +73,8 @@ func TestRotatingASpoofedAddressDoesNotBuyAFreshBucket(t *testing.T) {
 	}
 }
 
-// **the bug this exists to catch is invisible on a laptop.** Uzbek mobile operators put thousands of
-// subscribers behind one public address, so bucketing an authenticated request by address throttles
-// a whole carrier as though it were one person - and every developer machine has an address to
-// itself, so nothing local ever reproduces it.
+// **the bug this exists to catch is invisible on a laptop**: uzbek operators put thousands of subscribers
+// behind one address, so bucketing an authenticated request by address throttles a whole carrier.
 func TestKeyedBucketsByAccountRatherThanAddress(t *testing.T) {
 	// one token, so the second request from the same bucket is refused
 	limiter := New(0, 1, time.Minute).Keyed(func(r *http.Request) string {

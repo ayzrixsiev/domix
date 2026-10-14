@@ -1,13 +1,9 @@
-/// The layout a tab wears when it has **no navigation zone**: no back button, no title that changes
-/// with a route, nothing to pop. A big title written straight on the page, and content in bands
-/// under it.
+/// The layout a tab wears when it has **no navigation zone**: no back button, nothing to pop. A big
+/// title written straight on the page, and content in bands under it.
 ///
-/// This is the alternative to `AppPageHeader`, not a replacement for it. That header earns its
-/// tonal surface on a *pushed* screen, where the eye has to find the way back before it reads
-/// anything; on a root tab the same surface reads as a lid bolted onto the page. Both exist and the
-/// choice between them is one question - is there navigation in the top of this screen.
-///
-/// Three pieces, meant to be used together: [PlainPageTitle], [PageBand], [BandRow].
+/// The alternative to `AppPageHeader` rather than a replacement: the choice between them is one
+/// question - is there navigation in the top of this screen. Three pieces meant to be used together:
+/// [PlainPageTitle], [PageBand], [BandRow].
 library;
 
 import 'package:flutter/material.dart';
@@ -74,13 +70,12 @@ class PlainPageTitle extends StatelessWidget {
 
 /// A band of rows on the page: an optional label, a rule under it, the rows, and a closing rule.
 ///
-/// **The rules are [AppColors.trackGrey], not [AppColors.hairline].** Hairline is a border for
-/// things drawn on white; against the warm page it is three units away from the background and
-/// disappears on a phone in daylight. Track grey is the step *below* the page, which is what a
-/// divider lying directly on it has to be.
+/// **The rules are [AppColors.trackGrey], not [AppColors.hairline].** hairline is a border for things
+/// drawn on white, and against the page it is a few units off the background and disappears in
+/// daylight; track grey is the step *below* the page, which is what a divider lying on it has to be.
 ///
-/// A band with no rows still draws itself and says why it is empty - that is how a screen holding
-/// one live band admits to the ones it will hold later, instead of looking like the whole feature.
+/// A band with no rows still draws itself and says why it is empty, so a screen holding one live band
+/// admits to the ones it will hold later instead of looking like the whole feature.
 class PageBand extends StatelessWidget {
   const PageBand({
     super.key,
@@ -211,9 +206,8 @@ class _EmptyBand extends StatelessWidget {
 /// One row of a [PageBand]: a tinted glyph tile, a name, a line of what it is, whatever the caller
 /// puts on the right, and the chevron that says the row opens something.
 ///
-/// **Written with no idea what its rows mean** - a conversation, a role, a shop - because what must
-/// not differ between them is the layout. A list where one row is taller than another looks broken
-/// before it is read.
+/// **Written with no idea what its rows mean**, because what must not differ between them is the
+/// layout: a list where one row is taller than another looks broken before it is read.
 class BandRow extends StatelessWidget {
   const BandRow({
     super.key,

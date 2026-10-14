@@ -1,12 +1,9 @@
 package endpoints
 
-// the admin api is the only place in this service where one caller acts on another user's data, so
-// what these tests pin is almost entirely the boundary rather than the output.
-//
-// the shape of the bug they exist to catch: every one of these endpoints is correct-looking on its
-// own, and the whole security model is a single `role != "admin"` comparison in a middleware that
-// something else has to remember to wrap them in. a route registered without RequireAdmin still
-// compiles, still returns json, and hands the shop list to any logged-in customer.
+// the admin api is the only place where one caller acts on another user's data, so these pin the
+// boundary rather than the output: the whole security model is one `role != "admin"` comparison in a
+// middleware something else has to remember to wrap a route in. a route registered without
+// RequireAdmin still compiles, still returns json, and hands the shop list to any logged-in customer.
 
 import (
 	"context"
@@ -25,22 +22,12 @@ import (
 	"domix/backend/internal/catalog"
 )
 
-// every test here runs inside the transaction homeUnderTest opens and t.Cleanup rolls back, so the
-// DELETE below never reaches committed data - it only clears the rows this test's own view can see.
-// it is here because the statistics are counts over whole tables: with the developer's own rows
-// visible, "two users" would be "two plus whatever is in the local database" and the assertions
-// would pass or fail depending on whose laptop ran them.
+// the statistics are counts over whole tables, so with the developer's own rows visible "two users"
+// would be "two plus whatever is on this laptop". deleting users clears shops and products by cascade.
 //
-// deleting users is enough to clear all three tables - shops and products cascade off it.
-//
-// `basket_history` is the one table that cascade does not reach: it holds aggregates keyed by
-// (day, category) with no foreign key to anything, so a developer who has run `cmd/api` locally has
-// real committed rows here - startBasketHistory writes one per market at every boot. Those rows are
-// invisible to the delete above and outlive it, which is what made the history assertions count the
-// laptop's own days alongside the one the test wrote.
-//
-// both statements are undone by the rollback in homeUnderTest, so this empties the table for the
-// duration of one test without touching what is actually stored.
+// `basket_history` is the one table that cascade does not reach - aggregates keyed by (day, category)
+// with no foreign key - and startBasketHistory writes one row per market at every boot, so a laptop
+// that has run cmd/api has real rows here. both statements are undone by the harness's rollback.
 func adminUnderTest(t *testing.T) (*Admin, context.Context, pgx.Tx, *db.Queries) {
 	t.Helper()
 
@@ -280,7 +267,7 @@ func TestAdminDeletingAShopLeavesTheOwnerAlone(t *testing.T) {
 // ─────────────────────────── statistics ───────────────────────────
 
 // `shops_ranked` is the number the dashboard leads with, and it means one specific thing after
-// migration 000013: shops that have priced their *entire* template. a shop one row short of
+// shops that have priced their *entire* template. a shop one row short of
 // finished contributes nothing - not a partial index, not a share of the market average - so a
 // dashboard that counted it would report the comparison as working when it is empty.
 func TestStatsCountsOnlyCompleteBasketsAsRanked(t *testing.T) {
@@ -393,9 +380,8 @@ func TestListLimitIsClamped(t *testing.T) {
 
 // ─────────────────────────── vip ───────────────────────────
 
-// §7 deleted this endpoint once and said adding it back needed a conversation. it is back because
-// the founder asked for it, so what is worth pinning is the part that was never in question: a date
-// grants, and the *absence* of one revokes, through the same statement.
+// what is worth pinning here: a date grants, and the *absence* of one revokes, through the same
+// statement.
 func TestVIPIsGrantedAndRevokedThroughOneEndpoint(t *testing.T) {
 	adminEndpoints, ctx, tx, q := adminUnderTest(t)
 
@@ -439,11 +425,9 @@ func TestVIPIsGrantedAndRevokedThroughOneEndpoint(t *testing.T) {
 
 // ─────────────────────────── exclusion ───────────────────────────
 
-// **wins over catalogue completeness by design.** shop_basket_index answers "is every template
-// product priced", derived from products.price and unable to disagree with it - excluded_from_index
-// is an admin's own decision and has to override that even when every price is filled in. Migration
-// 000007's trigger recomputes the category on every flip, so this reads the same list endpoint the
-// panel does rather than poking shop_basket_index directly.
+// **wins over catalogue completeness by design**: shop_basket_index answers "is every template product
+// priced", where excluded_from_index is an admin's own decision and overrides that. a trigger
+// recomputes the category on every flip, so this reads the list endpoint the panel does.
 func TestExcludedShopLeavesTheIndexEvenWithACompleteCatalogue(t *testing.T) {
 	adminEndpoints, ctx, tx, q := adminUnderTest(t)
 
@@ -535,12 +519,9 @@ func TestExcludingAMissingShopIs404(t *testing.T) {
 
 // ─────────────────────────── editing ───────────────────────────
 
-// **the panel grants and revokes `admin`, and the only thing it refuses is emptying the role.**
-//
-// This reverses a rule that was pinned here for good reasons - a token that cannot mint another
-// administrator is a token whose theft ends when it expires - and the founder asked for the power on
-// his own product. What replaces the blanket refusal is arithmetic: zero administrators is the one
-// state no screen can undo, because signing into the panel requires one.
+// **the panel grants and revokes `admin`, and the only thing it refuses is emptying the role.** the
+// refusal is arithmetic rather than policy: zero administrators is the one state no screen can undo,
+// because signing into the panel requires one.
 func TestAnAdminCanGrantAndRevokeTheRole(t *testing.T) {
 	adminEndpoints, ctx, tx, q := adminUnderTest(t)
 
@@ -629,7 +610,7 @@ func TestSignupStillCannotAskForAdmin(t *testing.T) {
 // **the ranking is the whole point of the card it feeds**: not who is cheapest, but by how much and
 // against whom. It has to come back cheapest-first and it has to stay inside one shop category,
 // because a basket of ten wallpaper slots and a basket of a hundred universal rows are not
-// comparable numbers (§5) and putting them in one list would draw a chart of the templates.
+// comparable numbers, and putting them in one list would draw a chart of the templates.
 func TestTheMarketRankingIsPerCategoryAndCheapestFirst(t *testing.T) {
 	adminEndpoints, ctx, tx, q := adminUnderTest(t)
 
@@ -710,8 +691,7 @@ func TestTodaysBasketIsRecordedAndComesBackOnTheDashboard(t *testing.T) {
 			"keyed by (day, category) so running the job every hour must not add a row per run", len(days))
 	}
 
-	// computed, never written down: a size pinned as a literal breaks silently the day the template
-	// grows, which is the trap §7 records three separate versions of
+	// computed, never written down: a size pinned as a literal breaks silently the day the template grows
 	want := int64(catalog.Size(string(catalog.CategoryWallpaper))) * 100_000
 	if days[0].AvgBasket != want {
 		t.Errorf("recorded average is %d, want %d", days[0].AvgBasket, want)
@@ -724,9 +704,8 @@ func TestTodaysBasketIsRecordedAndComesBackOnTheDashboard(t *testing.T) {
 
 // ─────────────────────────── anomalies ───────────────────────────
 
-// the report exists because §6 accepts a mean for the index and says bad data gets caught
-// operationally instead. what it must not do is flag an honest market: three shops agreeing on a
-// price and one that does not is exactly one anomaly, not four.
+// the index is a mean, so bad data is caught operationally - by this report. what it must not do is
+// flag an honest market: three shops agreeing on a price and one that does not is one anomaly, not four.
 func TestAnomaliesFlagThePriceThatDisagreesWithTheMedian(t *testing.T) {
 	adminEndpoints, ctx, tx, q := adminUnderTest(t)
 
@@ -1003,16 +982,13 @@ func TestSyncRestoresMissingRowsAndKeepsEveryPrice(t *testing.T) {
 	}
 }
 
-// **the other thing a sync must not destroy, beside a price: the owner's own photograph.**
+// **the other thing a sync must not destroy, beside a price: the owner's own photograph.** an обои row
+// names a kind of wallpaper and the product is the roll standing in one shop, so a picture put on that
+// slot would have the sync replace every real photo in the market with it - silently, because the row
+// count looks exactly as it should.
 //
-// An обои row names a kind of wallpaper, not a wallpaper - the product is the roll standing in one
-// shop, and its photo is the owner's. Nothing stopped a picture being put on that slot in the panel,
-// and the sync would then have replaced every real photo in the market with it and sent the files
-// they replaced to the orphan sweep. Silently: the row count would look exactly as it should.
-//
-// The guard is the `shops/uploads/` prefix rather than the category, so a second slot-based category
-// is covered the day it exists. The contrast row is the other half of the test - the guard keeps
-// *uploads*, not every path a shop happens to hold.
+// The guard is the `shops/uploads/` prefix rather than the category, so a second slot-based category is
+// covered the day it exists. The contrast row pins that it keeps *uploads* and not every path.
 func TestSyncKeepsAShopsOwnPhotographWhenTheTemplateGainsOne(t *testing.T) {
 	_, ctx, tx, q := adminUnderTest(t)
 
@@ -1248,10 +1224,10 @@ func TestImportRefusesAKeyFromAnotherCategory(t *testing.T) {
 
 // ─────────────────────────── the photo path on a template row ───────────────────────────
 
-// **image_path used to accept any string at all.** A path that names nothing is a blank tile in
-// every shop of a market with nothing anywhere saying why, and `shops/plumbing/...` on a universal
-// row looked exactly as right in the table as the row beside it. The column is written from three
-// places - the one-row form, the sheet import and the sync - and they all come through `clean`.
+// **a path that names nothing is a blank tile in every shop of a market**, with nothing anywhere
+// saying why: `shops/plumbing/...` on a universal row looks exactly as right in the table as the row
+// beside it. The column is written from three places - the one-row form, the import and the sync -
+// and all three come through `clean`.
 func TestATemplatePhotoIsAFileOfItsOwnCategoryOrNothing(t *testing.T) {
 	for _, tc := range []struct {
 		what     string

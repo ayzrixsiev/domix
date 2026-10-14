@@ -7,9 +7,8 @@ import (
 
 // Which provider gets picked, and when the api refuses to boot instead.
 //
-// **Nothing here talks to a network.** New only builds a struct - the first byte leaves this process
-// inside Send - so the whole selection table runs offline, which is the point of keeping the choice
-// in a pure function rather than inline in main.go.
+// **Nothing here talks to a network**: New only builds a struct, which is the point of keeping the
+// choice in a pure function rather than inline in main.go.
 
 func TestChoosingAProvider(t *testing.T) {
 	const token = "gateway-token"

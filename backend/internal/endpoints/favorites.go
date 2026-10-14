@@ -24,9 +24,8 @@ import (
 // **there is no id in the list path and none in the body**: the set belongs to whoever RequireAuth
 // says is calling, so nothing here can name somebody else's.
 //
-// the app holds the whole list and paints the hearts from it, which is why there is no per-product
-// "is this saved" field on ProductResponse - one would make every product list depend on the caller
-// and take the browsing reads out of publicCache.
+// the app holds the whole list and paints the hearts from it: a per-product "is this saved" field
+// would make every product list depend on the caller and take the browsing reads out of publicCache.
 type Favorites struct {
 	Queries *db.Queries
 	URLs    imagestore.URLs

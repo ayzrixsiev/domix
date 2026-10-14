@@ -50,12 +50,12 @@ enum ShopCategory {
 
   /// What this kind of shop looks like on the map, inside its pin.
   ///
-  /// **Chosen as a set, not one at a time**: all four are ~20px of white stroke on an orange circle,
-  /// so what matters is that no two share a silhouette. Judge a candidate by rendering it at 22px,
-  /// never by its name - `wallpaper` is a monitor, `logs` is a log *file*, `droplets` is a forecast.
+  /// **Chosen as a set, not one at a time**: all four are ~20px of white stroke on an orange circle, so
+  /// what matters is that no two share a silhouette. **judge a candidate by rendering it at 22px, never
+  /// by its name** - `wallpaper` is a monitor, `logs` is a log *file*, `droplets` is a forecast.
   ///
-  /// `wrench_off` requires **flutter_lucide 1.33.0 or newer**. Not `hard_hat`, which marks the
-  /// worker role. `tree_pine` and `paint_roller` also mark [ProductCategory] tiles - accepted, since a kind
+  /// `wrench_off` requires **flutter_lucide 1.33.0 or newer**. not `hard_hat`, which marks the worker
+  /// role. `tree_pine` and `paint_roller` also mark [ProductCategory] tiles, which is accepted: a kind
   /// of *shop* and a kind of *product* never share a surface.
   IconData get icon => switch (this) {
         ShopCategory.universal => LucideIcons.wrench_off,

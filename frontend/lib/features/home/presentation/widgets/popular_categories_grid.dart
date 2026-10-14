@@ -9,12 +9,9 @@ import 'package:frontend/features/products/data/product_category.dart';
 /// The eight photographed categories, four across and two down - a product shot on a white card
 /// with its name under it.
 ///
-/// **Which eight is not a list kept here.** It is every category [ProductCategory.photo] answers
-/// for, in the enum's own order, so adding a shot to the assets and naming it on the enum is the
-/// whole of promoting a category onto this grid - there is no second list to forget.
-///
-/// **The pager and its dots are gone, and so is "Все категории".** The four categories without a
-/// photo are not on the home screen; they are still reached through search.
+/// **Which eight is not a list kept here**: it is every category [ProductCategory.photo] answers for,
+/// in the enum's own order, so adding a shot to the assets and naming it on the enum is the whole of
+/// promoting a category onto this grid. The categories without a photo are reached through search.
 class PopularCategoriesGrid extends StatelessWidget {
   const PopularCategoriesGrid({super.key, required this.onCategoryTap});
 
@@ -103,13 +100,10 @@ class _CategoryCard extends StatelessWidget {
               SizedBox(
                 height: PopularCategoriesGrid._photoHeight,
                 width: double.infinity,
-                // the shots are cut onto a pure white ground, so the whole card is one white
-                // surface and the frame before an image decodes is the colour of the frame after it.
-                //
-                // **they arrived on a light grey ground and it could not stay.** The reference this
-                // is built from insets a grey panel inside a white card, which works on a white
-                // page; ours is #EFF1F5, and grey-on-grey left the top two thirds of every card
-                // with no edge at all - only the name strip read as a card.
+                // **the shots are cut onto pure white**, so the card is one white surface and the
+                // frame before an image decodes is the colour of the frame after it. a grey panel
+                // inset in a white card works on a white page; on ours it leaves the top two thirds
+                // of every card with no edge at all.
                 child: ColoredBox(
                   color: AppColors.surfaceWhite,
                   child: Image.asset(

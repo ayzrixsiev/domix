@@ -49,9 +49,8 @@ const (
 	categoryProductsLimit = 100
 	searchResultsLimit    = 100
 
-	// how many shops' prices a category shows for one product before moving on to the next one -
-	// two rows of the grid. see ListProductsByCategory: without it a popular category is one product
-	// repeated until the limit, since every shop of a market prices the same curated rows.
+	// how many shops' prices a category shows for one product before moving to the next - two rows of the
+	// grid. without it a popular category is one product repeated, since every shop prices the same rows.
 	categoryOffersPerLine = 4
 
 	// three characters in at least one word - the shortest piece the trigram index can look up
@@ -62,17 +61,14 @@ const (
 	maxSearchQueryLen = 60
 )
 
-// the payload behind GET /api/home. one endpoint rather than three, because the screen renders all
-// of it at once: one round trip, one spinner, one error state. anything that needs shops on their
-// own still has GET /api/shops.
+// the payload behind GET /api/home. one endpoint rather than three, because the screen renders all of it
+// at once: one round trip, one spinner, one error state.
 type HomeResponse struct {
 	VipShops []ShopResponse `json:"vip_shops"`
 
-	// "Лучшие предложения", one entry per shop category - the tabs on that section.
-	//
-	// grouped rather than flat because the index only compares shops of the same category: a
-	// Сантехника basket is a different list of goods, so "6% cheaper" means a different market on
-	// each row. all groups arrive together so switching a tab is instant.
+	// "Лучшие предложения", one entry per shop category - the tabs on that section. grouped rather than
+	// flat because the index only compares shops of the same category, so "6% cheaper" means a different
+	// market on each row. all groups arrive together so switching a tab is instant.
 	BestOffers []CategoryOffersResponse `json:"best_offers"`
 
 	// how many products a new shop of each category is seeded with. the same for everybody, so it

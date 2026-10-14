@@ -57,17 +57,14 @@ FROM products WHERE id = $1;
 DELETE FROM products WHERE id = $1;
 
 -- name: ListProductsByCategory :many
--- **a few offers of one product, then the next product.** Every universal shop prices the same 1kg
--- glue, so ordering the category by price alone answers it with two hundred glues before its second
--- product - the page would have to be scrolled past every shop in Tashkent to find out what else is
--- in it. The cheapest line still leads, so the category opens on the best price in it.
+-- **a few offers of one product, then the next product.** every universal shop prices the same 1kg glue,
+-- so ordering by price alone answers the category with two hundred glues before its second product. the
+-- cheapest line still leads, so the page opens on the best price in it.
 --
--- A line is the template key: the rows seeded from one curated product, one size each (000007). An
--- owner's own row has no key and lines up on its name and size instead - the only thing two shops'
--- custom rows ever share.
+-- a line is the template key; an owner's own row has no key and lines up on its name and size instead.
 --
--- **offers_per_line carries a cast or sqlc cannot compile this**: it has no type for a parameter
--- compared against a column a subquery invented, and fails with `column "offer_rank" does not exist`.
+-- **offers_per_line carries a cast or sqlc cannot compile this**: it has no type for a parameter compared
+-- against a column a subquery invented, and fails with `column "offer_rank" does not exist`.
 SELECT id, shop_id, name, specs, price, category, unit, availability, template_key, image_path, shop_name
 FROM (
   SELECT p.id, p.shop_id, p.name, p.specs, p.price, p.category, p.unit, p.availability, p.template_key,

@@ -1,11 +1,8 @@
 package endpoints
 
-// the phone-code login at the http boundary: the json the flutter side has to match, and the
-// refusals it has to be able to tell apart.
-//
-// Most of these need no database - a code is minted, checked and refused entirely in ram, and the
-// provider is a fake that records what it was asked to deliver. Only the last few, where a proven
-// number turns into a users row, take the transaction-bound harness the rest of this package uses.
+// the phone-code login at the http boundary: the json the flutter side has to match, and the refusals
+// it has to be able to tell apart. most need no database - a code is minted, checked and refused in
+// ram against a fake provider - and only the last few, where a number becomes a users row, need one.
 
 import (
 	"context"
