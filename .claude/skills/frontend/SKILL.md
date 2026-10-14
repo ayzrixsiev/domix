@@ -1,59 +1,155 @@
 ---
 name: frontend
 description: >
-  Core architectural rules, visual tokens, layout philosophies, and Flutter toolchain constraints 
-  for the Domix mobile app. Use when building UI screens, working with the map, managing state, 
-  or applying styling.
+  Domix's Flutter app under frontend/lib — screens and widgets, the design tokens in
+  app_colors.dart and app_theme.dart, ChangeNotifier controllers, the MapKit map and its pins,
+  address search, favourites, the product card and the home feed, and the Makefile dev loop.
+  Use when building or changing UI, laying out a screen, picking a colour or a radius, wiring a
+  controller, or working on the map. Not release builds or Gradle (deployment skill).
 ---
 
-# Domix Frontend Architecture & UI Rules
+# Domix frontend
 
-### Architecture & Layout
+## Architecture
 
-The app follows a feature-first structure (`lib/features/<feature>/{data,presentation}`). We use `ChangeNotifier` view-models provided as singletons via `MultiProvider`. The app deliberately ignores the device's font-size settings using `MediaQuery.withNoTextScaling` and locks to portrait mode because our UI relies on fixed-height cards that would otherwise overflow.
+Feature-first: `lib/features/<feature>/{data,presentation}`. `ChangeNotifier` view-models provided as
+singletons through `MultiProvider`.
 
-Anything that belongs to a session is wiped through `AuthController.onSessionEnded`, and fetched through `onSessionStarted` — `main()` is the one place allowed to wire both ends, which is what keeps `profile/` from importing `stores/` or `favorites/`.
+- The app ignores the device's font-size setting (`MediaQuery.withNoTextScaling`) and locks to
+  portrait, because the UI rests on fixed-height cards that scaled text has nowhere to go in. **If
+  cards that size to their content ever land, delete the wrapper rather than raising the constants.**
+- Anything belonging to a session is wiped through `AuthController.onSessionEnded` and fetched through
+  `onSessionStarted`. **`main()` is the one place allowed to wire both ends** — that is what keeps
+  `profile/` from importing `stores/` or `favorites/`.
+- **Сообщения and Заявки are placeholders.** Both tabs stay in the nav bar and say «скоро»: phase 1 is
+  shops and customers, and a tab that disappears and returns moves every other tab twice. Do not
+  rebuild either feature into them.
 
-**Сообщения and Заявки are placeholders.** Both tabs stay in the nav bar and say «скоро»: phase 1 is shops and customers, and a tab that disappears and returns moves every other tab twice. Do not rebuild either feature into them.
+## Design system
 
-### Design System & Components
+Tokens live in `app_theme.dart` and `app_colors.dart`. Use them; never a literal colour or radius.
 
-Visual tokens live in `app_theme.dart` and `app_colors.dart` (using specific radii scales). **The look is iOS: an off-white page (`background`, #F6F4F2, ~4% under a card) with pure-white cards lifted by the two-layer warm `AppShadows.card`** — the step alone is too small to separate them, so a card without the shadow disappears. Brand orange is strictly reserved for primary actions, while `trackGrey` is used for elements sitting directly on the page.
+- **The look is iOS: a cool off-white page under pure-white cards.** `background` is `#F2F2F6`, iOS's
+  own grouped-list grey, so a white card reads as a white *object* rather than as the page. The step is
+  deliberately small, so a card without `AppShadows.card` (two layers, cool slate) disappears.
+- Brand orange is reserved for primary actions. `trackGrey` is a groove — a step *below* `background`,
+  because a track lighter than the page reads as a card sitting on top of it.
+- **The header sits flat on the page** (`AppPageHeader`: page colour, no band, no shadow; title 21/w800
+  with an optional subtitle). A band of a second colour read as a toolbar bolted onto the screen.
+- `CircleIconButton` is a white disc with a shadow and **no ring**. **A disc sharing a line with a
+  search field takes that field's height**, never the title's 40 (`CircleIconButton.diameter`,
+  `AppPageHeader.customDisc`, and `MapBarButton.size` 50 over the map): a 40 disc beside a 50 capsule
+  reads as the smaller, lesser half of its own bar.
+- **The bottom nav bar floats** (`FloatingBottomNavBar`): 22dp clear of each edge against the feed's
+  16dp gutter, 8dp above the system inset, blurred over the page, with one orange pill sliding under the
+  active tab. **It insets itself with `MediaQuery.viewPaddingOf`, not `padding`** — `Scaffold` does not
+  inset a custom `bottomNavigationBar`, and `padding` collapses to zero while the keyboard is open,
+  dropping the bar into the system buttons for as long as anyone types. Tabs clear it through the
+  shell's `bottomInset`, not a constant of their own.
+- **Every search field in the app is `PillSearchField`** — a white capsule, a magnifier, a cross once
+  there is text. `floating: true` is the form that hovers over the map (hairline, heavier shadow,
+  darker glyphs).
+- Do not hand-roll back buttons or empty states: `CircleIconButton`/`CircleBackButton` and
+  `EmptyStateView`. `PressableScale` rather than ink ripples, which read as nothing on a bordered
+  shape. Icons are `flutter_lucide` only.
 
-**The header sits flat on the page** (`AppPageHeader`: page colour, no band, no shadow; title 21/w800 with an optional subtitle) and `CircleIconButton` is a white disc with a shadow and **no ring**. **The bottom nav bar is full width and flush with the bottom edge** (`AppBottomNavBar`): `surfaceRaised`, a hairline on top, one orange pill sliding under the active tab. Tabs clear it by `AppBottomNavBar.height` plus the system inset, not a constant. Do not hand-roll back buttons or empty states; universally use `CircleIconButton` and `EmptyStateView`. For tap feedback on large tiles, we use `PressableScale` instead of ink ripples because ripples fail to provide clear visual feedback on bordered shapes. We exclusively use `flutter_lucide` for icons. **Every search field in the app is `PillSearchField`** — a white capsule, a magnifier, a cross once there is text; `floating: true` is the form that hovers over the map (hairline, heavier shadow, darker glyphs). **A disc sharing a line with one takes that field's height**, never the title's 40: `CircleIconButton.diameter` (`AppPageHeader.customDisc` on a header carrying a field, `height` in `CatalogueSearchBar`) and `MapBarButton`'s 50 over the map. A 40 disc beside a 48 capsule reads as the smaller, lesser half of its own bar.
+## Home feed
 
-### Home Screen & Feeds
+The home screen invents no fallback data. VIP and «Лучшие предложения» have a fixed number of slots (5
+and 15, from the api); **an unsold slot is drawn at full visual strength**, because it is the
+advertisement for the placement.
 
-The home screen does not invent fallback data. VIP and "Best Offers" use a fixed number of slots (5 and 15). Unsold slots are drawn at full visual strength to act as advertisements for the placement. The VIP carousel snaps to the center using an unbounded forward-only `PageView`.
+The VIP carousel is one card across the page in an unbounded forward-only `PageView` (Dart's `%` is
+Euclidean, so the index maps below the origin too; **guard the empty list — `index % 0` throws**). It
+advances on its own every few seconds so every placement is seen by somebody who never touches it, and
+a finger on it always outranks the clock.
 
-### Favourites
+**The VIP card's photograph is uploaded from the admin panel and never generated**
+(`HomeShopPreview.imageThumbUrl`): a placement nobody has photographed draws an empty frame with its
+category glyph, because an invented shop front over a real shop's name is the one thing the section that
+is *sold* cannot show. The facts run in the order a buyer checks them — who, where, the comparison, then
+two figures. **«Рейтинг» has no source in this build** (no reviews table), so a real shop draws
+`strings.noFigure` and only an unsold slot shows a number, which is part of what is being sold. The dots
+under the strip are what say there are more placements. Distance is deliberately absent: this app asks
+for a location for the map and nothing else.
 
-The heart on a product tile is painted from `FavoritesController`, never from local widget state — the same product appears on several grids at once. A tap **moves the heart first and sends afterwards**, and a refused request puts it back: waiting for a round trip feels broken, and lying is worse.
+## Favourites
 
-A guest has nowhere to save to, so the tap opens the sign-in flow and saves the product they were reaching for once an account exists (`toggleFavorite`). The app holds its own list rather than the server marking each product, because a per-caller field would take the browsing reads out of the backend's cache.
+The heart on a product tile is painted from `FavoritesController`, never from local widget state — the
+same product appears on several grids at once. A tap **moves the heart first and sends afterwards**, and
+a refused request puts it back: waiting for a round trip feels broken, and lying is worse.
 
-### The product card, sections and the basket
+A guest has nowhere to save to, so the tap opens the sign-in flow and saves the product they were
+reaching for once an account exists (`toggleFavorite`). **The app holds its own list rather than the
+server marking each product**, because a per-caller field would take the browsing reads out of the
+backend's cache.
 
-`ProductTile` is a white card with the photo on a `photoPanel`-coloured panel, the name (2 lines), `specs` under it (2 lines of its own — the size lives there, so a long name must never squeeze it out), then the price. **One size is one card**; nothing folds rows together. The height is fixed at 230 and every text carries an explicit line height — `screen_chrome_test` checks the worst case at the narrowest width. **The catalogue photos must be shot on `AppColors.photoPanel` (#F4F2EF)**, or `contain` leaves visible bars either side; the token is separate from `background` so the page can be retuned without a reshoot.
+## The product card, sections and the basket
 
-`CatalogueSearchBar` is the one row over a catalogue grid, on a shop's card and on the owner's «Товары» alike: the search field and, when the catalogue uses two sections or more, the disc that opens the full names with a count each. There are **no section chips** — a scrolling strip and a «Категории» button under it were the same choice offered twice and cost two rows before the first product. **The field and the sections are separate questions**: a catalogue too short to be worth searching (`_searchThreshold`) can still be split, and then the bar is `searchable: false` and draws the «Категории» button alone. The owner's «Добавить товар» is a button pinned to the bottom of the screen (`_AddProductBar`), never a cell at the end of the grid; a spent allowance greys it out and says so on it. `productsBySection` orders «Все товары» by section, catalogue order inside each, an owner's own rows (no section) last. `templatePricingProgressFor` counts **basket rows only** (`inBasket`), or an owner in the comparison is told they are one price short of it.
+`ProductTile` is a white card: the photo on a `photoPanel` panel, the name (2 lines), `specs` under it
+(2 lines of its own — the size lives there, so a long name must never squeeze it out), then the price.
+**One size is one card**; nothing folds rows together. The height is fixed (`ProductTile.height`) and
+every text carries an explicit line height, so it holds on any font; `screen_chrome_test` checks the
+worst case at the narrowest width.
 
-### Address search and «О приложении»
+**The catalogue photos are shot on `AppColors.photoPanel`** (`#EFF0F5`, the median edge of the shots,
+which range `#E5E8EF`–`#F4F5F7`), or `contain` leaves visible bars either side. The token is separate
+from `background` so the page can be retuned without a reshoot.
 
-Typed suggestions come from Photon, a pin's address and a submitted search from Nominatim (`GeocodingService`) — see the `deployment` skill for why. `AboutScreen` carries the link Yandex's free MapKit licence requires and the OpenStreetMap credit; it is reachable from the guest gate too.
+`CatalogueSearchBar` is the one row over a catalogue grid — on a shop's card and on the owner's «Товары»
+alike: the search field and, when the catalogue uses two sections or more, the disc that opens the full
+names with a count each. **There are no section chips**: a scrolling strip plus a «Категории» button
+under it were the same choice offered twice and cost two rows before the first product. **The field and
+the sections are separate questions** — a catalogue too short to be worth searching (`_searchThreshold`)
+can still be split, and then the bar is `searchable: false` and draws the button alone.
 
-### Images
+The owner's «Добавить товар» is pinned to the bottom of the screen (`_AddProductBar`), never a cell at
+the end of the grid; a spent allowance greys it out and says so on it. `productsBySection` orders «Все
+товары» by section, catalogue order inside each, an owner's own rows (no section) last.
+`templatePricingProgressFor` counts **basket rows only** (`inBasket`), or an owner in the comparison is
+told they are one price short of it.
 
-Product photos come from the api as two ready-made urls — grids load `image_thumb_url`, the edit screen loads `image_url`. **Never build the thumb url in Dart**: an apk that appended `_thumb` itself would freeze the convention inside every build already on a phone.
+## The map
 
-The category tiles are bundled assets (`assets/decorations/categories`), not server files: they are the first thing on the home screen and have to be there before the network is.
+Rotation-locked and tilt-locked, so teardrop pins and price labels stay upright — a pin drawn flat on a
+tilted plane is unreadable. **Pins are withheld below `_minDetailZoom` (13)**, where they are clutter
+rather than information. A pin carries two channels: the teardrop holds a Lucide glyph for the shop's
+category, a separate label holds the price comparison.
 
-**The VIP card is one card across the page**: a storefront on the left, then the name, the address, the comparison and two figures — «Рейтинг» and «Товаров». The dots under it are what say there are more placements, and the count in them is the inventory, not a page count. Nothing on it is invented: the photograph is `HomeShopPreview.imageThumbUrl`, uploaded from the admin panel, and a placement with none draws an empty frame with its category glyph. **There is no rating in this build** — the reviews table was dropped — so a real shop draws `strings.noFigure` and only an unsold slot shows a number, which is part of what the placement is being sold as. The distance to the shop is deliberately not on it: this app asks for a location for the map and nothing else.
+## Address search and «О приложении»
 
-### Map Mechanics & Pins
+**Typed suggestions come from Photon, a pin's address and a submitted search from Nominatim**
+(`GeocodingService`): Nominatim's policy forbids as-you-type, and the public Photon instance allows it
+but promises no speed, so a typed lookup gives up after a few seconds and the panel asks for «Найти»,
+which is the Nominatim path. Operational detail — the measured outage and the fallback options — is in
+the `deployment` skill.
 
-The map is strictly rotation-locked and tilt-locked so that teardrop pins and price labels stay upright. Pins are completely withheld below a zoom level of 13 to prevent visual clutter. A map pin conveys two distinct channels of information: the teardrop carries a Lucide glyph for the shop's category, and a separate label carries the price comparison.
+`AboutScreen` carries the link Yandex's free MapKit licence requires and the OpenStreetMap credit, and
+is reachable from the guest gate too.
 
-### Toolchain & Workflows
+## Images
 
-Building for Android strictly requires JDK 21+ due to Yandex MapKit's bytecode requirements. We cap the Gradle heap to 4GB in `gradle.properties` to prevent OutOfMemory errors on standard laptops. We use `make dev` for Android testing (which supports the map) and `make desktop` with `DevicePreview` for rapid UI layout testing (which lacks map support but runs faster).
+Product photos arrive as two ready-made urls — grids load `image_thumb_url`, the edit screen
+`image_url`. **Never build the thumb url in Dart**: an apk that appended `_thumb` itself would freeze
+the convention inside every build already on a phone.
+
+The category tiles are bundled assets (`assets/decorations/categories`), not server files: they are the
+first thing on the home screen and have to be there before the network is.
+
+## Toolchain
+
+- `make dev` runs on Android (pinned on purpose — the desktop has no MapKit, and silently running the
+  one build that cannot show the map is worse than refusing). `make desktop` is faster for layout work.
+  `make check` is analyze + test.
+- **Android needs JDK 21+** (MapKit's bytecode) and Gradle's heap is capped in
+  `android/gradle.properties`, sized to this machine — the Flutter template's `-Xmx8G` let one build ask
+  for more memory than the laptop had. **If a release build dies with OutOfMemoryError, close the
+  emulator before raising anything**: R8 is the hungriest step and only runs for release.
+  `make gradle-stop` reclaims the daemon's heap.
+- **`DevicePreview` is development-only and has been removed and restored twice. Leave it.** The
+  emulator is a real phone running a *debug* build, which interprets Dart rather than running compiled
+  code, so scrolling stutters there and it is the wrong place to judge a layout. `enabled:
+  !kReleaseMode && !MapConfig.isSupportedPlatform` scopes it to desktop. The wrapper order is
+  load-bearing: `DevicePreview.appBuilder` supplies the simulated phone's `MediaQuery` and
+  `withNoTextScaling` sits inside it so ours wins — **delete the DevicePreview half before release, not
+  that one.**

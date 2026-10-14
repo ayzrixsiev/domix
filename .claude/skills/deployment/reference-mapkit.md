@@ -11,7 +11,7 @@ so there was no "swap the URL" version of the migration off `flutter_map`.
 
 **The free licence is 1 000 DAU — daily unique users opening the map — on the yandex.ru terms that
 apply to us** (checked 2026-09-26, `yandex.ru/dev/tariffs/doc/ru/mapkit/prices/`). **yandex.com shows
-a different, international licence (25 000 MAU) — do not quote it**; that mistake was made once.
+a different, international licence (25 000 MAU) — do not quote it.**
 Paid plans are annual (5 000 DAU 195 000 ₽/yr, 20 000 DAU 585 000 ₽/yr …) **or monthly** (5 000 DAU
 20 800 ₽/mo, 20 000 DAU 58 500 ₽/mo), the minimum payment non-refundable; a 7-day trial covers 100 DAU.
 At 300–400 users DAU is far below 1 000. **There is no hard cap: set a usage alert.**
@@ -70,7 +70,7 @@ the screens see; nothing outside that file imports the SDK. **Keep it that way.*
   is already evaluated`.
 - **`play-services-location`** declared in `app/build.gradle.kts` — MapKit's location layer needs it,
   the plugin does not pull it in, and without it the app compiles and dies at runtime.
-- **Gradle's heap cap** in `android/gradle.properties` — see `frontend/CLAUDE.md`.
+- **Gradle's heap cap** in `android/gradle.properties` — see the `frontend` skill.
 
 ### Permissions MapKit merges in
 
