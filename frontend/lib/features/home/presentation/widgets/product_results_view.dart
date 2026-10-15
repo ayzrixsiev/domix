@@ -101,7 +101,9 @@ class _ProductResultsViewState extends State<ProductResultsView> {
     return [
       for (final entry in products)
         if (words.every(
-          (word) => '${entry.product.name} ${entry.shopName}'.toLowerCase().contains(word),
+          (word) => '${entry.product.name} ${entry.shopName}'
+              .toLowerCase()
+              .contains(word),
         ))
           entry,
     ];
@@ -137,7 +139,9 @@ class _ProductResultsViewState extends State<ProductResultsView> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.primaryOrange));
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.primaryOrange),
+      );
     }
 
     // every non-loading state sits under one RefreshIndicator. the two shrink-wrapping ones go through
@@ -166,7 +170,10 @@ class _ProductResultsViewState extends State<ProductResultsView> {
           iconBackground: AppColors.dangerSoft,
           title: strings.categoryProductsLoadError,
           subtitle: strings.loadErrorHintFor(failure),
-          action: PrimaryActionButton(label: strings.retryButtonShort, onTap: _load),
+          action: PrimaryActionButton(
+            label: strings.retryButtonShort,
+            onTap: _load,
+          ),
         ),
       );
     }

@@ -71,7 +71,10 @@ class _BestOffersListState extends State<BestOffersList> {
         const SizedBox(height: 12),
         // rebuilt per frame rather than cached: fifteen references over a list the controller already
         // holds, and caching it would mean deciding when it goes stale
-        for (final (i, slot) in rankedSlots(shops, slotCount: BestOffersList.slotCount).indexed) ...[
+        for (final (i, slot) in rankedSlots(
+          shops,
+          slotCount: BestOffersList.slotCount,
+        ).indexed) ...[
           if (i > 0) const SizedBox(height: 10),
           if (slot == null)
             EmptyShopRow(strings: strings)

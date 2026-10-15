@@ -78,6 +78,11 @@ func main() {
 	loginLimiter := ratelimit.New(5, 60, 10*time.Minute)
 	searchLimiter := ratelimit.New(3, 30, 10*time.Minute)
 
+	// **far wider than searchLimiter on purpose**: a suggestion is read out of memory, so the cost of
+	// one is a few hundred string comparisons, while the shape of the traffic is a request every few
+	// keystrokes from everybody typing at once - behind one carrier address.
+	suggestLimiter := ratelimit.New(20, 60, 10*time.Minute)
+
 	// held in memory for a few seconds, which is what makes publicLimiter affordable at those numbers
 	publicReads := endpoints.NewPublicCache(20 * time.Second)
 
@@ -144,6 +149,9 @@ func main() {
 	http.HandleFunc("/api/categories/{code}/products", endpoints.WithJSON(publicLimiter.Wrap(homeEndpoints.ProductsByCategory)))
 	// the one public read whose cost the caller chooses, so the one that is not cached
 	http.HandleFunc("/api/products/search", endpoints.WithJSON(publicLimiter.Wrap(searchLimiter.Wrap(homeEndpoints.SearchProducts))))
+	// the as-you-type panel over that field. not behind publicLimiter: it shares no budget with the
+	// reads that cost a connection, and the limiter it does have is only a floor against a flood.
+	http.HandleFunc("/api/products/suggest", endpoints.WithJSON(suggestLimiter.Wrap(homeEndpoints.SuggestProducts)))
 
 	favoritesEndpoints := &endpoints.Favorites{Queries: queries, URLs: imageURLs}
 	http.HandleFunc("/api/favorites", endpoints.WithJSON(apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, favoritesEndpoints.Route))))

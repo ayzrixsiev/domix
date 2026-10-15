@@ -21,14 +21,20 @@ class HomeRepository {
       throw ApiException(response.statusCode);
     }
 
-    return HomeContent.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return HomeContent.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   /// Every priced product in one category, across every shop, cheapest first - what a "Популярные
   /// категории" tile opens. Fetched on tap, never with the home load: eleven of the twelve
   /// categories' products would be thrown away on every launch.
-  Future<List<CategoryProduct>> fetchProductsByCategory(ProductCategory category) async {
-    final uri = Uri.parse('${ApiConfig.serverRoot}/api/categories/${category.code}/products');
+  Future<List<CategoryProduct>> fetchProductsByCategory(
+    ProductCategory category,
+  ) async {
+    final uri = Uri.parse(
+      '${ApiConfig.serverRoot}/api/categories/${category.code}/products',
+    );
     return _fetchProducts(uri);
   }
 
@@ -38,8 +44,9 @@ class HomeRepository {
   /// `queryParameters` rather than concatenation: `&`, `#` or `%` in a typed query would truncate the
   /// search or break the parse.
   Future<List<CategoryProduct>> searchProducts(String query) async {
-    final uri = Uri.parse('${ApiConfig.serverRoot}/api/products/search')
-        .replace(queryParameters: {'q': query});
+    final uri = Uri.parse(
+      '${ApiConfig.serverRoot}/api/products/search',
+    ).replace(queryParameters: {'q': query});
     return _fetchProducts(uri);
   }
 
@@ -54,7 +61,27 @@ class HomeRepository {
 
     final data = jsonDecode(response.body) as List<dynamic>;
     return [
-      for (final item in data) CategoryProduct.fromJson(item as Map<String, dynamic>),
+      for (final item in data)
+        CategoryProduct.fromJson(item as Map<String, dynamic>),
     ];
+  }
+
+  /// The names offered under the search field as it is typed, from `GET /api/products/suggest`.
+  ///
+  /// The server answers this one out of memory, with no database behind it, which is what makes a
+  /// request every few keystrokes affordable. A query too short to look up comes back as an empty
+  /// list rather than an error.
+  Future<List<String>> suggestProducts(String query) async {
+    final uri = Uri.parse(
+      '${ApiConfig.serverRoot}/api/products/suggest',
+    ).replace(queryParameters: {'q': query});
+    final response = await apiGet(uri, timeout: const Duration(seconds: 4));
+
+    if (response.statusCode != 200) {
+      throw ApiException(response.statusCode);
+    }
+
+    final data = jsonDecode(response.body) as List<dynamic>;
+    return [for (final name in data) name as String];
   }
 }

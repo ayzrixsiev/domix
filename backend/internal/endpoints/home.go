@@ -59,6 +59,10 @@ const (
 
 	// an unbounded query string is an anonymous caller deciding how much work the database does
 	maxSearchQueryLen = 60
+
+	// rows in the as-you-type panel. a short list a thumb can read without scrolling, and the panel
+	// covers the results underneath it - ProductSuggestionsPanel.maxRows is the other half.
+	suggestLimit = 8
 )
 
 // the payload behind GET /api/home. one endpoint rather than three, because the screen renders all of it
@@ -246,6 +250,34 @@ func (h *Home) SearchProducts(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// GET /api/products/suggest?q=... - the names offered under the search field as it is typed, as a
+// json array of strings.
+//
+// **answered from internal/catalog's in-memory copy, with no query at all**: this is the one read the
+// app makes while a thumb is still moving, and a database round trip per keystroke is the shape of
+// request that takes the pool down. What it costs is a few hundred substring comparisons.
+func (h *Home) SuggestProducts(w http.ResponseWriter, r *http.Request) {
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+
+	if utf8.RuneCountInString(query) > maxSearchQueryLen {
+		writeAPIError(w, http.StatusBadRequest, "query_too_long", "search query is too long")
+		return
+	}
+
+	// too short is an empty list rather than the 400 the search answers with: here it is the ordinary
+	// state of a field somebody is halfway through typing, not a request that went wrong
+	var names []string
+	if _, ok := searchable(query); ok {
+		names = catalog.Suggest(query, suggestLimit)
+	}
+	if names == nil {
+		names = []string{}
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(names)
+}
+
 // one product row into the wire shape, shared by the two endpoints that return products across shops
 func categoryProductFromRow(urls imagestore.URLs, row db.ListProductsByCategoryRow) CategoryProductResponse {
 	isTemplate, nameEditable, photoEditable := templateFlags(row.TemplateKey)
@@ -273,17 +305,33 @@ func categoryProductFromRow(urls imagestore.URLs, row db.ListProductsByCategoryR
 
 // what a customer typed, as the two arguments SearchProducts takes: one pattern per word (all
 // required, any order) plus the longest word again as the anchor - the only one the trigram index
-// can serve, since it cannot do `~ ALL`. ok is false when no word reaches minSearchWordLen.
+// can serve, since it cannot do `~ ALL`.
 func searchPatterns(query string) (anchor string, patterns []string, ok bool) {
+	words, ok := searchable(query)
+	if !ok {
+		return "", nil, false
+	}
+
 	longest := 0
-	for _, word := range strings.Fields(strings.ReplaceAll(strings.ToLower(query), "ё", "е")) {
+	for _, word := range words {
 		pattern := wordPattern(word)
 		patterns = append(patterns, pattern)
 		if n := utf8.RuneCountInString(word); n > longest {
 			longest, anchor = n, pattern
 		}
 	}
-	return anchor, patterns, longest >= minSearchWordLen
+	return anchor, patterns, true
+}
+
+// the words of a query, and whether one of them is long enough to look up at all
+func searchable(query string) (words []string, ok bool) {
+	words = catalog.QueryWords(query)
+	for _, word := range words {
+		if utf8.RuneCountInString(word) >= minSearchWordLen {
+			return words, true
+		}
+	}
+	return words, false
 }
 
 // one word as a regex: the word itself plus its cyrillic spelling when typed in latin ("kabel" ->

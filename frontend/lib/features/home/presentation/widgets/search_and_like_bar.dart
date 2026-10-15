@@ -48,7 +48,11 @@ class SearchAndLikeBar extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(LucideIcons.search, color: AppColors.textMuted, size: 18),
+                const Icon(
+                  LucideIcons.search,
+                  color: AppColors.textMuted,
+                  size: 18,
+                ),
                 const SizedBox(width: 10),
                 // styled exactly as the real field's hint on the screen this opens, so pressing it reads as the
                 // same control moving up into that app bar

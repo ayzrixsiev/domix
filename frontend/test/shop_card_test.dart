@@ -50,6 +50,9 @@ class _FakeHomeRepository implements HomeRepository {
 
   @override
   Future<List<CategoryProduct>> searchProducts(String query) async => const [];
+
+  @override
+  Future<List<String>> suggestProducts(String query) async => const [];
 }
 
 class _FakeProductsRepository implements ProductsRepository {

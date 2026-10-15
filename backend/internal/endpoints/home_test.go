@@ -218,7 +218,15 @@ func TestHomeRanksAndCountsRealData(t *testing.T) {
 	if offers[2].PriceTier == nil || *offers[2].PriceTier != "dearer" {
 		t.Fatalf("an index of 120 should read as dearer, got %v", offers[2].PriceTier)
 	}
-	wantBasket := int64(len(catalog.Template(string(catalog.CategoryUniversal)))) * 80_000
+	// basket rows only: a template voted out of the basket is priced like any other product and
+	// counts towards nobody's total
+	basketRows := 0
+	for _, item := range catalog.Template(string(catalog.CategoryUniversal)) {
+		if item.InBasket {
+			basketRows++
+		}
+	}
+	wantBasket := int64(basketRows) * 80_000
 	if offers[0].BasketPrice == nil || *offers[0].BasketPrice != wantBasket {
 		t.Fatalf("want a basket of %d alongside the badge, got %v", wantBasket, offers[0].BasketPrice)
 	}

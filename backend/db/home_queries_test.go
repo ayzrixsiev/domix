@@ -228,6 +228,18 @@ func TestAProductOutsideTheBasketDoesNotCostAnybodyTheirBadge(t *testing.T) {
 // example**: a basket is n items and moves when the template does, but the index divides one basket by
 // the average of the others and n cancels. an index that changed when a product was added would mean
 // the view is measuring the wrong thing.
+// how many of a template's rows the basket is - **not its length**: a product voted out of the basket
+// is still priced like any other and counts towards nobody's total.
+func basketSize(category catalog.Category) int64 {
+	var rows int64
+	for _, item := range catalog.Template(string(category)) {
+		if item.InBasket {
+			rows++
+		}
+	}
+	return rows
+}
+
 func TestBasketIndexReproducesTheWorkedExample(t *testing.T) {
 	ctx, conn, q := beginTx(t)
 
@@ -257,7 +269,7 @@ func TestBasketIndexReproducesTheWorkedExample(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		wantBasket := int64(full) * c.unitPrice
+		wantBasket := basketSize(catalog.CategoryUniversal) * c.unitPrice
 
 		row := findShop(t, shops, ids[c.name])
 		if !row.BasketPrice.Valid || row.BasketPrice.Int64 != wantBasket {
@@ -303,7 +315,7 @@ func TestBasketIndexExcludesShopsWithAnIncompleteBasket(t *testing.T) {
 		t.Fatalf("the only complete basket in the category is the market, so it should read 100, "+
 			"got %+v - the incomplete shop is still in the average", finishedRow.PriceIndex)
 	}
-	if wantBasket := int64(full) * 100_000; finishedRow.BasketPrice.Int64 != wantBasket {
+	if wantBasket := basketSize(catalog.CategoryUniversal) * 100_000; finishedRow.BasketPrice.Int64 != wantBasket {
 		t.Errorf("want a basket of %d, got %d", wantBasket, finishedRow.BasketPrice.Int64)
 	}
 }

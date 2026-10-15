@@ -106,9 +106,13 @@ class _VipShopsCarouselState extends State<VipShopsCarousel> {
     _autoAdvance?.cancel();
     _autoAdvance = Timer.periodic(VipShopsCarousel.autoAdvanceEvery, (_) {
       // there is no page to advance from until the first layout, and `nextPage` asserts on that
-      if (!_controller.hasClients || !_controller.position.hasContentDimensions) return;
+      if (!_controller.hasClients || !_controller.position.hasContentDimensions)
+        return;
       // forwards forever - the virtual range is unbounded in exactly this direction
-      _controller.nextPage(duration: _autoAdvanceGlide, curve: Curves.easeInOut);
+      _controller.nextPage(
+        duration: _autoAdvanceGlide,
+        curve: Curves.easeInOut,
+      );
     });
   }
 
@@ -167,7 +171,9 @@ class _VipShopsCarouselState extends State<VipShopsCarousel> {
                 final slot = widget.slots[index % widget.slots.length];
 
                 return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: VipShopsCarousel.cardGutter),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: VipShopsCarousel.cardGutter,
+                  ),
                   child: PressableScale(
                     // PressableScale rather than an ink ripple: a ripple is a faint wash inside a card that
                     // fills the page and never moves. its onTapCancel matters here - the PageView claims the
@@ -225,7 +231,9 @@ class _SlotDots extends StatelessWidget {
             width: i == active ? _activeSize : _size,
             height: i == active ? _activeSize : _size,
             decoration: BoxDecoration(
-              color: i == active ? AppColors.primaryOrange : AppColors.trackGrey,
+              color: i == active
+                  ? AppColors.primaryOrange
+                  : AppColors.trackGrey,
               shape: BoxShape.circle,
             ),
           ),
@@ -307,11 +315,15 @@ class _SlotCard extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 // a field name, drawn so «Название магазина» cannot be mistaken for a shop called that
-                                color: isPlaceholder ? AppColors.textGrey : AppColors.textDark,
+                                color: isPlaceholder
+                                    ? AppColors.textGrey
+                                    : AppColors.textDark,
                                 fontSize: 17,
                                 height: 1.15,
                                 letterSpacing: -0.3,
-                                fontWeight: isPlaceholder ? FontWeight.w600 : FontWeight.w700,
+                                fontWeight: isPlaceholder
+                                    ? FontWeight.w600
+                                    : FontWeight.w700,
                               ),
                             ),
                           ),
@@ -319,14 +331,20 @@ class _SlotCard extends StatelessWidget {
                           // nothing to open, so it is not drawn rather than drawn dead.
                           if (!isPlaceholder) ...[
                             const SizedBox(width: 6),
-                            const Icon(LucideIcons.chevron_right, size: 17, color: AppColors.textFaint),
+                            const Icon(
+                              LucideIcons.chevron_right,
+                              size: 17,
+                              color: AppColors.textFaint,
+                            ),
                           ],
                         ],
                       ),
                       const SizedBox(height: 4),
                       _AddressLine(
                         text: shop?.address ?? strings.slotAddressLabel,
-                        color: isPlaceholder ? AppColors.textFaint : AppColors.textGrey,
+                        color: isPlaceholder
+                            ? AppColors.textFaint
+                            : AppColors.textGrey,
                       ),
                     ],
                   ),
@@ -392,7 +410,11 @@ class _SlotFigures extends StatelessWidget {
             // nothing to show - on the slot it is part of what a placement is being sold as.
             value: shop == null ? kSlotRating : strings.noFigure,
             caption: strings.cardRatingCaption,
-            leading: const Icon(CupertinoIcons.star_fill, color: AppColors.starYellow, size: 12),
+            leading: const Icon(
+              CupertinoIcons.star_fill,
+              color: AppColors.starYellow,
+              size: 12,
+            ),
           ),
         ),
         const SizedBox(width: 14),
@@ -400,7 +422,9 @@ class _SlotFigures extends StatelessWidget {
           child: _Figure(
             // 0 is "this read did not count them", and the carousel's read always does - so a shop
             // whose catalogue is genuinely empty is the only card that draws a dash here
-            value: (shop?.productCount ?? 0) > 0 ? '${shop!.productCount}' : strings.noFigure,
+            value: (shop?.productCount ?? 0) > 0
+                ? '${shop!.productCount}'
+                : strings.noFigure,
             caption: strings.cardProductsCaption,
           ),
         ),
@@ -468,7 +492,11 @@ class _Figure extends StatelessWidget {
 /// **An empty frame is a real state, not a loading one** - only an admin can put a photo here, so the
 /// frame carries the category glyph instead of inventing what the shop looks like.
 class _Storefront extends StatelessWidget {
-  const _Storefront({required this.url, required this.category, required this.strings});
+  const _Storefront({
+    required this.url,
+    required this.category,
+    required this.strings,
+  });
 
   final String? url;
   final ShopCategory? category;
@@ -585,7 +613,11 @@ class _AddressLine extends StatelessWidget {
         // nudged onto the first line's baseline: a pin centred against two lines of address floats
         const Padding(
           padding: EdgeInsets.only(top: 2),
-          child: Icon(CupertinoIcons.location_solid, color: AppColors.textFaint, size: 11),
+          child: Icon(
+            CupertinoIcons.location_solid,
+            color: AppColors.textFaint,
+            size: 11,
+          ),
         ),
         const SizedBox(width: 5),
         Expanded(
@@ -595,7 +627,12 @@ class _AddressLine extends StatelessWidget {
             // it ellipsises before the district - which is the half a customer navigates by
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: color, fontSize: 12, height: 1.3, fontWeight: FontWeight.w400),
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              height: 1.3,
+              fontWeight: FontWeight.w400,
+            ),
           ),
         ),
       ],

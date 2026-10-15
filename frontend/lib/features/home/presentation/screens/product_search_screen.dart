@@ -10,6 +10,7 @@ import 'package:frontend/core/widgets/empty_state_view.dart';
 import 'package:frontend/core/widgets/pill_search_field.dart';
 import 'package:frontend/features/home/presentation/controllers/home_controller.dart';
 import 'package:frontend/features/home/presentation/widgets/product_results_view.dart';
+import 'package:frontend/features/home/presentation/widgets/product_suggestions_panel.dart';
 import 'package:frontend/core/widgets/app_page_header.dart';
 
 /// The screen the home search bar opens: a field, and below it every priced product whose name
@@ -18,8 +19,9 @@ import 'package:frontend/core/widgets/app_page_header.dart';
 /// **A screen rather than an inline field**: a live `TextField` on the home feed has no way to put the
 /// keyboard away - nothing there unfocuses on tap and there is no route to pop.
 ///
-/// Nothing is searched until the search key is pressed: as-you-type would turn every keystroke into a
-/// request against the api's most expensive read.
+/// Nothing is *searched* until the search key is pressed or a suggestion is tapped: as-you-type would
+/// turn every keystroke into a request against the api's most expensive read. The names offered under
+/// the field while it is typed are the cheap half - see [ProductSuggestionsPanel].
 class ProductSearchScreen extends StatefulWidget {
   const ProductSearchScreen({super.key});
 
@@ -33,8 +35,10 @@ class ProductSearchScreen extends StatefulWidget {
 
   /// Counted in *characters*: Dart's `String.length` is UTF-16 code units, one per letter for every
   /// alphabet the app ships in, so it agrees with the server's rune count.
-  static bool isSearchable(String query) =>
-      query.trim().split(RegExp(r'\s+')).any((word) => word.length >= minQueryLength);
+  static bool isSearchable(String query) => query
+      .trim()
+      .split(RegExp(r'\s+'))
+      .any((word) => word.length >= minQueryLength);
 
   @override
   State<ProductSearchScreen> createState() => _ProductSearchScreenState();
@@ -73,6 +77,16 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
     });
   }
 
+  /// A name from the panel: the field takes it and the search runs at once. The customer picked a
+  /// product rather than a spelling, so asking them to press search as well asks twice.
+  void _pick(String name) {
+    _controller.value = TextEditingValue(
+      text: name,
+      selection: TextSelection.collapsed(offset: name.length),
+    );
+    _run(name);
+  }
+
   void _clear() {
     _controller.clear();
     // back to the prompt, not to the last results: an empty field over a list of цемент is the field
@@ -99,13 +113,40 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
           onSubmitted: _run,
           // the server's ceiling, applied where it can be seen - see maxQueryLength
           inputFormatters: [
-            LengthLimitingTextInputFormatter(ProductSearchScreen.maxQueryLength),
+            LengthLimitingTextInputFormatter(
+              ProductSearchScreen.maxQueryLength,
+            ),
           ],
           onClear: _clear,
           clearTooltip: strings.searchClear,
         ),
       ),
-      body: SafeArea(top: false, child: _body(strings)),
+      body: SafeArea(
+        top: false,
+        child: Stack(
+          children: [
+            _body(strings),
+            // over the body rather than above it: the panel belongs to the field in the header, and
+            // pushing the results down every time a letter is typed would move the page under a thumb
+            Positioned.fill(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ProductSuggestionsPanel(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    isSearchable: ProductSearchScreen.isSearchable,
+                    suggest: context.read<HomeController>().suggestProducts,
+                    submittedQuery: _submitted,
+                    onPicked: _pick,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

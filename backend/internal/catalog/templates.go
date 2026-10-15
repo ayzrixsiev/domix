@@ -41,11 +41,12 @@ type Row struct {
 }
 
 var (
-	mu             sync.RWMutex
-	templates      = map[Category][]Item{}
-	ownerNamedKeys = map[string]bool{}
-	templateImages = map[string]string{}
-	loaded         bool
+	mu              sync.RWMutex
+	templates       = map[Category][]Item{}
+	ownerNamedKeys  = map[string]bool{}
+	templateImages  = map[string]string{}
+	suggestionIndex []suggestion
+	loaded          bool
 )
 
 func Load(rows []Row) {
@@ -80,11 +81,14 @@ func Load(rows []Row) {
 		}
 	}
 
+	names := buildSuggestions(next)
+
 	mu.Lock()
 	defer mu.Unlock()
 	templates = next
 	ownerNamedKeys = slots
 	templateImages = images
+	suggestionIndex = names
 	loaded = true
 }
 

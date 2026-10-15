@@ -198,7 +198,11 @@ class EmptyShopRow extends StatelessWidget {
                   children: [
                     // drawn in full, unlike a real row where the star waits for reviews: here the star *is* part of
                     // what is being described
-                    const Icon(CupertinoIcons.star_fill, color: AppColors.starYellow, size: 11),
+                    const Icon(
+                      CupertinoIcons.star_fill,
+                      color: AppColors.starYellow,
+                      size: 11,
+                    ),
                     const SizedBox(width: 3),
                     const Text(
                       kSlotRating,

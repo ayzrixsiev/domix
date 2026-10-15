@@ -63,16 +63,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _openCategory(ProductCategory category) {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => CategoryProductsScreen(category: category)),
+      MaterialPageRoute(
+        builder: (_) => CategoryProductsScreen(category: category),
+      ),
     );
   }
 
   /// Navigation lives here rather than inside the carousel and the rows, so a card stays a thing that
   /// reports a tap instead of one that knows about routes.
   void _openShop(Shop shop) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => ShopCardScreen(shop: shop)),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => ShopCardScreen(shop: shop)));
   }
 
   @override
@@ -96,7 +98,9 @@ class _HomeScreenState extends State<HomeScreen> {
               // AlwaysScrollable wrapping the bouncing physics, not replacing it: content that exactly fits the
               // viewport has nothing to overscroll and the pull gesture is never recognised. Bouncing is also
               // what gives the pull somewhere to travel on Android, where the default clamps at zero.
-              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
               slivers: [
                 // **Cupertino's control rather than RefreshIndicator's floating circle.** The circle
                 // hovers *over* the content and snaps away the instant the future completes. This one
@@ -175,7 +179,9 @@ class _HomeScreenState extends State<HomeScreen> {
       return const [
         SliverFillRemaining(
           hasScrollBody: false,
-          child: Center(child: CircularProgressIndicator(color: AppColors.primaryOrange)),
+          child: Center(
+            child: CircularProgressIndicator(color: AppColors.primaryOrange),
+          ),
         ),
       ];
     }
@@ -205,7 +211,10 @@ class _HomeScreenState extends State<HomeScreen> {
       ];
     }
 
-    final vipSlots = vipSlotRing(home.vipShops, slotCount: VipShopsCarousel.slotCount);
+    final vipSlots = vipSlotRing(
+      home.vipShops,
+      slotCount: VipShopsCarousel.slotCount,
+    );
 
     return [
       // one adapter holding the whole feed rather than a lazy SliverList: the three sections are a
@@ -222,7 +231,10 @@ class _HomeScreenState extends State<HomeScreen> {
             // VIP strip is the first thing on the page worth reading. 26 under the capsule left the
             // paid placement floating in the middle of the screen.
             const SizedBox(height: 14),
-            Padding(padding: _gutter, child: SectionHeader(title: strings.vipShops)),
+            Padding(
+              padding: _gutter,
+              child: SectionHeader(title: strings.vipShops),
+            ),
             const SizedBox(height: 12),
             // keyed on the slot count, so the State is rebuilt if the ring ever grows - a PageController's
             // initialPage is derived from that size and cannot be changed afterwards
@@ -247,11 +259,17 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
 
             const SizedBox(height: 26),
-            Padding(padding: _gutter, child: SectionHeader(title: strings.bestOffersTitle)),
+            Padding(
+              padding: _gutter,
+              child: SectionHeader(title: strings.bestOffersTitle),
+            ),
             const SizedBox(height: 12),
             Padding(
               padding: _gutter,
-              child: BestOffersList(groups: home.bestOffers, onShopTap: _openShop),
+              child: BestOffersList(
+                groups: home.bestOffers,
+                onShopTap: _openShop,
+              ),
             ),
 
             SizedBox(height: widget.bottomPadding),

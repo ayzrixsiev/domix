@@ -72,6 +72,9 @@ class _FakeHomeRepository implements HomeRepository {
     requestedQuery = query;
     return searchResults;
   }
+
+  @override
+  Future<List<String>> suggestProducts(String query) async => const [];
 }
 
 Shop _shop({

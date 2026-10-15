@@ -9,7 +9,8 @@ import 'package:frontend/features/stores/data/shop_category.dart';
 /// The viewmodel behind the home screen's three sections. **There is no fallback content**: what
 /// the screen shows is what the database holds, and an empty slot says so plainly.
 class HomeController extends ChangeNotifier {
-  HomeController({HomeRepository? repository}) : _repo = repository ?? HomeRepository();
+  HomeController({HomeRepository? repository})
+    : _repo = repository ?? HomeRepository();
 
   final HomeRepository _repo;
 
@@ -80,5 +81,11 @@ class HomeController extends ChangeNotifier {
   /// what the home screen's search field submits to. uncached and unstored for the same reasons.
   Future<List<CategoryProduct>> searchProducts(String query) {
     return _repo.searchProducts(query);
+  }
+
+  /// the names under that field while it is being typed. the panel owns the debounce and the one
+  /// answer it keeps, so there is nothing here to hold either.
+  Future<List<String>> suggestProducts(String query) {
+    return _repo.suggestProducts(query);
   }
 }

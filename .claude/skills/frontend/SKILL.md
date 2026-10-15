@@ -73,6 +73,13 @@ two figures. **«Рейтинг» has no source in this build** (no reviews tabl
 under the strip are what say there are more placements. Distance is deliberately absent: this app asks
 for a location for the map and nothing else.
 
+`ProductSuggestionsPanel` is the list of catalogue names under the search field, and it owns
+everything that keeps the traffic down: the three-character floor, a 250ms debounce, and every answer
+of the session remembered, so a backspace or a corrected letter costs nothing. **An answer is applied
+only while the field still holds the query it was asked for**, which is what makes a slow reply
+harmless instead of a list contradicting the text above it; a failed one says nothing at all. The
+search itself still runs only on the search key or on a tapped name.
+
 ## Favourites
 
 The heart on a product tile is painted from `FavoritesController`, never from local widget state — the

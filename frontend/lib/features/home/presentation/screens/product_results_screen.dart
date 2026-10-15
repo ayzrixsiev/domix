@@ -165,7 +165,9 @@ class _ProductResultsScreenState extends State<ProductResultsScreen> {
               ? (_count == null
                     ? strings.searchAcrossCategories
                     : '${strings.searchAcrossCategories} · ${strings.productsCountLabel(_count!)}')
-              : (_count == null ? widget.subtitle : strings.productsCountLabel(_count!)),
+              : (_count == null
+                    ? widget.subtitle
+                    : strings.productsCountLabel(_count!)),
           search: HeaderSearch(
             open: _searching,
             onOpen: _openSearch,
@@ -199,8 +201,8 @@ class _ProductResultsScreenState extends State<ProductResultsScreen> {
             key: ValueKey(_submitted == null ? 'category' : 'search-$_runs'),
             strings: strings,
             load: _submitted == null
-              ? widget.load
-              : () => widget.onSearch!(_submitted!),
+                ? widget.load
+                : () => widget.onSearch!(_submitted!),
             // catalogue-wide results are not narrowed again by the text still sitting in the field -
             // they already are its answer
             query: _submitted == null ? _typed : '',

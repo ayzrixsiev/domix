@@ -10,15 +10,15 @@ import 'package:frontend/features/stores/data/shop_model.dart';
 class HomeShopPreview {
   /// Projects a real backend shop onto what the home screen needs, keeping the row itself in [shop].
   HomeShopPreview.fromShop(Shop source)
-      : shop = source,
-        name = source.name,
-        address = source.address,
-        priceTier = source.priceTier,
-        priceDifferencePercent = source.priceDifferencePercent,
-        basketPrice = source.basketPrice,
-        isVip = source.isVip,
-        productCount = source.productCount,
-        imageThumbUrl = source.imageThumbUrl;
+    : shop = source,
+      name = source.name,
+      address = source.address,
+      priceTier = source.priceTier,
+      priceDifferencePercent = source.priceDifferencePercent,
+      basketPrice = source.basketPrice,
+      isVip = source.isVip,
+      productCount = source.productCount,
+      imageThumbUrl = source.imageThumbUrl;
 
   final String name;
   final String address;
@@ -86,16 +86,15 @@ class HomeContent {
     if (raw is! Map) return const {};
     return {
       for (final entry in raw.entries)
-        if (ShopCategory.tryFromCode(entry.key as String) case final category? when entry.value is int)
+        if (ShopCategory.tryFromCode(entry.key as String) case final category?
+            when entry.value is int)
           category: entry.value as int,
     };
   }
 
   static List<CategoryOffers> _offerGroups(dynamic raw) {
     if (raw is! List) return const [];
-    return [
-      for (final item in raw) ?_offerGroup(item as Map<String, dynamic>),
-    ];
+    return [for (final item in raw) ?_offerGroup(item as Map<String, dynamic>)];
   }
 
   /// Null for a shop category this build does not know, so a backend that grew a fifth one leaves an
@@ -157,7 +156,5 @@ List<HomeShopPreview?> rankedSlots(
   required int slotCount,
 }) {
   final size = math.max(slotCount, shops.length);
-  return [
-    for (var i = 0; i < size; i++) i < shops.length ? shops[i] : null,
-  ];
+  return [for (var i = 0; i < size; i++) i < shops.length ? shops[i] : null];
 }

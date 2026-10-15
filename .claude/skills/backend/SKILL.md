@@ -150,6 +150,14 @@ expression `SearchProducts` compares — change one character of either and ever
 a sequential scan. The longest word is sent separately as the "anchor" because GIN can serve one `~` but
 not `~ ALL`, and it must be at least three letters.
 
+`GET /api/products/suggest` is the panel under that field as it is typed. **It never touches the
+database**: `catalog.Suggest` matches the typed words against the curated template names held in
+memory (`internal/catalog/suggest.go`, rebuilt by every `catalog.Load`), so a request costs a few
+hundred substring comparisons and needs neither the cache nor a search slot - only its own wide
+limiter. It reads the query with `catalog.QueryWords`, the same normalisation `searchPatterns` uses,
+or the panel would offer names the search cannot find. A query with no three-letter word is an empty
+list and not the 400 search answers with: that is the ordinary state of a half-typed word.
+
 ## The category drill-down
 
 `GET /api/categories/{code}/products` shows **`categoryOffersPerLine` offers of one product, then the

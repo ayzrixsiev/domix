@@ -58,7 +58,9 @@ class HomeHeader extends StatelessWidget {
                   icon: LucideIcons.bell,
                   semanticsLabel: strings.notificationsTitle,
                   onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const NotificationsScreen(),
+                    ),
                   ),
                 ),
               ],
@@ -137,7 +139,11 @@ class _CityChip extends StatelessWidget {
                   // Row throws
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(LucideIcons.map_pin, color: AppColors.primaryOrange, size: 15),
+                    const Icon(
+                      LucideIcons.map_pin,
+                      color: AppColors.primaryOrange,
+                      size: 15,
+                    ),
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
@@ -155,7 +161,11 @@ class _CityChip extends StatelessWidget {
                     ),
                     const SizedBox(width: 5),
                     // textMuted, not textFaint: this chevron is the only thing saying the chip opens something
-                    const Icon(LucideIcons.chevron_down, color: AppColors.textMuted, size: 14),
+                    const Icon(
+                      LucideIcons.chevron_down,
+                      color: AppColors.textMuted,
+                      size: 14,
+                    ),
                   ],
                 ),
               ),

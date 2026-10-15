@@ -19,8 +19,9 @@ class PopularCategoriesGrid extends StatelessWidget {
   final void Function(ProductCategory category) onCategoryTap;
 
   /// derived, never hand-written - see the class doc
-  static List<ProductCategory> get photographed =>
-      ProductCategory.values.where((category) => category.photo != null).toList();
+  static List<ProductCategory> get photographed => ProductCategory.values
+      .where((category) => category.photo != null)
+      .toList();
 
   static const int _columns = 4;
   static const double _gap = 8;
