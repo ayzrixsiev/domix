@@ -6,10 +6,14 @@ INSERT INTO products (shop_id, name, category, unit, template_key, image_path,
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
 
 -- name: ListProductsByShop :many
+-- **a shop's grid follows the template's order, not the row's**: a product added to the template later gets
+-- a higher row id in every shop, which would strand it below its own family.
 SELECT id, shop_id, name, price, category, unit, availability, template_key, image_path, in_basket, specs, section
 FROM products
 WHERE shop_id = $1
-ORDER BY (template_key IS NULL), id;
+ORDER BY (template_key IS NULL),
+         (SELECT t.id FROM product_templates t WHERE t.template_key = products.template_key),
+         id;
 
 -- name: CreateCustomProduct :one
 -- in_basket is written FALSE rather than left to the column default: an owner's own product is theirs
@@ -89,15 +93,34 @@ LIMIT @result_limit;
 -- name: SearchProducts :many
 -- the text expression must stay character for character the one idx_products_search_text indexes
 -- (migration 000007): postgres uses an expression index only for the identical expression.
-SELECT p.id, p.shop_id, p.name, p.specs, p.price, p.category, p.unit, p.availability, p.template_key,
-       p.image_path, s.name AS shop_name
-FROM products p
-JOIN shops s ON s.id = p.shop_id
-WHERE p.price IS NOT NULL
-  AND translate(lower(p.name || ' ' || p.specs), 'ё', 'е') ~ @anchor::text
-  AND translate(lower(p.name || ' ' || p.specs), 'ё', 'е') ~ ALL (@patterns::text[])
-ORDER BY (p.availability = 'unavailable'), p.price ASC, p.id
-LIMIT @result_limit;
+--
+-- offers of one product, then the next, as ListProductsByCategory does: fifty universal shops all price
+-- the same lamp, and a flat price order answers "лампа" with fifty copies of one lamp. the order is a
+-- total one (line_price, line, offer_rank) so that offset pages never overlap or skip a row. line_price
+-- counts only what can be bought: a line whose every offer is «нет в наличии» sorts after all the others.
+-- **offers_per_line carries the ::bigint cast for the reason given on ListProductsByCategory.**
+SELECT id, shop_id, name, specs, price, category, unit, availability, template_key, image_path, shop_name
+FROM (
+  SELECT p.id, p.shop_id, p.name, p.specs, p.price, p.category, p.unit, p.availability, p.template_key,
+         p.image_path, s.name AS shop_name,
+         coalesce(p.template_key, lower(p.name || ' ' || p.specs)) AS line,
+         row_number() OVER (
+           PARTITION BY coalesce(p.template_key, lower(p.name || ' ' || p.specs))
+           ORDER BY (p.availability = 'unavailable'), p.price ASC, p.id
+         ) AS offer_rank,
+         min(p.price) FILTER (WHERE p.availability <> 'unavailable') OVER (
+           PARTITION BY coalesce(p.template_key, lower(p.name || ' ' || p.specs))
+         ) AS line_price
+  FROM products p
+  JOIN shops s ON s.id = p.shop_id
+  WHERE p.price IS NOT NULL
+    AND translate(lower(p.name || ' ' || p.specs), 'ё', 'е') ~ @anchor::text
+    AND translate(lower(p.name || ' ' || p.specs), 'ё', 'е') ~ ALL (@patterns::text[])
+) offers
+WHERE offer_rank <= @offers_per_line::bigint
+ORDER BY line_price ASC NULLS LAST, line, offer_rank
+LIMIT @result_limit
+OFFSET @result_offset;
 
 -- name: SetProductImage :one
 UPDATE products

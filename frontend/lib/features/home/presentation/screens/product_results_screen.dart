@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/home/data/category_product.dart';
+import 'package:frontend/features/home/data/home_repository.dart';
 import 'package:frontend/features/home/presentation/widgets/product_results_view.dart';
 import 'package:frontend/features/home/presentation/screens/product_search_screen.dart';
 import 'package:frontend/core/widgets/app_page_header.dart';
@@ -41,7 +42,10 @@ class ProductResultsScreen extends StatefulWidget {
   /// Optional: without it the field only narrows what [load] returned. With it, pressing the search
   /// key leaves the category entirely - which is the point of having a field on a category page at
   /// all, since a user who knows the product name should not have to guess which tile it lives under.
-  final Future<List<CategoryProduct>> Function(String query)? onSearch;
+  ///
+  /// The second argument is how many rows are already held, so the same call serves "Ещё".
+  final Future<List<CategoryProduct>> Function(String query, int offset)?
+  onSearch;
 
   final IconData emptyIcon;
   final String emptyTitle;
@@ -202,7 +206,11 @@ class _ProductResultsScreenState extends State<ProductResultsScreen> {
             strings: strings,
             load: _submitted == null
                 ? widget.load
-                : () => widget.onSearch!(_submitted!),
+                : () => widget.onSearch!(_submitted!, 0),
+            loadMore: _submitted == null
+                ? null
+                : (offset) => widget.onSearch!(_submitted!, offset),
+            pageSize: HomeRepository.searchPageSize,
             // catalogue-wide results are not narrowed again by the text still sitting in the field -
             // they already are its answer
             query: _submitted == null ? _typed : '',

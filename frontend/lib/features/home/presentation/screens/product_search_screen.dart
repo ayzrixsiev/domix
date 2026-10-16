@@ -8,6 +8,7 @@ import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
 import 'package:frontend/core/widgets/pill_search_field.dart';
+import 'package:frontend/features/home/data/home_repository.dart';
 import 'package:frontend/features/home/presentation/controllers/home_controller.dart';
 import 'package:frontend/features/home/presentation/widgets/product_results_view.dart';
 import 'package:frontend/features/home/presentation/widgets/product_suggestions_panel.dart';
@@ -187,6 +188,8 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
       key: ValueKey(_runs),
       strings: strings,
       load: () => home.searchProducts(query),
+      loadMore: (offset) => home.searchProducts(query, offset: offset),
+      pageSize: HomeRepository.searchPageSize,
       // a magnifier rather than a category glyph: the empty state should look like what failed to find
       emptyIcon: LucideIcons.search,
       emptyTitle: strings.searchNoResults,

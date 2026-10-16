@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -52,6 +53,10 @@ const (
 	// how many shops' prices a category shows for one product before moving to the next - two rows of the
 	// grid. without it a popular category is one product repeated, since every shop prices the same rows.
 	categoryOffersPerLine = 4
+
+	// the same rule for search, a little wider: the caller named the product, so more of its offers are
+	// the answer. a full page is the app's only sign that more may follow - see SearchProducts.
+	searchOffersPerLine = 6
 
 	// three characters in at least one word - the shortest piece the trigram index can look up
 	// (migration 000002). the app enforces the same rule before sending.
@@ -188,6 +193,10 @@ func (h *Home) ProductsByCategory(w http.ResponseWriter, r *http.Request) {
 //
 // **every word counts, in any order**: "пвс кабель" finds "Кабель медный ПВС 2х1,5". names and query
 // are both lowercased with ё written as е - see searchPatterns.
+//
+// **paged by `offset`, a hundred rows a page, and a page shorter than `searchResultsLimit` is the last
+// one**: the app shows "Ещё" only after a full page and sends nothing otherwise. A result of exactly a
+// hundred costs one empty follow-up request.
 func (h *Home) SearchProducts(w http.ResponseWriter, r *http.Request) {
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 
@@ -201,6 +210,16 @@ func (h *Home) SearchProducts(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		writeAPIError(w, http.StatusBadRequest, "query_too_short", "search query is too short")
 		return
+	}
+
+	offset := int64(0)
+	if raw := r.URL.Query().Get("offset"); raw != "" {
+		parsed, err := strconv.ParseInt(raw, 10, 32)
+		if err != nil || parsed < 0 {
+			writeAPIError(w, http.StatusBadRequest, "bad_offset", "offset must be a non-negative number")
+			return
+		}
+		offset = parsed
 	}
 
 	ctx, cancel := dbctx.WithTimeout(r.Context())
@@ -222,9 +241,11 @@ func (h *Home) SearchProducts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.Queries.SearchProducts(ctx, db.SearchProductsParams{
-		Anchor:      anchor,
-		Patterns:    patterns,
-		ResultLimit: searchResultsLimit,
+		Anchor:        anchor,
+		Patterns:      patterns,
+		OffersPerLine: searchOffersPerLine,
+		ResultOffset:  int32(offset),
+		ResultLimit:   searchResultsLimit,
 	})
 	// given back as soon as the rows are in, not held while a slow phone downloads them
 	if h.SearchSlots != nil {

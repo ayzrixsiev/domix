@@ -11,9 +11,13 @@ class ProductGrid extends StatelessWidget {
     required this.tiles,
     this.padding = EdgeInsets.zero,
     this.keyboardDismissBehavior = ScrollViewKeyboardDismissBehavior.manual,
+    this.footer,
   });
 
   final List<Widget> tiles;
+
+  /// Under the last row, inside the same scroll - the search results' "Ещё".
+  final Widget? footer;
 
   final EdgeInsets padding;
 
@@ -33,13 +37,28 @@ class ProductGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      padding: padding,
+    return CustomScrollView(
       physics: const BouncingScrollPhysics(),
       keyboardDismissBehavior: keyboardDismissBehavior,
-      itemCount: tiles.length,
-      gridDelegate: gridDelegate,
-      itemBuilder: (context, index) => tiles[index],
+      slivers: [
+        SliverPadding(
+          // the footer carries the bottom margin itself, so it sits `spacing` under the last row
+          padding: footer == null ? padding : padding.copyWith(bottom: 0),
+          sliver: ProductSliverGrid(tiles: tiles),
+        ),
+        if (footer case final footer?)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                padding.left,
+                spacing,
+                padding.right,
+                padding.bottom,
+              ),
+              child: footer,
+            ),
+          ),
+      ],
     );
   }
 }

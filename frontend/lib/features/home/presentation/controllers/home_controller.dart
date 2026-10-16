@@ -79,8 +79,8 @@ class HomeController extends ChangeNotifier {
   }
 
   /// what the home screen's search field submits to. uncached and unstored for the same reasons.
-  Future<List<CategoryProduct>> searchProducts(String query) {
-    return _repo.searchProducts(query);
+  Future<List<CategoryProduct>> searchProducts(String query, {int offset = 0}) {
+    return _repo.searchProducts(query, offset: offset);
   }
 
   /// the names under that field while it is being typed. the panel owns the debounce and the one

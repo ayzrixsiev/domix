@@ -411,7 +411,7 @@ void main() {
             title: 'Смеси',
             load: () async => inCategory,
             onSearch: withSearch
-                ? (q) async {
+                ? (q, _) async {
                     searched.add(q);
                     return acrossCatalogue;
                   }

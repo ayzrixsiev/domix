@@ -1,11 +1,14 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:provider/provider.dart';
 
 import 'package:frontend/core/constants/app_colors.dart';
+import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
+import 'package:frontend/core/widgets/pressable_scale.dart';
 import 'package:frontend/core/widgets/primary_action_button.dart';
 import 'package:frontend/features/favorites/presentation/controllers/favorites_controller.dart';
 import 'package:frontend/features/favorites/presentation/favorite_action.dart';
@@ -30,7 +33,9 @@ class ProductResultsView extends StatefulWidget {
     this.query = '',
     this.canSearchWider = false,
     this.onCountChanged,
-  });
+    this.loadMore,
+    this.pageSize = 0,
+  }) : assert(loadMore == null || pageSize > 0);
 
   final AppLocalizations strings;
 
@@ -58,6 +63,14 @@ class ProductResultsView extends StatefulWidget {
   /// request failed" are not the same sentence, and only one of them is true.
   final void Function(int? count)? onCountChanged;
 
+  /// The next page, given how many rows are already held. Null where the list is the whole answer
+  /// (a category). **"Ещё" appears only after a page of exactly [pageSize] rows**: a shorter one means
+  /// the server has nothing left, and asking would be a request to the database for an empty list.
+  final Future<List<CategoryProduct>> Function(int offset)? loadMore;
+
+  /// Mirrors the server's page size - see `HomeRepository.searchPageSize`.
+  final int pageSize;
+
   @override
   State<ProductResultsView> createState() => _ProductResultsViewState();
 }
@@ -68,6 +81,14 @@ class _ProductResultsViewState extends State<ProductResultsView> {
 
   /// what kind of failure, never the exception's text - it picks one of three written sentences
   LoadFailure? _failure;
+
+  bool _hasMore = false;
+  bool _loadingMore = false;
+  bool _moreFailed = false;
+
+  /// bumped by every first-page load, so a page that was still in flight when the list was refreshed
+  /// is dropped instead of being appended to rows it does not follow
+  int _generation = 0;
 
   @override
   void initState() {
@@ -110,29 +131,73 @@ class _ProductResultsViewState extends State<ProductResultsView> {
   }
 
   Future<void> _load() async {
+    final generation = ++_generation;
     setState(() {
       _isLoading = true;
       _failure = null;
+      _loadingMore = false;
+      _moreFailed = false;
     });
 
     try {
       final products = await widget.load();
       // the request outlives the widget if the user backs out mid-flight, and `mounted` has to be
       // checked *after* every await, not once at the top
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       setState(() {
         _products = products;
+        _hasMore =
+            widget.loadMore != null && products.length >= widget.pageSize;
         _isLoading = false;
       });
       widget.onCountChanged?.call(_visible().length);
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       debugPrint('ProductResultsView: could not load results: $e');
       setState(() {
         _failure = LoadFailure.of(e);
         _isLoading = false;
       });
       widget.onCountChanged?.call(null);
+    }
+  }
+
+  Future<void> _more() async {
+    final loaded = _products;
+    final loadMore = widget.loadMore;
+    if (loaded == null || loadMore == null || _loadingMore) return;
+
+    final generation = _generation;
+    setState(() {
+      _loadingMore = true;
+      _moreFailed = false;
+    });
+
+    try {
+      // the rows held are the offset: the server's order is a total one, so the next page starts
+      // exactly where this one stopped
+      final page = await loadMore(loaded.length);
+      if (!mounted || generation != _generation) return;
+
+      // a price edited between two pages can shift a row across the seam; it is shown once
+      final held = {for (final entry in loaded) entry.product.id};
+      setState(() {
+        _products = [
+          ...loaded,
+          for (final entry in page)
+            if (!held.contains(entry.product.id)) entry,
+        ];
+        _hasMore = page.length >= widget.pageSize;
+        _loadingMore = false;
+      });
+      widget.onCountChanged?.call(_visible().length);
+    } catch (e) {
+      if (!mounted || generation != _generation) return;
+      debugPrint('ProductResultsView: could not load more results: $e');
+      setState(() {
+        _loadingMore = false;
+        _moreFailed = true;
+      });
     }
   }
 
@@ -201,6 +266,16 @@ class _ProductResultsViewState extends State<ProductResultsView> {
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       // dragging the results puts the keyboard away; a no-op on the category screen, where none is open
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      footer: _hasMore
+          ? _ShowMoreButton(
+              // a failed page keeps the list and turns the button into the retry
+              label: _moreFailed
+                  ? strings.retryButtonShort
+                  : strings.showMoreButton,
+              loading: _loadingMore,
+              onTap: _more,
+            )
+          : null,
       tiles: [
         for (final entry in products)
           ProductTile(
@@ -216,6 +291,69 @@ class _ProductResultsViewState extends State<ProductResultsView> {
             onTap: () => openShopById(context, entry.product.shopId),
           ),
       ],
+    );
+  }
+}
+
+/// The white capsule under the last row that asks for the next page.
+class _ShowMoreButton extends StatelessWidget {
+  const _ShowMoreButton({
+    required this.label,
+    required this.loading,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool loading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: PressableScale(
+        onTap: loading ? null : onTap,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.surfaceWhite,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            boxShadow: AppShadows.card,
+          ),
+          child: SizedBox(
+            height: 48,
+            width: 160,
+            child: Center(
+              child: loading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.4,
+                        color: AppColors.primaryOrange,
+                      ),
+                    )
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          label,
+                          style: const TextStyle(
+                            color: AppColors.textDark,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        const Icon(
+                          LucideIcons.chevron_down,
+                          size: 18,
+                          color: AppColors.textGrey,
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

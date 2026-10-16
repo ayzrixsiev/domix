@@ -169,5 +169,7 @@ Lines are ordered by their own cheapest offer, so the page still opens on the be
 `ListProductsByCategory` does it with `row_number() OVER (PARTITION BY …)` in a subquery, and
 **`offers_per_line` carries a `::bigint` cast or sqlc will not compile the file** — it has no type for a
 parameter compared against a column a subquery invented, and fails with
-`column "offer_rank" does not exist`. Search is still flat: the caller named the product there, so every
-offer of it is the answer.
+`column "offer_rank" does not exist`. Search does the same with `searchOffersPerLine` (6) and an `offset`:
+the app shows «Ещё» only after a full page of `searchResultsLimit` rows, so a short page is the last one and
+nothing more is requested. Its order is total (`line_price`, `line`, `offer_rank`) so pages never overlap,
+and `line_price` counts only available offers, so a line nobody can sell sorts last.

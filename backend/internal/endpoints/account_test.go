@@ -6,6 +6,7 @@ package endpoints
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -184,8 +185,14 @@ func TestDeletingTwiceIsNotAnError(t *testing.T) {
 // about whatever the template holds.
 func makeSearchableShop(t *testing.T, ctx context.Context, tx pgx.Tx, q *db.Queries, named map[string]*int64) int64 {
 	t.Helper()
+	return addSearchableShop(t, ctx, tx, q, "Searchable", named)
+}
 
-	shopID := makeSeededShop(t, ctx, tx, q, "Searchable", catalog.CategoryWallpaper, false)
+// the owner's phone is built from the shop name, so a test that needs several shops names each one
+func addSearchableShop(t *testing.T, ctx context.Context, tx pgx.Tx, q *db.Queries, shopName string, named map[string]*int64) int64 {
+	t.Helper()
+
+	shopID := makeSeededShop(t, ctx, tx, q, shopName, catalog.CategoryWallpaper, false)
 
 	for name, price := range named {
 		if _, err := tx.Exec(ctx,
@@ -374,6 +381,84 @@ func TestSearchMatchesEveryWordInAnyOrder(t *testing.T) {
 	}
 	if containsName(names, "Кабель алюминиевый") {
 		t.Fatalf("a name missing one of the words matched anyway: %v", names)
+	}
+}
+
+// eight shops price the same lamp: a flat price order would answer "лампа" with all eight before the
+// second lamp is reached. the page keeps the six cheapest and moves on.
+func TestSearchShowsSixOffersOfAProductThenTheNextProduct(t *testing.T) {
+	home, ctx, tx, q := homeUnderTest(t)
+	if _, err := tx.Exec(ctx, "DELETE FROM shops"); err != nil {
+		t.Fatalf("clearing shops: %v", err)
+	}
+
+	for i := int64(1); i <= 8; i++ {
+		price := i * 1000
+		addSearchableShop(t, ctx, tx, q, fmt.Sprintf("Lamp%d", i), map[string]*int64{"Лампа настольная": &price})
+	}
+	dearer := int64(50000)
+	addSearchableShop(t, ctx, tx, q, "Ceiling", map[string]*int64{"Лампа потолочная": &dearer})
+
+	var results []CategoryProductResponse
+	getJSON(t, ctx, home.SearchProducts, searchURL("лампа"), &results)
+
+	if len(results) != 7 {
+		t.Fatalf("want 6 offers of the table lamp and 1 ceiling lamp, got %d rows", len(results))
+	}
+	for i, row := range results[:6] {
+		if row.Name != "Лампа настольная" || *row.Price != int64(i+1)*1000 {
+			t.Fatalf("row %d: want the table lamp at %d, got %q at %v", i, (i+1)*1000, row.Name, row.Price)
+		}
+	}
+	if results[6].Name != "Лампа потолочная" {
+		t.Fatalf("the second product should follow the sixth offer, got %q", results[6].Name)
+	}
+}
+
+// the app asks for the next page with the number of rows it already holds
+func TestSearchOffsetContinuesWhereThePageStopped(t *testing.T) {
+	home, ctx, tx, q := homeUnderTest(t)
+	if _, err := tx.Exec(ctx, "DELETE FROM shops"); err != nil {
+		t.Fatalf("clearing shops: %v", err)
+	}
+
+	for i, name := range []string{"Лампа А", "Лампа Б", "Лампа В"} {
+		price := int64(1000)
+		addSearchableShop(t, ctx, tx, q, fmt.Sprintf("Shop%d", i), map[string]*int64{name: &price})
+	}
+
+	page := func(offset string) []string {
+		var results []CategoryProductResponse
+		rec := getJSON(t, ctx, home.SearchProducts, searchURL("лампа")+"&offset="+offset, &results)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("offset %s: want 200, got %d", offset, rec.Code)
+		}
+		names := make([]string, 0, len(results))
+		for _, row := range results {
+			names = append(names, row.Name)
+		}
+		return names
+	}
+
+	if got := page("0"); len(got) != 3 {
+		t.Fatalf("offset 0: want all three, got %v", got)
+	}
+	if got := page("2"); len(got) != 1 {
+		t.Fatalf("offset 2: want the last row only, got %v", got)
+	}
+	if got := page("3"); len(got) != 0 {
+		t.Fatalf("offset past the end: want an empty list, got %v", got)
+	}
+}
+
+func TestSearchRejectsABadOffset(t *testing.T) {
+	home, ctx, _, _ := homeUnderTest(t)
+
+	for _, offset := range []string{"-1", "abc", "99999999999"} {
+		rec := getJSON(t, ctx, home.SearchProducts, searchURL("лампа")+"&offset="+offset, nil)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("offset %q: want 400, got %d", offset, rec.Code)
+		}
 	}
 }
 

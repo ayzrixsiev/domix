@@ -786,6 +786,7 @@ class AppLocalizations {
       : "Mahsulot yuklash va xaritada ko'rinish uchun do'kon qo'shing";
   String get myShopsLoadError =>
       isRu ? 'Не удалось загрузить ваши магазины' : "Do'konlaringizni yuklab bo'lmadi";
+  String get showMoreButton => isRu ? 'Ещё' : "Yana ko'rsatish";
   String get retryButtonShort => isRu ? 'Повторить' : "Qayta urinish";
   String get noProductsYet => isRu ? 'Нет товаров' : "Mahsulot yo'q";
 

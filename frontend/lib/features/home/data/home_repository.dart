@@ -10,6 +10,10 @@ import 'package:frontend/features/products/data/product_category.dart';
 /// home screen draws before anyone has logged in. A refusal throws [ApiException] with the status, so
 /// a screen can tell "server busy" from "phone offline" - see [LoadFailure].
 class HomeRepository {
+  /// Mirrors `searchResultsLimit` on the server. **A page shorter than this is the last one**, which
+  /// is how the results screen knows whether to offer "Ещё" without asking the api.
+  static const int searchPageSize = 100;
+
   static final Uri _homeUri = Uri.parse('${ApiConfig.serverRoot}/api/home');
 
   /// The whole home screen in one request, matching the single `GET /api/home`: all three sections
@@ -43,10 +47,16 @@ class HomeRepository {
   ///
   /// `queryParameters` rather than concatenation: `&`, `#` or `%` in a typed query would truncate the
   /// search or break the parse.
-  Future<List<CategoryProduct>> searchProducts(String query) async {
-    final uri = Uri.parse(
-      '${ApiConfig.serverRoot}/api/products/search',
-    ).replace(queryParameters: {'q': query});
+  ///
+  /// [offset] is the number of rows already held, which is how the next page is asked for.
+  Future<List<CategoryProduct>> searchProducts(
+    String query, {
+    int offset = 0,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.serverRoot}/api/products/search')
+        .replace(
+          queryParameters: {'q': query, if (offset > 0) 'offset': '$offset'},
+        );
     return _fetchProducts(uri);
   }
 

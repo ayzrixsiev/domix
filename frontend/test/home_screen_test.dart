@@ -20,6 +20,7 @@ import 'package:frontend/features/home/presentation/screens/category_products_sc
 import 'package:frontend/features/home/presentation/screens/product_search_screen.dart';
 import 'package:frontend/features/home/presentation/widgets/search_and_like_bar.dart';
 import 'package:frontend/features/products/data/product_model.dart';
+import 'package:frontend/features/products/presentation/widgets/product_grid.dart';
 import 'package:frontend/features/products/presentation/widgets/product_tile.dart';
 import 'package:frontend/features/home/presentation/screens/home_screen.dart';
 import 'package:frontend/features/home/presentation/widgets/best_offers.dart';
@@ -50,6 +51,9 @@ class _FakeHomeRepository implements HomeRepository {
   ProductCategory? requestedCategory;
   String? requestedQuery;
 
+  /// the offset of every search request, in order - what "Ещё" is checked against
+  final List<int> requestedOffsets = [];
+
   /// how many times the feed has actually been fetched - the only way to tell a refresh that ran
   /// from one whose gesture was never recognised, which is how pull-to-refresh fails
   int fetchCount = 0;
@@ -68,9 +72,11 @@ class _FakeHomeRepository implements HomeRepository {
   }
 
   @override
-  Future<List<CategoryProduct>> searchProducts(String query) async {
+  Future<List<CategoryProduct>> searchProducts(String query, {int offset = 0}) async {
     requestedQuery = query;
-    return searchResults;
+    requestedOffsets.add(offset);
+    // sliced the way the server pages: the rows already held are the offset
+    return searchResults.skip(offset).take(HomeRepository.searchPageSize).toList();
   }
 
   @override
@@ -136,6 +142,21 @@ Future<HomeController> _pumpHome(WidgetTester tester, _FakeHomeRepository repo) 
   await tester.pumpAndSettle();
   return controller;
 }
+
+CategoryProduct _lamp(int id) => CategoryProduct(
+  shopName: 'Магазин $id',
+  product: Product(
+    id: id,
+    shopId: id,
+    name: 'Лампа $id',
+    category: 'electrical',
+    unit: 'шт',
+    price: 10000 + id,
+    availability: ProductAvailability.inStock,
+    isTemplate: true,
+    nameEditable: false,
+  ),
+);
 
 void main() {
   // **the state a fresh install is in, and the one that used to be covered up.** an empty database
@@ -487,6 +508,55 @@ void main() {
     // the results replace the prompt on the same screen rather than pushing a second route - the
     // field stays reachable, which is what as-you-type will need
     expect(find.byType(ProductSearchScreen), findsOneWidget);
+  });
+
+  testWidgets('a short page of results offers no "Ещё" and asks for nothing more', (tester) async {
+    final repo = _FakeHomeRepository(
+      content: _content(),
+      searchResults: [for (var i = 1; i <= 7; i++) _lamp(i)],
+    );
+    await _pumpHome(tester, repo);
+
+    await tester.tap(find.byType(SearchAndLikeBar));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'лампа');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ProductGrid), const Offset(0, -20000));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ещё'), findsNothing);
+    expect(repo.requestedOffsets, [0]);
+  });
+
+  testWidgets('a full page offers "Ещё", which fetches from the rows held and ends on a short page',
+      (tester) async {
+    final repo = _FakeHomeRepository(
+      content: _content(),
+      searchResults: [for (var i = 1; i <= 130; i++) _lamp(i)],
+    );
+    await _pumpHome(tester, repo);
+
+    await tester.tap(find.byType(SearchAndLikeBar));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'лампа');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(find.text('Ещё'), 1000, scrollable: find.descendant(of: find.byType(ProductGrid), matching: find.byType(Scrollable)));
+    await tester.ensureVisible(find.text('Ещё'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ещё'));
+    await tester.pumpAndSettle();
+
+    expect(repo.requestedOffsets, [0, 100]);
+
+    // thirty rows came back: the list is over, so the button goes and nothing more is asked
+    await tester.drag(find.byType(ProductGrid), const Offset(0, -20000));
+    await tester.pumpAndSettle();
+    expect(find.text('Ещё'), findsNothing);
+    expect(find.text('Лампа 130'), findsOneWidget);
   });
 
   testWidgets('a search with no three-letter word goes nowhere', (tester) async {

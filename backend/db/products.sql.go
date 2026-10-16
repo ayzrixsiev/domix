@@ -220,7 +220,9 @@ const listProductsByShop = `-- name: ListProductsByShop :many
 SELECT id, shop_id, name, price, category, unit, availability, template_key, image_path, in_basket, specs, section
 FROM products
 WHERE shop_id = $1
-ORDER BY (template_key IS NULL), id
+ORDER BY (template_key IS NULL),
+         (SELECT t.id FROM product_templates t WHERE t.template_key = products.template_key),
+         id
 `
 
 type ListProductsByShopRow struct {
@@ -238,6 +240,8 @@ type ListProductsByShopRow struct {
 	Section      string      `json:"section"`
 }
 
+// **a shop's grid follows the template's order, not the row's**: a product added to the template later gets
+// a higher row id in every shop, which would strand it below its own family.
 func (q *Queries) ListProductsByShop(ctx context.Context, shopID int64) ([]ListProductsByShopRow, error) {
 	rows, err := q.db.Query(ctx, listProductsByShop, shopID)
 	if err != nil {
@@ -272,21 +276,36 @@ func (q *Queries) ListProductsByShop(ctx context.Context, shopID int64) ([]ListP
 }
 
 const searchProducts = `-- name: SearchProducts :many
-SELECT p.id, p.shop_id, p.name, p.specs, p.price, p.category, p.unit, p.availability, p.template_key,
-       p.image_path, s.name AS shop_name
-FROM products p
-JOIN shops s ON s.id = p.shop_id
-WHERE p.price IS NOT NULL
-  AND translate(lower(p.name || ' ' || p.specs), 'ё', 'е') ~ $1::text
-  AND translate(lower(p.name || ' ' || p.specs), 'ё', 'е') ~ ALL ($2::text[])
-ORDER BY (p.availability = 'unavailable'), p.price ASC, p.id
-LIMIT $3
+SELECT id, shop_id, name, specs, price, category, unit, availability, template_key, image_path, shop_name
+FROM (
+  SELECT p.id, p.shop_id, p.name, p.specs, p.price, p.category, p.unit, p.availability, p.template_key,
+         p.image_path, s.name AS shop_name,
+         coalesce(p.template_key, lower(p.name || ' ' || p.specs)) AS line,
+         row_number() OVER (
+           PARTITION BY coalesce(p.template_key, lower(p.name || ' ' || p.specs))
+           ORDER BY (p.availability = 'unavailable'), p.price ASC, p.id
+         ) AS offer_rank,
+         min(p.price) FILTER (WHERE p.availability <> 'unavailable') OVER (
+           PARTITION BY coalesce(p.template_key, lower(p.name || ' ' || p.specs))
+         ) AS line_price
+  FROM products p
+  JOIN shops s ON s.id = p.shop_id
+  WHERE p.price IS NOT NULL
+    AND translate(lower(p.name || ' ' || p.specs), 'ё', 'е') ~ $1::text
+    AND translate(lower(p.name || ' ' || p.specs), 'ё', 'е') ~ ALL ($2::text[])
+) offers
+WHERE offer_rank <= $3::bigint
+ORDER BY line_price ASC NULLS LAST, line, offer_rank
+LIMIT $5
+OFFSET $4
 `
 
 type SearchProductsParams struct {
-	Anchor      string   `json:"anchor"`
-	Patterns    []string `json:"patterns"`
-	ResultLimit int32    `json:"result_limit"`
+	Anchor        string   `json:"anchor"`
+	Patterns      []string `json:"patterns"`
+	OffersPerLine int64    `json:"offers_per_line"`
+	ResultOffset  int32    `json:"result_offset"`
+	ResultLimit   int32    `json:"result_limit"`
 }
 
 type SearchProductsRow struct {
@@ -305,8 +324,20 @@ type SearchProductsRow struct {
 
 // the text expression must stay character for character the one idx_products_search_text indexes
 // (migration 000007): postgres uses an expression index only for the identical expression.
+//
+// offers of one product, then the next, as ListProductsByCategory does: fifty universal shops all price
+// the same lamp, and a flat price order answers "лампа" with fifty copies of one lamp. the order is a
+// total one (line_price, line, offer_rank) so that offset pages never overlap or skip a row. line_price
+// counts only what can be bought: a line whose every offer is «нет в наличии» sorts after all the others.
+// **offers_per_line carries the ::bigint cast for the reason given on ListProductsByCategory.**
 func (q *Queries) SearchProducts(ctx context.Context, arg SearchProductsParams) ([]SearchProductsRow, error) {
-	rows, err := q.db.Query(ctx, searchProducts, arg.Anchor, arg.Patterns, arg.ResultLimit)
+	rows, err := q.db.Query(ctx, searchProducts,
+		arg.Anchor,
+		arg.Patterns,
+		arg.OffersPerLine,
+		arg.ResultOffset,
+		arg.ResultLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
