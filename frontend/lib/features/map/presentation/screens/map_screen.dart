@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
@@ -100,6 +101,7 @@ class _MapScreenState extends State<MapScreen> {
   /// Why the last press of «Рядом со мной» came back empty. Cleared by the next press, so the
   /// sentence on the banner is always about the button the user just pressed.
   UserLocationFailure? _locationFailure;
+  Timer? _failureTimer;
 
   @override
   void initState() {
@@ -109,6 +111,12 @@ class _MapScreenState extends State<MapScreen> {
     // session and every later re-sync comes through didUpdateWidget. deliberately not gated on
     // isActive: the shell builds every tab at launch, so the pins are in hand before Карта is pressed.
     _syncShops();
+  }
+
+  @override
+  void dispose() {
+    _failureTimer?.cancel();
+    super.dispose();
   }
 
   /// Re-syncs when this becomes the visible tab. [StoresController.refreshStoresIfStale] decides
@@ -162,6 +170,7 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _goToUserLocation() async {
     if (_locating) return;
 
+    _failureTimer?.cancel();
     setState(() {
       _locating = true;
       _locationFailure = null;
@@ -175,23 +184,36 @@ class _MapScreenState extends State<MapScreen> {
     } on UserLocationException catch (e) {
       if (!mounted) return;
       setState(() => _locationFailure = e.failure);
+      // **only the failure with nothing to press fades**: the other three carry «Настройки», which
+      // would vanish under the finger
+      if (e.failure == UserLocationFailure.unavailable) {
+        _failureTimer = Timer(const Duration(seconds: 3), () {
+          if (mounted) setState(() => _locationFailure = null);
+        });
+      }
     } finally {
       if (mounted) setState(() => _locating = false);
     }
   }
 
-  String _locationFailureMessage(UserLocationFailure failure, AppLocalizations strings) =>
-      switch (failure) {
-        UserLocationFailure.servicesOff => strings.locationServicesOff,
-        UserLocationFailure.denied => strings.locationDenied,
-        UserLocationFailure.deniedForever => strings.locationDeniedForever,
-        UserLocationFailure.unavailable => strings.locationUnavailable,
-      };
+  String _locationFailureMessage(
+    UserLocationFailure failure,
+    AppLocalizations strings,
+  ) => switch (failure) {
+    UserLocationFailure.servicesOff => strings.locationServicesOff,
+    UserLocationFailure.denied => strings.locationDenied,
+    UserLocationFailure.deniedForever => strings.locationDeniedForever,
+    UserLocationFailure.unavailable => strings.locationUnavailable,
+  };
 
   /// The one line over the map, or nothing. **Order is the message**: the location failure answers
   /// the button the user just pressed, so it outranks everything about the shop list, and "no shops
   /// in this category" only makes sense once there are shops to have filtered.
-  Widget? _statusBanner(StoresController controller, List<Shop> visible, AppLocalizations strings) {
+  Widget? _statusBanner(
+    StoresController controller,
+    List<Shop> visible,
+    AppLocalizations strings,
+  ) {
     if (_locationFailure case final failure?) {
       // the two failures a settings page can undo carry the button; the other two are just facts
       final actionable = failure != UserLocationFailure.unavailable;
@@ -231,7 +253,9 @@ class _MapScreenState extends State<MapScreen> {
 
     final shops = _category == null
         ? controller.stores
-        : controller.stores.where((shop) => shop.category == _category).toList();
+        : controller.stores
+              .where((shop) => shop.category == _category)
+              .toList();
 
     final statusBanner = _statusBanner(controller, shops, strings);
 
@@ -285,7 +309,8 @@ class _MapScreenState extends State<MapScreen> {
                   // **a dot zooms in, it does not open the card.** at city scale a fingertip covers
                   // several dots, so opening a shop would be a coin toss the user has to undo; flying
                   // in resolves which dot was meant and costs nothing if it was the wrong one.
-                  onTap: () => _flyTo(shop.latitude, shop.longitude, zoom: _nearMeZoom),
+                  onTap: () =>
+                      _flyTo(shop.latitude, shop.longitude, zoom: _nearMeZoom),
                   builder: () => const ShopDot(),
                 ),
             // last, so it draws over the shops: where the user is standing is never the thing to hide
@@ -317,14 +342,15 @@ class _MapScreenState extends State<MapScreen> {
                     shops: controller.stores,
                     // only when there is nothing at all to search: a list that loaded before a failed
                     // refresh is still worth searching
-                    shopsFailed: controller.loadFailed && controller.stores.isEmpty,
+                    shopsFailed:
+                        controller.loadFailed && controller.stores.isEmpty,
                     strings: strings,
                     leading: switch (widget.onExit) {
                       final VoidCallback exit => MapBarButton(
-                          icon: LucideIcons.chevron_left,
-                          tooltip: strings.exitMap,
-                          onTap: exit,
-                        ),
+                        icon: LucideIcons.chevron_left,
+                        tooltip: strings.exitMap,
+                        onTap: exit,
+                      ),
                       _ => null,
                     },
                     action: MapBarButton(
@@ -332,15 +358,19 @@ class _MapScreenState extends State<MapScreen> {
                       // strip is going, not at what it is hiding
                       icon: LucideIcons.chevron_up,
                       turns: _categoriesOpen ? 0 : 0.5,
-                      tooltip: _categoriesOpen ? strings.hideCategories : strings.showCategories,
-                      onTap: () => setState(() => _categoriesOpen = !_categoriesOpen),
+                      tooltip: _categoriesOpen
+                          ? strings.hideCategories
+                          : strings.showCategories,
+                      onTap: () =>
+                          setState(() => _categoriesOpen = !_categoriesOpen),
                     ),
                     onShopSelected: (shop) {
                       // the camera moves first, so popping the card lands back on a map already centred on the shop
                       _flyTo(shop.latitude, shop.longitude);
                       _openShopCard(context, shop);
                     },
-                    onPlaceSelected: (place) => _flyTo(place.latitude, place.longitude),
+                    onPlaceSelected: (place) =>
+                        _flyTo(place.latitude, place.longitude),
                   ),
                 ),
                 AnimatedSize(
@@ -353,7 +383,8 @@ class _MapScreenState extends State<MapScreen> {
                           child: MapCategoryBar(
                             selected: _category,
                             strings: strings,
-                            onSelected: (category) => setState(() => _category = category),
+                            onSelected: (category) =>
+                                setState(() => _category = category),
                           ),
                         )
                       : const SizedBox(width: double.infinity),
@@ -375,7 +406,10 @@ class _MapScreenState extends State<MapScreen> {
         // licence - [_logoClearance] is the strip left for it.
         Positioned(
           right: 16,
-          bottom: widget.bottomPadding + MediaQuery.viewPaddingOf(context).bottom + _logoClearance,
+          bottom:
+              widget.bottomPadding +
+              MediaQuery.viewPaddingOf(context).bottom +
+              _logoClearance,
           child: _NearMeButton(
             label: strings.nearMe,
             isBusy: _locating,
@@ -407,7 +441,11 @@ class _MapScreenState extends State<MapScreen> {
 /// «Рядом со мной» - the one control on the map that asks the phone a question. A pill rather than a
 /// disc because it carries a verb: a bare arrow glyph over a map is read as a compass.
 class _NearMeButton extends StatelessWidget {
-  const _NearMeButton({required this.label, required this.isBusy, required this.onTap});
+  const _NearMeButton({
+    required this.label,
+    required this.isBusy,
+    required this.onTap,
+  });
 
   final String label;
 
@@ -441,12 +479,19 @@ class _NearMeButton extends StatelessWidget {
                 const SizedBox(
                   width: 17,
                   height: 17,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryOrange),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.primaryOrange,
+                  ),
                 )
               else
                 // **not orange.** the glyph is a direction, not an action's accent, and the strip
                 // above already spends the brand colour on the picked category.
-                const Icon(LucideIcons.navigation, size: 17, color: AppColors.textDark),
+                const Icon(
+                  LucideIcons.navigation,
+                  size: 17,
+                  color: AppColors.textDark,
+                ),
               const SizedBox(width: 9),
               Text(
                 label,
@@ -490,77 +535,77 @@ class _MapMessageBanner extends StatelessWidget {
     // looks like a system error banner, not a status hint
     return Center(
       child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: AppColors.hairline),
-            boxShadow: AppShadows.floating,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (isBusy)
-                const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppColors.primaryOrange,
-                  ),
-                )
-              else
-                Icon(
-                  isError
-                      ? CupertinoIcons.exclamationmark_circle_fill
-                      : CupertinoIcons.map_pin_slash,
-                  color: isError ? AppColors.danger : AppColors.textFaint,
-                  size: 15,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: AppColors.hairline),
+          boxShadow: AppShadows.floating,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isBusy)
+              const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.primaryOrange,
                 ),
-              const SizedBox(width: 9),
-              Flexible(
-                child: Text(
-                  message,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: isError ? AppColors.danger : AppColors.textGrey,
-                    fontSize: 13,
-                    height: 1.3,
-                    fontWeight: FontWeight.w500,
-                  ),
+              )
+            else
+              Icon(
+                isError
+                    ? CupertinoIcons.exclamationmark_circle_fill
+                    : CupertinoIcons.map_pin_slash,
+                color: isError ? AppColors.danger : AppColors.textFaint,
+                size: 15,
+              ),
+            const SizedBox(width: 9),
+            Flexible(
+              child: Text(
+                message,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: isError ? AppColors.danger : AppColors.textGrey,
+                  fontSize: 13,
+                  height: 1.3,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-              if (actionLabel != null && onAction != null) ...[
-                // a divider rather than a gap: without a rule between them the label and the button read as one
-                // run-on line and the tappable half is not obviously tappable
-                Container(
-                  width: 1,
-                  height: 16,
-                  margin: const EdgeInsets.symmetric(horizontal: 10),
-                  color: AppColors.hairline,
-                ),
-                GestureDetector(
-                  onTap: onAction,
-                  // opaque, so the whole padded box takes the tap - this is a 13px label and the padding is most
-                  // of the target
-                  behavior: HitTestBehavior.opaque,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Text(
-                      actionLabel!,
-                      style: const TextStyle(
-                        color: AppColors.primaryOrange,
-                        fontSize: 13,
-                        height: 1.3,
-                        fontWeight: FontWeight.w700,
-                      ),
+            ),
+            if (actionLabel != null && onAction != null) ...[
+              // a divider rather than a gap: without a rule between them the label and the button read as one
+              // run-on line and the tappable half is not obviously tappable
+              Container(
+                width: 1,
+                height: 16,
+                margin: const EdgeInsets.symmetric(horizontal: 10),
+                color: AppColors.hairline,
+              ),
+              GestureDetector(
+                onTap: onAction,
+                // opaque, so the whole padded box takes the tap - this is a 13px label and the padding is most
+                // of the target
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Text(
+                    actionLabel!,
+                    style: const TextStyle(
+                      color: AppColors.primaryOrange,
+                      fontSize: 13,
+                      height: 1.3,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
-              ],
+              ),
             ],
-          ),
+          ],
+        ),
       ),
     );
   }
