@@ -20,7 +20,7 @@ import 'package:frontend/core/widgets/pressable_scale.dart';
 
 /// mirrors maxCustomProducts in backend/internal/endpoints/product_crud.go, which is what actually
 /// enforces it - this copy only greys the add tile out before a doomed round trip
-const int kMaxCustomProducts = 30;
+const int kMaxCustomProducts = 40;
 
 // the "Товары" section of ShopSettingsScreen: the shop's whole catalogue as a grid, in the layout a
 // customer sees on the shop's card. it arrives already full, because creating the shop copied its

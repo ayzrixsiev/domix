@@ -7,6 +7,7 @@ import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/app_shell/presentation/widgets/floating_bottom_nav_bar.dart';
 import 'package:frontend/features/favorites/presentation/screens/favorites_screen.dart';
 import 'package:frontend/features/home/presentation/screens/home_screen.dart';
+import 'package:frontend/features/map/presentation/controllers/map_focus_controller.dart';
 import 'package:frontend/features/map/presentation/screens/map_screen.dart';
 import 'package:frontend/features/onboarding/presentation/screens/onboarding_flow.dart';
 import 'package:frontend/features/products/presentation/controllers/products_controller.dart';
@@ -27,14 +28,26 @@ class AppShellScreen extends StatefulWidget {
 class _AppShellScreenState extends State<AppShellScreen> with WidgetsBindingObserver {
   static const _bottomPadding = 96.0;
 
+  late final MapFocusController _mapFocus;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _mapFocus = context.read<MapFocusController>()..addListener(_showMap);
+  }
+
+  // a shop card's «Маршрут»: whatever is open over the shell closes, and the map tab takes over. the
+  // map itself flies to the shop - it is the one holding the request
+  void _showMap() {
+    if (_mapFocus.request == null) return;
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    setState(() => _currentIndex = _mapTabIndex);
   }
 
   @override
   void dispose() {
+    _mapFocus.removeListener(_showMap);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

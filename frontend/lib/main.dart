@@ -14,6 +14,7 @@ import 'package:frontend/features/app_shell/presentation/screens/app_shell_scree
 import 'package:frontend/features/profile/presentation/widgets/session_expiry_guard.dart';
 import 'features/home/presentation/controllers/home_controller.dart';
 import 'features/location/presentation/controllers/city_controller.dart';
+import 'features/map/presentation/controllers/map_focus_controller.dart';
 import 'features/favorites/presentation/controllers/favorites_controller.dart';
 import 'features/profile/presentation/controllers/auth_controller.dart';
 import 'features/stores/presentation/controllers/stores_controller.dart';
@@ -74,6 +75,7 @@ void main() async {
           ChangeNotifierProvider.value(value: authController),      // make all
           ChangeNotifierProvider.value(value: storesController),
           ChangeNotifierProvider.value(value: favoritesController),    // UI components
+          ChangeNotifierProvider(create: (_) => MapFocusController()),
           ChangeNotifierProvider.value(value: productsController),  // to listen to these controllers using notifyListener()
         ],
         child: const DomixApp(),

@@ -46,7 +46,7 @@ type Products struct {
 // how many products an owner may add on top of the category template - the cap that stops a shop
 // drifting into a catalogue nobody else's lines up with. counts only `template_key IS NULL` rows,
 // since seeded ones are identical in every shop. sent to the app in the product_limit_reached error.
-const maxCustomProducts = 30
+const maxCustomProducts = 40
 
 // the varchar widths in db/migrations. a value wider than its column makes postgres reject the
 // statement, which reaches the owner as an unexplained "failed to save".

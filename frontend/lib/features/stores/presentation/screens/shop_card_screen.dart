@@ -15,6 +15,7 @@ import 'package:frontend/core/widgets/primary_action_button.dart';
 import 'package:frontend/features/favorites/presentation/controllers/favorites_controller.dart';
 import 'package:frontend/features/favorites/presentation/favorite_action.dart';
 import 'package:frontend/features/home/data/category_product.dart';
+import 'package:frontend/features/map/presentation/controllers/map_focus_controller.dart';
 import 'package:frontend/features/products/data/product_model.dart';
 import 'package:frontend/features/products/data/product_section.dart';
 import 'package:frontend/features/products/presentation/controllers/products_controller.dart';
@@ -296,20 +297,9 @@ class _ShopCardViewState extends State<ShopCardView> {
     _toast(Provider.of<LanguageProvider>(context, listen: false).strings.phoneCopied);
   }
 
-  // hands the coordinates to whatever maps app the phone has: `geo:` is a platform scheme, so the
-  // system shows a chooser, where a yandex url opens a browser on a phone with only Google Maps.
-  // `geo:` cannot express "route to it", so the web url underneath covers that and a phone with no
-  // maps app. both need a `<queries>` entry in AndroidManifest.xml - Android 11 package visibility.
-  Future<void> _route() async {
-    final shop = widget.shop;
-    final point = '${shop.latitude},${shop.longitude}';
-    // parentheses delimit the label in a geo: uri, and Uri.encodeComponent leaves them alone
-    final label = Uri.encodeComponent(shop.name.replaceAll(RegExp(r'[()]'), ''));
-
-    if (await _tryOpen(Uri.parse('geo:$point?q=$point($label)'))) return;
-    if (await _tryOpen(Uri.parse('https://yandex.uz/maps/?rtext=~$point&rtt=auto'))) return;
-    _reportNothingToOpenWith();
-  }
+  // our own map shows the shop rather than the phone's maps app: the shell closes this card and the
+  // map tab flies to the pin
+  void _route() => context.read<MapFocusController>().show(widget.shop);
 
   // **the return value of launchUrl is the signal, not canLaunchUrl**, which answers false for
   // launchable links unless every scheme is declared - and throws rather than returning false, so the
