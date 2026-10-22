@@ -613,6 +613,16 @@
   .phf-acts{display:flex;gap:8px;flex-wrap:wrap}
   .phf-path{font-size:11px;color:var(--muted);word-break:break-all;line-height:1.45}
 
+  /* the editor's photo field accepts a dragged file; the overlay is a pseudo-element so a drag
+     moving across the buttons underneath never fires a dragleave on the box itself */
+  .phf.dz{position:relative;padding:12px;border:1.5px dashed var(--line-2);border-radius:var(--r-3);
+          transition:border-color .2s var(--ease),background-color .2s var(--ease)}
+  .phf.dz.over{border-color:var(--o);background:var(--o-50)}
+  .phf.dz.over::after{content:"Отпустите, чтобы загрузить";position:absolute;inset:0;display:grid;
+          place-items:center;border-radius:inherit;background:var(--o-50);color:var(--o-ink);
+          font-size:13.5px;font-weight:650;pointer-events:none}
+  .phf.dz.busy{opacity:.6;pointer-events:none}
+
   /* the editor's own row of actions, left of the spacer: this row's two ways out that are not
      «Сохранить». Quiet on purpose - they are not what the modal is for. */
   .m-acts .m-left{display:flex;gap:8px;flex:none}
@@ -3482,10 +3492,15 @@ function deleteTemplateItem(t, it) {
 // **nothing here deletes a file.** Other sizes and shops seeded earlier may draw the one being
 // replaced, so taking it off this row only stops this row pointing at it; «Фото каталога без
 // товара» under Шаблоны is what collects it once nothing does.
+// **a file dropped anywhere the page does not handle makes the browser open it**, replacing the
+// panel and the half-filled form with a bare image. The drop zone below handles its own drop first.
+window.addEventListener("dragover", function (e) { e.preventDefault(); });
+window.addEventListener("drop", function (e) { e.preventDefault(); });
+
 function photoField(f, input) {
   if (f.locked) input.value = ""; // a slot's row may not carry one at all - see OWNER_PHOTO_NOTE
 
-  var box = el("div","phf");
+  var box = el("div", f.locked ? "phf" : "phf dz");
   var shot = el("img","phf-ph"); shot.alt = "";
   var blank = el("div","phf-ph none"); blank.appendChild(ico(ICONS.box,26));
   box.appendChild(shot); box.appendChild(blank);
@@ -3511,7 +3526,7 @@ function photoField(f, input) {
     }
     shot.hidden = !url; blank.hidden = !!url;
     if (url) shot.src = url;
-    pathLine.textContent = rel || (f.locked ? "" : "Фото не выбрано");
+    pathLine.textContent = rel || (f.locked ? "" : "Фото не выбрано — перетащите файл сюда");
     if (drop) drop.hidden = !rel;
   }
 
@@ -3524,12 +3539,10 @@ function photoField(f, input) {
   var up = el("button","btn btn-g btn-s"); up.type = "button";
   up.appendChild(ico(ICONS.upload,15));
   up.appendChild(el("span",null,"Загрузить"));
-  up.addEventListener("click", function () { file.click(); });
-  file.addEventListener("change", function () {
-    var chosen = file.files && file.files[0];
-    if (!chosen) return;
+  function send(chosen) {
     var was = up.lastChild.textContent;
     up.disabled = true; up.lastChild.textContent = "…";
+    box.classList.add("busy");
     uploadCataloguePhoto(f.category, chosen).then(function (saved) {
       known[saved.path] = saved.thumb_url;
       input.value = saved.path;
@@ -3539,8 +3552,41 @@ function photoField(f, input) {
       if (!guard(e)) toast(photoError(e), true);
     }).then(function () {
       up.disabled = false; up.lastChild.textContent = was;
+      box.classList.remove("busy");
       file.value = ""; // or picking the same file twice fires no change event
     });
+  }
+
+  up.addEventListener("click", function () { file.click(); });
+  file.addEventListener("change", function () {
+    if (file.files && file.files[0]) send(file.files[0]);
+  });
+
+  // dragenter/dragleave also fire for every child the pointer crosses, so a depth count is the only
+  // honest way to know the drag has really left the box
+  var depth = 0;
+  function carriesFile(e) {
+    return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types, "Files") >= 0;
+  }
+  box.addEventListener("dragenter", function (e) {
+    if (!carriesFile(e)) return;
+    e.preventDefault(); depth++; box.classList.add("over");
+  });
+  box.addEventListener("dragover", function (e) {
+    if (carriesFile(e)) e.preventDefault();
+  });
+  box.addEventListener("dragleave", function () {
+    depth = Math.max(0, depth - 1);
+    if (!depth) box.classList.remove("over");
+  });
+  box.addEventListener("drop", function (e) {
+    if (!carriesFile(e)) return;
+    e.preventDefault(); depth = 0; box.classList.remove("over");
+    var dropped = e.dataTransfer.files[0];
+    if (!dropped) return;
+    // the picker filters by `accept`, a drop does not
+    if (dropped.type.indexOf("image/") !== 0) { toast("Нужен снимок JPEG или PNG", true); return; }
+    send(dropped);
   });
 
   var pick = el("button","btn btn-g btn-s","Из каталога"); pick.type = "button";
