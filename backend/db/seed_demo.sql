@@ -288,8 +288,8 @@ INSERT INTO demo_base_price (template_key, price) VALUES
   ('wallpaper.econom_cn_1', 60000),
   ('wallpaper.econom_cn_2', 65000);
 
--- Сантехника - сто позиций одного поставщика, поэтому цена берётся правилом по названию, а
--- разброс внутри правила даёт хеш ключа: соседние фитинги не стоят одинаково.
+-- Сантехника - полтораста позиций одного поставщика, поэтому цена берётся правилом по названию и
+-- описанию, а разброс внутри правила даёт хеш ключа: соседние фитинги не стоят одинаково.
 INSERT INTO demo_base_price (template_key, price)
 SELECT t.template_key,
        (ROUND(rule.price * (0.90 + (ABS(HASHTEXT(t.template_key)) % 21) / 100.0)
@@ -297,32 +297,45 @@ SELECT t.template_key,
 FROM product_templates t
 CROSS JOIN LATERAL (
     SELECT CASE
-        WHEN t.name ILIKE '%Электрический смеситель%'      THEN 480000
-        WHEN t.name ILIKE '%смеситель%'                    THEN 380000
-        WHEN t.name ILIKE '%Канализационная труба%150/3%'  THEN 180000
-        WHEN t.name ILIKE '%Канализационная труба%100/3%'  THEN 110000
-        WHEN t.name ILIKE '%Канализационная труба%75/3%'   THEN  85000
-        WHEN t.name ILIKE '%Канализационная труба%'        THEN  60000
-        WHEN t.name ILIKE '%Лейка%'                        THEN  45000
-        WHEN t.name ILIKE '%Шланг%'                        THEN  32000
-        WHEN t.name ILIKE '%Термофлекс%'                   THEN  12000
-        WHEN t.name ILIKE '%нержавейка%'                   THEN  42000
-        WHEN t.name ILIKE '%латунн%'                       THEN  38000
-        WHEN t.name ILIKE '%Эксцентрик%'                   THEN  22000
-        WHEN t.name ILIKE '%Кальсо%'                       THEN  18000
-        WHEN t.name ILIKE '%Бочонок%'                      THEN  12000
-        WHEN t.name ILIKE '%Штуцер%'                       THEN   9000
-        WHEN t.name ILIKE '%Удлинитель%'                   THEN   8000
-        WHEN t.name ILIKE '%Хомут%'                        THEN   6000
-        WHEN t.name ILIKE '%Клипса%'                       THEN   2500
-        WHEN t.name ILIKE '%Заглушка%'                     THEN   4500
-        WHEN t.name ILIKE 'VERO (к)%'                      THEN  22000
-        WHEN t.name ILIKE 'VERO%'                          THEN   9000
+        WHEN t.name ILIKE 'Электрический смеситель%'                                  THEN 480000
+        WHEN t.name ILIKE 'Смеситель%'                                                THEN 380000
+        WHEN t.name = 'Канализационная труба' AND t.specs LIKE 'Ø150%'                THEN 180000
+        WHEN t.name = 'Канализационная труба' AND t.specs LIKE 'Ø100%'                THEN 110000
+        WHEN t.name = 'Канализационная труба' AND t.specs LIKE 'Ø75%'                 THEN  85000
+        WHEN t.name = 'Канализационная труба'                                         THEN  60000
+        WHEN t.name ILIKE 'Труба PPR%' AND t.specs LIKE '63 мм%'                      THEN  95000
+        WHEN t.name ILIKE 'Труба PPR%' AND t.specs LIKE '32 мм%'                      THEN  38000
+        WHEN t.name ILIKE 'Труба PPR%' AND t.specs LIKE '25 мм%'                      THEN  24000
+        WHEN t.name ILIKE 'Труба PPR%'                                                THEN  16000
+        WHEN t.name ILIKE 'Металлопластиковая труба%'                                 THEN  18000
+        WHEN t.name ILIKE 'Труба для тёплого пола%'                                   THEN   8000
+        WHEN t.name ILIKE 'Лейка%'                                                    THEN  45000
+        WHEN t.name ILIKE '%шланг%'                                                   THEN  32000
+        WHEN t.name ILIKE 'Термофлекс%'                                               THEN  12000
+        WHEN t.name ILIKE 'Фильтр для воды%' AND t.specs LIKE '3-ступенчатый%'        THEN 160000
+        WHEN t.name ILIKE 'Фильтр для воды%'                                          THEN  70000
+        WHEN t.name ILIKE 'Набор картриджей%'                                         THEN  45000
+        WHEN t.name ILIKE 'Картридж для фильтра%'                                     THEN  12000
+        WHEN t.specs ILIKE '%нержавеющая%' OR t.specs ILIKE '%AISI%'                  THEN  42000
+        WHEN t.name ILIKE 'Футорка%'                                                  THEN  18000
+        WHEN t.name ILIKE 'Ниппель резьбовой%' AND t.specs ILIKE '%Эконом%'           THEN  12000
+        WHEN t.name ILIKE 'Ниппель переходной%'                                       THEN  22000
+        WHEN t.name ILIKE 'Штуцер%'                                                   THEN   9000
+        WHEN t.name ILIKE 'Удлинитель%'                                               THEN   8000
+        WHEN t.name ILIKE 'Клипса%'                                                   THEN   2500
+        WHEN t.name ILIKE 'Заглушка%'                                                 THEN   4500
+        WHEN t.name ILIKE 'Газов%'                                                    THEN  48000
+        WHEN t.name ILIKE '%кран%' AND t.specs ILIKE '%KAS%'                          THEN  36000
+        WHEN t.name ILIKE 'Вентиль%' AND t.specs ILIKE '%KAS%'                        THEN  22000
+        WHEN t.specs ILIKE '%Латунь%'                                                 THEN  38000
+        WHEN t.name ILIKE 'Хомут%'                                                    THEN   6000
+        WHEN t.name ILIKE '%канализационн%'                                           THEN  22000
+        WHEN t.specs ILIKE '%VERO%'                                                   THEN   9000
         ELSE 12000
     END AS price,
     CASE
-        WHEN t.name ILIKE '%Клипса%' OR t.name ILIKE '%Заглушка%' THEN 100
-        WHEN t.name ILIKE '%смеситель%' OR t.name ILIKE '%Канализационная труба%' THEN 1000
+        WHEN t.name ILIKE 'Клипса%' OR t.name ILIKE 'Заглушка%'                       THEN 100
+        WHEN t.name ILIKE 'Смеситель%' OR t.name ILIKE '%труба%'                      THEN 1000
         ELSE 500
     END AS step
 ) rule

@@ -1020,10 +1020,19 @@ var SHOP_CATS = { universal:"Универсальный", plumbing:"Сантех
 var PRODUCT_CATS = { mixes:"Смеси", blocks:"Блоки", lumber:"Пиломатериалы", metal:"Металл", fasteners:"Крепёж",
   roofing:"Кровля", insulation:"Изоляция", electrical:"Электрика", plumbing:"Сантехника",
   paints:"Краски", finishing:"Отделка", tools:"Инструменты" };
-// a shop's own grid chips, universal only for now. "" keeps a row out of every chip but «Все товары».
+// the sheet a shop's grid is split by, per shop category. "" keeps a row out of every section but «Все товары».
 var SECTIONS = { tapes_abrasives:"Ленты, расходники, абразивы и диски", drills_hand_tools:"Свёрла и ручной инструмент",
   electrical_lighting:"Электрика и освещение", fasteners_mounting:"Крепёж и монтаж",
-  mixes_paints:"Смеси, клеи, краски и химия", films_sheets:"Плёнки, изоляция и листовые материалы" };
+  mixes_paints:"Смеси, клеи, краски и химия", films_sheets:"Плёнки, изоляция и листовые материалы",
+  pipes_insulation:"Трубы и теплоизоляция", ppr_fittings:"PPR-фитинги VERO", valves_vero:"Краны и вентили VERO",
+  sewer:"Канализация VERO", threaded_fittings:"Металлические резьбовые фитинги", ktm_fittings:"Фитинги KTM",
+  valves_kas:"Краны KAS", cistern_toilet:"Бачок и унитаз", siphons:"Сифоны", drains:"Трапы",
+  washing_machine:"Для стиральной машины", filters_cartridges:"Фильтры и картриджи",
+  mixer_parts:"Комплектующие для смесителей", hoses:"Гибкие подводки и шланги", mixers:"Смесители" };
+var SECTION_GROUPS = {
+  universal:["tapes_abrasives", "drills_hand_tools", "electrical_lighting", "fasteners_mounting", "mixes_paints", "films_sheets"],
+  plumbing:["pipes_insulation", "ppr_fittings", "valves_vero", "sewer", "threaded_fittings", "ktm_fittings", "valves_kas",
+    "cistern_toilet", "siphons", "drains", "washing_machine", "filters_cartridges", "mixer_parts", "hoses", "mixers"] };
 var ROLES = { customer:"Покупатель", shop_owner:"Владелец магазина", admin:"Администратор" };
 var AVAIL = { in_stock:"В наличии", on_order:"Под заказ", unavailable:"Нет в наличии" };
 
@@ -3332,8 +3341,8 @@ function productCategoryOptions() {
   return Object.keys(PRODUCT_CATS).map(function(k){ return [k, PRODUCT_CATS[k]]; });
 }
 
-function sectionOptions() {
-  return [["", "Без раздела"]].concat(Object.keys(SECTIONS).map(function(k){ return [k, SECTIONS[k]]; }));
+function sectionOptions(shopCategory) {
+  return [["", "Без раздела"]].concat((SECTION_GROUPS[shopCategory] || []).map(function(k){ return [k, SECTIONS[k]]; }));
 }
 
 // a key the founder does not have to invent: the category prefix plus a transliterated slug of the
@@ -3366,7 +3375,7 @@ function addTemplateItem(t, base) {
       { name:"template_key", label:"Ключ (навсегда)",
         note:"Ключ нельзя будет изменить: по нему товар сравнивается между магазинами. Латиница, цифры, точка и подчёркивание." },
       { name:"category", label:"Категория товара", type:"select", value: base ? base.category : "tools", options:productCategoryOptions() },
-      { name:"section", label:"Раздел в магазине", type:"select", value: base ? (base.section || "") : "", options:sectionOptions() },
+      { name:"section", label:"Раздел в магазине", type:"select", value: base ? (base.section || "") : "", options:sectionOptions(t.category) },
       { name:"unit", label:"Единица измерения", value: base ? base.unit : "шт" },
       { name:"image_path", label:"Фото", type:"photo", category:t.category, value: base ? (base.image_path || "") : "",
         thumb: base ? base.image_thumb_url : "", locked:t.owner_named,
@@ -3415,7 +3424,7 @@ function editTemplateItem(t, it) {
       { name:"specs", label:"Описание", value:it.specs || "",
         note:"Строка под названием на карточке: «45 мм × 50 м · Прозрачный». Размер пишется здесь." },
       { name:"unit", label:"Единица измерения", value:it.unit },
-      { name:"section", label:"Раздел в магазине", type:"select", value:it.section || "", options:sectionOptions() },
+      { name:"section", label:"Раздел в магазине", type:"select", value:it.section || "", options:sectionOptions(t.category) },
       { name:"category", label:"Категория товара", type:"select", value:it.category, options:productCategoryOptions() },
       { name:"in_basket", label:"В корзине — участвует в сравнении цен", type:"check", value:it.in_basket,
         note:basketNote(t, it), warnNote:!it.in_basket && t.shops - it.priced > 0 },
