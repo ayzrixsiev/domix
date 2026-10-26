@@ -3,17 +3,34 @@ import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'product_model.dart';
 
-/// The chips over one shop's grid. [code] mirrors `catalog.IsValidSection` on the backend.
+/// The groups a shop's «Категории» sheet splits its grid by. [code] mirrors `catalog.IsValidSection`
+/// on the backend; the order is the sheet's order, so a template lists its sections together.
 ///
 /// **Not a [ProductCategory]**: a category is what the home screen browses across every shop, a
-/// section only splits one shop's own catalogue. Only the universal template has them so far.
+/// section only splits one shop's own catalogue. The universal and plumbing templates have them.
 enum ProductSection {
   tapesAbrasives('tapes_abrasives'),
   drillsHandTools('drills_hand_tools'),
   electricalLighting('electrical_lighting'),
   fastenersMounting('fasteners_mounting'),
   mixesPaints('mixes_paints'),
-  filmsSheets('films_sheets');
+  filmsSheets('films_sheets'),
+
+  pipesInsulation('pipes_insulation'),
+  pprFittings('ppr_fittings'),
+  valvesVero('valves_vero'),
+  sewer('sewer'),
+  threadedFittings('threaded_fittings'),
+  ktmFittings('ktm_fittings'),
+  valvesKas('valves_kas'),
+  cisternToilet('cistern_toilet'),
+  siphons('siphons'),
+  drains('drains'),
+  washingMachine('washing_machine'),
+  filtersCartridges('filters_cartridges'),
+  mixerParts('mixer_parts'),
+  hoses('hoses'),
+  mixers('mixers');
 
   const ProductSection(this.code);
 
@@ -26,16 +43,6 @@ enum ProductSection {
     return null;
   }
 
-  String label(AppLocalizations strings) => switch (this) {
-    ProductSection.tapesAbrasives => strings.sectionTapesAbrasives,
-    ProductSection.drillsHandTools => strings.sectionDrillsHandTools,
-    ProductSection.electricalLighting => strings.sectionElectricalLighting,
-    ProductSection.fastenersMounting => strings.sectionFastenersMounting,
-    ProductSection.mixesPaints => strings.sectionMixesPaints,
-    ProductSection.filmsSheets => strings.sectionFilmsSheets,
-  };
-
-  /// the whole name, for the sheet - a chip has the short one
   String fullLabel(AppLocalizations strings) => switch (this) {
     ProductSection.tapesAbrasives => strings.sectionFullTapesAbrasives,
     ProductSection.drillsHandTools => strings.sectionFullDrillsHandTools,
@@ -43,6 +50,21 @@ enum ProductSection {
     ProductSection.fastenersMounting => strings.sectionFullFastenersMounting,
     ProductSection.mixesPaints => strings.sectionFullMixesPaints,
     ProductSection.filmsSheets => strings.sectionFullFilmsSheets,
+    ProductSection.pipesInsulation => strings.sectionFullPipesInsulation,
+    ProductSection.pprFittings => strings.sectionFullPprFittings,
+    ProductSection.valvesVero => strings.sectionFullValvesVero,
+    ProductSection.sewer => strings.sectionFullSewer,
+    ProductSection.threadedFittings => strings.sectionFullThreadedFittings,
+    ProductSection.ktmFittings => strings.sectionFullKtmFittings,
+    ProductSection.valvesKas => strings.sectionFullValvesKas,
+    ProductSection.cisternToilet => strings.sectionFullCisternToilet,
+    ProductSection.siphons => strings.sectionFullSiphons,
+    ProductSection.drains => strings.sectionFullDrains,
+    ProductSection.washingMachine => strings.sectionFullWashingMachine,
+    ProductSection.filtersCartridges => strings.sectionFullFiltersCartridges,
+    ProductSection.mixerParts => strings.sectionFullMixerParts,
+    ProductSection.hoses => strings.sectionFullHoses,
+    ProductSection.mixers => strings.sectionFullMixers,
   };
 
   IconData get icon => switch (this) {
@@ -52,6 +74,21 @@ enum ProductSection {
     ProductSection.fastenersMounting => LucideIcons.bolt,
     ProductSection.mixesPaints => LucideIcons.paint_bucket,
     ProductSection.filmsSheets => LucideIcons.layers,
+    ProductSection.pipesInsulation => LucideIcons.cylinder,
+    ProductSection.pprFittings => LucideIcons.split,
+    ProductSection.valvesVero => LucideIcons.circle_gauge,
+    ProductSection.sewer => LucideIcons.waves_horizontal,
+    ProductSection.threadedFittings => LucideIcons.cog,
+    ProductSection.ktmFittings => LucideIcons.unplug,
+    ProductSection.valvesKas => LucideIcons.gauge,
+    ProductSection.cisternToilet => LucideIcons.toilet,
+    ProductSection.siphons => LucideIcons.funnel,
+    ProductSection.drains => LucideIcons.grip,
+    ProductSection.washingMachine => LucideIcons.washing_machine,
+    ProductSection.filtersCartridges => LucideIcons.droplets,
+    ProductSection.mixerParts => LucideIcons.wrench,
+    ProductSection.hoses => LucideIcons.cable,
+    ProductSection.mixers => LucideIcons.shower_head,
   };
 }
 

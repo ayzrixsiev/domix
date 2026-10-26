@@ -14,7 +14,7 @@ All of it was `flutter create` placeholder:
 | ---------------------------- | ------------------------------ | ----------------------------------------- |
 | `applicationId`, `namespace` | `com.example.frontend`         | `app.domix`                               |
 | `android:label`              | `frontend`                     | `Domix`                                   |
-| launcher icon                | Flutter logo, no adaptive icon | Domix pin, legacy + adaptive + monochrome |
+| launcher icon                | Flutter logo, no adaptive icon | Domix logo, legacy + adaptive + monochrome |
 | release signing              | the debug key                  | `android/key.properties`, gitignored      |
 
 **`applicationId` is permanent from the first upload** — it is the listing's primary key; changing it later
@@ -29,15 +29,14 @@ a URL or because people need somewhere to read about the app, never as the produ
 
 Android 8 masks two layers itself, so the launcher decides whether Domix is a circle, squircle or rounded
 square; a single flat PNG gets pillar-boxed inside a white rounded square.
-`mipmap-anydpi-v26/ic_launcher.xml` declares a flat `@color/ic_launcher_background` (`#F26B21`, sampled from
-the artwork, close but not equal to `AppColors.primaryOrange`), the white pin as foreground, and the same
-pin as the Android 13 `<monochrome>` layer.
+`mipmap-anydpi-v26/ic_launcher.xml` declares a flat `@color/ic_launcher_background` (white), the logo on transparency as
+foreground, and the same layer as the Android 13 `<monochrome>` layer.
 
 **The foreground's size is load-bearing.** The layer is 108dp but only the central **66dp** survives every
-mask, and launchers pan the rest during animations. The pin is drawn at 560/1024 of the canvas — furthest
-point 280px from centre against the 313px the safe circle allows. **Regenerating from new artwork means
-redoing that arithmetic, not just resizing.** The source PNG is not in the repo and not on this laptop; it
-has to be re-exported before the icon can be regenerated.
+mask, and launchers pan the rest during animations. The logo is 60% of the canvas wide — furthest
+point 32.4dp from centre against the 33dp the safe circle allows. **Regenerating from new artwork means
+redoing that arithmetic, not just resizing.** The 1254px source PNG is not in the repo; the layers were cut from it with ImageMagick
+(`-fuzz 6% -transparent white -trim`, then resized).
 
 ### Release signing
 

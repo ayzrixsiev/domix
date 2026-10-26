@@ -376,16 +376,8 @@ class AppLocalizations {
   String get categoryFinishing => isRu ? 'Отделка' : 'Pardozlash';
   String get categoryTools => isRu ? 'Инструменты' : 'Asboblar';
 
-  // a shop's own chips over its grid - shorter than the section names in products.md, to fit a chip
+  // the groups a shop's grid is split by, named on the sheet the «Категории» button opens
   String get sectionAll => isRu ? 'Все товары' : 'Barcha mahsulotlar';
-  String get sectionTapesAbrasives => isRu ? 'Ленты и диски' : 'Lentalar va disklar';
-  String get sectionDrillsHandTools => isRu ? 'Свёрла и инструмент' : 'Parmalar va asboblar';
-  String get sectionElectricalLighting => isRu ? 'Электрика и свет' : 'Elektrika va yoritish';
-  String get sectionFastenersMounting => isRu ? 'Крепёж и монтаж' : 'Mahkamlagich va montaj';
-  String get sectionMixesPaints => isRu ? 'Смеси и краски' : "Qorishmalar va bo'yoqlar";
-  String get sectionFilmsSheets => isRu ? 'Плёнки и листы' : 'Plyonka va listlar';
-
-  // the same six in full, for the sheet that the «Категории» button opens
   String get sectionsButton => isRu ? 'Категории' : 'Turkumlar';
   String get sectionFullTapesAbrasives => isRu
       ? 'Ленты, расходники, абразивы и диски'
@@ -402,6 +394,27 @@ class AppLocalizations {
   String get sectionFullFilmsSheets => isRu
       ? 'Плёнки, изоляция и листовые материалы'
       : 'Plyonkalar, izolyatsiya va list materiallari';
+  String get sectionFullPipesInsulation =>
+      isRu ? 'Трубы и теплоизоляция' : 'Quvurlar va issiqlik izolyatsiyasi';
+  String get sectionFullPprFittings => isRu ? 'PPR-фитинги VERO' : 'PPR fitinglari VERO';
+  String get sectionFullValvesVero => isRu ? 'Краны и вентили VERO' : 'VERO kranlari va ventillari';
+  String get sectionFullSewer => isRu ? 'Канализация VERO' : 'VERO kanalizatsiya';
+  String get sectionFullThreadedFittings =>
+      isRu ? 'Металлические резьбовые фитинги' : 'Rezbali metall fitinglar';
+  String get sectionFullKtmFittings => isRu ? 'Фитинги KTM' : 'KTM fitinglari';
+  String get sectionFullValvesKas => isRu ? 'Краны KAS' : 'KAS kranlari';
+  String get sectionFullCisternToilet => isRu ? 'Бачок и унитаз' : 'Bachok va unitaz';
+  String get sectionFullSiphons => isRu ? 'Сифоны' : 'Sifonlar';
+  String get sectionFullDrains => isRu ? 'Трапы' : 'Traplar';
+  String get sectionFullWashingMachine =>
+      isRu ? 'Для стиральной машины' : 'Kir yuvish mashinasi uchun';
+  String get sectionFullFiltersCartridges =>
+      isRu ? 'Фильтры и картриджи' : 'Filtrlar va kartridjlar';
+  String get sectionFullMixerParts =>
+      isRu ? 'Комплектующие для смесителей' : 'Smesitel butlovchi qismlari';
+  String get sectionFullHoses =>
+      isRu ? 'Гибкие подводки и шланги' : 'Egiluvchan ulagichlar va shlanglar';
+  String get sectionFullMixers => isRu ? 'Смесители' : 'Smesitellar';
   // the category drill-down, opened from a "Популярные категории" tile - it lists products
 
   /// its own sentence rather than [noShopsYet]: "nobody has priced anything" and "we could not ask"

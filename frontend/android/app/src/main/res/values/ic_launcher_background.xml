@@ -1,9 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  The orange behind the launcher icon's pin. Sampled from the source artwork rather than copied from
-  AppColors.primaryOrange (#FF6F00): the two are close but not equal, and the icon should match the
-  file the founder drew, not the app's button colour.
--->
+<!-- white, because the logo artwork is drawn on white and its light-grey bars vanish on any tint. -->
 <resources>
-    <color name="ic_launcher_background">#F26B21</color>
+    <color name="ic_launcher_background">#FFFFFF</color>
 </resources>

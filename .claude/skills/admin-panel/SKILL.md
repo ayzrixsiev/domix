@@ -379,7 +379,8 @@ layout while the later categories do not exist yet, which threw the page to the 
 
 **One size is one row.** «Похожий размер» opens the add form prefilled from a row, so another size is a new
 key and a new description. «Описание» is free text up to 80; «Раздел в магазине» is a select over
-`SECTIONS`, refused server-side as `invalid_section`.
+the row's own category's `SECTION_GROUPS` (a plumbing row cannot be filed under «Смеси и краски»), refused
+server-side as `invalid_section`.
 
 **The photo field is three doors and no text input** (`photoField`): «Загрузить», «Из каталога»
 (`pickPhoto` over the catalogue scan), «Убрать». A path that cannot be typed cannot be mistyped into a
