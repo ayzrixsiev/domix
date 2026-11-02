@@ -158,7 +158,7 @@ mechanics are in the `backend` skill.
   an armed-looking, unarmed deployment is discovered by a rejection weeks later. **Unset both once the review
   is over**: it is a fixed code on a known number. Fill the Console's **App access** section with that
   number, that code and a screen recording.
-- **The Data Safety form.** Declare name, phone number, the store's address, product photos and favourites —
+- **The Data Safety form.** Declare name, phone number, the store's address, product photos, shopping lists and their photos, and favourites —
   **not device location**: the app never requests it. `docs-privacy.md` has the row-by-row answers. A
   mismatch found later is a policy strike, not a correction.
 - **Justify `ACCESS_FINE_LOCATION`** — see the MapKit permissions note.
@@ -196,7 +196,7 @@ mechanics are in the `backend` skill.
 
 ### Infrastructure and operations
 
-- **Database backups.** There is no `pg_dump` on any schedule. Every shop's catalogue is hand-typed by its
+- **Database backups.** There is no `pg_dump` on any schedule, and customers' sent lists now live only there too. Every shop's catalogue is hand-typed by its
   owner and exists in exactly one place; losing it loses work real people did. **This ranks above every
   polish item on this list.**
 - **No error reporting.** When the app breaks on an owner's phone, nobody finds out. Structured server logs

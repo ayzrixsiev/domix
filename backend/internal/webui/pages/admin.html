@@ -731,6 +731,8 @@
   @keyframes fd{to{opacity:1}}
   .modal{width:100%;max-width:456px;background:var(--shell);border-radius:var(--r-5);padding:26px;transform:scale(.97);animation:pp .22s var(--ease) forwards;max-height:88vh;overflow-y:auto}
   .modal.lg{max-width:900px}
+  .wb-photo{display:block;background:var(--card);border-radius:var(--r-2);padding:10px}
+  .wb-photo img{display:block;max-width:100%;max-height:52vh;margin:0 auto;border-radius:var(--r-1)}
   .modal.md{max-width:560px}
   @keyframes pp{to{transform:scale(1)}}
   .modal .m-ico{width:46px;height:46px;border-radius:15px;display:grid;place-items:center;margin-bottom:16px}
@@ -887,6 +889,10 @@
            to the section rather than to the session. They stood in a `.bar` of their own under this
            row, which on Пользователи and Магазины was 45px of empty page holding one grey word at
            the far right. Shown by setView, one at a time. -->
+      <div class="sec" id="sec-waybills" hidden>
+        <select class="fsel" id="f-waybills" aria-label="Категория"></select>
+        <span class="count" id="c-waybills"></span>
+      </div>
       <div class="sec" id="sec-anomalies" hidden>
         <button class="pill" id="an-th" type="button"></button>
         <button class="ib sm" id="anom-info" title="Как читать этот отчёт"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button>
@@ -924,6 +930,18 @@
     </header>
 
     <section id="v-dash"><div class="dash" id="dash"></div></section>
+
+    <section id="v-waybills" hidden>
+      <div class="tbl"><div class="scroll"><table id="t-waybills">
+        <thead><tr>
+          <th class="s" data-key="id">Номер<span class="ar">▼</span></th>
+          <th class="s" data-key="created_at">Получена<span class="ar">▼</span></th>
+          <th class="s" data-key="customer_name">Покупатель<span class="ar">▼</span></th>
+          <th class="s" data-key="shop_category">Магазины<span class="ar">▼</span></th>
+          <th class="s" data-key="item_count">Список<span class="ar">▼</span></th>
+          <th></th>
+        </tr></thead><tbody></tbody></table></div><div id="s-waybills"></div></div>
+    </section>
 
     <section id="v-anomalies" hidden>
       <div class="tbl"><div class="scroll"><table id="t-anom">
@@ -1016,7 +1034,7 @@ function shade(i, n) {
   return "rgb(" + ch(A.slice(0,2),B.slice(0,2)) + "," + ch(A.slice(2,4),B.slice(2,4)) + "," + ch(A.slice(4,6),B.slice(4,6)) + ")";
 }
 
-var SHOP_CATS = { universal:"Универсальный", plumbing:"Сантехника", wood:"Пиломатериалы", wallpaper:"Обои" };
+var SHOP_CATS = { universal:"Разное", plumbing:"Сантехника", wood:"Дерево", wallpaper:"Обои" };
 var PRODUCT_CATS = { mixes:"Смеси", blocks:"Блоки", lumber:"Пиломатериалы", metal:"Металл", fasteners:"Крепёж",
   roofing:"Кровля", insulation:"Изоляция", electrical:"Электрика", plumbing:"Сантехника",
   paints:"Краски", finishing:"Отделка", tools:"Инструменты" };
@@ -1037,7 +1055,7 @@ var ROLES = { customer:"Покупатель", shop_owner:"Владелец ма
 var AVAIL = { in_stock:"В наличии", on_order:"Под заказ", unavailable:"Нет в наличии" };
 
 var state = {
-  token:null, me:null, stats:null, users:null, shops:null, anomalies:null, templates:null,
+  token:null, me:null, stats:null, users:null, shops:null, anomalies:null, templates:null, waybills:null,
   // the two orphaned-file scans, by sweep. null until somebody presses «Проверить» - unlike every
   // other field here they are never fetched on a timer, because answering means walking the store.
   storage:{ uploads:null, catalogue:null },
@@ -1046,10 +1064,10 @@ var state = {
   // which market «Кто дешевле» is showing. it survives the 45-second stats poll, and falls back to
   // the busiest category when the one it names stops having anybody in the comparison.
   view:"dash", threshold:0.5, raceCat:null,
-  q:{ users:"", shops:"", anom:"", tpl:"" },
+  q:{ users:"", shops:"", anom:"", tpl:"", waybills:"" },
   // "" is every row; otherwise a role or a shop category. these are filters, not the sort.
-  filter:{ users:"", shops:"" },
-  sort:{ users:{key:"created_at",dir:-1}, shops:{key:"created_at",dir:-1}, anom:{key:"deviation_percent",dir:-1} },
+  filter:{ users:"", shops:"", waybills:"" },
+  sort:{ users:{key:"created_at",dir:-1}, shops:{key:"created_at",dir:-1}, anom:{key:"deviation_percent",dir:-1}, waybills:{key:"id",dir:-1} },
 };
 
 // ── dom helpers. every user-supplied string goes through textContent, never innerHTML: the admin's
@@ -1120,6 +1138,8 @@ var ICONS = {
        "m4.93 4.93 1.41 1.41","m17.66 17.66 1.41 1.41","m4.93 19.07 1.41-1.41","m17.66 6.34 1.41-1.41"],
   moon:["M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"],
   upload:["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4","m17 8-5-5-5 5","M12 3v12"],
+  download:["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4","m7 10 5 5 5-5","M12 15V3"],
+  doc:["M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z","M14 2v4a2 2 0 0 0 2 2h4","M16 13H8","M16 17H8","M10 9H8"],
   photo:["M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z","M11 9a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z","m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"],
   broom:["m13 11 9-9","M14.6 12.6c.8.8.9 2 .2 2.7l-1.3 1.3c-.7.7-2 .6-2.7-.2L5.6 11.2c-.8-.8-.9-2-.2-2.7l1.3-1.3c.7-.7 2-.6 2.7.2Z","M6 15l-3 3","M9 18l-3 3","M3 21h6"]
 };
@@ -1136,10 +1156,24 @@ function api(path, opts) {
     .then(function (res) {
       return res.json().catch(function(){ return {}; }).then(function (b) {
         if (res.ok) return b;
-        var e = new Error(b.error || res.statusText || "request failed");
-        e.status = res.status; e.code = b.code; throw e;
+        throw apiError(res, b);
       });
     });
+}
+
+function apiError(res, body) {
+  var e = new Error(body.error || res.statusText || "request failed");
+  e.status = res.status; e.code = body.code;
+  return e;
+}
+
+// **a file behind the bearer token**: a plain link or an <img src> sends no Authorization header, so
+// the bytes come through fetch and reach the browser as a blob url.
+function apiBlob(path) {
+  return fetch(path, { headers: { "Authorization": "Bearer " + state.token } }).then(function (res) {
+    if (res.ok) return res.blob();
+    return res.json().catch(function(){ return {}; }).then(function (b) { throw apiError(res, b); });
+  });
 }
 
 function toast(msg, bad) {
@@ -1252,7 +1286,7 @@ function signOut(reason) {
   live.thread = null;
   state.token=null; state.me=null; state.stats=null; state.users=null; state.shops=null;
   // the inbox goes with the rest: it holds phone numbers and what people wrote about their problems
-  state.anomalies=null; state.templates=null;
+  state.anomalies=null; state.templates=null; state.waybills=null;
   try{ localStorage.removeItem(TOKEN_KEY); }catch(e){}
   $("#app").hidden = true; $("#login").hidden = false; resetLogin(); $("#l-err").hidden = true;
   if (reason==="expired") loginError("Сессия закончилась","Войдите снова.");
@@ -1272,6 +1306,7 @@ var NAV = [
   { v:"dash",      label:"Главная",       icon:ICONS.dash,  title:"Главная",       sub:"Всё, что происходит в Domix" },
   // second, above everything else: a person is waiting on the other end of these and nothing
   // else on this panel has somebody's attention held while it goes unread.
+  { v:"waybills",  label:"Накладные",     icon:ICONS.doc,   title:"Накладные",     sub:"Списки покупателей из вкладки «Корзина»" },
   { v:"anomalies", label:"Аномалии",      icon:ICONS.anom,  title:"Аномалии цен",  sub:"Цены, которые расходятся с рынком" },
   { v:"users",     label:"Пользователи",  icon:ICONS.users, title:"Пользователи",  sub:"Аккаунты и их магазины" },
   { v:"shops",     label:"Магазины",      icon:ICONS.shops, title:"Магазины",      sub:"Каталоги, индексы и размещения" },
@@ -1282,6 +1317,7 @@ var NAV = [
 // `render` is what redraws the rows it filters - the two things that used to be hardcoded four
 // times over, once per section's own input.
 var SEARCH = {
+  waybills:  { q:"waybills", placeholder:"Номер, имя или телефон",        render:function(){ renderWaybills(); } },
   anomalies: { q:"anom",    placeholder:"Товар или магазин",                render:function(){ renderAnomalies(); } },
   users:     { q:"users",   placeholder:"Имя, телефон или ID",              render:function(){ renderUsers(); } },
   shops:     { q:"shops",   placeholder:"Название, адрес, владелец или ID", render:function(){ renderShops(); } },
@@ -1421,6 +1457,7 @@ function setView(v) {
   if (v==="dash" && state.stats) drawDash();
 
   // opening the inbox must show what is there now, not a list cached before the founder walked away
+  if (v==="waybills") { live.waybillsAt = Date.now(); loadWaybills(); }
 }
 
 // ═══════════════════════ live refresh ═══════════════════════
@@ -1454,10 +1491,13 @@ var LIVE = {
   stats: 45000,
   // whatever modal hands the loop a refresher - a shop's catalogue, say. faster than the
   // dashboard, because somebody is looking straight at it.
-  thread: 8000
+  thread: 8000,
+  // the open «Накладные» list, so a new one appears without anybody pressing anything. only while
+  // that section is the one on screen.
+  waybills: 30000
 };
 
-var live = { timer:null, statsAt:0, threadAt:0, busy:false, thread:null };
+var live = { timer:null, statsAt:0, threadAt:0, waybillsAt:0, busy:false, thread:null };
 
 function liveTick() {
   // signed out, or the tab is in the background - a poll nobody can see is a request nobody asked
@@ -1474,6 +1514,10 @@ function liveTick() {
     live.threadAt = now; jobs.push(live.thread());
   }
 
+  if (state.view === "waybills" && now - live.waybillsAt > LIVE.waybills) {
+    live.waybillsAt = now; jobs.push(loadWaybills());
+  }
+
   if (!jobs.length) return;
   live.busy = true;
   Promise.all(jobs).catch(function(){}).then(function(){ live.busy = false; });
@@ -1482,7 +1526,7 @@ function liveTick() {
 // forces the next tick to do the work now - used when a section is opened, so arriving somewhere
 // shows current data rather than whatever was cached up to twelve seconds ago.
 function liveNow() {
-  live.statsAt = 0; live.threadAt = 0;
+  live.statsAt = 0; live.threadAt = 0; live.waybillsAt = 0;
   liveTick();
 }
 
@@ -1499,6 +1543,7 @@ function refresh(o) {
   if (state.shops) jobs.push(loadShops());
   if (state.anomalies) jobs.push(loadAnomalies());
   if (state.templates) jobs.push(loadTemplates());
+  if (state.waybills) jobs.push(loadWaybills());
 
   // a floor on how briefly the spinner can exist. against a local database every one of these
   // finishes inside a single frame, so the button flickered and the numbers - which on a market
@@ -2390,7 +2435,7 @@ function fillFilter(sel, allLabel, map, key) {
   sel.value = state.filter[key];
   sel.addEventListener("change", function () {
     state.filter[key] = sel.value;
-    (key === "users" ? renderUsers : renderShops)();
+    ({ users:renderUsers, shops:renderShops, waybills:renderWaybills })[key]();
   });
 }
 
@@ -2522,6 +2567,161 @@ function confirmDeleteUser(u) {
 }
 
 // ═══════════════════════ shops ═══════════════════════
+
+// ═══════════════════════ накладные ═══════════════════════
+
+function loadWaybills() {
+  if (!state.waybills) { $("#s-waybills").className="skel"; $("#s-waybills").textContent="Загрузка…"; }
+  return api("/api/admin/waybills?limit=500").then(function (d) {
+    state.waybills = d.waybills || []; renderWaybills();
+  }).catch(function(e){ if(!guard(e) && !state.waybills){ $("#s-waybills").className="skel"; $("#s-waybills").textContent="Не удалось загрузить накладные"; } });
+}
+
+function rowsWord(n) {
+  var tens = n % 100, ones = n % 10;
+  if (tens >= 11 && tens <= 14) return nf(n)+" строк";
+  if (ones === 1) return nf(n)+" строка";
+  if (ones >= 2 && ones <= 4) return nf(n)+" строки";
+  return nf(n)+" строк";
+}
+
+function renderWaybills() {
+  var body = $("#t-waybills tbody"), box = $("#s-waybills");
+  // the live loop redraws this while somebody may be reading halfway down it
+  var scroller = $("#v-waybills .scroll"), top = scroller.scrollTop;
+  clear(body); clear(box); box.className = "";
+
+  var q = state.q.waybills.trim().toLowerCase(), cat = state.filter.waybills;
+  var rows = (state.waybills||[]).filter(function (w) {
+    if (cat && w.shop_category !== cat) return false;
+    if (!q) return true;
+    return String(w.id).indexOf(q)>=0 || (w.customer_name||"").toLowerCase().indexOf(q)>=0 || (w.customer_phone||"").indexOf(q)>=0;
+  });
+  rows = sortRows(rows, state.sort.waybills);
+  $("#c-waybills").textContent = countLabel(q||cat, rows.length, (state.waybills||[]).length);
+  markSort("#t-waybills", state.sort.waybills);
+
+  if (!rows.length) { box.appendChild(emptyBox((q||cat)?"Ничего не найдено":"Накладных пока нет",
+    cat&&!q?"В эту категорию пока ничего не присылали.":q?"Попробуйте другой запрос.":"Здесь появятся списки, которые покупатели отправят из вкладки «Корзина».")); return; }
+
+  rows.forEach(function (w) {
+    var tr = el("tr");
+    tr.appendChild(el("td","b num","№ "+w.id));
+    tr.appendChild(el("td","num", stamp(w.created_at)));
+
+    var who = el("td");
+    who.appendChild(el("div",null, w.customer_name || "Без имени"));
+    who.appendChild(waybillPhone(w.customer_phone));
+    tr.appendChild(who);
+
+    var ct = el("td"); ct.appendChild(el("span","tag g", catName(w.shop_category))); tr.appendChild(ct);
+
+    var what = el("td");
+    what.appendChild(w.has_photo ? el("span","tag am","Фото списка") : el("span",null, rowsWord(w.item_count)));
+    tr.appendChild(what);
+
+    var act = el("td","r"); var wrap = el("div","acts");
+    wrap.appendChild(iconBtn(ICONS.doc, "Открыть", null, function(){ openWaybill(w); }));
+    var pdf = iconBtn(ICONS.download, "Скачать PDF", null, function(){ downloadWaybill(w, pdf); });
+    wrap.appendChild(pdf);
+    wrap.appendChild(iconBtn(ICONS.trash, "Удалить", "dg", function(){ confirmDeleteWaybill(w); }));
+    act.appendChild(wrap); tr.appendChild(act);
+
+    body.appendChild(tr);
+  });
+  scroller.scrollTop = top;
+}
+
+function waybillPhone(phone) {
+  var tel = el("a","d mono", phone);
+  tel.href = "tel:+" + String(phone).replace(/[^\d]/g, "");
+  return tel;
+}
+
+function downloadWaybill(w, button) {
+  button.disabled = true;
+  return apiBlob("/api/admin/waybills/"+w.id+"/pdf").then(function (blob) {
+    var url = URL.createObjectURL(blob);
+    var link = el("a"); link.href = url; link.download = "nakladnaya-"+w.id+".pdf";
+    document.body.appendChild(link); link.click(); link.remove();
+    // the browser has taken its own copy by the time the click has run; the delay is for Firefox
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 10000);
+  }).catch(function (e) {
+    if (!guard(e)) toast(e.code==="waybill_not_found" ? "Эта накладная уже удалена" : "Не удалось скачать PDF", true);
+  }).then(function () { button.disabled = false; });
+}
+
+function openWaybill(w) {
+  var photoUrl = null;
+  var s = shell({
+    title:"Накладная № "+w.id,
+    sub:catName(w.shop_category)+" · "+stamp(w.created_at)+" · "+(w.customer_name ? w.customer_name+", " : "")+w.customer_phone,
+    icon:ICONS.doc, iconClass:"o", size:"lg",
+    onClose:function(){ if (photoUrl) URL.revokeObjectURL(photoUrl); }
+  });
+
+  var body = el("div"); body.style.marginTop = "18px";
+  body.appendChild(el("div","skel","Загрузка…"));
+  s.modal.appendChild(body);
+
+  var acts = el("div","m-acts");
+  var close = el("button","btn btn-g","Закрыть");
+  var pdf = el("button","btn btn-p","Скачать PDF");
+  close.addEventListener("click", s.close);
+  pdf.addEventListener("click", function(){ downloadWaybill(w, pdf); });
+  acts.appendChild(close); acts.appendChild(pdf); s.modal.appendChild(acts);
+
+  var shown = w.has_photo
+    ? apiBlob("/api/admin/waybills/"+w.id+"/photo").then(function (blob) {
+        photoUrl = URL.createObjectURL(blob);
+        clear(body);
+        // a link around it, because handwriting is read at full size in a tab of its own
+        var link = el("a","wb-photo"); link.href = photoUrl; link.target = "_blank"; link.rel = "noopener";
+        var img = el("img"); img.src = photoUrl; img.alt = "Фото списка";
+        link.appendChild(img); body.appendChild(link);
+      })
+    : api("/api/admin/waybills/"+w.id).then(function (d) {
+        clear(body);
+        var tbl = el("div","tbl");
+        var sc = el("div","scroll"); sc.style.maxHeight = "58vh";
+        var t = el("table");
+        var thead = el("thead"); var hr = el("tr");
+        ["№","Наименование","Кол-во"].forEach(function (h) { hr.appendChild(el("th",null,h)); });
+        thead.appendChild(hr); t.appendChild(thead);
+        var tb = el("tbody");
+        (d.items||[]).forEach(function (item, index) {
+          var tr = el("tr");
+          tr.appendChild(el("td","idc", index+1));
+          tr.appendChild(el("td",null, item.name));
+          tr.appendChild(el("td",null, item.quantity));
+          tb.appendChild(tr);
+        });
+        t.appendChild(tb); sc.appendChild(t); tbl.appendChild(sc); body.appendChild(tbl);
+      });
+
+  shown.catch(function (e) {
+    if (guard(e)) { s.close(); return; }
+    clear(body);
+    body.appendChild(el("div","skel", e.code==="waybill_not_found" ? "Эта накладная уже удалена" : "Не удалось загрузить накладную"));
+  });
+}
+
+function confirmDeleteWaybill(w) {
+  confirmDialog({
+    title:"Удалить накладную № "+w.id+"?",
+    body:"Покупатель "+(w.customer_name||w.customer_phone)+" больше не увидит этот список в приложении. Восстановить его нельзя.",
+    onConfirm:function () {
+      return api("/api/admin/waybills/"+w.id, { method:"DELETE" }).then(function () {
+        state.waybills = state.waybills.filter(function(x){ return x.id!==w.id; });
+        renderWaybills(); toast("Накладная удалена");
+      }).catch(function (e) {
+        if (guard(e)) return;
+        toast(e.code==="waybill_not_found" ? "Эта накладная уже удалена" : "Не удалось удалить", true);
+        throw e;
+      });
+    }
+  });
+}
 
 function loadShops() {
   if (!state.shops) { $("#s-shops").className="skel"; $("#s-shops").textContent="Загрузка…"; }
@@ -4277,6 +4477,7 @@ $("#q-global").addEventListener("input", function (e) {
 });
 fillFilter($("#f-users"), "Все пользователи", ROLES, "users");
 fillFilter($("#f-shops"), "Все магазины", SHOP_CATS, "shops");
+fillFilter($("#f-waybills"), "Все магазины", SHOP_CATS, "waybills");
 
 $("#anom-info").addEventListener("click", anomalyHelp);
 
@@ -4290,6 +4491,7 @@ $("#an-th").addEventListener("click", function () {
 wireSort("#t-users", state.sort.users, renderUsers);
 wireSort("#t-shops", state.sort.shops, renderShops);
 wireSort("#t-anom", state.sort.anom, renderAnomalies);
+wireSort("#t-waybills", state.sort.waybills, renderWaybills);
 
 // coming back to the tab catches up immediately rather than waiting out whichever interval was
 // running when it was hidden. this is the other half of `document.hidden` in liveTick: together they

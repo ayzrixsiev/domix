@@ -23,6 +23,7 @@ import (
 	"domix/backend/internal/catalog"
 	"domix/backend/internal/dbctx"
 	"domix/backend/internal/imagestore"
+	"domix/backend/internal/waybill"
 )
 
 // the admin panel's api: the dashboard's statistics, moderation, the template editor and the
@@ -2484,4 +2485,212 @@ func (a *Admin) findOrphans(w http.ResponseWriter, r *http.Request, scope sweepS
 		report.Bytes += file.Size
 	}
 	return orphans, report, true
+}
+
+// ─────────────────────────── накладные ───────────────────────────
+
+// the lists customers send from the Корзина tab, and the one place outside the customer's own phone
+// that can read them.
+type adminWaybillResponse struct {
+	ID            int64           `json:"id"`
+	ShopCategory  string          `json:"shop_category"`
+	ItemCount     int32           `json:"item_count"`
+	HasPhoto      bool            `json:"has_photo"`
+	CreatedAt     string          `json:"created_at"`
+	CustomerName  string          `json:"customer_name"`
+	CustomerPhone string          `json:"customer_phone"`
+	Items         json.RawMessage `json:"items,omitempty"`
+}
+
+func (a *Admin) ListWaybills(w http.ResponseWriter, r *http.Request) {
+	limit, offset := adminPaging(r)
+
+	ctx, cancel := dbctx.WithTimeout(r.Context())
+	defer cancel()
+
+	rows, err := a.Queries.AdminListWaybills(ctx, db.AdminListWaybillsParams{Limit: limit, Offset: offset})
+	if err != nil {
+		log.Printf("CRITICAL: admin waybill list failed: %v", err)
+		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not load the lists")
+		return
+	}
+
+	waybills := make([]adminWaybillResponse, 0, len(rows))
+	for _, row := range rows {
+		waybills = append(waybills, adminWaybillResponse{
+			ID:            row.ID,
+			ShopCategory:  row.ShopCategory,
+			ItemCount:     row.ItemCount,
+			HasPhoto:      row.HasPhoto,
+			CreatedAt:     timestampString(row.CreatedAt),
+			CustomerName:  row.CustomerName.String,
+			CustomerPhone: row.CustomerPhone,
+		})
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]any{"waybills": waybills, "limit": limit, "offset": offset})
+}
+
+func (a *Admin) RouteWaybill(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		a.GetWaybill(w, r)
+	case http.MethodDelete:
+		a.DeleteWaybill(w, r)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func (a *Admin) GetWaybill(w http.ResponseWriter, r *http.Request) {
+	row, ok := a.readWaybill(w, r)
+	if !ok {
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(adminWaybillResponse{
+		ID:            row.ID,
+		ShopCategory:  row.ShopCategory,
+		HasPhoto:      row.HasPhoto,
+		CreatedAt:     timestampString(row.CreatedAt),
+		CustomerName:  row.CustomerName.String,
+		CustomerPhone: row.CustomerPhone,
+		Items:         row.Items,
+	})
+}
+
+func (a *Admin) DeleteWaybill(w http.ResponseWriter, r *http.Request) {
+	adminID, _ := auth.UserIDFromContext(r.Context())
+
+	id, ok := waybillIDFromPath(w, r)
+	if !ok {
+		return
+	}
+
+	ctx, cancel := dbctx.WithTimeout(r.Context())
+	defer cancel()
+
+	deleted, err := a.Queries.AdminDeleteWaybill(ctx, id)
+	if err != nil {
+		log.Printf("CRITICAL: admin %d failed to delete waybill %d: %v", adminID, id, err)
+		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not delete the list")
+		return
+	}
+	if deleted == 0 {
+		writeAPIError(w, http.StatusNotFound, "waybill_not_found", "no list with that number")
+		return
+	}
+
+	log.Printf("ADMIN %d deleted waybill %d", adminID, id)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]bool{"deleted": true})
+}
+
+func (a *Admin) WaybillPhoto(w http.ResponseWriter, r *http.Request) {
+	id, ok := waybillIDFromPath(w, r)
+	if !ok {
+		return
+	}
+
+	ctx, cancel := dbctx.WithTimeout(r.Context())
+	defer cancel()
+
+	photo, err := a.Queries.AdminGetWaybillPhoto(ctx, id)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		log.Printf("CRITICAL: could not read the photo of waybill %d: %v", id, err)
+		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not load the photo")
+		return
+	}
+	writeWaybillPhoto(w, photo)
+}
+
+// WaybillPDF answers with the filled paper form. drawn on request rather than stored: the row is the
+// document, so a form redrawn tomorrow cannot disagree with what the customer sent.
+func (a *Admin) WaybillPDF(w http.ResponseWriter, r *http.Request) {
+	row, ok := a.readWaybill(w, r)
+	if !ok {
+		return
+	}
+
+	doc := waybill.Document{
+		Number: row.ID,
+		Date:   row.CreatedAt.Time,
+		To:     "Domix, магазины «" + catalog.ShopCategoryName(row.ShopCategory) + "»",
+		From:   waybillSender(row.CustomerName.String, row.CustomerPhone),
+	}
+
+	if row.HasPhoto {
+		ctx, cancel := dbctx.WithTimeout(r.Context())
+		defer cancel()
+
+		photo, err := a.Queries.AdminGetWaybillPhoto(ctx, row.ID)
+		if err != nil {
+			log.Printf("CRITICAL: could not read the photo of waybill %d: %v", row.ID, err)
+			writeAPIError(w, http.StatusInternalServerError, "server_error", "could not build the pdf")
+			return
+		}
+		doc.Photo = photo
+	} else if err := json.Unmarshal(row.Items, &doc.Items); err != nil {
+		log.Printf("CRITICAL: waybill %d holds rows that do not decode: %v", row.ID, err)
+		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not build the pdf")
+		return
+	}
+
+	pdf, err := waybill.Render(doc)
+	if err != nil {
+		log.Printf("CRITICAL: could not render waybill %d: %v", row.ID, err)
+		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not build the pdf")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Length", strconv.Itoa(len(pdf)))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="nakladnaya-%d.pdf"`, row.ID))
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write(pdf)
+}
+
+func (a *Admin) readWaybill(w http.ResponseWriter, r *http.Request) (db.AdminGetWaybillRow, bool) {
+	id, ok := waybillIDFromPath(w, r)
+	if !ok {
+		return db.AdminGetWaybillRow{}, false
+	}
+
+	ctx, cancel := dbctx.WithTimeout(r.Context())
+	defer cancel()
+
+	row, err := a.Queries.AdminGetWaybill(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeAPIError(w, http.StatusNotFound, "waybill_not_found", "no list with that number")
+			return db.AdminGetWaybillRow{}, false
+		}
+		log.Printf("CRITICAL: could not read waybill %d: %v", id, err)
+		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not load the list")
+		return db.AdminGetWaybillRow{}, false
+	}
+	return row, true
+}
+
+func waybillIDFromPath(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeAPIError(w, http.StatusBadRequest, "invalid_id", "waybill id must be a positive integer")
+		return 0, false
+	}
+	return id, true
+}
+
+// «От кого» on the form: a name is optional on an account, the number never is.
+func waybillSender(name, phone string) string {
+	// 998901234567 as +998 90 123 45 67, the spelling somebody reads aloud off a printed sheet
+	if len(phone) == 12 {
+		phone = "+" + phone[:3] + " " + phone[3:5] + " " + phone[5:8] + " " + phone[8:10] + " " + phone[10:]
+	}
+	if name == "" {
+		return phone
+	}
+	return name + ", " + phone
 }

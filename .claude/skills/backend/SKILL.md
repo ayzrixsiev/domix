@@ -2,7 +2,7 @@
 name: backend
 description: >
   Domix's Go API — handlers in internal/endpoints, the auth code flow, rate limiting and the
-  public cache, image storage and its sweeps, product search, the basket price index, sqlc
+  public cache, image storage and its sweeps, product search, the basket price index, customers' waybills and their PDF, sqlc
   queries in db/queries and migrations in db/migrations. Use when writing or changing a handler,
   a query, a migration or a schema rule. Not the /admin page itself (admin-panel skill), not
   Flutter (frontend skill).
@@ -49,7 +49,7 @@ address to itself. Every bucket is declared together in `main.go`.
   verifies the token's signature and touches no database.
 - **Public traffic has no account to key by, so the answer is to make it cheap, never to squeeze the
   limit.** `endpoints.publicCache` holds the three whole-market reads (`/api/home`, `/api/shops`,
-  `/api/categories/{code}/products`) for 20s. One caller rebuilds and the rest wait on that rebuild —
+  `/api/categories/{code}/products`) for 60s. One caller rebuilds and the rest wait on that rebuild —
   a cache without single-flight is a stampede at every expiry — and a *failed* rebuild serves the last
   good copy rather than a 500, bounded by `staleFor`.
 - **Nothing a cached read answers may depend on who is asking.** This is why favourites are fetched by
@@ -92,6 +92,39 @@ silently writing to the wrong one.
   the database perfectly consistent. `TestTheUploadsSweepLeavesAStorefrontPhotoAlone` is the pin.
 - The sweeps themselves, and the three rules that keep them off a live photo, are in the `admin-panel`
   skill: they are driven from that page.
+
+## Waybills — the list a customer sends
+
+The Корзина tab, `internal/endpoints/waybills.go`, migration `000010`. **Named waybill because "basket"
+already means the price index below.** A row is an immutable document, printed for staff as a накладная;
+**its id is the number**, restarted at 1001 so no first customer holds «№ 1».
+
+- **Customers only, and the server is the rule.** `Waybills.RequireCustomer` reads the role from the database
+  on every request and refuses owners and admins with `customers_only`; `customerRoute` in `main.go` is the
+  one chain. The app hiding the tab is a courtesy. `TestOnlyACustomerCanUseTheCart` is the pin.
+- **The photo is a `bytea` in the row, not a file in `imagestore`, and that is a privacy decision.** The image
+  store is a public R2 bucket abroad that `docs-privacy.md` promises holds only shop windows; a handwritten
+  list can carry a name or an address. In the row it stays in the country, has no url at all, cannot be
+  orphaned, needs no sweep, and goes with the account by cascade. **Do not add a `photo_url`**, and do not
+  `SELECT photo` on a list. Read it through `GET /api/waybills/{id}/photo`, which filters by account.
+- **`NormalizeDocument` keeps 2000px where a product keeps 1000**: somebody reads handwriting off this. One
+  file and no thumbnail, since no grid draws one. The re-encode still strips the GPS a phone writes.
+- **`items` is jsonb, not a child table**: rows have no life of their own and are always read whole.
+  `waybills_rows_or_photo` holds a row to exactly one of rows or a photo, and the panel and the PDF rely on it.
+- **`request_id` makes a retry safe.** The app draws one per submission and a new one after any edit; a repeat
+  answers with the stored row through the no-op `ON CONFLICT` in `CreateWaybill`. Reusing an id across an edit
+  would silently keep the old list.
+- `cleanWaybillText` strips control characters because **postgres refuses `\u0000` inside jsonb**: one pasted
+  NUL would be a 500 on every retry. Limits mirror the app: 100 rows, 150 characters a name, 30 an amount.
+- **`Waybills.Sends` is the per-account budget** (ten, then one per ten minutes), spent before the body is read.
+  A photo is half a megabyte of database, so this is what bounds its growth.
+
+**`internal/waybill` draws the PDF** and knows nothing about http or the database. Drawn on request rather than
+stored, so a reprint cannot disagree with the row. Liberation Serif is embedded (Times metrics, covers Uzbek
+Cyrillic and Latin). `printable` drops runes the font lacks, because the PDF writer prints them as a wrong
+glyph or nothing. **Кому is Domix and От кого is the customer**, the founder's call. Цена and Сумма stay
+empty on purpose. A long list continues onto numbered sheets, and signatures go on the last. The date is
+fixed to UTC+5, whatever zone the server runs in.
 
 ## The basket price index and its history
 

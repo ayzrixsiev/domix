@@ -122,6 +122,8 @@ func TestOnlyAnAdminReachesTheAdminAPI(t *testing.T) {
 		{"shops", http.MethodGet, "/api/admin/shops", adminEndpoints.ListShops},
 		// the anomaly report carries owners' phone numbers, so its leak would be the worst of these
 		{"anomalies", http.MethodGet, "/api/admin/anomalies", adminEndpoints.Anomalies},
+		// a customer's own shopping list and their number: no shop owner may read these
+		{"waybills", http.MethodGet, "/api/admin/waybills", adminEndpoints.ListWaybills},
 	}
 
 	for _, route := range routes {

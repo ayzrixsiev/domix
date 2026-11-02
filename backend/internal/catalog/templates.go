@@ -122,6 +122,22 @@ var AllShopCategories = []Category{
 	CategoryWallpaper,
 }
 
+// what the app, the panel and a printed накладная all call a market: one set of words, or staff and customers describe different shops
+var shopCategoryNames = map[Category]string{
+	CategoryUniversal: "Разное",
+	CategoryPlumbing:  "Сантехника",
+	CategoryWood:      "Дерево",
+	CategoryWallpaper: "Обои",
+}
+
+// ShopCategoryName falls back to the code itself: a printed form is better wrong-looking than blank.
+func ShopCategoryName(category string) string {
+	if name, ok := shopCategoryNames[Category(category)]; ok {
+		return name
+	}
+	return category
+}
+
 func IsValidCategory(code string) bool {
 	for _, category := range AllShopCategories {
 		if string(category) == code {

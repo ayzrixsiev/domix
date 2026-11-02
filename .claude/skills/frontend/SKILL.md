@@ -3,7 +3,7 @@ name: frontend
 description: >
   Domix's Flutter app under frontend/lib — screens and widgets, the design tokens in
   app_colors.dart and app_theme.dart, ChangeNotifier controllers, the MapKit map and its pins,
-  address search, favourites, the product card and the home feed, and the Makefile dev loop.
+  address search, favourites, the Корзина tab, the product card and the home feed, and the Makefile dev loop.
   Use when building or changing UI, laying out a screen, picking a colour or a radius, wiring a
   controller, or working on the map. Not release builds or Gradle (deployment skill).
 ---
@@ -21,9 +21,11 @@ singletons through `MultiProvider`.
 - Anything belonging to a session is wiped through `AuthController.onSessionEnded` and fetched through
   `onSessionStarted`. **`main()` is the one place allowed to wire both ends** — that is what keeps
   `profile/` from importing `stores/` or `favorites/`.
-- **Сообщения and Заявки are placeholders.** Both tabs stay in the nav bar and say «скоро»: phase 1 is
-  shops and customers, and a tab that disappears and returns moves every other tab twice. Do not
-  rebuild either feature into them.
+- **Сообщения is a placeholder.** It stays in the nav bar and says «скоро». Do not rebuild a feature
+  into it.
+- **The shell names its tabs (`_ShellTab`) and never numbers them**, because Корзина is missing from an
+  owner's bar and the same position means a different tab depending on who is signed in. The page list
+  stays fixed so the map is never rebuilt. A customer who becomes an owner while on Корзина lands on home.
 
 ## Design system
 
@@ -79,6 +81,26 @@ of the session remembered, so a backspace or a corrected letter costs nothing. *
 only while the field still holds the query it was asked for**, which is what makes a slow reply
 harmless instead of a list contradicting the text above it; a failed one says nothing at all. The
 search itself still runs only on the search key or on a tapped name.
+
+## Корзина
+
+`features/waybills`. The tab lists what this customer has sent; `NewWaybillFlow` sends another. Everything
+says waybill in code because "basket" is the price index. **A guest fills the form like anybody else and signs
+in at «Отправить»**, with every row kept, then the send continues, because they already pressed the button.
+Signing in can land on an owner's account, so the role is checked after that step too.
+
+- **Loaded when the tab comes into view (`isActive`), never at sign-in**: an owner's session must not spend
+  a refused request on a tab it never shows. Post-frame, because the shell is mid-build at that moment.
+- **`WaybillSheet` is the paper form on a phone**: fixed columns and unbroken rules, the same object while it
+  is filled in and when it is read back.
+- **A refusal clears on `onChanged`, never on a controller listener.** A listener also fires when a field takes
+  focus, which is exactly what a refusal does to the field it names: the error would wipe itself in one frame.
+- **`_requestId` goes back to null on any edit.** A retried id answers with the list already stored.
+- **The picker is called at 2000px**, not the product photo's 1440: somebody reads handwriting off this.
+- **`_recoverLostPhoto` answers `retrieveLostData`.** On a phone short of memory Android kills the app while
+  the camera is open, and the picture comes back on the next launch through that call or not at all. An owner's
+  session skips it, so a lost product photo cannot open a customer's flow.
+- The photo is private, so the detail screen fetches bytes through the repository and not `Image.network`.
 
 ## Favourites
 

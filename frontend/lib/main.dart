@@ -19,6 +19,7 @@ import 'features/favorites/presentation/controllers/favorites_controller.dart';
 import 'features/profile/presentation/controllers/auth_controller.dart';
 import 'features/stores/presentation/controllers/stores_controller.dart';
 import 'features/products/presentation/controllers/products_controller.dart';
+import 'features/waybills/presentation/controllers/waybills_controller.dart';
 
 void main() async {
   // wake up flutter engine drivers to read hardware encrypted storage before drawing ui
@@ -47,6 +48,7 @@ void main() async {
   final storesController = StoresController();
   final favoritesController = FavoritesController();
   final productsController = ProductsController();
+  final waybillsController = WaybillsController();
   // what the end of a session has to reach. callbacks rather than imports in either direction, and
   // main() is the one place allowed to know about both: the shops, because deleting an account
   // cascades them away server-side under a map holding a stale snapshot; and the saved products,
@@ -58,6 +60,7 @@ void main() async {
   authController.onSessionEnded = (accountDeleted) {
     storesController.handleSessionEnded(accountDeleted);
     favoritesController.handleSessionEnded();
+    waybillsController.handleSessionEnded();
   };
 
   runApp(
@@ -77,6 +80,7 @@ void main() async {
           ChangeNotifierProvider.value(value: favoritesController),    // UI components
           ChangeNotifierProvider(create: (_) => MapFocusController()),
           ChangeNotifierProvider.value(value: productsController),  // to listen to these controllers using notifyListener()
+          ChangeNotifierProvider.value(value: waybillsController),
         ],
         child: const DomixApp(),
       ),

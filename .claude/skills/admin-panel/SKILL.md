@@ -1,7 +1,7 @@
 ---
 name: admin-panel
 description: >
-  The html the Go API serves itself — the `/admin` panel (dashboard, anomaly report, users,
+  The html the Go API serves itself — the `/admin` panel (dashboard, the «Накладные» inbox, anomaly report, users,
   shops, VIP placements, template editing and sync, the storage sweeps) and the public site
   (`/`, `/privacy`, `/terms`, `/delete-account`). Use when working in
   `backend/internal/webui/`, `backend/internal/endpoints/admin.go`,
@@ -141,6 +141,7 @@ taught to read it; **this is not a licence to add it to `ShopResponse`.**
 | tab | holds |
 | --- | --- |
 | **Главная** | the dashboard — see `reference-dashboard.md` |
+| **Накладные** | the lists customers send from Корзина: open, download the PDF, delete; a category filter |
 | **Аномалии** | prices that disagree with the market for the same basket line |
 | **Пользователи** | edit name and role, delete; a role filter in the header |
 | **Магазины** | edit the four editable fields, grant/revoke VIP and the storefront photo, exclude from the comparison, open the catalogue, delete; a category filter |
@@ -171,6 +172,19 @@ and the two tabs would otherwise disagree until a reload.
 ---
 
 ## Rules inside the sections
+
+### Накладные
+
+A person is waiting on the other end of these, so the section sits second. **It reloads whenever it is opened
+and every `LIVE.waybills` (30s) while it is the section on screen**, unlike the other lists, because a new row
+here is the point; the redraw restores `.scroll`'s `scrollTop`.
+
+- **Files come through `apiBlob`, never a link or `<img src>`**: neither sends the bearer token, and the
+  photo and the PDF have no public url at all. The photo modal holds a blob url and revokes it in `onClose`.
+- The list carries `item_count` and no rows; `GET /api/admin/waybills/{id}` is read when one is opened. **The
+  name «Накладные» is deliberate**: «В корзине» in Шаблоны already means the price index.
+- Customer names reach the page through `textContent` like everything else a stranger writes.
+- Deleting is the panel's only write. A list is otherwise immutable: it has a number and a customer holds it.
 
 ### The anomaly report
 

@@ -6,7 +6,7 @@ import 'package:frontend/core/localization/app_localizations.dart';
 /// carries an English version. It lives here as well so it can be read and accepted before an account
 /// exists. `TestTheAppCarriesThePublishedPolicy` compares the two line by line: edit both, and move
 /// [policyVersion] together with the api's `policyVersion`.
-const String policyVersion = '2026-10-08';
+const String policyVersion = '2026-11-02';
 
 /// One heading and the paragraphs under it. Bullets are plain strings beginning with "• ", so the
 /// renderer stays a `Text` per line.
@@ -54,6 +54,9 @@ const List<PolicySection> _russian = [
           "телефон, категорию, цены и фотографии товаров. Это витрина, поэтому её видят все "
           "пользователи приложения.",
       "• Избранное: товары, которые вы сохранили.",
+      "• Списки покупок, если вы отправляете их из раздела «Корзина»: категорию магазинов, товары "
+          "и количество или фотографию вашего списка. Их видят сотрудники Domix и магазины, которым мы пересылаем "
+          "список вместе с вашим именем и номером телефона, чтобы они могли с вами связаться.",
       "• Технические данные. Когда приложение обращается к серверу, в журнал записываются IP-"
           "адрес, время и адрес запроса. Это нужно, чтобы защищать сервис от злоупотреблений и "
           "разбираться со сбоями.",
@@ -67,7 +70,7 @@ const List<PolicySection> _russian = [
           "карту к вам, и дальше вашего устройства она не уходит. Город и адрес магазина вы "
           "выбираете на карте сами.",
       "• Место съёмки фотографий. Камера телефона записывает в снимок координаты. Когда вы "
-          "загружаете фото товара, мы пересохраняем его, и эти сведения удаляются.",
+          "загружаете фото, мы пересохраняем его, и эти сведения удаляются.",
       "• Контакты, сообщения, файлы и рекламный идентификатор устройства.",
       "• Ничего для рекламы и аналитики: в Domix нет систем аналитики, трекеров и рекламных "
           "библиотек.",
@@ -83,6 +86,7 @@ const List<PolicySection> _russian = [
       "• Чтобы вы могли войти, а мы — убедиться, что номер ваш.",
       "• Чтобы показывать магазины на карте и сравнивать их цены.",
       "• Чтобы покупатель мог связаться с магазином.",
+      "• Чтобы обработать отправленный вами список покупок и связаться с вами по нему.",
       "• Чтобы защищать сервис от автоматических запросов и злоупотреблений.",
       "Мы обрабатываем данные с вашего согласия, которое вы даёте при регистрации, и только в том"
           " объёме, без которого приложение не может работать. Согласие можно отозвать в любой "
@@ -110,8 +114,8 @@ const List<PolicySection> _russian = [
   PolicySection(
     title: "6. Где хранятся данные",
     body: [
-      "Аккаунты, номера телефонов и магазины хранятся в базе данных на сервере в Республике "
-          "Узбекистан.",
+      "Аккаунты, номера телефонов, магазины и списки покупок вместе с их фотографиями хранятся в "
+          "базе данных на сервере в Республике Узбекистан.",
       "Telegram, Яндекс, Photon, Nominatim и Cloudflare работают за пределами Узбекистана. "
           "Поэтому то, что получает каждый из них (см. раздел 5), передаётся за рубеж: номер телефона"
           " — для доставки кода, адресные запросы и координаты точки — для поиска адреса, фотографии "
@@ -121,7 +125,7 @@ const List<PolicySection> _russian = [
   PolicySection(
     title: "7. Сколько мы храним данные",
     body: [
-      "• Аккаунт, магазины, товары и избранное — пока вы пользуетесь Domix.",
+      "• Аккаунт, магазины, товары, списки покупок и избранное — пока вы пользуетесь Domix.",
       "• Код подтверждения — 5 минут. Он хранится только в оперативной памяти сервера и только в "
           "виде хэша, поэтому от начатой и брошенной регистрации ничего не остаётся.",
       "• Журналы сервера — до 90 дней.",
@@ -137,7 +141,7 @@ const List<PolicySection> _russian = [
       "• в приложении: «Профиль» → «Удалить аккаунт»;",
       "• без приложения: на странице domix-api.uz/delete-account.",
       "Аккаунт удаляется сразу, а не по заявке. Вместе с ним удаляются ваши магазины, товары, "
-          "загруженные фотографии и избранное. Восстановить их нельзя. В журналах сервера до 90 дней "
+          "списки покупок, загруженные фотографии и избранное. Восстановить их нельзя. В журналах сервера до 90 дней "
           "может остаться числовой номер удалённого аккаунта — без имени и телефона.",
     ],
   ),
@@ -194,6 +198,9 @@ const List<PolicySection> _uzbek = [
           "telefoni, toifasi, mahsulotlar narxi va suratlari. Bu vitrina, shuning uchun uni ilovaning"
           " barcha foydalanuvchilari ko‘radi.",
       "• Tanlanganlar: siz saqlab qo‘ygan mahsulotlar.",
+      "• Xaridlar ro‘yxati, agar uni «Savat» bo‘limidan yuborsangiz: do‘konlar toifasi, mahsulotlar "
+          "va miqdori yoki ro‘yxatingiz surati. Uni Domix xodimlari va ro‘yxat yuboriladigan do‘konlar ko‘radi: "
+          "ular siz bilan bog‘lana olishi uchun ro‘yxat ismingiz va telefon raqamingiz bilan birga yuboriladi.",
       "• Texnik ma’lumotlar. Ilova serverga murojaat qilganda jurnalga IP manzil, vaqt va so‘rov "
           "manzili yoziladi. Bu xizmatni suiiste’moldan himoya qilish va nosozliklarni aniqlash uchun"
           " kerak.",
@@ -206,8 +213,8 @@ const List<PolicySection> _uzbek = [
           " qayerdaligingizni faqat siz bosgan paytda so‘raydi: koordinata xaritani sizga tomon "
           "surish uchun kerak va qurilmangizdan tashqariga chiqmaydi. Shahar va do‘kon manzilini "
           "xaritada o‘zingiz tanlaysiz.",
-      "• Suratga olingan joy. Telefon kamerasi suratga koordinatalarni yozib qo‘yadi. Mahsulot "
-          "suratini yuklaganingizda biz uni qayta saqlaymiz va bu ma’lumotlar o‘chib ketadi.",
+      "• Suratga olingan joy. Telefon kamerasi suratga koordinatalarni yozib qo‘yadi. "
+          "Suratni yuklaganingizda biz uni qayta saqlaymiz va bu ma’lumotlar o‘chib ketadi.",
       "• Kontaktlar, xabarlar, fayllar va qurilmaning reklama identifikatori.",
       "• Reklama va tahlil uchun hech narsa: Domix’da tahlil tizimlari, kuzatuvchilar va reklama "
           "kutubxonalari yo‘q.",
@@ -223,6 +230,7 @@ const List<PolicySection> _uzbek = [
       "• Siz kira olishingiz, biz esa raqam sizniki ekaniga ishonch hosil qilishimiz uchun.",
       "• Do‘konlarni xaritada ko‘rsatish va ularning narxlarini solishtirish uchun.",
       "• Xaridor do‘kon bilan bog‘lana olishi uchun.",
+      "• Siz yuborgan xaridlar ro‘yxatini ko‘rib chiqish va shu bo‘yicha siz bilan bog‘lanish uchun.",
       "• Xizmatni avtomatik so‘rovlar va suiiste’moldan himoya qilish uchun.",
       "Ma’lumotlarni ro‘yxatdan o‘tishda bergan roziligingiz asosida va faqat ilova ishlashi "
           "uchun zarur hajmda qayta ishlaymiz. Rozilikni istalgan vaqtda qaytarib olish mumkin: "
@@ -250,8 +258,8 @@ const List<PolicySection> _uzbek = [
   PolicySection(
     title: "6. Ma’lumotlar qayerda saqlanadi",
     body: [
-      "Akkauntlar, telefon raqamlari va do‘konlar O‘zbekiston Respublikasidagi serverda "
-          "joylashgan ma’lumotlar bazasida saqlanadi.",
+      "Akkauntlar, telefon raqamlari, do‘konlar va suratlari bilan birga xaridlar ro‘yxatlari "
+          "O‘zbekiston Respublikasidagi serverda joylashgan ma’lumotlar bazasida saqlanadi.",
       "Telegram, Yandex, Photon, Nominatim va Cloudflare O‘zbekistondan tashqarida ishlaydi. "
           "Shuning uchun ularning har biri oladigan narsa (5-bo‘limga qarang) chet elga uzatiladi: "
           "telefon raqami — kodni yetkazish uchun, manzil so‘rovlari va nuqta koordinatalari — "
@@ -261,7 +269,8 @@ const List<PolicySection> _uzbek = [
   PolicySection(
     title: "7. Ma’lumotlarni qancha saqlaymiz",
     body: [
-      "• Akkaunt, do‘konlar, mahsulotlar va tanlanganlar — Domix’dan foydalanar ekansiz.",
+      "• Akkaunt, do‘konlar, mahsulotlar, xaridlar ro‘yxatlari va tanlanganlar — Domix’dan foydalanar "
+          "ekansiz.",
       "• Tasdiqlash kodi — 5 daqiqa. U faqat server tezkor xotirasida va faqat xesh ko‘rinishida "
           "saqlanadi, shuning uchun boshlangan va tashlab ketilgan ro‘yxatdan o‘tishdan hech narsa "
           "qolmaydi.",
@@ -278,7 +287,7 @@ const List<PolicySection> _uzbek = [
       "• ilovada: «Profil» → «Akkauntni o‘chirish»;",
       "• ilovasiz: domix-api.uz/delete-account sahifasida.",
       "Akkaunt ariza bo‘yicha emas, darhol o‘chiriladi. U bilan birga do‘konlaringiz, "
-          "mahsulotlaringiz, yuklangan suratlar va tanlanganlar ham o‘chiriladi. Ularni tiklab "
+          "mahsulotlaringiz, xaridlar ro‘yxatlari, yuklangan suratlar va tanlanganlar ham o‘chiriladi. Ularni tiklab "
           "bo‘lmaydi. Server jurnallarida 90 kungacha o‘chirilgan akkauntning raqamli identifikatori "
           "qolishi mumkin — ismsiz va telefonsiz.",
     ],

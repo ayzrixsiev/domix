@@ -32,6 +32,10 @@ const (
 	// under this it is an icon or a screenshot fragment, and the grid would upscale it into mush
 	minSourceSide = 64
 
+	// a photographed paper list is read rather than glanced at: at the 1000px a product gets, a
+	// handwritten line on a4 is a few pixels tall and the letters run together
+	documentMaxSide = 2000
+
 	// **these two bound the decode, and that is their whole job**: a file well inside MaxUploadBytes can
 	// describe hundreds of millions of pixels. DecodeConfig reads only the header, so both are checked first.
 	maxSourceSide   = 12000
@@ -58,30 +62,10 @@ var (
 // **the thumbnail is scaled from the master, not the source**: the expensive work happens once, and the
 // two files frame the product identically.
 func Normalize(src []byte) (Photo, error) {
-	// header only - no pixels are allocated until the two bounds below have been checked
-	cfg, format, err := image.DecodeConfig(bytes.NewReader(src))
+	master, err := decodeUpright(src, OutputMaxSide)
 	if err != nil {
-		return Photo{}, fmt.Errorf("%w: %v", ErrUnsupportedFormat, err)
+		return Photo{}, err
 	}
-	if format != "jpeg" && format != "png" {
-		return Photo{}, fmt.Errorf("%w: got %s", ErrUnsupportedFormat, format)
-	}
-	if cfg.Width < minSourceSide || cfg.Height < minSourceSide {
-		return Photo{}, fmt.Errorf("%w: %dx%d", ErrTooSmall, cfg.Width, cfg.Height)
-	}
-	if cfg.Width > maxSourceSide || cfg.Height > maxSourceSide ||
-		cfg.Width*cfg.Height > maxSourcePixels {
-		return Photo{}, fmt.Errorf("%w: %dx%d", ErrTooLarge, cfg.Width, cfg.Height)
-	}
-
-	img, _, err := image.Decode(bytes.NewReader(src))
-	if err != nil {
-		return Photo{}, fmt.Errorf("%w: %v", ErrBroken, err)
-	}
-
-	// scaled first, rotated second: the target is a square bound, so it is the same box whichever
-	// way up the photo ends, and rotating one megapixel costs a hundredth of rotating twelve
-	master := orient(fit(img, OutputMaxSide), orientationOf(src))
 
 	masterJPEG, err := encode(master)
 	if err != nil {
@@ -92,6 +76,43 @@ func Normalize(src []byte) (Photo, error) {
 		return Photo{}, err
 	}
 	return Photo{Master: masterJPEG, Thumb: thumbJPEG}, nil
+}
+
+// NormalizeDocument is the same scrub for a photographed paper list: one larger JPEG, and no thumbnail
+// because no grid ever draws one.
+func NormalizeDocument(src []byte) ([]byte, error) {
+	upright, err := decodeUpright(src, documentMaxSide)
+	if err != nil {
+		return nil, err
+	}
+	return encode(upright)
+}
+
+func decodeUpright(src []byte, maxSide int) (*image.RGBA, error) {
+	// header only - no pixels are allocated until the two bounds below have been checked
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(src))
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrUnsupportedFormat, err)
+	}
+	if format != "jpeg" && format != "png" {
+		return nil, fmt.Errorf("%w: got %s", ErrUnsupportedFormat, format)
+	}
+	if cfg.Width < minSourceSide || cfg.Height < minSourceSide {
+		return nil, fmt.Errorf("%w: %dx%d", ErrTooSmall, cfg.Width, cfg.Height)
+	}
+	if cfg.Width > maxSourceSide || cfg.Height > maxSourceSide ||
+		cfg.Width*cfg.Height > maxSourcePixels {
+		return nil, fmt.Errorf("%w: %dx%d", ErrTooLarge, cfg.Width, cfg.Height)
+	}
+
+	img, _, err := image.Decode(bytes.NewReader(src))
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrBroken, err)
+	}
+
+	// scaled first, rotated second: the target is a square bound, so it is the same box whichever
+	// way up the photo ends, and rotating one megapixel costs a hundredth of rotating twelve
+	return orient(fit(img, maxSide), orientationOf(src)), nil
 }
 
 func encode(img image.Image) ([]byte, error) {

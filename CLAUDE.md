@@ -6,7 +6,7 @@ Domix: a map-first construction-materials marketplace for Uzbekistan. Go backend
 Do not guess domain rules. Load the matching skill first:
 - Go backend, Postgres schema, auth, rate limits, images, price comparison → `backend`
 - Flutter UI, layouts, the map, address search, colors → `frontend`
-- `/admin` web pages, VIP photos → `admin-panel`
+- `/admin` web pages, VIP photos, the «Накладные» section → `admin-panel`
 - APK builds, Google Play, Yandex MapKit, server and nginx → `deployment`
 - network failures, native platform quirks, state bugs → `lessons`
 
@@ -37,7 +37,9 @@ Build the current phase only; never scaffold a later one.
 2. **Exchange**: a client posts a basket, shops answer with their own price and advantages. Competing offers, not a checkout.
 3. **Masters and clients**: job tickets for workers.
 
-Removed down to their tables, to be rebuilt from scratch. Do not restore the old code: **support** (migration `000003`) and the **job marketplace** (the Заявки tab is a placeholder).
+Removed down to their tables, to be rebuilt from scratch. Do not restore the old code: **support** (migration `000003`) and the **job marketplace**.
+
+**Корзина** (the tab that was Заявки) is live: a customer sends a list to Domix and staff read it in the panel. It is not phase 2: no shop sees a list and nothing is offered back.
 
 ## Invariants that fail silently
 Detail and reasoning live in the `backend` skill.
@@ -47,6 +49,9 @@ Detail and reasoning live in the `backend` skill.
 - `products.image_path` is a relative path, never a url. Write files, then point the row, then unlink the old ones.
 - One size is one product row and one card. Never fold sizes.
 - `products.in_basket` defaults TRUE on purpose; `product_templates.in_basket` defaults FALSE.
+- "Basket" means the price index. A customer's list is a `waybill`, whatever the tab says.
+- A waybill's photo lives in its Postgres row, never in `imagestore`, which is public and abroad.
+- Waybills are customers-only on the server. Hiding the tab from owners is not the rule.
 
 ## Commands
 Backend, from `backend/`:

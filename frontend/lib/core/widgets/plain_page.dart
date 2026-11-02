@@ -24,8 +24,8 @@ class PlainPageTitle extends StatelessWidget {
 
   final String title;
 
-  /// One control opposite the title - the role pill on Заявки. Never a row of them: the point of
-  /// this layout is a page that opens with a word, not a toolbar.
+  /// One control opposite the title. Never a row of them: the point of this layout is a page that
+  /// opens with a word, not a toolbar.
   final Widget? action;
 
   /// Where the content column starts. The title, the band labels and the rows all sit on it - with

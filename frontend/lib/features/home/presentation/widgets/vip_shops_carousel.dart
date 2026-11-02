@@ -106,8 +106,10 @@ class _VipShopsCarouselState extends State<VipShopsCarousel> {
     _autoAdvance?.cancel();
     _autoAdvance = Timer.periodic(VipShopsCarousel.autoAdvanceEvery, (_) {
       // there is no page to advance from until the first layout, and `nextPage` asserts on that
-      if (!_controller.hasClients || !_controller.position.hasContentDimensions)
+      if (!_controller.hasClients ||
+          !_controller.position.hasContentDimensions) {
         return;
+      }
       // forwards forever - the virtual range is unbounded in exactly this direction
       _controller.nextPage(
         duration: _autoAdvanceGlide,

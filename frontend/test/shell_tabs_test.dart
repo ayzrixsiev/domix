@@ -1,0 +1,142 @@
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+
+import 'package:frontend/core/localization/app_localizations.dart';
+import 'package:frontend/core/localization/language_provider.dart';
+import 'package:frontend/features/app_shell/presentation/screens/app_shell_screen.dart';
+import 'package:frontend/features/app_shell/presentation/widgets/floating_bottom_nav_bar.dart';
+import 'package:frontend/features/favorites/presentation/controllers/favorites_controller.dart';
+import 'package:frontend/features/home/presentation/controllers/home_controller.dart';
+import 'package:frontend/features/location/presentation/controllers/city_controller.dart';
+import 'package:frontend/features/map/presentation/controllers/map_focus_controller.dart';
+import 'package:frontend/features/products/presentation/controllers/products_controller.dart';
+import 'package:frontend/features/profile/presentation/controllers/auth_controller.dart';
+import 'package:frontend/features/stores/data/shop_model.dart';
+import 'package:frontend/features/stores/data/stores_repository.dart';
+import 'package:frontend/features/stores/presentation/controllers/stores_controller.dart';
+import 'package:frontend/features/waybills/presentation/controllers/waybills_controller.dart';
+import 'package:frontend/features/waybills/presentation/screens/waybills_screen.dart';
+
+final _strings = AppLocalizations(AppLanguage.ru);
+
+class _EmptyStoresRepository extends StoresRepository {
+  @override
+  Future<List<Shop>> fetchStores() async => const [];
+}
+
+// the only public way into a signed-in state: the real controller, hydrated out of a faked secure store
+Future<void> _signInAs(String? role) async {
+  String chunk(Map<String, dynamic> m) =>
+      base64Url.encode(utf8.encode(jsonEncode(m))).replaceAll('=', '');
+  final exp =
+      DateTime.now().add(const Duration(days: 30)).millisecondsSinceEpoch ~/
+      1000;
+
+  final store = role == null
+      ? <String, String>{}
+      : {
+          'domix_jwt_token':
+              '${chunk({'alg': 'HS256'})}.${chunk({'exp': exp})}.signature',
+          'domix_user_role': role,
+          'domix_user_name': 'Азиз Рихсиев',
+          'domix_user_phone': '998900000000',
+        };
+
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(
+        const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+        (call) async => switch (call.method) {
+          'read' => store[(call.arguments as Map)['key']],
+          'readAll' => store,
+          _ => null,
+        },
+      );
+
+  // a process-wide singleton: a state left by one test would decide the next
+  await AuthController().logout();
+  await AuthController().checkExistingLogin();
+}
+
+Future<void> _pumpShell(WidgetTester tester) async {
+  await tester.pumpWidget(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => LanguageProvider()),
+        ChangeNotifierProvider(create: (_) => CityController()),
+        ChangeNotifierProvider(create: (_) => HomeController()),
+        ChangeNotifierProvider.value(value: AuthController()),
+        ChangeNotifierProvider(
+          create: (_) => StoresController(repository: _EmptyStoresRepository()),
+        ),
+        ChangeNotifierProvider(create: (_) => FavoritesController()),
+        ChangeNotifierProvider(create: (_) => ProductsController()),
+        ChangeNotifierProvider(create: (_) => MapFocusController()),
+        ChangeNotifierProvider(create: (_) => WaybillsController()),
+      ],
+      child: const MaterialApp(home: AppShellScreen()),
+    ),
+  );
+  await tester.pump();
+}
+
+Finder _navLabel(String label) => find.descendant(
+  of: find.byType(FloatingBottomNavBar),
+  matching: find.text(label),
+);
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('a customer and a guest have the cart on the bar', (
+    tester,
+  ) async {
+    for (final role in ['customer', null]) {
+      await _signInAs(role);
+      await _pumpShell(tester);
+      expect(_navLabel(_strings.cartTab), findsOneWidget, reason: 'as $role');
+    }
+  });
+
+  testWidgets(
+    'a shop owner and an admin do not, and every other tab still lands where it says',
+    (tester) async {
+      for (final role in ['shop_owner', 'admin']) {
+        await _signInAs(role);
+        await _pumpShell(tester);
+
+        expect(_navLabel(_strings.cartTab), findsNothing, reason: 'as $role');
+
+        await tester.tap(_navLabel(_strings.profileTab));
+        await tester.pump();
+        expect(
+          find.text(_strings.manageShops),
+          findsOneWidget,
+          reason: 'the bar is one tab shorter for $role',
+        );
+      }
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets('a customer who becomes an owner is moved off the cart', (
+    tester,
+  ) async {
+    await _signInAs('customer');
+    await _pumpShell(tester);
+
+    await tester.tap(_navLabel(_strings.cartTab));
+    await tester.pump();
+    final page = find.byType(WaybillsScreen, skipOffstage: false);
+    expect(tester.widget<WaybillsScreen>(page).isActive, isTrue);
+
+    await _signInAs('shop_owner');
+    await tester.pump();
+
+    expect(_navLabel(_strings.cartTab), findsNothing);
+    expect(tester.widget<WaybillsScreen>(page).isActive, isFalse);
+  });
+}

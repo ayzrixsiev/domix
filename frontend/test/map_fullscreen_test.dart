@@ -24,6 +24,7 @@ import 'package:frontend/features/profile/presentation/controllers/auth_controll
 import 'package:frontend/features/stores/data/shop_model.dart';
 import 'package:frontend/features/stores/data/stores_repository.dart';
 import 'package:frontend/features/stores/presentation/controllers/stores_controller.dart';
+import 'package:frontend/features/waybills/presentation/controllers/waybills_controller.dart';
 import 'package:frontend/features/location/presentation/controllers/city_controller.dart';
 
 /// Answers nothing, which is the point: this test is about the shell's chrome, and a shop list would
@@ -47,6 +48,7 @@ Future<void> _pumpShell(WidgetTester tester) async {
         ChangeNotifierProvider(create: (_) => FavoritesController()),
         ChangeNotifierProvider(create: (_) => ProductsController()),
         ChangeNotifierProvider(create: (_) => MapFocusController()),
+        ChangeNotifierProvider(create: (_) => WaybillsController()),
       ],
       child: const MaterialApp(home: AppShellScreen()),
     ),

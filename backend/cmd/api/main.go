@@ -83,8 +83,8 @@ func main() {
 	// keystrokes from everybody typing at once - behind one carrier address.
 	suggestLimiter := ratelimit.New(20, 60, 10*time.Minute)
 
-	// held in memory for a few seconds, which is what makes publicLimiter affordable at those numbers
-	publicReads := endpoints.NewPublicCache(20 * time.Second)
+	// held in memory for a minute, which is what makes publicLimiter affordable at those numbers
+	publicReads := endpoints.NewPublicCache(time.Minute)
 
 	// tighter, because every call here can spend money
 	codeLimiter := ratelimit.New(0.5, 10, 30*time.Minute)
@@ -157,6 +157,19 @@ func main() {
 	http.HandleFunc("/api/favorites", endpoints.WithJSON(apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, favoritesEndpoints.Route))))
 	http.HandleFunc("/api/favorites/{id}", endpoints.WithJSON(apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, favoritesEndpoints.RouteByID))))
 
+	// a person sends a few lists a day, and a photo costs a decode and half a megabyte of database: ten
+	// at once, then one every ten minutes. forgotten after a day idle, or waiting would refill it early.
+	waybillEndpoints := &endpoints.Waybills{Queries: queries, Sends: ratelimit.New(1.0/600, 10, 24*time.Hour)}
+	// **one chain built once, like adminRoute below**: a route left off it answers any shop owner
+	customerRoute := func(handler http.HandlerFunc) http.HandlerFunc {
+		return endpoints.WithJSON(apiLimiter.Wrap(
+			auth.RequireAuth(jwtSecret, queries, waybillEndpoints.RequireCustomer(handler)),
+		))
+	}
+	http.HandleFunc("/api/waybills", customerRoute(waybillEndpoints.Route))
+	http.HandleFunc("/api/waybills/photo", customerRoute(waybillEndpoints.CreateFromPhoto))
+	http.HandleFunc("/api/waybills/{id}/photo", customerRoute(waybillEndpoints.Photo))
+
 	// **one chain built once, so no route can quietly forget RequireAdmin.** the order is load-bearing:
 	// RequireAuth puts the caller's id on the context, RequireAdmin reads it.
 	adminEndpoints := &endpoints.Admin{Pool: dbPool, Queries: queries, URLs: imageURLs, Images: productImages}
@@ -190,6 +203,11 @@ func main() {
 	http.HandleFunc("/api/admin/templates/{category}/import", adminRoute(adminEndpoints.ImportTemplate))
 	// the only way a photo enters images/shops/<category>/
 	http.HandleFunc("/api/admin/catalogue/{category}/photo", adminRoute(adminEndpoints.UploadCataloguePhoto))
+
+	http.HandleFunc("/api/admin/waybills", adminRoute(adminEndpoints.ListWaybills))
+	http.HandleFunc("/api/admin/waybills/{id}", adminRoute(adminEndpoints.RouteWaybill))
+	http.HandleFunc("/api/admin/waybills/{id}/photo", adminRoute(adminEndpoints.WaybillPhoto))
+	http.HandleFunc("/api/admin/waybills/{id}/pdf", adminRoute(adminEndpoints.WaybillPDF))
 
 	// photos no row points at. uploads and the curated catalogue go through two doors, see sweepScope
 	http.HandleFunc("/api/admin/storage/orphans", adminRoute(adminEndpoints.RouteOrphans))
@@ -308,7 +326,7 @@ func mustOpenCodeSender() (verify.Sender, bool) {
 // **the policy's date and the support address have to match the app's copy** (privacy_policy.dart):
 // two copies of one document that disagree read as two different policies.
 const (
-	policyVersion = "2026-10-08"
+	policyVersion = "2026-11-02"
 	termsVersion  = "2026-10-08"
 	supportEmail  = "domix.support@gmail.com"
 )

@@ -500,7 +500,7 @@ class _CatalogueSummary extends StatelessWidget {
   }
 }
 
-// the same nested-layer empty state the tickets tab, notifications and my-shops list use
+// the same nested-layer empty state notifications and the my-shops list use
 class _CenteredMessage extends StatelessWidget {
   const _CenteredMessage({
     required this.icon,

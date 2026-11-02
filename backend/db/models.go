@@ -86,3 +86,13 @@ type User struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
+
+type Waybill struct {
+	ID           int64              `json:"id"`
+	UserID       int64              `json:"user_id"`
+	RequestID    string             `json:"request_id"`
+	ShopCategory string             `json:"shop_category"`
+	Items        []byte             `json:"items"`
+	Photo        []byte             `json:"photo"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
