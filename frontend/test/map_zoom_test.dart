@@ -4,6 +4,10 @@
 // renders, still pans and still looks like a working map: too high and the city is permanently
 // anonymous dots, too low and seventy labelled pins overlap into noise on the first frame.
 //
+// **A price label may not appear on a pin MapKit is still shrinking.** the label is 13px type and
+// the scale applies to the whole marker, so a label brought in below ShopPinIcon.fullScaleZoom is
+// rendered at a size nothing recovers - and it looks like a label that is merely small.
+//
 // **The category chips are a filter over the same list** - one that filtered nothing, or could not be
 // un-picked, would also just look like a map.
 //
@@ -22,6 +26,7 @@ import 'package:frontend/features/map/presentation/screens/map_screen.dart';
 import 'package:frontend/features/map/presentation/widgets/domix_map.dart';
 import 'package:frontend/features/map/presentation/widgets/shop_marker.dart';
 import 'package:frontend/features/products/presentation/controllers/products_controller.dart';
+import 'package:frontend/features/stores/data/price_tier.dart';
 import 'package:frontend/features/stores/data/shop_category.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 import 'package:frontend/features/stores/data/stores_repository.dart';
@@ -36,20 +41,26 @@ const _categories = [
   ShopCategory.plumbing,
 ];
 
+/// Priced, so the pins have a label to withhold - a shop without a tier draws the same key either
+/// side of the threshold and would pass the label test for the wrong reason.
+const _tier = PriceTier.cheaper;
+
 class _FakeStoresRepository extends StoresRepository {
   @override
   Future<List<Shop>> fetchStores() async => [
-        for (var i = 0; i < _categories.length; i++)
-          Shop(
-            id: i + 1,
-            name: 'Магазин ${i + 1}',
-            contactPhone: '+998901234567',
-            address: 'Ташкент',
-            category: _categories[i],
-            latitude: 41.2995 + i * 0.001,
-            longitude: 69.2401 + i * 0.001,
-          ),
-      ];
+    for (var i = 0; i < _categories.length; i++)
+      Shop(
+        id: i + 1,
+        name: 'Магазин ${i + 1}',
+        contactPhone: '+998901234567',
+        address: 'Ташкент',
+        category: _categories[i],
+        latitude: 41.2995 + i * 0.001,
+        longitude: 69.2401 + i * 0.001,
+        priceTier: _tier,
+        priceDifferencePercent: 12,
+      ),
+  ];
 }
 
 Future<StoresController> _pumpMap(WidgetTester tester) async {
@@ -137,6 +148,35 @@ void main() {
       isNot(ShopDot.visualKey),
       reason: 'one zoom step in from the city view should already read as pins - a threshold set '
           'higher leaves the map a field of dots for anyone who does not pinch several times',
+    );
+  });
+
+  testWidgets('the price label waits until the pin has stopped being scaled down', (
+    tester,
+  ) async {
+    await _pumpMap(tester);
+
+    // the pin arrives first, with the comparison still held back
+    _cameraAt(tester, ShopPinIcon.detailZoom);
+    await tester.pump();
+    expect(_pins(tester).first.visualKey, isNot(contains(_tier.name)));
+    expect(ShopPinIcon.scaleForZoom(ShopPinIcon.detailZoom), lessThan(1));
+
+    _cameraAt(tester, ShopPinIcon.fullScaleZoom);
+    await tester.pump();
+    expect(
+      _pins(tester).first.visualKey,
+      contains(_tier.name),
+      reason:
+          'by full size the pin has room for the comparison, which is the whole point of a '
+          'labelled pin',
+    );
+    expect(
+      ShopPinIcon.scaleForZoom(ShopPinIcon.fullScaleZoom),
+      1,
+      reason:
+          'the label appears at the zoom the pin stops shrinking at - bringing it in any '
+          'earlier renders 13px type at a fraction of its size',
     );
   });
 

@@ -10,10 +10,10 @@ import 'package:frontend/features/stores/data/shop_category.dart';
 /// for - the disc has to read as one object while half of it lies on a coloured picture and half on
 /// white.
 ///
-/// **The glyph is [ShopCategory.icon], the same one the map pin carries.** A shop is usually reached
-/// by tapping its pin, and a different mark on the card it opens would read as a different shop.
-/// The disc stays brand orange on all four categories: the cover is what says which kind of shop
-/// this is, and the mark is what says whose app it is.
+/// The glyph is [ShopCategory.icon] - the lined set, not the map's drawings, which are orange on
+/// white and have nowhere to go on an orange disc. The disc stays brand orange on all four
+/// categories: the cover is what says which kind of shop this is, and the mark is what says whose
+/// app it is.
 class ShopCategoryAvatar extends StatelessWidget {
   const ShopCategoryAvatar({
     super.key,

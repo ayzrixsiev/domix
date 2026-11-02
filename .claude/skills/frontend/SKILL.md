@@ -118,10 +118,21 @@ told they are one price short of it.
 
 ## The map
 
-Rotation-locked and tilt-locked, so teardrop pins and price labels stay upright — a pin drawn flat on a
-tilted plane is unreadable. **Pins are withheld below `_minDetailZoom` (13)**, where they are clutter
-rather than information. A pin carries two channels: the teardrop holds a Lucide glyph for the shop's
-category, a separate label holds the price comparison.
+Rotation-locked and tilt-locked, so pins and price labels stay upright — a pin drawn flat on a tilted
+plane is unreadable. A shop is a plain `ShopDot` until zoom 13, where it becomes a `ShopPinIcon` — a
+drawing of its trade, one bundled file per `ShopCategory` — and a price label joins it at zoom 15.
+
+**The pin's size follows the zoom** (`ShopPinIcon.scaleForZoom`, 0.7 at 13 rising to 1.0 at 15, applied
+through `MapPin.scaleWithZoom`). `DomixMap` pushes it to the placemarks on camera frames with
+`setIconStyle`, which rescales the bitmap MapKit already holds: no rebuild, no re-rasterization. The
+label waits for full scale because MapKit scales the whole marker and the label is 11px type.
+
+**Every pin file carries its point on its bottom row, dead centre**, with its drop shadow and ground
+mark baked in above it and nothing below. That row is the coordinate, so the placemark anchors at
+(0.5, 1.0) for all four categories and the centred column puts the label over the point.
+`map_pin_artwork_test` guards it, along with the other silent failure here: **MapKit rasterizes a pin
+once, off-screen, with no second frame**, so an `Image` still decoding caches as blank for the session
+— which is why `MapPin.builder` is a `FutureOr` and awaits `ShopPinIcon.decoded`.
 
 ## Address search and «О приложении»
 

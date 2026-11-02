@@ -71,12 +71,18 @@ class _MapScreenState extends State<MapScreen> {
   static const _initialZoom = 12.0;
 
   /// Below this zoom a shop is a [ShopDot] and above it a full [ShopMarker]. **not a cutoff where pins
-  /// disappear**: at city scale the glyph is unreadable and seventy price labels overlap into noise,
-  /// but *where the shops are* is what a zoomed-out map is for, so only the detail is withheld.
+  /// disappear**: at city scale the drawing is unreadable, but *where the shops are* is what a
+  /// zoomed-out map is for, so only the detail is withheld.
   ///
   /// 13 and not 12: the map opens at [_initialZoom] showing the scatter, and one pinch turns it into
-  /// pins that can be read.
-  static const _minDetailZoom = 13.0;
+  /// pins that can be read. It belongs to the pin rather than to this screen because the pin's size
+  /// curve starts here - see [ShopPinIcon.scaleForZoom].
+  static const _minDetailZoom = ShopPinIcon.detailZoom;
+
+  /// Below this zoom a pin carries no price label. **The label is 13px type and MapKit scales the
+  /// whole marker**, so a label on a pin drawn at 70% is unreadable - and seventy of them at city
+  /// scale overlap into a wall of white pills anyway. By the time one appears the pin is full size.
+  static const _minLabelZoom = ShopPinIcon.fullScaleZoom;
 
   DomixMapController? _map;
 
@@ -84,6 +90,9 @@ class _MapScreenState extends State<MapScreen> {
   /// fires on every frame of a pinch, so holding the zoom in state would rebuild the pin list sixty
   /// times a second.
   bool _detailedPins = _initialZoom >= _minDetailZoom;
+
+  /// Same again for the price label, which comes in a zoom or two after the drawing does.
+  bool _pinLabels = _initialZoom >= _minLabelZoom;
 
   /// null is every kind of shop. Lives here rather than in [StoresController] because it is a view
   /// of one screen's map, not a fact about the shop list - the home screen browses the same shops
@@ -168,9 +177,50 @@ class _MapScreenState extends State<MapScreen> {
   // search result bring the detail in on its own.
   void _onZoomChanged(double zoom) {
     final detailed = zoom >= _minDetailZoom;
-    if (detailed != _detailedPins) {
-      setState(() => _detailedPins = detailed);
+    final labelled = zoom >= _minLabelZoom;
+    if (detailed != _detailedPins || labelled != _pinLabels) {
+      setState(() {
+        _detailedPins = detailed;
+        _pinLabels = labelled;
+      });
     }
+  }
+
+  /// One shop, drawn as its trade. The price label is folded in here rather than at the call site
+  /// because the tier decides both how the pin looks and what it is cached under, and a visual key
+  /// that disagreed with the widget would serve the wrong bitmap for the rest of the session.
+  MapPin _shopPin(Shop shop) {
+    // omitted entirely for a shop that has not priced its whole catalogue, which is most of them
+    // early on - and matches the shop card the pin opens
+    final tier = _pinLabels ? shop.priceTier : null;
+
+    return MapPin(
+      id: shop.id.toString(),
+      latitude: shop.latitude,
+      longitude: shop.longitude,
+      // everything that changes how this pin is drawn, and nothing that does not. the shop's name is
+      // absent on purpose - two shops of the same category with the same comparison draw the same pin and
+      // share one cached raster. see MapPin.visualKey.
+      visualKey:
+          '${shop.category.code}|${tier?.name ?? '-'}'
+          '|${shop.priceDifferencePercent ?? 0}',
+      // the drawing grows as the camera comes in, which is what makes it part of the map rather
+      // than a sticker over it. applied to the raster, so it is not in the key above.
+      scaleWithZoom: ShopPinIcon.scaleForZoom,
+      onTap: () => _openShopCard(context, shop),
+      // async, and that is what MapPin.builder takes a future for: the drawing has to be decoded
+      // before MapKit takes the raster off this widget - see ShopPinIcon
+      builder: () async {
+        await ShopPinIcon.decoded(shop.category);
+        return ShopMarker(
+          // always present, unlike the price label: a shop's category is picked at creation and
+          // never changes
+          category: shop.category,
+          priceTier: tier,
+          priceDifferencePercent: shop.priceDifferencePercent,
+        );
+      },
+    );
   }
 
   /// Opens the shop card **as a draggable sheet over the map** - the same card a VIP card and a
@@ -296,27 +346,7 @@ class _MapScreenState extends State<MapScreen> {
           pins: [
             for (final shop in shops)
               if (_detailedPins)
-                MapPin(
-                  id: shop.id.toString(),
-                  latitude: shop.latitude,
-                  longitude: shop.longitude,
-                  // everything that changes how this pin is drawn, and nothing that does not. the shop's name is
-                  // absent on purpose - two shops of the same category with the same comparison draw the same pin and
-                  // share one cached raster. see MapPin.visualKey.
-                  visualKey:
-                      '${shop.category.code}|${shop.priceTier?.name ?? '-'}'
-                      '|${shop.priceDifferencePercent ?? 0}',
-                  onTap: () => _openShopCard(context, shop),
-                  builder: () => ShopMarker(
-                    // always present, unlike the price label above: a shop's category is picked at creation and never
-                    // changes
-                    category: shop.category,
-                    // omitted entirely for a shop that has not priced its whole catalogue, which is most of them early
-                    // on - and matches the shop card the pin opens
-                    priceTier: shop.priceTier,
-                    priceDifferencePercent: shop.priceDifferencePercent,
-                  ),
-                )
+                _shopPin(shop)
               else
                 MapPin(
                   // the same id as the detailed pin above, so switching between the two reads as one

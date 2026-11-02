@@ -91,6 +91,11 @@ flutter:
   # before the network is. product photos are the opposite and come from the api - see images/shops.
   assets:
     - assets/decorations/categories/
+    # the white DOMIX wordmark, a drawn letterform rather than a typeface anything could set in a Text.
+    - assets/brand/
+    # one drawing per ShopCategory, each carrying its own drop shadow and ground mark and its point
+    # on the bottom row dead centre, so every map pin anchors at (0.5, 1.0) - see ShopPinIcon.
+    - assets/map/pins/
 
   # the rim of the glass the nav bar is cut from - see GlassSurface. compiled to the device's own
   # shader format at build time, which is why it is declared here and not loaded as an asset.

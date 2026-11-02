@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- white, because the logo artwork is drawn on white and its light-grey bars vanish on any tint. -->
+<!-- the logo's own orange, a shade deeper than the app's primaryOrange: the mark is white, and the
+     UI orange is light enough under it that the icon lost contrast at homescreen size. -->
 <resources>
-    <color name="ic_launcher_background">#FFFFFF</color>
+    <color name="ic_launcher_background">#E85B1F</color>
 </resources>

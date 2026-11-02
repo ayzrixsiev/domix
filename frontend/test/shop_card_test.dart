@@ -436,7 +436,7 @@ void main() {
 
   // **the mark on the card and the glyph in the map pin are the same character.** almost every way
   // into a shop is a pin, and a card that opened under a different mark reads as the wrong shop.
-  testWidgets('the mark carries the shop category the pin does', (tester) async {
+  testWidgets('the mark carries the shop category', (tester) async {
     await _pumpHome(
       tester,
       content: _content(vip: [_shop(id: 1, name: 'Стройбаза', isVip: true)]),

@@ -48,7 +48,8 @@ enum ShopCategory {
         ShopCategory.wallpaper => strings.shopCategoryWallpaperHint,
       };
 
-  /// What this kind of shop looks like on the map, inside its pin.
+  /// What this kind of shop looks like wherever it is one glyph in a line of UI - the shop card's
+  /// avatar, a VIP row, an empty state. **The map does not use it**: a pin is [pinAsset].
   ///
   /// **Chosen as a set, not one at a time**: all four are ~20px of white stroke on an orange circle, so
   /// what matters is that no two share a silhouette. **judge a candidate by rendering it at 22px, never
@@ -62,5 +63,20 @@ enum ShopCategory {
         ShopCategory.plumbing => LucideIcons.bath,
         ShopCategory.wood => LucideIcons.tree_pine,
         ShopCategory.wallpaper => LucideIcons.paint_roller,
+      };
+
+  /// The drawing this kind of shop is plotted as on the map - a pin in its own right rather than a
+  /// glyph inside one, so it carries the trade instead of an abstraction of it.
+  ///
+  /// **Every file has its point on its own bottom row and on its horizontal centre**, which is what
+  /// lets every pin anchor at (0.5, 1.0) and the price label above it land over the point rather
+  /// than over the drawing. Each also carries its drop shadow and the mark on the ground under the
+  /// point, baked in above that row, plus the clearance the shadow's blur needs at the top and
+  /// sides. Replacing one means rebuilding all of that - see [ShopPinIcon].
+  String get pinAsset => switch (this) {
+        ShopCategory.universal => 'assets/map/pins/universal.webp',
+        ShopCategory.plumbing => 'assets/map/pins/plumbing.webp',
+        ShopCategory.wood => 'assets/map/pins/wood.webp',
+        ShopCategory.wallpaper => 'assets/map/pins/wallpaper.webp',
       };
 }

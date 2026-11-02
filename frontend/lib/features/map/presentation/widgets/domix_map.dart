@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -91,6 +92,7 @@ class MapPin {
     required this.builder,
     this.onTap,
     this.anchor = const math.Point(0.5, 1.0),
+    this.scaleWithZoom,
   });
 
   /// Stable per shop, used to tell "the same pin moved" from "a different pin".
@@ -106,13 +108,35 @@ class MapPin {
   final String visualKey;
 
   /// Built off-screen by MapKit, not mounted in the tree. See the note on [DomixMap].
-  final Widget Function() builder;
+  ///
+  /// **May be async, and a pin drawn from an asset has to be.** MapKit builds this once, paints it
+  /// and keeps the bitmap: there is no second frame for an image that was still decoding, and
+  /// `cacheable` would hold the empty one for the session. Awaiting the decode here is what makes
+  /// the first raster the right one.
+  final FutureOr<Widget> Function() builder;
 
   final VoidCallback? onTap;
 
   /// normalized; the default (0.5, 1.0) is bottom-centre, where a teardrop's tip is - anchoring at
   /// the centre would float every shop half a pin north of where it actually is
   final math.Point<double> anchor;
+
+  /// How large to draw this pin's bitmap at a given zoom, or null for one that is the same size at
+  /// every zoom. MapKit scales the raster around [anchor], so the point stays on the coordinate.
+  ///
+  /// **A tear-off or a top-level function, never a closure built in `build`.** It is read on camera
+  /// frames from the placemark the pin produced, long after the widget list it came in has gone.
+  final double Function(double zoom)? scaleWithZoom;
+}
+
+/// A placemark on the map and the pin it was built from, so a camera move can rescale it without
+/// going anywhere near the widget tree. [appliedScale] is the last value pushed to MapKit.
+class _LivePin {
+  _LivePin(this.pin, this.placemark);
+
+  final MapPin pin;
+  final ymk.PlacemarkMapObject placemark;
+  double? appliedScale;
 }
 
 /// Compares two pin lists without holding on to the builders, which are closures and never equal.
@@ -173,6 +197,9 @@ class _DomixMapState extends State<DomixMap> with WidgetsBindingObserver {
 
   /// Same reason: one tap listener per pin, retained here for as long as the pin is on the map.
   final List<ymk.MapObjectTapListener> _pinTapListeners = [];
+
+  /// Everything currently on the map, in the order it was added - see [_applyZoomScale].
+  final List<_LivePin> _livePins = [];
 
   @override
   void initState() {
@@ -238,6 +265,7 @@ class _DomixMapState extends State<DomixMap> with WidgetsBindingObserver {
     ymk.CameraUpdateReason reason,
     bool finished,
   ) {
+    _applyZoomScale(position.zoom);
     widget.onZoomChanged?.call(position.zoom);
     // only when the camera has come to rest: `finished` is false for every intermediate frame of a
     // pinch, a fling or an animated flyTo, and the picker's reverse geocode is a network call.
@@ -255,6 +283,7 @@ class _DomixMapState extends State<DomixMap> with WidgetsBindingObserver {
 
     window.map.mapObjects.clear();
     _pinTapListeners.clear();
+    _livePins.clear();
 
     for (final pin in widget.pins) {
       final placemark = window.map.mapObjects.addPlacemarkWithViewStyle(
@@ -268,12 +297,38 @@ class _DomixMapState extends State<DomixMap> with WidgetsBindingObserver {
         ),
         ymk.IconStyle(anchor: pin.anchor),
       );
+      _livePins.add(_LivePin(pin, placemark));
 
       if (pin.onTap case final onTap?) {
         final listener = _PinTapListener(onTap);
         _pinTapListeners.add(listener);
         placemark.addTapListener(listener);
       }
+    }
+
+    // pins added mid-session arrive at scale 1 - the zoom they are *for* is whatever the camera is
+    // sitting at, not the one it was at when the map opened
+    _applyZoomScale(window.map.cameraPosition.zoom);
+  }
+
+  /// Resizes the pins that follow the zoom. MapKit scales the bitmap it already holds, so this
+  /// costs no rebuild and no re-rasterization: it is what lets a pin grow under a pinch.
+  ///
+  /// **Rounded to a hundredth, and the last value kept per pin.** The camera listener runs on every
+  /// frame, and pushing a new style to seventy placemarks sixty times a second is seventy calls
+  /// across the ffi boundary per frame for a difference of a fraction of a pixel.
+  void _applyZoomScale(double zoom) {
+    for (final live in _livePins) {
+      final curve = live.pin.scaleWithZoom;
+      if (curve == null) continue;
+
+      final scale = (curve(zoom) * 100).roundToDouble() / 100;
+      if (scale == live.appliedScale) continue;
+      live.appliedScale = scale;
+
+      live.placemark.setIconStyle(
+        ymk.IconStyle(anchor: live.pin.anchor, scale: scale),
+      );
     }
   }
 

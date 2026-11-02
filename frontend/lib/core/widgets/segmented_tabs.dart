@@ -13,7 +13,7 @@ import 'package:frontend/core/constants/app_theme.dart';
 ///
 /// [floating] is the same split [CircleIconButton] makes: a recessed groove on the page, a white
 /// capsule over a map - a grey track over map tiles reads as part of the map.
-class SegmentedTabs extends StatelessWidget {
+class SegmentedTabs extends StatefulWidget {
   const SegmentedTabs({
     super.key,
     required this.labels,
@@ -64,31 +64,61 @@ class SegmentedTabs extends StatelessWidget {
   static const double _scrollingSegmentWidth = 138;
 
   @override
+  State<SegmentedTabs> createState() => _SegmentedTabsState();
+}
+
+class _SegmentedTabsState extends State<SegmentedTabs> {
+  /// the segment the pill sits under, kept through a cleared selection so it fades out where it
+  /// stood instead of sliding to the first segment on its way to invisible
+  late int _parked = widget.selected ?? 0;
+
+  /// **the pill glides only from one picked segment to another.** from an empty track it appears
+  /// on the spot, and a clear fades it out on the spot: gliding in from the side of a pill that
+  /// was never anywhere reads as a glitch.
+  bool _glides = false;
+
+  @override
+  void didUpdateWidget(SegmentedTabs old) {
+    super.didUpdateWidget(old);
+    final selected = widget.selected;
+    _glides = selected != null && old.selected != null;
+    if (selected != null) _parked = selected;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final labels = widget.labels;
+    final selected = widget.selected;
+    final floating = widget.floating;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final scrolls = labels.length > _fitLimit;
+        final scrolls = labels.length > SegmentedTabs._fitLimit;
         // everything between the track's edge and the segments: the groove, plus the hairline the
         // floating form draws
-        final chrome = _inset * 2 + (floating ? _borderWidth * 2 : 0);
+        final chrome =
+            SegmentedTabs._inset * 2 +
+            (floating ? SegmentedTabs._borderWidth * 2 : 0);
         final segmentWidth = scrolls
-            ? _scrollingSegmentWidth
+            ? SegmentedTabs._scrollingSegmentWidth
             : (constraints.maxWidth - chrome) / labels.length;
 
         // a capsule when it floats, so the pill inside it reads as a smaller capsule of the same
         // family - the shape is most of what makes the pair look like one object
-        final trackRadius = floating ? 999.0 : _trackRadius;
-        final pillRadius = floating ? 999.0 : _pillRadius;
+        final trackRadius = floating ? 999.0 : SegmentedTabs._trackRadius;
+        final pillRadius = floating ? 999.0 : SegmentedTabs._pillRadius;
 
         final track = Container(
-          height: height,
+          height: SegmentedTabs.height,
           width: scrolls ? segmentWidth * labels.length + chrome : null,
-          padding: const EdgeInsets.all(_inset),
+          padding: const EdgeInsets.all(SegmentedTabs._inset),
           decoration: BoxDecoration(
             color: floating ? AppColors.surfaceWhite : AppColors.trackGrey,
             borderRadius: BorderRadius.circular(trackRadius),
             border: floating
-                ? Border.all(color: AppColors.hairline, width: _borderWidth)
+                ? Border.all(
+                    color: AppColors.hairline,
+                    width: SegmentedTabs._borderWidth,
+                  )
                 : null,
             boxShadow: floating ? AppShadows.floating : null,
           ),
@@ -97,11 +127,9 @@ class SegmentedTabs extends StatelessWidget {
               // the pill sits *behind* the labels and moves independently, so the transition reads as one
               // object sliding rather than two labels swapping styles
               AnimatedPositioned(
-                duration: AppMotion.base,
+                duration: _glides ? AppMotion.base : Duration.zero,
                 curve: Curves.easeOutCubic,
-                // parked where it last was while it fades out, so clearing the selection does not
-                // also slide the pill back to the first segment on its way to invisible
-                left: segmentWidth * (selected ?? 0),
+                left: segmentWidth * _parked,
                 top: 0,
                 bottom: 0,
                 width: segmentWidth,
@@ -114,7 +142,9 @@ class SegmentedTabs extends StatelessWidget {
                       // **the one place the brand colour marks a selection rather than an action.**
                       // over a map the strip is the only chrome with a state to show, and a dark
                       // pill was read as a disabled segment rather than the chosen one.
-                      color: floating ? AppColors.primaryOrange : AppColors.surfaceWhite,
+                      color: floating
+                          ? AppColors.primaryOrange
+                          : AppColors.surfaceWhite,
                       borderRadius: BorderRadius.circular(pillRadius),
                       // `card`, not `raised`: a pill lifted out of a groove a few pixels deep, not floating over the page
                       boxShadow: floating ? null : AppShadows.card,
@@ -130,13 +160,15 @@ class SegmentedTabs extends StatelessWidget {
                       child: _Segment(
                         label: labels[i],
                         isActive: i == selected,
-                        activeColor: floating ? AppColors.textLight : AppColors.textDark,
+                        activeColor: floating
+                            ? AppColors.textLight
+                            : AppColors.textDark,
                         // the floating form runs a size tighter: it is a filter hovering over a map,
                         // not a section's own heading, and the point it gives back is what lets
                         // «Сантехника» fit a quarter of a 360px screen without an ellipsis
                         dense: floating,
-                        showClear: clearable && i == selected,
-                        onTap: () => onSelected(i),
+                        showClear: widget.clearable && i == selected,
+                        onTap: () => widget.onSelected(i),
                       ),
                     ),
                 ],
@@ -148,7 +180,7 @@ class SegmentedTabs extends StatelessWidget {
         if (!scrolls) return track;
 
         return SizedBox(
-          height: height,
+          height: SegmentedTabs.height,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
@@ -221,7 +253,11 @@ class _Segment extends StatelessWidget {
                 Flexible(
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
-                    child: Text(label, maxLines: 1, textAlign: TextAlign.center),
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ),
                 if (showClear) ...[

@@ -122,7 +122,7 @@ class PriceTierPinLabel extends StatelessWidget {
   final int? differencePercent;
 
   /// larger than the badge's 7px: it has to survive being one of forty marks over busy map tiles
-  static const double dotSize = 8;
+  static const double dotSize = 9;
 
   @override
   Widget build(BuildContext context) {
@@ -154,9 +154,9 @@ class PriceTierPinLabel extends StatelessWidget {
           maxLines: 1,
           style: TextStyle(
             color: colour,
-            fontSize: 11,
+            fontSize: 13,
             height: 1.1,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
             letterSpacing: -0.2,
           ),
         ),

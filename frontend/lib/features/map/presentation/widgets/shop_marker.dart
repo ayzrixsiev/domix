@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -7,16 +8,14 @@ import 'package:frontend/core/widgets/price_tier_badge.dart';
 import 'package:frontend/features/stores/data/price_tier.dart';
 import 'package:frontend/features/stores/data/shop_category.dart';
 
-// teardrop pin in brand orange, shared between ShopMarker and the location picker's centre pin.
+// the location picker's centre pin: a plain teardrop in brand orange.
 //
-// [category] is nullable rather than defaulting to универсальный: a plotted shop shows what it sells,
-// while the picker gets a plain капля, because it points at a yard or a stretch of road and a building
-// glyph would both claim something about the place and read as a fifth shop category.
+// it points at a yard or a stretch of road, so it carries no trade - a shop's drawing here would
+// both claim something about the place and read as a fifth shop category. A shop is [ShopPinIcon].
 class MapPinIcon extends StatelessWidget {
-  const MapPinIcon({super.key, this.size = 40, this.category});
+  const MapPinIcon({super.key, this.size = 40});
 
   final double size;
-  final ShopCategory? category;
 
   @override
   Widget build(BuildContext context) {
@@ -28,27 +27,110 @@ class MapPinIcon extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.only(bottom: size * 0.25),
           child: Center(
-            child: category == null
-                // a filled white circle rather than a stroked ring: at 48px a ring is three concentric outlines
-                // deep once the pin's own rim is counted, and the solid dot reads as "punched through"
-                ? Container(
-                    width: size * 0.30,
-                    height: size * 0.30,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                  )
-                : Icon(
-                    category!.icon,
-                    color: Colors.white,
-                    // half the pin's width, where the filled cupertino glyph this replaced sat at 0.45: lucide is a
-                    // stroke font and covers less area at the same nominal size
-                    size: size * 0.5,
-                  ),
+            // a filled white circle rather than a stroked ring: at 48px a ring is three concentric outlines
+            // deep once the pin's own rim is counted, and the solid dot reads as "punched through"
+            child: Container(
+              width: size * 0.30,
+              height: size * 0.30,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A shop on the map, drawn as its trade: the toolbox, the pipe, the rolls, the timber
+/// ([ShopCategory.pinAsset]).
+///
+/// Sized by height alone, so all four read as one set however wide each drawing happens to be. That
+/// height is what the bitmap is *rasterized* at and also the largest it is ever drawn: between
+/// [detailZoom] and [fullScaleZoom] MapKit scales the bitmap down - see [scaleForZoom].
+///
+/// **The drawing's point is the file's bottom row, and nothing is painted below it**: that row is
+/// the shop's coordinate, so transparent room under the point would stand every shop that far north
+/// of its address. The drop shadow and the mark on the ground - which are what make a pin land on
+/// the map rather than sit on top of it like a sticker - are both baked into the file above that
+/// row, and the file carries its own clearance at the top and sides for the shadow's blur.
+///
+/// **Mount it only behind [decoded].** MapKit rasterizes a pin on a one-shot offscreen tree that
+/// never gets a second frame, so an asset still decoding paints nothing at all - and the
+/// placemark's `cacheable: true` would then keep that blank for the rest of the session.
+class ShopPinIcon extends StatelessWidget {
+  const ShopPinIcon({
+    super.key,
+    required this.category,
+    this.height = defaultHeight,
+  });
+
+  final ShopCategory category;
+  final double height;
+
+  static const double defaultHeight = 34;
+
+  /// The zoom a shop is first drawn as a pin rather than a [ShopDot], and the zoom the pin reaches
+  /// full size at. **The size curve and the map's own thresholds are one design**, so they are one
+  /// pair of constants and MapScreen reads them rather than keeping its own.
+  static const double detailZoom = 13;
+  static const double fullScaleZoom = 15;
+
+  /// What the pin shrinks to at [detailZoom]. Not less: below this the toolbox and the timber stop
+  /// telling each other apart, and four indistinguishable marks are what [ShopDot] is already for.
+  static const double _minScale = 0.7;
+
+  /// How much MapKit should scale this pin's bitmap at [zoom]. It scales the raster rather than
+  /// rebuilding anything, which is what lets the pins grow smoothly under a pinch instead of
+  /// popping between two sizes - and tying their size to the zoom is what puts them *on* the map
+  /// rather than over it.
+  ///
+  /// **Full size from [fullScaleZoom] up and never larger**: past the raster it is a blurred
+  /// bitmap. The price label above the pin is what sets the bottom of the range - it is 13px type,
+  /// and MapKit scales the whole marker - so the label is withheld below that zoom too.
+  static double scaleForZoom(double zoom) {
+    final progress = ((zoom - detailZoom) / (fullScaleZoom - detailZoom)).clamp(
+      0.0,
+      1.0,
+    );
+    return _minScale + (1 - _minScale) * progress;
+  }
+
+  /// Completes once this category's drawing is in the image cache, so the [Image] below paints on
+  /// its first build. Resolved against [ImageConfiguration.empty] rather than a `BuildContext`: a
+  /// pin has none, and with no density variants of these files every configuration asks for the
+  /// same file at scale 1 anyway. A failed decode completes too - a missing pin beats no map.
+  static Future<void> decoded(ShopCategory category) {
+    final completer = Completer<void>();
+    final stream = AssetImage(
+      category.pinAsset,
+    ).resolve(ImageConfiguration.empty);
+
+    late final ImageStreamListener listener;
+    void finish() {
+      stream.removeListener(listener);
+      if (!completer.isCompleted) completer.complete();
+    }
+
+    listener = ImageStreamListener(
+      (_, _) => finish(),
+      onError: (_, _) => finish(),
+    );
+    stream.addListener(listener);
+
+    return completer.future;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      category.pinAsset,
+      height: height,
+      // the file is ~6x the height it is drawn at, and the default `low` leaves the diagonals of a
+      // glyph ragged at that reduction
+      filterQuality: FilterQuality.medium,
     );
   }
 }
@@ -75,34 +157,25 @@ class ShopMarker extends StatelessWidget {
   final PriceTier? priceTier;
   final int? priceDifferencePercent;
 
-  // an explicit SizedBox, so wrapping the pin in a Column below cannot shrink it back down to
-  // MapPinIcon's own smaller intrinsic size
-  static const double pinWidth = 44;
-  static const double pinHeight = 50;
-  static const double labelGap = 4;
-  // approximate: the Column below bottom-aligns its children, so slack just adds space above
-  static const double labelHeight = 26;
-  // wide enough for the dot, the gap and "−20%" without the pill clipping. the pin's anchor assumes
-  // the raster is symmetric about its centre.
-  static const double labeledMarkerWidth = 96;
-
   @override
   Widget build(BuildContext context) {
+    // the column centres its children, and that is what puts the label over the *point*: every pin
+    // file carries its own tip on its horizontal centre, so the column's centre is the tip whatever
+    // the drawing's width, and the placemark anchors at (0.5, 1.0) for all four categories.
+    //
+    // no gap under the label: the pin file carries its own clearance for the drop shadow's blur,
+    // and a SizedBox on top of it stranded the label about twice as far up as it reads best.
     return GestureDetector(
       onTap: onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          if (priceTier case final tier?) ...[
-            _PriceComparisonLabel(tier: tier, differencePercent: priceDifferencePercent),
-            const SizedBox(height: labelGap),
-          ],
-          SizedBox(
-            width: pinWidth,
-            height: pinHeight,
-            child: MapPinIcon(category: category),
-          ),
+          if (priceTier case final tier?)
+            _PriceComparisonLabel(
+              tier: tier,
+              differencePercent: priceDifferencePercent,
+            ),
+          ShopPinIcon(category: category),
         ],
       ),
     );

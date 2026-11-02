@@ -265,24 +265,21 @@ class _DomixBrandButtonState extends State<_DomixBrandButton> {
               borderRadius: borderRadius,
               splashColor: Colors.white.withValues(alpha: 0.10),
               highlightColor: Colors.white.withValues(alpha: 0.06),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(LucideIcons.boxes, color: Colors.white, size: 17),
-                    SizedBox(width: 8),
-                    Text(
-                      'DOMIX',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        height: 1.1,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.2,
-                      ),
+              // **the wordmark is artwork, not a Text.** DOMIX is a drawn letterform - chamfered D,
+              // square O, a V-cut M - that no font on a phone has, so setting it in a typeface
+              // would ship a different logo on every handset.
+              child: const SizedBox(
+                height: _chipHeight,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Center(
+                    child: Image(
+                      image: AssetImage('assets/brand/domix_wordmark.webp'),
+                      height: 14,
+                      excludeFromSemantics: true,
+                      filterQuality: FilterQuality.medium,
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
