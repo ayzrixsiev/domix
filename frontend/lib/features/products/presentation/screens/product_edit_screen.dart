@@ -27,7 +27,12 @@ import 'package:frontend/core/widgets/app_page_header.dart';
 // обои are the exception and the reason there are two flags on Product: an обои template row is a
 // *slot*, so its name is a text field while its category and unit stay locked.
 class ProductEditScreen extends StatefulWidget {
-  const ProductEditScreen({super.key, required this.shopId, this.product, this.suggestedCategory});
+  const ProductEditScreen({
+    super.key,
+    required this.shopId,
+    this.product,
+    this.suggestedCategory,
+  });
 
   final int shopId;
   final Product? product;
@@ -101,7 +106,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     _nameController = TextEditingController(text: product?.name ?? '');
     // an unpriced product shows an empty field rather than "0" - empty is what "no price yet" looks
     // like, and it is also how the owner clears one back to unpriced
-    _priceController = TextEditingController(text: product?.price?.toString() ?? '');
+    _priceController = TextEditingController(
+      text: product?.price?.toString() ?? '',
+    );
     _unitController = TextEditingController(text: product?.unit ?? '');
     _availability = product?.availability ?? ProductAvailability.inStock;
     _product = product;
@@ -126,7 +133,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     super.dispose();
   }
 
-  AppLocalizations get _strings => Provider.of<LanguageProvider>(context, listen: false).strings;
+  AppLocalizations get _strings =>
+      Provider.of<LanguageProvider>(context, listen: false).strings;
 
   Future<void> _save() async {
     final existing = _product;
@@ -137,7 +145,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     // control, because on that path there is no form control. the two conditions differ for an обои
     // slot, where the name *is* a control.
     final name = nameEditable ? _nameController.text.trim() : existing!.name;
-    final categoryCode = isTemplate ? existing!.category : (_pickedCategory?.code ?? '');
+    final categoryCode = isTemplate
+        ? existing!.category
+        : (_pickedCategory?.code ?? '');
     final unit = isTemplate ? existing!.unit : _unitController.text.trim();
 
     final priceText = _priceController.text.trim();
@@ -148,12 +158,15 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
 
     setState(() {
       _nameError = name.isEmpty ? _strings.productNameRequiredError : null;
-      _categoryError = categoryCode.isEmpty ? _strings.productCategoryRequiredError : null;
+      _categoryError = categoryCode.isEmpty
+          ? _strings.productCategoryRequiredError
+          : null;
       _unitError = unit.isEmpty ? _strings.productUnitRequiredError : null;
       _priceError = priceIsInvalid ? _strings.productPriceInvalidError : null;
     });
 
-    if (name.isEmpty || categoryCode.isEmpty || unit.isEmpty || priceIsInvalid) return;
+    if (name.isEmpty || categoryCode.isEmpty || unit.isEmpty || priceIsInvalid)
+      return;
 
     final controller = context.read<ProductsController>();
 
@@ -212,7 +225,11 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       Navigator.of(context).pop();
       // the product is saved either way, so this reports the half-success rather than treating it as a
       // failure - the owner's work is not lost and the photo is one tap from a retry
-      _showSnack(photoFailed ? _strings.productSavedWithoutPhoto : _strings.productSavedMessage);
+      _showSnack(
+        photoFailed
+            ? _strings.productSavedWithoutPhoto
+            : _strings.productSavedMessage,
+      );
     }
     // on failure controller.saveError is now set, and build() shows the inline error card
   }
@@ -236,7 +253,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     final XFile? picked;
     try {
       picked = await _picker.pickImage(
-        source: source == PhotoSource.camera ? ImageSource.camera : ImageSource.gallery,
+        source: source == PhotoSource.camera
+            ? ImageSource.camera
+            : ImageSource.gallery,
         // **these three parameters are what make the plugin re-encode on the device.** the resize bakes the
         // EXIF rotation into the pixels and turns an iPhone HEIC into a jpeg, so what leaves the phone is
         // decodable and already the right way up - and a 4 MB camera frame becomes a few hundred kilobytes.
@@ -259,7 +278,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     });
 
     final product = _product;
-    if (product == null) return; // nothing to attach it to yet - [_save] sends it
+    if (product == null)
+      return; // nothing to attach it to yet - [_save] sends it
 
     final saved = await context.read<ProductsController>().uploadProductPhoto(
       product: product,
@@ -290,7 +310,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       return;
     }
 
-    final saved = await context.read<ProductsController>().removeProductPhoto(product);
+    final saved = await context.read<ProductsController>().removeProductPhoto(
+      product,
+    );
     if (!mounted || saved == null) return;
 
     setState(() {
@@ -307,7 +329,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     final strings = _strings;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => _DeleteProductDialog(product: product, strings: strings),
+      builder: (ctx) =>
+          _DeleteProductDialog(product: product, strings: strings),
     );
     if (confirmed != true || !mounted) return;
 
@@ -334,7 +357,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
         content: Text(message),
         backgroundColor: AppColors.textDark,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+        ),
       ),
     );
   }
@@ -358,7 +383,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppPageHeader(
-        title: widget.isNew ? strings.addProductTitle : strings.editProductTitle,
+        title: widget.isNew
+            ? strings.addProductTitle
+            : strings.editProductTitle,
       ),
       body: SafeArea(
         child: ListView(
@@ -370,7 +397,11 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
             if (isTemplate) ...[
               // a slot's rule is a different rule: telling an обои owner "название изменить нельзя" over a name
               // field they can type in is worse than saying nothing
-              _HintCard(message: isSlot ? strings.slotProductHint : strings.templateProductHint),
+              _HintCard(
+                message: isSlot
+                    ? strings.slotProductHint
+                    : strings.templateProductHint,
+              ),
               const SizedBox(height: 20),
             ],
             // the one catalogue row whose missing price costs the shop nothing - said here, where the
@@ -393,7 +424,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                 controller: _nameController,
                 // on a slot the seeded name is the instruction ("Обои премиум (Россия)"), so the hint says what to
                 // type instead of repeating the label
-                hint: isSlot ? strings.slotProductNameHint : strings.productNameLabel,
+                hint: isSlot
+                    ? strings.slotProductNameHint
+                    : strings.productNameLabel,
                 errorText: _nameError,
                 icon: CupertinoIcons.cube_box,
                 // guarded: without the check this would rebuild the whole screen on every keystroke
@@ -450,7 +483,11 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
             StoreFormLabel(strings.productUnitLabel),
             const SizedBox(height: 8),
             if (isTemplate)
-              ProductLockedField(value: product!.unit, icon: CupertinoIcons.scope, strings: strings)
+              ProductLockedField(
+                value: product!.unit,
+                icon: CupertinoIcons.scope,
+                strings: strings,
+              )
             else ...[
               StoreFormTextField(
                 controller: _unitController,
@@ -505,7 +542,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
               onPick: _pickPhoto,
               // hidden, not disabled, when there is nothing of the owner's to remove: on a seeded row still
               // showing the catalogue's photo, "удалить" would put back the picture that is already there
-              onRemove: (product?.ownImage ?? false) || _pickedPhoto != null ? _removePhoto : null,
+              onRemove: (product?.ownImage ?? false) || _pickedPhoto != null
+                  ? _removePhoto
+                  : null,
             ),
             if (isTemplate && !photoEditable) ...[
               const SizedBox(height: 10),
@@ -529,13 +568,20 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
             ],
 
             const SizedBox(height: 28),
-            StoreSubmitButton(label: strings.saveProductButton, isBusy: isBusy, onTap: _save),
+            StoreSubmitButton(
+              label: strings.saveProductButton,
+              isBusy: isBusy,
+              onTap: _save,
+            ),
 
             // a template row has no delete button at all rather than a disabled one - the hint card above
             // already says why, and a control that is present but never works is worse than one that is not
             if (product != null && !product.isTemplate) ...[
               const SizedBox(height: 32),
-              const SizedBox(height: 1, child: ColoredBox(color: AppColors.hairline)),
+              const SizedBox(
+                height: 1,
+                child: ColoredBox(color: AppColors.hairline),
+              ),
               const SizedBox(height: 20),
               StoreDangerButton(
                 label: strings.deleteProductButton,
@@ -553,7 +599,11 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
 // one-tap shortcuts that fill the unit field. a Wrap rather than a scrolling row, so every option
 // is visible at once - there are only eleven, and a hidden shortcut is not a shortcut.
 class _UnitSuggestions extends StatelessWidget {
-  const _UnitSuggestions({required this.units, required this.selected, required this.onSelected});
+  const _UnitSuggestions({
+    required this.units,
+    required this.selected,
+    required this.onSelected,
+  });
 
   final List<String> units;
   final String selected;
@@ -566,14 +616,22 @@ class _UnitSuggestions extends StatelessWidget {
       runSpacing: 7,
       children: [
         for (final unit in units)
-          _ChoiceChip(label: unit, isSelected: unit == selected, onTap: () => onSelected(unit)),
+          _ChoiceChip(
+            label: unit,
+            isSelected: unit == selected,
+            onTap: () => onSelected(unit),
+          ),
       ],
     );
   }
 }
 
 class _AvailabilityPicker extends StatelessWidget {
-  const _AvailabilityPicker({required this.value, required this.strings, required this.onChanged});
+  const _AvailabilityPicker({
+    required this.value,
+    required this.strings,
+    required this.onChanged,
+  });
 
   final ProductAvailability value;
   final AppLocalizations strings;
@@ -590,7 +648,8 @@ class _AvailabilityPicker extends StatelessWidget {
     return Row(
       children: [
         for (final availability in ProductAvailability.values) ...[
-          if (availability != ProductAvailability.values.first) const SizedBox(width: 8),
+          if (availability != ProductAvailability.values.first)
+            const SizedBox(width: 8),
           Expanded(
             child: _ChoiceChip(
               label: _label(availability),
@@ -624,7 +683,9 @@ class _ChoiceChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final background = isSelected ? AppColors.primarySoft : AppColors.surfaceMuted;
+    final background = isSelected
+        ? AppColors.primarySoft
+        : AppColors.surfaceMuted;
 
     return Material(
       color: background,
@@ -643,7 +704,10 @@ class _ChoiceChip extends StatelessWidget {
             ),
           ),
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: height == null ? 9 : 0),
+            padding: EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: height == null ? 9 : 0,
+            ),
             child: Center(
               widthFactor: height == null ? 1 : null,
               child: Text(
@@ -652,7 +716,9 @@ class _ChoiceChip extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: isSelected ? AppColors.primaryOrange : AppColors.textGrey,
+                  color: isSelected
+                      ? AppColors.primaryOrange
+                      : AppColors.textGrey,
                   fontSize: 13,
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 ),
@@ -683,7 +749,11 @@ class _HintCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(CupertinoIcons.info_circle_fill, color: AppColors.textFaint, size: 16),
+          const Icon(
+            CupertinoIcons.info_circle_fill,
+            color: AppColors.textFaint,
+            size: 16,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -715,7 +785,9 @@ class _DeleteProductDialog extends StatelessWidget {
     return Dialog(
       backgroundColor: Colors.white,
       insetPadding: const EdgeInsets.symmetric(horizontal: 32),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(22, 24, 22, 18),
         child: Column(
@@ -725,8 +797,15 @@ class _DeleteProductDialog extends StatelessWidget {
               width: 52,
               height: 52,
               alignment: Alignment.center,
-              decoration: const BoxDecoration(color: AppColors.dangerSoft, shape: BoxShape.circle),
-              child: const Icon(CupertinoIcons.trash_fill, color: AppColors.danger, size: 22),
+              decoration: const BoxDecoration(
+                color: AppColors.dangerSoft,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                CupertinoIcons.trash_fill,
+                color: AppColors.danger,
+                size: 22,
+              ),
             ),
             const SizedBox(height: 16),
             Text(
@@ -810,7 +889,11 @@ class _DialogButton extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: foreground, fontSize: 14.5, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: foreground,
+                fontSize: 14.5,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ),

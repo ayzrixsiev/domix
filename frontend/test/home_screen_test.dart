@@ -66,17 +66,25 @@ class _FakeHomeRepository implements HomeRepository {
   }
 
   @override
-  Future<List<CategoryProduct>> fetchProductsByCategory(ProductCategory category) async {
+  Future<List<CategoryProduct>> fetchProductsByCategory(
+    ProductCategory category,
+  ) async {
     requestedCategory = category;
     return categoryProducts;
   }
 
   @override
-  Future<List<CategoryProduct>> searchProducts(String query, {int offset = 0}) async {
+  Future<List<CategoryProduct>> searchProducts(
+    String query, {
+    int offset = 0,
+  }) async {
     requestedQuery = query;
     requestedOffsets.add(offset);
     // sliced the way the server pages: the rows already held are the offset
-    return searchResults.skip(offset).take(HomeRepository.searchPageSize).toList();
+    return searchResults
+        .skip(offset)
+        .take(HomeRepository.searchPageSize)
+        .toList();
   }
 
   @override
@@ -122,7 +130,10 @@ HomeContent _content({
   );
 }
 
-Future<HomeController> _pumpHome(WidgetTester tester, _FakeHomeRepository repo) async {
+Future<HomeController> _pumpHome(
+  WidgetTester tester,
+  _FakeHomeRepository repo,
+) async {
   final controller = HomeController(repository: repo);
 
   await tester.pumpWidget(
@@ -162,9 +173,14 @@ void main() {
   // **the state a fresh install is in, and the one that used to be covered up.** an empty database
   // draws all three sections at full size - five VIP places, eight category cards, fifteen ranked
   // places - and not one shop name anywhere.
-  testWidgets('an empty backend draws every section, never invented shops', (tester) async {
+  testWidgets('an empty backend draws every section, never invented shops', (
+    tester,
+  ) async {
     final strings = AppLocalizations(AppLanguage.ru);
-    final controller = await _pumpHome(tester, _FakeHomeRepository(content: _content()));
+    final controller = await _pumpHome(
+      tester,
+      _FakeHomeRepository(content: _content()),
+    );
 
     expect(controller.vipShops, isEmpty);
     expect(controller.bestOffers, isEmpty);
@@ -189,7 +205,9 @@ void main() {
   // its neighbours, and that sliver was what told a reader there were more placements; the dots
   // carry that job alone, and there has to be one per slot or the section stops saying how much
   // inventory it has. Pinned at a real phone's width rather than at the test default of 800.
-  testWidgets('one card across the page, with a dot for every slot under it', (tester) async {
+  testWidgets('one card across the page, with a dot for every slot under it', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(360 * 3, 800 * 3);
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
@@ -197,7 +215,9 @@ void main() {
     await _pumpHome(
       tester,
       _FakeHomeRepository(
-        content: _content(vip: [_shop(id: 1, name: 'Настоящий VIP', isVip: true)]),
+        content: _content(
+          vip: [_shop(id: 1, name: 'Настоящий VIP', isVip: true)],
+        ),
       ),
     );
 
@@ -223,7 +243,8 @@ void main() {
     // and exactly one of them is the wide one - at 6px a colour change on its own is a detail
     // somebody has to go looking for
     final widths = [
-      for (var i = 0; i < VipShopsCarousel.slotCount; i++) tester.getSize(dots.at(i)).width,
+      for (var i = 0; i < VipShopsCarousel.slotCount; i++)
+        tester.getSize(dots.at(i)).width,
     ];
     final widest = widths.reduce((a, b) => a > b ? a : b);
     expect(
@@ -238,12 +259,16 @@ void main() {
   // first one worth selling - and **the finger wins over the clock**, because a tick firing mid-drag
   // would animate the page away from the person holding it. one card is one whole page, so "it moved"
   // is the sold card no longer being on screen at all.
-  testWidgets('the carousel advances on its own, and a finger on it stops the clock', (tester) async {
+  testWidgets('the carousel advances on its own, and a finger on it stops the clock', (
+    tester,
+  ) async {
     final strings = AppLocalizations(AppLanguage.ru);
     await _pumpHome(
       tester,
       _FakeHomeRepository(
-        content: _content(vip: [_shop(id: 1, name: 'Настоящий VIP', isVip: true)]),
+        content: _content(
+          vip: [_shop(id: 1, name: 'Настоящий VIP', isVip: true)],
+        ),
       ),
     );
 
@@ -257,25 +282,31 @@ void main() {
     expect(
       card,
       findsNothing,
-      reason: 'the sold card is still on screen - the strip never advanced by itself',
+      reason:
+          'the sold card is still on screen - the strip never advanced by itself',
     );
 
     // **now a finger, held still, and it has to win.** on the empty slot the strip has moved to,
     // which is also what keeps this from opening a shop: an unsold slot is inert. measured after
     // the press lands, since a card shrinking under a thumb is not the strip moving.
     final slot = find.text(strings.slotShopNameLabel).first;
-    final gesture = await tester.startGesture(tester.getCenter(find.byType(VipShopsCarousel)));
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(VipShopsCarousel)),
+    );
     await tester.pumpAndSettle();
     final held = tester.getRect(slot);
 
-    await tester.pump(VipShopsCarousel.autoAdvanceEvery + const Duration(seconds: 1));
+    await tester.pump(
+      VipShopsCarousel.autoAdvanceEvery + const Duration(seconds: 1),
+    );
     // and a settle, because a tick that did fire would only show up on the frames after it
     await tester.pumpAndSettle();
 
     expect(
       tester.getRect(slot),
       held,
-      reason: 'the carousel advanced out from under a finger that was holding it',
+      reason:
+          'the carousel advanced out from under a finger that was holding it',
     );
 
     await gesture.up();
@@ -285,7 +316,9 @@ void main() {
   // **pull-to-refresh is the gesture that fails silently.** nothing throws when the scroll physics
   // do not allow an overscroll - the finger just drags and nothing happens - so the only honest
   // assertion is that the repository was asked a second time.
-  testWidgets('pulling the feed down opens the gap, spins in it, and refetches', (tester) async {
+  testWidgets('pulling the feed down opens the gap, spins in it, and refetches', (
+    tester,
+  ) async {
     final repo = _FakeHomeRepository(content: _content());
     await _pumpHome(tester, repo);
     expect(repo.fetchCount, 1, reason: 'the initial load');
@@ -293,7 +326,9 @@ void main() {
     // no spinner on a feed that is sitting still
     expect(find.byType(CircularProgressIndicator), findsNothing);
 
-    final gesture = await tester.startGesture(tester.getCenter(find.byType(CustomScrollView)));
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(CustomScrollView)),
+    );
     // **the finger travels much further than the gap opens.** BouncingScrollPhysics damps an
     // overscroll the further past the edge it goes, so pulling 110px of finger yields nowhere near
     // 110px of extent - and it is the extent that _refreshTriggerDistance is measured against.
@@ -309,12 +344,17 @@ void main() {
     expect(
       tester.getCenter(find.byType(CircularProgressIndicator)).dy,
       lessThan(tester.getTopLeft(find.byType(SearchAndLikeBar)).dy),
-      reason: 'the spinner belongs in the gap between the header and the search bar',
+      reason:
+          'the spinner belongs in the gap between the header and the search bar',
     );
 
     await gesture.up();
     await tester.pump();
-    expect(repo.fetchCount, 2, reason: 'letting go past the trigger has to actually refetch');
+    expect(
+      repo.fetchCount,
+      2,
+      reason: 'letting go past the trigger has to actually refetch',
+    );
 
     // and the gap closes again on its own, taking the spinner with it. pumped in steps rather than
     // settled: an indeterminate CircularProgressIndicator animates forever, so pumpAndSettle would
@@ -324,7 +364,9 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
-  testWidgets('an unreachable backend says so and offers a retry', (tester) async {
+  testWidgets('an unreachable backend says so and offers a retry', (
+    tester,
+  ) async {
     final strings = AppLocalizations(AppLanguage.ru);
     final controller = await _pumpHome(
       tester,
@@ -359,7 +401,9 @@ void main() {
     expect(find.textContaining('Exception'), findsNothing);
   });
 
-  testWidgets('real shops fill the slots from the front, and nothing is invented', (tester) async {
+  testWidgets('real shops fill the slots from the front, and nothing is invented', (
+    tester,
+  ) async {
     final controller = await _pumpHome(
       tester,
       _FakeHomeRepository(
@@ -401,13 +445,20 @@ void main() {
     expect(find.text('на 12% дешевле рынка'), findsWidgets);
   });
 
-  testWidgets('a category tile opens onto that category\'s products', (tester) async {
+  testWidgets('a category tile opens onto that category\'s products', (
+    tester,
+  ) async {
     final repo = _FakeHomeRepository(
       content: _content(
         offers: {
           ShopCategory.universal: [
-            _shop(id: 2, name: 'Настоящий', priceTier: PriceTier.cheaper,
-                differencePercent: 12, basketPrice: 4400000),
+            _shop(
+              id: 2,
+              name: 'Настоящий',
+              priceTier: PriceTier.cheaper,
+              differencePercent: 12,
+              basketPrice: 4400000,
+            ),
           ],
         },
       ),
@@ -462,13 +513,20 @@ void main() {
     expect(find.byType(TextField), findsOneWidget);
   });
 
-  testWidgets('submitting the search field opens the results for what was typed', (tester) async {
+  testWidgets('submitting the search field opens the results for what was typed', (
+    tester,
+  ) async {
     final repo = _FakeHomeRepository(
       content: _content(
         offers: {
           ShopCategory.universal: [
-            _shop(id: 2, name: 'Настоящий', priceTier: PriceTier.cheaper,
-                differencePercent: 12, basketPrice: 4400000),
+            _shop(
+              id: 2,
+              name: 'Настоящий',
+              priceTier: PriceTier.cheaper,
+              differencePercent: 12,
+              basketPrice: 4400000,
+            ),
           ],
         },
       ),
@@ -510,56 +568,70 @@ void main() {
     expect(find.byType(ProductSearchScreen), findsOneWidget);
   });
 
-  testWidgets('a short page of results offers no "Ещё" and asks for nothing more', (tester) async {
-    final repo = _FakeHomeRepository(
-      content: _content(),
-      searchResults: [for (var i = 1; i <= 7; i++) _lamp(i)],
-    );
-    await _pumpHome(tester, repo);
+  testWidgets(
+    'a short page of results offers no "Ещё" and asks for nothing more',
+    (tester) async {
+      final repo = _FakeHomeRepository(
+        content: _content(),
+        searchResults: [for (var i = 1; i <= 7; i++) _lamp(i)],
+      );
+      await _pumpHome(tester, repo);
 
-    await tester.tap(find.byType(SearchAndLikeBar));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).first, 'лампа');
-    await tester.testTextInput.receiveAction(TextInputAction.search);
-    await tester.pumpAndSettle();
+      await tester.tap(find.byType(SearchAndLikeBar));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, 'лампа');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
 
-    await tester.drag(find.byType(ProductGrid), const Offset(0, -20000));
-    await tester.pumpAndSettle();
+      await tester.drag(find.byType(ProductGrid), const Offset(0, -20000));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Ещё'), findsNothing);
-    expect(repo.requestedOffsets, [0]);
-  });
+      expect(find.text('Ещё'), findsNothing);
+      expect(repo.requestedOffsets, [0]);
+    },
+  );
 
-  testWidgets('a full page offers "Ещё", which fetches from the rows held and ends on a short page',
-      (tester) async {
-    final repo = _FakeHomeRepository(
-      content: _content(),
-      searchResults: [for (var i = 1; i <= 130; i++) _lamp(i)],
-    );
-    await _pumpHome(tester, repo);
+  testWidgets(
+    'a full page offers "Ещё", which fetches from the rows held and ends on a short page',
+    (tester) async {
+      final repo = _FakeHomeRepository(
+        content: _content(),
+        searchResults: [for (var i = 1; i <= 130; i++) _lamp(i)],
+      );
+      await _pumpHome(tester, repo);
 
-    await tester.tap(find.byType(SearchAndLikeBar));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).first, 'лампа');
-    await tester.testTextInput.receiveAction(TextInputAction.search);
-    await tester.pumpAndSettle();
+      await tester.tap(find.byType(SearchAndLikeBar));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, 'лампа');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(find.text('Ещё'), 1000, scrollable: find.descendant(of: find.byType(ProductGrid), matching: find.byType(Scrollable)));
-    await tester.ensureVisible(find.text('Ещё'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Ещё'));
-    await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Ещё'),
+        1000,
+        scrollable: find.descendant(
+          of: find.byType(ProductGrid),
+          matching: find.byType(Scrollable),
+        ),
+      );
+      await tester.ensureVisible(find.text('Ещё'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ещё'));
+      await tester.pumpAndSettle();
 
-    expect(repo.requestedOffsets, [0, 100]);
+      expect(repo.requestedOffsets, [0, 100]);
 
-    // thirty rows came back: the list is over, so the button goes and nothing more is asked
-    await tester.drag(find.byType(ProductGrid), const Offset(0, -20000));
-    await tester.pumpAndSettle();
-    expect(find.text('Ещё'), findsNothing);
-    expect(find.text('Лампа 130'), findsOneWidget);
-  });
+      // thirty rows came back: the list is over, so the button goes and nothing more is asked
+      await tester.drag(find.byType(ProductGrid), const Offset(0, -20000));
+      await tester.pumpAndSettle();
+      expect(find.text('Ещё'), findsNothing);
+      expect(find.text('Лампа 130'), findsOneWidget);
+    },
+  );
 
-  testWidgets('a search with no three-letter word goes nowhere', (tester) async {
+  testWidgets('a search with no three-letter word goes nowhere', (
+    tester,
+  ) async {
     // nothing for the search index to look up, so the server answers 400 - the app does not ask.
     final repo = _FakeHomeRepository(content: _content());
     await _pumpHome(tester, repo);
@@ -591,11 +663,13 @@ void main() {
     await _pumpHome(
       tester,
       _FakeHomeRepository(
-        content: _content(offers: {
-          ShopCategory.universal: [
-            _shop(id: 2, name: 'Настоящий', basketPrice: 4400000),
-          ],
-        }),
+        content: _content(
+          offers: {
+            ShopCategory.universal: [
+              _shop(id: 2, name: 'Настоящий', basketPrice: 4400000),
+            ],
+          },
+        ),
       ),
     );
 
@@ -629,11 +703,13 @@ void main() {
     final controller = await _pumpHome(
       tester,
       _FakeHomeRepository(
-        content: _content(offers: {
-          ShopCategory.universal: [
-            _shop(id: 2, name: 'Единственный', basketPrice: 5000000),
-          ],
-        }),
+        content: _content(
+          offers: {
+            ShopCategory.universal: [
+              _shop(id: 2, name: 'Единственный', basketPrice: 5000000),
+            ],
+          },
+        ),
       ),
     );
 
@@ -650,16 +726,22 @@ void main() {
   // the drill-down behind a category tile reads the database or shows an empty state. it used to
   // answer from the invented catalogue whenever the home screen was showing invented shops, so a
   // tapped tile opened onto plausible products at plausible prices from businesses that do not exist.
-  testWidgets('a category with no products opens onto an empty state, not a story', (tester) async {
-    final strings = AppLocalizations(AppLanguage.ru);
-    final repo = _FakeHomeRepository(content: _content(), categoryProducts: const []);
-    await _pumpHome(tester, repo);
+  testWidgets(
+    'a category with no products opens onto an empty state, not a story',
+    (tester) async {
+      final strings = AppLocalizations(AppLanguage.ru);
+      final repo = _FakeHomeRepository(
+        content: _content(),
+        categoryProducts: const [],
+      );
+      await _pumpHome(tester, repo);
 
-    await tester.tap(find.text(strings.categoryMixes));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text(strings.categoryMixes));
+      await tester.pumpAndSettle();
 
-    expect(repo.requestedCategory, ProductCategory.mixes);
-    expect(find.text(strings.noProductsInCategory), findsOneWidget);
-    expect(find.byType(ProductTile), findsNothing);
-  });
+      expect(repo.requestedCategory, ProductCategory.mixes);
+      expect(find.text(strings.noProductsInCategory), findsOneWidget);
+      expect(find.byType(ProductTile), findsNothing);
+    },
+  );
 }

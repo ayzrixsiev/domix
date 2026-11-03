@@ -74,7 +74,8 @@ class UserLocationService {
       debugPrint('UserLocationService: no fix: $e');
 
       final last = await Geolocator.getLastKnownPosition();
-      if (last != null && DateTime.now().difference(last.timestamp) < _lastKnownMaxAge) {
+      if (last != null &&
+          DateTime.now().difference(last.timestamp) < _lastKnownMaxAge) {
         return (latitude: last.latitude, longitude: last.longitude);
       }
       throw const UserLocationException(UserLocationFailure.unavailable);

@@ -49,9 +49,17 @@ class FloatingBottomNavBar extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: radius,
           boxShadow: const [
-            BoxShadow(color: Color(0x262A2018), blurRadius: 30, offset: Offset(0, 12)),
+            BoxShadow(
+              color: Color(0x262A2018),
+              blurRadius: 30,
+              offset: Offset(0, 12),
+            ),
             // a tight second layer, so the bar does not read as floating too high
-            BoxShadow(color: Color(0x0F2A2018), blurRadius: 4, offset: Offset(0, 1)),
+            BoxShadow(
+              color: Color(0x0F2A2018),
+              blurRadius: 4,
+              offset: Offset(0, 1),
+            ),
           ],
         ),
         child: GlassSurface(
@@ -147,7 +155,9 @@ class _NavButtonState extends State<_NavButton> {
   Widget build(BuildContext context) {
     // textMuted rather than textGrey for the idle tabs: the glass lightens whatever it sits on, so
     // the step the old opaque bar needed is a step too little here
-    final itemColor = widget.isActive ? AppColors.textLight : AppColors.textMuted;
+    final itemColor = widget.isActive
+        ? AppColors.textLight
+        : AppColors.textMuted;
 
     return Expanded(
       child: GestureDetector(
@@ -185,7 +195,9 @@ class _NavButtonState extends State<_NavButton> {
                   style: TextStyle(
                     color: itemColor,
                     fontSize: 10,
-                    fontWeight: widget.isActive ? FontWeight.w700 : FontWeight.w600,
+                    fontWeight: widget.isActive
+                        ? FontWeight.w700
+                        : FontWeight.w600,
                   ),
                   child: Text(
                     widget.item.label,

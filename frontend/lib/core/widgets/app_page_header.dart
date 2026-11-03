@@ -136,7 +136,8 @@ class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
   static const double customDisc = _rowHeight;
 
   /// 40 under a title, the row's own height beside a control - see [customDisc].
-  double get _discDiameter => child == null ? CircleIconButton.disc : customDisc;
+  double get _discDiameter =>
+      child == null ? CircleIconButton.disc : customDisc;
 
   /// Where a disc's slot begins, so the disc itself lands on the 16px page gutter: a disc narrower
   /// than its tap target is already inset by that slack, and only the rest is padding.
@@ -156,7 +157,8 @@ class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
   static const double rowExtent = _topPadding + _rowHeight + _bottomPadding;
 
   @override
-  Size get preferredSize => Size.fromHeight(rowExtent + (bottom?.preferredSize.height ?? 0));
+  Size get preferredSize =>
+      Size.fromHeight(rowExtent + (bottom?.preferredSize.height ?? 0));
 
   @override
   Widget build(BuildContext context) {
@@ -176,7 +178,10 @@ class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.only(top: _topPadding, bottom: _bottomPadding),
+              padding: const EdgeInsets.only(
+                top: _topPadding,
+                bottom: _bottomPadding,
+              ),
               child: SizedBox(
                 height: _rowHeight,
                 child: search == null ? _row() : _searchRow(search!),
@@ -198,7 +203,10 @@ class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
           const SizedBox(width: _discGap),
         ] else
           const SizedBox(width: _textGutter),
-        if (icon case final glyph?) ...[_IconTile(glyph), const SizedBox(width: 12)],
+        if (icon case final glyph?) ...[
+          _IconTile(glyph),
+          const SizedBox(width: 12),
+        ],
         Expanded(child: _swap(_middle())),
         if (action case final trailing?) ...[
           const SizedBox(width: 12),
@@ -223,7 +231,8 @@ class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
       duration: AppMotion.base,
       curve: AppMotion.easing,
       builder: (context, t, _) => LayoutBuilder(
-        builder: (context, constraints) => _searchStack(search, t, constraints.maxWidth),
+        builder: (context, constraints) =>
+            _searchStack(search, t, constraints.maxWidth),
       ),
     );
   }
@@ -304,8 +313,12 @@ class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
       return CircleIconButton(
         // the two keys the chrome tests reach for, and the glyph each of them names
         key: ValueKey(search.resultsAreSearch ? 'close-search' : 'open-search'),
-        icon: search.resultsAreSearch ? Icons.close_rounded : LucideIcons.search,
-        tooltip: search.resultsAreSearch ? search.closeTooltip : search.openTooltip,
+        icon: search.resultsAreSearch
+            ? Icons.close_rounded
+            : LucideIcons.search,
+        tooltip: search.resultsAreSearch
+            ? search.closeTooltip
+            : search.openTooltip,
         onTap: search.resultsAreSearch ? search.onClose : search.onOpen,
       );
     }
@@ -325,7 +338,10 @@ class AppPageHeader extends StatelessWidget implements PreferredSizeWidget {
           // screen can focus it on the way in, and still exist while it shrinks on the way out
           Opacity(
             opacity: fieldT,
-            child: ClipRRect(borderRadius: BorderRadius.circular(999), child: search.field),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: search.field,
+            ),
           ),
         ],
       ),

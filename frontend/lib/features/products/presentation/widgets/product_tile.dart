@@ -128,7 +128,11 @@ class ProductTile extends StatelessWidget {
 
     return Material(
       color: Colors.transparent,
-      child: InkWell(onTap: onTap, borderRadius: BorderRadius.circular(AppRadius.md), child: card),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: card,
+      ),
     );
   }
 }
@@ -183,7 +187,10 @@ class _PhotoPanel extends StatelessWidget {
           Positioned(
             top: 7,
             left: 7,
-            child: _AvailabilityBadge(availability: product.availability, strings: strings),
+            child: _AvailabilityBadge(
+              availability: product.availability,
+              strings: strings,
+            ),
           ),
           if (showFavourite)
             Positioned(
@@ -201,7 +208,10 @@ class _PhotoPanel extends StatelessWidget {
             Positioned(
               bottom: 7,
               right: 7,
-              child: _TileChip(label: strings.ownProductBadge, color: AppColors.primaryOrange),
+              child: _TileChip(
+                label: strings.ownProductBadge,
+                color: AppColors.primaryOrange,
+              ),
             ),
         ],
       ),
@@ -216,7 +226,11 @@ class _PanelPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Center(
-      child: Icon(CupertinoIcons.cube_box_fill, color: AppColors.textFaint, size: 30),
+      child: Icon(
+        CupertinoIcons.cube_box_fill,
+        color: AppColors.textFaint,
+        size: 30,
+      ),
     );
   }
 }
@@ -272,17 +286,33 @@ class _AvailabilityBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (color, label) = switch (availability) {
-      ProductAvailability.inStock => (AppColors.success, strings.availabilityBadgeInStock),
-      ProductAvailability.onOrder => (AppColors.warning, strings.availabilityBadgeOnOrder),
-      ProductAvailability.unavailable => (AppColors.textGrey, strings.availabilityBadgeUnavailable),
+      ProductAvailability.inStock => (
+        AppColors.success,
+        strings.availabilityBadgeInStock,
+      ),
+      ProductAvailability.onOrder => (
+        AppColors.warning,
+        strings.availabilityBadgeOnOrder,
+      ),
+      ProductAvailability.unavailable => (
+        AppColors.textGrey,
+        strings.availabilityBadgeUnavailable,
+      ),
     };
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(AppRadius.xs)),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(AppRadius.xs),
+      ),
       child: Text(
         label,
-        style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w700),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 9.5,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -295,7 +325,11 @@ class _AvailabilityBadge extends StatelessWidget {
 /// The disc stays white when saved and only the glyph fills: a red disc at 26px reads as a warning
 /// badge on a product tile, where a red heart reads as saved.
 class _FavouriteButton extends StatelessWidget {
-  const _FavouriteButton({required this.label, required this.saved, this.onTap});
+  const _FavouriteButton({
+    required this.label,
+    required this.saved,
+    this.onTap,
+  });
 
   final String label;
   final bool saved;
@@ -383,7 +417,11 @@ class _TileChip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(color: color, fontSize: 9.5, fontWeight: FontWeight.w700),
+        style: TextStyle(
+          color: color,
+          fontSize: 9.5,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

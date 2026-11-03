@@ -57,7 +57,10 @@ class CodeRequestResult {
 class AuthApiException implements Exception {
   const AuthApiException(this.code, {this.retryAfter});
 
-  factory AuthApiException.from(http.Response response, Map<String, dynamic> body) {
+  factory AuthApiException.from(
+    http.Response response,
+    Map<String, dynamic> body,
+  ) {
     final retryAfter = body['retry_after'];
     return AuthApiException(
       body['code'] as String? ?? 'server_error',
@@ -111,6 +114,7 @@ class AuthService {
     'API_BASE_URL',
     defaultValue: 'http://localhost:8080/api/auth',
   );
+
   /// `/api/me` sits outside the `/api/auth` prefix baked into [_baseUrl], so it is built off the
   /// plain server root the rest of the app uses (see ApiConfig).
   static final Uri _meUri = Uri.parse('${ApiConfig.serverRoot}/api/me');
@@ -127,12 +131,14 @@ class AuthService {
   static Duration _calculateBackoff(int attempt) {
     const baseDelayMs = 200;
     const maxDelayMs = 5000;
-    
+
     // exponential: 200ms, 400ms, 800ms, 1600ms, 5000ms (capped)
     final delayMs = (baseDelayMs * (1 << attempt)).clamp(0, maxDelayMs);
-    
-    final jitterMs = (delayMs * 0.1 * (0.5 + (DateTime.now().millisecond % 100) / 100)).toInt();
-    
+
+    final jitterMs =
+        (delayMs * 0.1 * (0.5 + (DateTime.now().millisecond % 100) / 100))
+            .toInt();
+
     return Duration(milliseconds: delayMs + jitterMs);
   }
 
@@ -142,31 +148,38 @@ class AuthService {
     int maxAttempts = 3,
   }) async {
     int attempt = 0;
-    
+
     while (true) {
       try {
         return await operation(); // run the function which is wrappeed by _executeWithRetry wrapper
       } catch (e) {
         attempt++;
-        
+
         if (attempt >= maxAttempts) {
-          throw Exception('$operationName failed after $maxAttempts attempts: $e');
+          throw Exception(
+            '$operationName failed after $maxAttempts attempts: $e',
+          );
         }
-        
+
         final delay = _calculateBackoff(attempt - 1);
         await Future.delayed(delay);
       }
     }
   }
 
-  Future<AuthInitResult> initSession({required String name, required String role}) async {
+  Future<AuthInitResult> initSession({
+    required String name,
+    required String role,
+  }) async {
     return _executeWithRetry(
       () async {
-        final response = await appHttpClient.post(
-          Uri.parse('$_baseUrl/init'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'name': name, 'role': role}),
-        ).timeout(const Duration(seconds: 10));
+        final response = await appHttpClient
+            .post(
+              Uri.parse('$_baseUrl/init'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'name': name, 'role': role}),
+            )
+            .timeout(const Duration(seconds: 10));
 
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
@@ -175,7 +188,9 @@ class AuthService {
             telegramUrl: data['telegram_url'],
           );
         } else {
-          throw Exception('Failed to initialize login session: ${response.statusCode}');
+          throw Exception(
+            'Failed to initialize login session: ${response.statusCode}',
+          );
         }
       },
       'initSession',
@@ -186,10 +201,12 @@ class AuthService {
   Future<AuthStatusResult> checkStatus(String sessionId) async {
     return _executeWithRetry(
       () async {
-        final response = await appHttpClient.get(
-          Uri.parse('$_baseUrl/status?session_id=$sessionId'),
-          headers: {'Content-Type': 'application/json'},
-        ).timeout(const Duration(seconds: 5));
+        final response = await appHttpClient
+            .get(
+              Uri.parse('$_baseUrl/status?session_id=$sessionId'),
+              headers: {'Content-Type': 'application/json'},
+            )
+            .timeout(const Duration(seconds: 5));
 
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
@@ -234,17 +251,24 @@ class AuthService {
       if (parts.length != 3) return true;
 
       // base64url without padding is what JWT uses; normalize() puts the '=' back so decode accepts it
-      final payload = jsonDecode(
-        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
-      ) as Map<String, dynamic>;
+      final payload =
+          jsonDecode(
+                utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+              )
+              as Map<String, dynamic>;
 
       final exp = payload['exp'];
       if (exp is! int) return true;
 
-      final expiresAt = DateTime.fromMillisecondsSinceEpoch(exp * 1000, isUtc: true);
+      final expiresAt = DateTime.fromMillisecondsSinceEpoch(
+        exp * 1000,
+        isUtc: true,
+      );
       // a minute of slack, so a clock a little ahead of the server's does not sign someone out on the
       // very last minute of a valid token
-      return DateTime.now().toUtc().isAfter(expiresAt.subtract(const Duration(minutes: 1)));
+      return DateTime.now().toUtc().isAfter(
+        expiresAt.subtract(const Duration(minutes: 1)),
+      );
     } catch (_) {
       return true;
     }
@@ -279,6 +303,7 @@ class AuthService {
       role: body['role'] as String? ?? 'customer',
     );
   }
+
   /// `PATCH /api/me` - the name, and the one role change the server allows.
   ///
   /// **Both arguments are nullable and a null is not sent**, which is the whole reason this is a PATCH:
@@ -338,7 +363,10 @@ class AuthService {
   /// **The token is not replaced and does not need to be.** Its phone claim authorizes nothing -
   /// the server reads the user id off it and nothing else - so the session opened under the old
   /// number keeps working.
-  Future<MeResult> verifyPhoneChange({required String phone, required String code}) async {
+  Future<MeResult> verifyPhoneChange({
+    required String phone,
+    required String code,
+  }) async {
     final token = await getToken();
     if (token == null || token.isEmpty) throw const SessionExpiredException();
 
@@ -374,7 +402,12 @@ class AuthService {
       role: body['role'] as String? ?? 'customer',
     );
 
-    await saveSession(token: token, role: me.role, name: me.name, phone: me.phone);
+    await saveSession(
+      token: token,
+      role: me.role,
+      name: me.name,
+      phone: me.phone,
+    );
     return me;
   }
 
@@ -395,7 +428,6 @@ class AuthService {
 
     throw Exception('Could not delete the account (${response.statusCode})');
   }
-
 
   // -----------------------------------------------------------------------------------------------
   // The phone-code login: POST /api/auth/request-code, then POST /api/auth/verify.
@@ -434,7 +466,10 @@ class AuthService {
 
   /// `/api/auth/verify`. On success the session is already saved before this returns, so a caller
   /// that forgets to persist it cannot leave a logged-in user looking like a guest.
-  Future<MeResult> verifyCode({required String phone, required String code}) async {
+  Future<MeResult> verifyCode({
+    required String phone,
+    required String code,
+  }) async {
     final response = await appHttpClient
         .post(
           Uri.parse('${ApiConfig.serverRoot}/api/auth/verify'),
@@ -460,7 +495,12 @@ class AuthService {
       role: user['role'] as String? ?? 'customer',
     );
 
-    await saveSession(token: token, role: me.role, name: me.name, phone: me.phone);
+    await saveSession(
+      token: token,
+      role: me.role,
+      name: me.name,
+      phone: me.phone,
+    );
     return me;
   }
 

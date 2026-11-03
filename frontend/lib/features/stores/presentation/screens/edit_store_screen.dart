@@ -61,7 +61,8 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
     super.dispose();
   }
 
-  AppLocalizations get _strings => Provider.of<LanguageProvider>(context, listen: false).strings;
+  AppLocalizations get _strings =>
+      Provider.of<LanguageProvider>(context, listen: false).strings;
 
   bool get _hasChanges =>
       _nameController.text.trim() != widget.shop.name ||
@@ -124,7 +125,10 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
     final confirmed = await DestructiveConfirmDialog.show(
       context,
       title: strings.deleteStoreConfirmTitle,
-      body: strings.deleteStoreConfirmBody(widget.shop.name, widget.shop.productCount),
+      body: strings.deleteStoreConfirmBody(
+        widget.shop.name,
+        widget.shop.productCount,
+      ),
       confirmLabel: strings.deleteStoreConfirmAction,
       cancelLabel: strings.cancelButton,
     );
@@ -152,7 +156,9 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
         content: Text(message),
         backgroundColor: AppColors.textDark,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+        ),
       ),
     );
   }
@@ -201,14 +207,17 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
             const SizedBox(height: 8),
             StoreLocationTile(
               pickedAddress: _address,
-              errorText: null, // never empty on an existing shop, so it can't fail validation
+              errorText:
+                  null, // never empty on an existing shop, so it can't fail validation
               strings: strings,
               onTap: _pickLocation,
             ),
             if (controller.shopMutationError != null) ...[
               const SizedBox(height: 18),
               StoreInlineErrorCard(
-                message: strings.shopMutationErrorMessage(controller.shopMutationError!.code),
+                message: strings.shopMutationErrorMessage(
+                  controller.shopMutationError!.code,
+                ),
               ),
             ],
             const SizedBox(height: 28),
@@ -221,7 +230,10 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
             // everything below this rule is destructive. the gap and the divider put enough distance between
             // "save" and "delete" that a mis-tap cannot reach the wrong one, without hiding delete.
             const SizedBox(height: 38),
-            const SizedBox(height: 1, child: ColoredBox(color: AppColors.hairline)),
+            const SizedBox(
+              height: 1,
+              child: ColoredBox(color: AppColors.hairline),
+            ),
             const SizedBox(height: 22),
             _DangerZone(
               strings: strings,
@@ -236,7 +248,11 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
 }
 
 class _DangerZone extends StatelessWidget {
-  const _DangerZone({required this.strings, required this.isBusy, required this.onDelete});
+  const _DangerZone({
+    required this.strings,
+    required this.isBusy,
+    required this.onDelete,
+  });
 
   final AppLocalizations strings;
   final bool isBusy;
@@ -249,7 +265,11 @@ class _DangerZone extends StatelessWidget {
       children: [
         Row(
           children: [
-            const Icon(CupertinoIcons.exclamationmark_triangle_fill, color: AppColors.danger, size: 15),
+            const Icon(
+              CupertinoIcons.exclamationmark_triangle_fill,
+              color: AppColors.danger,
+              size: 15,
+            ),
             const SizedBox(width: 8),
             Text(
               strings.dangerZoneTitle,

@@ -12,35 +12,45 @@ import 'package:frontend/features/products/presentation/widgets/product_tile.dar
 // The server sends both addresses ready-made and **the app never builds one**.
 
 Map<String, dynamic> _json({String? image, String? thumb}) => {
-      'id': 7,
-      'shop_id': 1,
-      'name': 'Цемент М400',
-      'category': 'mixes',
-      'unit': 'мешок',
-      'price': 52000,
-      'availability': 'in_stock',
-      'is_template': true,
-      'name_editable': false,
-      // null-aware entries: a null drops the key entirely, which is what an older backend sends
-      'image_url': ?image,
-      'image_thumb_url': ?thumb,
-    };
+  'id': 7,
+  'shop_id': 1,
+  'name': 'Цемент М400',
+  'category': 'mixes',
+  'unit': 'мешок',
+  'price': 52000,
+  'availability': 'in_stock',
+  'is_template': true,
+  'name_editable': false,
+  // null-aware entries: a null drops the key entirely, which is what an older backend sends
+  'image_url': ?image,
+  'image_thumb_url': ?thumb,
+};
 
 void main() {
   test('a product keeps both addresses the server sent', () {
-    final product = Product.fromJson(_json(
-      image: '/static/products/universal/001.jpg',
-      thumb: '/static/products/universal/001_thumb.jpg',
-    ));
+    final product = Product.fromJson(
+      _json(
+        image: '/static/products/universal/001.jpg',
+        thumb: '/static/products/universal/001_thumb.jpg',
+      ),
+    );
 
-    expect(product.imageUrl, '${ApiConfig.serverRoot}/static/products/universal/001.jpg');
-    expect(product.thumbUrl, '${ApiConfig.serverRoot}/static/products/universal/001_thumb.jpg');
+    expect(
+      product.imageUrl,
+      '${ApiConfig.serverRoot}/static/products/universal/001.jpg',
+    );
+    expect(
+      product.thumbUrl,
+      '${ApiConfig.serverRoot}/static/products/universal/001_thumb.jpg',
+    );
   });
 
   // a backend from before thumbnails existed sends only image_url. the app has to keep drawing that
   // photo rather than the placeholder — no existing picture may disappear because the server is old.
   test('a response with no thumbnail falls back to the full-size photo', () {
-    final product = Product.fromJson(_json(image: '/static/products/universal/001.jpg'));
+    final product = Product.fromJson(
+      _json(image: '/static/products/universal/001.jpg'),
+    );
 
     expect(product.thumbUrl, product.imageUrl);
     expect(product.thumbUrl, isNotNull);
@@ -56,25 +66,39 @@ void main() {
   // an absolute url is what arrives once IMAGE_BASE_URL points photos at their own host, and the
   // app must not prepend its own server root to it
   test('an absolute address is passed through untouched', () {
-    final product = Product.fromJson(_json(
-      image: 'https://img.domix-api.uz/universal/001.jpg',
-      thumb: 'https://img.domix-api.uz/universal/001_thumb.jpg',
-    ));
+    final product = Product.fromJson(
+      _json(
+        image: 'https://img.domix-api.uz/universal/001.jpg',
+        thumb: 'https://img.domix-api.uz/universal/001_thumb.jpg',
+      ),
+    );
 
-    expect(product.thumbUrl, 'https://img.domix-api.uz/universal/001_thumb.jpg');
+    expect(
+      product.thumbUrl,
+      'https://img.domix-api.uz/universal/001_thumb.jpg',
+    );
   });
 
-  testWidgets('the grid tile loads the thumbnail, not the full-size photo', (tester) async {
-    final product = Product.fromJson(_json(
-      image: 'https://img.domix-api.uz/universal/001.jpg',
-      thumb: 'https://img.domix-api.uz/universal/001_thumb.jpg',
-    ));
-
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ProductTile(product: product, strings: AppLocalizations(AppLanguage.ru)),
+  testWidgets('the grid tile loads the thumbnail, not the full-size photo', (
+    tester,
+  ) async {
+    final product = Product.fromJson(
+      _json(
+        image: 'https://img.domix-api.uz/universal/001.jpg',
+        thumb: 'https://img.domix-api.uz/universal/001_thumb.jpg',
       ),
-    ));
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ProductTile(
+            product: product,
+            strings: AppLocalizations(AppLanguage.ru),
+          ),
+        ),
+      ),
+    );
 
     // the network image never resolves in a test harness, which is fine: what is under test is the
     // address the tile asked for, and that is decided at build time.

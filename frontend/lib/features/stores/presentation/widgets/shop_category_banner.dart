@@ -66,38 +66,44 @@ enum _Material { bricks, pipes, boards, rolls }
 
 /// One category's cover. [pale] and [deep] are the ground, which runs white → pale → deep from the
 /// top; [bandFrom] and [bandTo] are the band the material is stacked on.
-typedef _CoverArt = ({Color pale, Color deep, Color bandFrom, Color bandTo, _Material material});
+typedef _CoverArt = ({
+  Color pale,
+  Color deep,
+  Color bandFrom,
+  Color bandTo,
+  _Material material,
+});
 
 _CoverArt _artFor(ShopCategory category) => switch (category) {
-      ShopCategory.universal => (
-          pale: const Color(0xFFFFF0E2),
-          deep: const Color(0xFFFFD6B0),
-          bandFrom: const Color(0xFFFF8A2B),
-          bandTo: const Color(0xFFE85D04),
-          material: _Material.bricks,
-        ),
-      ShopCategory.plumbing => (
-          pale: const Color(0xFFEBF3F9),
-          deep: const Color(0xFFC3D9EB),
-          bandFrom: const Color(0xFF6D9EC6),
-          bandTo: const Color(0xFF2F5D86),
-          material: _Material.pipes,
-        ),
-      ShopCategory.wood => (
-          pale: const Color(0xFFF8F0E5),
-          deep: const Color(0xFFE6CDAC),
-          bandFrom: const Color(0xFFC98B4B),
-          bandTo: const Color(0xFF8A5524),
-          material: _Material.boards,
-        ),
-      ShopCategory.wallpaper => (
-          pale: const Color(0xFFF0F4EB),
-          deep: const Color(0xFFD1E0C2),
-          bandFrom: const Color(0xFF8FA87A),
-          bandTo: const Color(0xFF55723F),
-          material: _Material.rolls,
-        ),
-    };
+  ShopCategory.universal => (
+    pale: const Color(0xFFFFF0E2),
+    deep: const Color(0xFFFFD6B0),
+    bandFrom: const Color(0xFFFF8A2B),
+    bandTo: const Color(0xFFE85D04),
+    material: _Material.bricks,
+  ),
+  ShopCategory.plumbing => (
+    pale: const Color(0xFFEBF3F9),
+    deep: const Color(0xFFC3D9EB),
+    bandFrom: const Color(0xFF6D9EC6),
+    bandTo: const Color(0xFF2F5D86),
+    material: _Material.pipes,
+  ),
+  ShopCategory.wood => (
+    pale: const Color(0xFFF8F0E5),
+    deep: const Color(0xFFE6CDAC),
+    bandFrom: const Color(0xFFC98B4B),
+    bandTo: const Color(0xFF8A5524),
+    material: _Material.boards,
+  ),
+  ShopCategory.wallpaper => (
+    pale: const Color(0xFFF0F4EB),
+    deep: const Color(0xFFD1E0C2),
+    bandFrom: const Color(0xFF8FA87A),
+    bandTo: const Color(0xFF55723F),
+    material: _Material.rolls,
+  ),
+};
 
 class _CoverPainter extends CustomPainter {
   const _CoverPainter({required this.art});
@@ -140,10 +146,18 @@ class _CoverPainter extends CustomPainter {
     final grid = Paint()
       ..color = art.bandTo.withValues(alpha: 0.07)
       ..strokeWidth = 1;
-    for (var x = ShopCategoryBanner._gridStep; x < size.width; x += ShopCategoryBanner._gridStep) {
+    for (
+      var x = ShopCategoryBanner._gridStep;
+      x < size.width;
+      x += ShopCategoryBanner._gridStep
+    ) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), grid);
     }
-    for (var y = ShopCategoryBanner._gridStep; y < size.height; y += ShopCategoryBanner._gridStep) {
+    for (
+      var y = ShopCategoryBanner._gridStep;
+      y < size.height;
+      y += ShopCategoryBanner._gridStep
+    ) {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
     }
 
@@ -156,7 +170,12 @@ class _CoverPainter extends CustomPainter {
     canvas.translate(-size.width / 2, -size.height / 2);
 
     final bandTop = size.height * _bandAt;
-    final bandRect = Rect.fromLTWH(-size.width, bandTop, size.width * 3, size.height * 2);
+    final bandRect = Rect.fromLTWH(
+      -size.width,
+      bandTop,
+      size.width * 3,
+      size.height * 2,
+    );
     canvas.drawRect(
       bandRect,
       Paint()
@@ -234,7 +253,10 @@ class _CoverPainter extends CustomPainter {
         for (var i = 0; i < runs.length; i++) {
           final (from, to) = runs[i];
           final y = bandTop + 3 + (i < 2 ? 0 : 1) * 24;
-          shape(Rect.fromLTWH(left + span * from, y, span * (to - from), 20), 2);
+          shape(
+            Rect.fromLTWH(left + span * from, y, span * (to - from), 20),
+            2,
+          );
         }
       case _Material.rolls:
         for (var x = left + 20; x < right; x += 104) {

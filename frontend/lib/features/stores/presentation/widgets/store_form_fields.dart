@@ -79,12 +79,24 @@ class StoreFormTextField extends StatelessWidget {
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       onChanged: onChanged,
-      style: const TextStyle(color: AppColors.textDark, fontSize: 15, fontWeight: FontWeight.w500),
+      style: const TextStyle(
+        color: AppColors.textDark,
+        fontSize: 15,
+        fontWeight: FontWeight.w500,
+      ),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: AppColors.textFaint, fontSize: 15, fontWeight: FontWeight.w400),
+        hintStyle: const TextStyle(
+          color: AppColors.textFaint,
+          fontSize: 15,
+          fontWeight: FontWeight.w400,
+        ),
         errorText: errorText,
-        errorStyle: const TextStyle(color: AppColors.danger, fontSize: 12, fontWeight: FontWeight.w500),
+        errorStyle: const TextStyle(
+          color: AppColors.danger,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
         filled: true,
         fillColor: AppColors.surfaceMuted,
         prefixIcon: Icon(icon, color: AppColors.textFaint, size: 18),
@@ -94,7 +106,10 @@ class StoreFormTextField extends StatelessWidget {
           fontSize: 14,
           fontWeight: FontWeight.w600,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
         // an unfocused field is a plain hairline: the border only gains weight and colour once the field
         // is actually the one being edited
         border: OutlineInputBorder(
@@ -107,7 +122,10 @@ class StoreFormTextField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: AppColors.primaryOrange, width: 1.5),
+          borderSide: const BorderSide(
+            color: AppColors.primaryOrange,
+            width: 1.5,
+          ),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -158,11 +176,15 @@ class StoreLocationTile extends StatelessWidget {
                 duration: AppMotion.base,
                 switchInCurve: AppMotion.easing,
                 child: Icon(
-                  hasLocation ? CupertinoIcons.checkmark_circle_fill : CupertinoIcons.map_pin_ellipse,
+                  hasLocation
+                      ? CupertinoIcons.checkmark_circle_fill
+                      : CupertinoIcons.map_pin_ellipse,
                   // a key, or AnimatedSwitcher sees "an Icon" both times and never animates - the widget type is
                   // unchanged, only its properties are
                   key: ValueKey(hasLocation),
-                  color: hasLocation ? AppColors.primaryOrange : AppColors.textFaint,
+                  color: hasLocation
+                      ? AppColors.primaryOrange
+                      : AppColors.textFaint,
                   size: 18,
                 ),
               ),
@@ -173,7 +195,9 @@ class StoreLocationTile extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: hasLocation ? AppColors.textDark : AppColors.textFaint,
+                    color: hasLocation
+                        ? AppColors.textDark
+                        : AppColors.textFaint,
                     fontSize: 13.5,
                     height: 1.35,
                     fontWeight: hasLocation ? FontWeight.w500 : FontWeight.w400,
@@ -192,7 +216,11 @@ class StoreLocationTile extends StatelessWidget {
                 ),
               ] else ...[
                 const SizedBox(width: 10),
-                const Icon(CupertinoIcons.chevron_forward, color: AppColors.textFaint, size: 14),
+                const Icon(
+                  CupertinoIcons.chevron_forward,
+                  color: AppColors.textFaint,
+                  size: 14,
+                ),
               ],
             ],
           ),
@@ -260,7 +288,9 @@ class StoreCategoryTile extends StatelessWidget {
                       ? CupertinoIcons.checkmark_circle_fill
                       : CupertinoIcons.square_grid_2x2,
                   key: ValueKey(category != null),
-                  color: category != null ? AppColors.primaryOrange : AppColors.textFaint,
+                  color: category != null
+                      ? AppColors.primaryOrange
+                      : AppColors.textFaint,
                   size: 18,
                 ),
               ),
@@ -274,10 +304,14 @@ class StoreCategoryTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: category != null ? AppColors.textDark : AppColors.textFaint,
+                        color: category != null
+                            ? AppColors.textDark
+                            : AppColors.textFaint,
                         fontSize: 13.5,
                         height: 1.35,
-                        fontWeight: category != null ? FontWeight.w600 : FontWeight.w400,
+                        fontWeight: category != null
+                            ? FontWeight.w600
+                            : FontWeight.w400,
                       ),
                     ),
                     // the catalogue size is the concrete thing the owner gets out of the choice, so it stays visible
@@ -299,7 +333,11 @@ class StoreCategoryTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              const Icon(CupertinoIcons.chevron_down, color: AppColors.textFaint, size: 14),
+              const Icon(
+                CupertinoIcons.chevron_down,
+                color: AppColors.textFaint,
+                size: 14,
+              ),
             ],
           ),
         ),
@@ -349,15 +387,20 @@ class ShopCategorySheet extends StatelessWidget {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       barrierColor: Colors.black.withValues(alpha: 0.28),
-      builder: (_) =>
-          ShopCategorySheet(selected: selected, strings: strings, templateSizes: templateSizes),
+      builder: (_) => ShopCategorySheet(
+        selected: selected,
+        strings: strings,
+        templateSizes: templateSizes,
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.85),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+      ),
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
@@ -452,12 +495,16 @@ class _CategoryRow extends StatelessWidget {
                 height: 40,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: isSelected ? AppColors.primarySoft : AppColors.surfaceMuted,
+                  color: isSelected
+                      ? AppColors.primarySoft
+                      : AppColors.surfaceMuted,
                   borderRadius: BorderRadius.circular(AppRadius.xs),
                 ),
                 child: Icon(
                   CupertinoIcons.cube_box_fill,
-                  color: isSelected ? AppColors.primaryOrange : AppColors.textFaint,
+                  color: isSelected
+                      ? AppColors.primaryOrange
+                      : AppColors.textFaint,
                   size: 18,
                 ),
               ),
@@ -484,7 +531,10 @@ class _CategoryRow extends StatelessWidget {
                         if (size != null) ...[
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
                             decoration: BoxDecoration(
                               color: AppColors.primarySoft,
                               borderRadius: BorderRadius.circular(AppRadius.xs),
@@ -516,8 +566,12 @@ class _CategoryRow extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Icon(
-                isSelected ? CupertinoIcons.checkmark_circle_fill : CupertinoIcons.circle,
-                color: isSelected ? AppColors.primaryOrange : AppColors.hairline,
+                isSelected
+                    ? CupertinoIcons.checkmark_circle_fill
+                    : CupertinoIcons.circle,
+                color: isSelected
+                    ? AppColors.primaryOrange
+                    : AppColors.hairline,
                 size: 20,
               ),
             ],
@@ -545,7 +599,11 @@ class StoreInlineErrorCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(CupertinoIcons.exclamationmark_triangle_fill, color: AppColors.danger, size: 17),
+          const Icon(
+            CupertinoIcons.exclamationmark_triangle_fill,
+            color: AppColors.danger,
+            size: 17,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -605,7 +663,10 @@ class StoreSubmitButton extends StatelessWidget {
                   ? const SizedBox(
                       width: 21,
                       height: 21,
-                      child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        color: Colors.white,
+                      ),
                     )
                   : Row(
                       mainAxisSize: MainAxisSize.min,
@@ -683,7 +744,9 @@ class StoreDangerButton extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: AppColors.danger.withValues(alpha: isBusy ? 0.5 : 1),
+                        color: AppColors.danger.withValues(
+                          alpha: isBusy ? 0.5 : 1,
+                        ),
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                       ),
@@ -732,7 +795,11 @@ class ShopIdentityCard extends StatelessWidget {
               color: AppColors.primarySoft,
               borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
-            child: const Icon(CupertinoIcons.building_2_fill, color: AppColors.primaryOrange, size: 20),
+            child: const Icon(
+              CupertinoIcons.building_2_fill,
+              color: AppColors.primaryOrange,
+              size: 20,
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -765,16 +832,12 @@ class ShopIdentityCard extends StatelessWidget {
               ],
             ),
           ),
-          if (trailing != null) ...[
-            const SizedBox(width: 12),
-            trailing!,
-          ],
+          if (trailing != null) ...[const SizedBox(width: 12), trailing!],
         ],
       ),
     );
   }
 }
-
 
 // the pressable surface behind StoreLocationTile and StoreCategoryTile. both used to be a Material
 // + InkWell whose faint ripple in the middle of a 15px-padded box read as nothing happening at all;

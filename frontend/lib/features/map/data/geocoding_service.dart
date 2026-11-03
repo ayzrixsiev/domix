@@ -69,7 +69,10 @@ class GeocodingService {
   ///
   /// **Throws when the lookup itself fails** rather than answering with an empty list: "no such
   /// address" and "could not ask" are different sentences on screen.
-  Future<List<GeocodeResult>> search(String query, {bool submitted = false}) async {
+  Future<List<GeocodeResult>> search(
+    String query, {
+    bool submitted = false,
+  }) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return const [];
 
@@ -82,12 +85,15 @@ class GeocodingService {
       results = await _searchPhoton(trimmed);
     } catch (e) {
       if (!submitted) rethrow;
-      debugPrint('GeocodingService: photon failed ($e), asking nominatim for a submitted search');
+      debugPrint(
+        'GeocodingService: photon failed ($e), asking nominatim for a submitted search',
+      );
       results = await _searchNominatim(trimmed);
     }
 
     // a map keeps insertion order, so the first key is the oldest answer
-    if (_searchCache.length >= _searchCacheSize) _searchCache.remove(_searchCache.keys.first);
+    if (_searchCache.length >= _searchCacheSize)
+      _searchCache.remove(_searchCache.keys.first);
     _searchCache[key] = results;
     return results;
   }
@@ -96,13 +102,15 @@ class GeocodingService {
   static const _photonTimeout = Duration(seconds: 4);
 
   Future<List<GeocodeResult>> _searchPhoton(String query) async {
-    final uri = Uri.parse(_photonUrl).replace(queryParameters: {
-      'q': query,
-      'limit': '5',
-      'bbox': _uzbekistanBox,
-      'lat': _biasLat,
-      'lon': _biasLon,
-    });
+    final uri = Uri.parse(_photonUrl).replace(
+      queryParameters: {
+        'q': query,
+        'limit': '5',
+        'bbox': _uzbekistanBox,
+        'lat': _biasLat,
+        'lon': _biasLon,
+      },
+    );
 
     final response = await appHttpClient
         .get(uri, headers: {'User-Agent': _userAgent})
@@ -119,12 +127,14 @@ class GeocodingService {
 
   /// the fallback for a submitted search only - see [search]
   Future<List<GeocodeResult>> _searchNominatim(String query) async {
-    final uri = Uri.parse('$_baseUrl/search').replace(queryParameters: {
-      'q': query,
-      'format': 'json',
-      'limit': '5',
-      'countrycodes': 'uz',
-    });
+    final uri = Uri.parse('$_baseUrl/search').replace(
+      queryParameters: {
+        'q': query,
+        'format': 'json',
+        'limit': '5',
+        'countrycodes': 'uz',
+      },
+    );
 
     final response = await appHttpClient
         .get(uri, headers: {'User-Agent': _userAgent})
@@ -148,7 +158,9 @@ class GeocodingService {
   /// whole line under it, exactly as it did with Nominatim's `display_name`.
   static GeocodeResult? _fromPhoton(dynamic feature) {
     if (feature is! Map<String, dynamic>) return null;
-    final coordinates = (feature['geometry'] as Map<String, dynamic>?)?['coordinates'] as List<dynamic>?;
+    final coordinates =
+        (feature['geometry'] as Map<String, dynamic>?)?['coordinates']
+            as List<dynamic>?;
     final props = feature['properties'] as Map<String, dynamic>? ?? const {};
     if (coordinates == null || coordinates.length < 2) return null;
 
@@ -194,16 +206,20 @@ class GeocodingService {
     double longitude, {
     String? languageCode,
   }) async {
-    final uri = Uri.parse('$_baseUrl/reverse').replace(queryParameters: {
-      'lat': latitude.toString(),
-      'lon': longitude.toString(),
-      'format': 'json',
-      'addressdetails': '1',
-      // null-aware map value: the entry is dropped entirely rather than sending "accept-language=null"
-      'accept-language': ?languageCode,
-    });
+    final uri = Uri.parse('$_baseUrl/reverse').replace(
+      queryParameters: {
+        'lat': latitude.toString(),
+        'lon': longitude.toString(),
+        'format': 'json',
+        'addressdetails': '1',
+        // null-aware map value: the entry is dropped entirely rather than sending "accept-language=null"
+        'accept-language': ?languageCode,
+      },
+    );
 
-    final fallback = ReverseGeocodeResult(address: _fallbackAddress(latitude, longitude));
+    final fallback = ReverseGeocodeResult(
+      address: _fallbackAddress(latitude, longitude),
+    );
 
     try {
       final response = await appHttpClient

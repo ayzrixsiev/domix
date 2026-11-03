@@ -23,9 +23,9 @@ import 'package:frontend/features/stores/presentation/screens/shop_card_screen.d
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
 
-  static Future<void> open(BuildContext context) => Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => const FavoritesScreen()),
-      );
+  static Future<void> open(BuildContext context) => Navigator.of(
+    context,
+  ).push(MaterialPageRoute<void>(builder: (_) => const FavoritesScreen()));
 
   @override
   State<FavoritesScreen> createState() => _FavoritesScreenState();
@@ -60,7 +60,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   Widget _body(FavoritesController favorites, AppLocalizations strings) {
     if (favorites.isLoading && favorites.items.isEmpty) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.primaryOrange));
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.primaryOrange),
+      );
     }
 
     if (favorites.failure case final failure? when favorites.items.isEmpty) {

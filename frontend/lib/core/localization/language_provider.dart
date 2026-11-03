@@ -3,7 +3,7 @@ import 'app_localizations.dart';
 
 class LanguageProvider extends ChangeNotifier {
   LanguageProvider({AppLanguage initialLanguage = AppLanguage.ru})
-      : _language = initialLanguage;
+    : _language = initialLanguage;
 
   AppLanguage _language;
 

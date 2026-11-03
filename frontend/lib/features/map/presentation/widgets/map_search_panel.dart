@@ -169,7 +169,11 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
     if (needle.isEmpty) return const [];
 
     return widget.shops
-        .where((shop) => _fold(shop.name).contains(needle) || _fold(shop.address).contains(needle))
+        .where(
+          (shop) =>
+              _fold(shop.name).contains(needle) ||
+              _fold(shop.address).contains(needle),
+        )
         .take(4)
         .toList();
   }
@@ -563,7 +567,11 @@ class _NoticeRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
       child: Row(
         children: [
-          Icon(icon, color: isError ? AppColors.danger : AppColors.textFaint, size: 16),
+          Icon(
+            icon,
+            color: isError ? AppColors.danger : AppColors.textFaint,
+            size: 16,
+          ),
           const SizedBox(width: 10),
           // Expanded: the prompt and the failure are whole sentences and would overflow the row
           Expanded(

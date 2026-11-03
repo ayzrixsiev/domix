@@ -261,11 +261,15 @@ class _ShopCardViewState extends State<ShopCardView> {
   // the catalogue is the only thing that changes while this screen is open - an owner pricing
   // products in another session
   Future<void> _refresh() {
-    return context.read<ProductsController>().loadProducts(widget.shop.id, force: true);
+    return context.read<ProductsController>().loadProducts(
+      widget.shop.id,
+      force: true,
+    );
   }
 
   Future<void> _dial() async {
-    if (!await _tryOpen(Uri.parse('tel:${widget.shop.contactPhone}'))) _reportNothingToOpenWith();
+    if (!await _tryOpen(Uri.parse('tel:${widget.shop.contactPhone}')))
+      _reportNothingToOpenWith();
   }
 
   // **plain text, not a link to us**: there is no page per shop and no deep link into the app, so a
@@ -274,7 +278,8 @@ class _ShopCardViewState extends State<ShopCardView> {
   // without Domix on it.
   Future<void> _share() async {
     final shop = widget.shop;
-    final text = '${shop.name}\n'
+    final text =
+        '${shop.name}\n'
         '${shop.address}\n'
         '${shop.contactPhone}\n'
         'https://yandex.uz/maps/?pt=${shop.longitude},${shop.latitude}&z=17';
@@ -282,7 +287,9 @@ class _ShopCardViewState extends State<ShopCardView> {
     try {
       // no sharePositionOrigin: it positions the popover an iPad anchors the sheet to, and this app
       // ships android only
-      await SharePlus.instance.share(ShareParams(text: text, subject: shop.name));
+      await SharePlus.instance.share(
+        ShareParams(text: text, subject: shop.name),
+      );
     } catch (e) {
       debugPrint('ShopCardView: could not share shop ${shop.id}: $e');
       _reportNothingToOpenWith();
@@ -294,7 +301,9 @@ class _ShopCardViewState extends State<ShopCardView> {
   Future<void> _copyPhone() async {
     await Clipboard.setData(ClipboardData(text: widget.shop.contactPhone));
     if (!mounted) return;
-    _toast(Provider.of<LanguageProvider>(context, listen: false).strings.phoneCopied);
+    _toast(
+      Provider.of<LanguageProvider>(context, listen: false).strings.phoneCopied,
+    );
   }
 
   // our own map shows the shop rather than the phone's maps app: the shell closes this card and the
@@ -315,7 +324,12 @@ class _ShopCardViewState extends State<ShopCardView> {
 
   void _reportNothingToOpenWith() {
     if (!mounted) return;
-    _toast(Provider.of<LanguageProvider>(context, listen: false).strings.couldNotOpenExternalApp);
+    _toast(
+      Provider.of<LanguageProvider>(
+        context,
+        listen: false,
+      ).strings.couldNotOpenExternalApp,
+    );
   }
 
   void _toast(String message) {
@@ -324,7 +338,9 @@ class _ShopCardViewState extends State<ShopCardView> {
         content: Text(message),
         backgroundColor: AppColors.textDark,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+        ),
       ),
     );
   }
@@ -332,9 +348,9 @@ class _ShopCardViewState extends State<ShopCardView> {
   // priced rows only: an unpriced row answers no question for a customer, and a fresh shop would bury
   // the handful that are priced under a hundred that are not
   List<Product> _pricedProducts(ProductsController controller) => [
-        for (final product in controller.productsFor(widget.shop.id))
-          if (product.hasPrice) product,
-      ];
+    for (final product in controller.productsFor(widget.shop.id))
+      if (product.hasPrice) product,
+  ];
 
   // name and description - the size lives in the description now. not the unit: "шт" would match
   // most of the list.
@@ -343,7 +359,8 @@ class _ShopCardViewState extends State<ShopCardView> {
     if (query.isEmpty) return priced;
     return [
       for (final product in priced)
-        if ('${product.name} ${product.specs}'.toLowerCase().contains(query)) product,
+        if ('${product.name} ${product.specs}'.toLowerCase().contains(query))
+          product,
     ];
   }
 
@@ -358,11 +375,13 @@ class _ShopCardViewState extends State<ShopCardView> {
     final sections = sectionsOf(priced);
     final section = sections.contains(_section) ? _section : null;
     final matches = productsBySection(_matching(priced), only: section);
-    final isFirstLoad = controller.isLoadingFor(shop.id) && !controller.hasLoaded(shop.id);
+    final isFirstLoad =
+        controller.isLoadingFor(shop.id) && !controller.hasLoaded(shop.id);
 
     // the pushed route draws its cover under the status bar, so the picture is that much taller for the
     // same 240 of it to show. the sheet is opened with useSafeArea and takes the plain height.
-    final coverHeight = ShopCategoryBanner.defaultHeight +
+    final coverHeight =
+        ShopCategoryBanner.defaultHeight +
         (_isSheet ? 0 : MediaQuery.paddingOf(context).top);
 
     const gutter = EdgeInsets.symmetric(horizontal: _gutter);
@@ -372,7 +391,9 @@ class _ShopCardViewState extends State<ShopCardView> {
       // onDrag: on the sheet this is the same drag that would otherwise put the sheet away with the
       // keyboard still on top of it
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
       slivers: [
         // no padding around the cover: full width, hard against the top
         SliverToBoxAdapter(
@@ -426,7 +447,8 @@ class _ShopCardViewState extends State<ShopCardView> {
         // ensureVisible somewhere to scroll the focused field to.
         SliverToBoxAdapter(
           child: SizedBox(
-            height: 28 +
+            height:
+                28 +
                 MediaQuery.paddingOf(context).bottom +
                 MediaQuery.viewInsetsOf(context).bottom,
           ),
@@ -438,32 +460,32 @@ class _ShopCardViewState extends State<ShopCardView> {
       // **no RefreshIndicator on the sheet**: a pull at the top is the gesture that puts the sheet away,
       // and a spinner competing for it would refresh or close depending on how far the thumb travelled
       ShopCardChrome.route => Stack(
-          children: [
-            RefreshIndicator(
-              color: AppColors.primaryOrange,
-              onRefresh: _refresh,
-              child: scrollView,
-            ),
-            // clear of the status bar the cover now runs under
-            Positioned(
-              top: MediaQuery.paddingOf(context).top + 8,
-              // the page gutter, which is where every other back disc in the app starts
-              left: CircleIconButton.gutterInset,
-              // floating: it hovers over the cover rather than sitting in a bar
-              child: const CircleBackButton(floating: true),
-            ),
-            Positioned(
-              top: MediaQuery.paddingOf(context).top + 8,
-              right: CircleIconButton.gutterInset,
-              child: _ShareButton(onTap: _share, strings: strings),
-            ),
-          ],
-        ),
+        children: [
+          RefreshIndicator(
+            color: AppColors.primaryOrange,
+            onRefresh: _refresh,
+            child: scrollView,
+          ),
+          // clear of the status bar the cover now runs under
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + 8,
+            // the page gutter, which is where every other back disc in the app starts
+            left: CircleIconButton.gutterInset,
+            // floating: it hovers over the cover rather than sitting in a bar
+            child: const CircleBackButton(floating: true),
+          ),
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + 8,
+            right: CircleIconButton.gutterInset,
+            child: _ShareButton(onTap: _share, strings: strings),
+          ),
+        ],
+      ),
       ShopCardChrome.sheet => _SheetSurface(
-          onShare: _share,
-          strings: strings,
-          child: scrollView,
-        ),
+        onShare: _share,
+        strings: strings,
+        child: scrollView,
+      ),
     };
   }
 }
@@ -493,7 +515,11 @@ class _ShareButton extends StatelessWidget {
 // inside it lands in the map's, underneath the sheet. the grabber floats over the content so the
 // cover can reach the top edge, and IgnorePointer lets a drag on it fall through to the scroll view.
 class _SheetSurface extends StatelessWidget {
-  const _SheetSurface({required this.child, required this.onShare, required this.strings});
+  const _SheetSurface({
+    required this.child,
+    required this.onShare,
+    required this.strings,
+  });
 
   final Widget child;
   final VoidCallback onShare;
@@ -507,7 +533,9 @@ class _SheetSurface extends StatelessWidget {
       body: Container(
         decoration: const BoxDecoration(
           color: AppColors.background,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadius.lg),
+          ),
         ),
         clipBehavior: Clip.antiAlias,
         child: Stack(
@@ -590,7 +618,10 @@ class _ShopHeader extends StatelessWidget {
           top: 0,
           left: 0,
           right: 0,
-          child: ShopCategoryBanner(category: shop.category, height: coverHeight),
+          child: ShopCategoryBanner(
+            category: shop.category,
+            height: coverHeight,
+          ),
         ),
         Padding(
           padding: EdgeInsets.only(top: surfaceTop),
@@ -651,7 +682,12 @@ class _DetailsSurface extends StatelessWidget {
           // basketPrice and priceTier are both present or both absent
           if (basket != null && tier != null) ...[
             const _Rule(),
-            _BasketPrice(shop: shop, basket: basket, tier: tier, strings: strings),
+            _BasketPrice(
+              shop: shop,
+              basket: basket,
+              tier: tier,
+              strings: strings,
+            ),
           ],
           const _Rule(),
           _Contacts(
@@ -730,7 +766,11 @@ class _Identity extends StatelessWidget {
                     // eyebrow is a chip, and this block was rebuilt to be rid of chips.
                     if (shop.isVip) ...[
                       const SizedBox(width: 10),
-                      const Icon(Icons.star_rounded, color: AppColors.primaryOrange, size: 15),
+                      const Icon(
+                        Icons.star_rounded,
+                        color: AppColors.primaryOrange,
+                        size: 15,
+                      ),
                       const SizedBox(width: 3),
                       const Text(
                         'VIP',
@@ -767,7 +807,11 @@ class _Identity extends StatelessWidget {
             children: [
               const Padding(
                 padding: EdgeInsets.only(top: 2),
-                child: Icon(CupertinoIcons.location_solid, color: AppColors.textFaint, size: 14),
+                child: Icon(
+                  CupertinoIcons.location_solid,
+                  color: AppColors.textFaint,
+                  size: 14,
+                ),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -910,7 +954,11 @@ class _Contacts extends StatelessWidget {
 // another thing to press. page colour rather than `surfaceMuted`: at this size a 1% step off white
 // is not a panel, it is a printing fault.
 class _PhoneTile extends StatelessWidget {
-  const _PhoneTile({required this.shop, required this.strings, required this.onCopy});
+  const _PhoneTile({
+    required this.shop,
+    required this.strings,
+    required this.onCopy,
+  });
 
   final Shop shop;
   final AppLocalizations strings;
@@ -933,7 +981,11 @@ class _PhoneTile extends StatelessWidget {
               color: AppColors.surfaceWhite,
               shape: BoxShape.circle,
             ),
-            child: const Icon(LucideIcons.store, color: AppColors.textMuted, size: 19),
+            child: const Icon(
+              LucideIcons.store,
+              color: AppColors.textMuted,
+              size: 19,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -979,7 +1031,11 @@ class _PhoneTile extends StatelessWidget {
                 child: const SizedBox(
                   width: 44,
                   height: 44,
-                  child: Icon(LucideIcons.copy, color: AppColors.textMuted, size: 18),
+                  child: Icon(
+                    LucideIcons.copy,
+                    color: AppColors.textMuted,
+                    size: 18,
+                  ),
                 ),
               ),
             ),
@@ -1013,7 +1069,9 @@ class _ActionButton extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppRadius.sm),
         // the coloured glow is reserved for a primary action - see AppShadows.accent
-        boxShadow: isPrimary ? AppShadows.accent(AppColors.primaryOrange) : null,
+        boxShadow: isPrimary
+            ? AppShadows.accent(AppColors.primaryOrange)
+            : null,
       ),
       child: Material(
         color: isPrimary ? AppColors.primaryOrange : AppColors.surfaceWhite,
@@ -1024,7 +1082,9 @@ class _ActionButton extends StatelessWidget {
           child: Ink(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(AppRadius.sm),
-              border: isPrimary ? null : Border.all(color: AppColors.trackGrey, width: 1.2),
+              border: isPrimary
+                  ? null
+                  : Border.all(color: AppColors.trackGrey, width: 1.2),
             ),
             child: SizedBox(
               height: 52,
@@ -1138,7 +1198,10 @@ class _ProductsSliver extends StatelessWidget {
             child: SizedBox(
               width: 24,
               height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2.4, color: AppColors.primaryOrange),
+              child: CircularProgressIndicator(
+                strokeWidth: 2.4,
+                color: AppColors.primaryOrange,
+              ),
             ),
           ),
         ),
@@ -1174,8 +1237,10 @@ class _ProductsSliver extends StatelessWidget {
 
     // a sliver grid, so a hundred-product catalogue builds one screenful of tiles - see the note at the
     // top of this file
-    void save(Product product) =>
-        toggleFavorite(context, CategoryProduct(product: product, shopName: shopName));
+    void save(Product product) => toggleFavorite(
+      context,
+      CategoryProduct(product: product, shopName: shopName),
+    );
 
     return ProductSliverGrid(
       tiles: [

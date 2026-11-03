@@ -25,7 +25,10 @@ class _FakeProductsRepository implements ProductsRepository {
   Future<List<Product>> fetchShopProducts(int shopId) async => products;
 
   @override
-  Future<Product> createProduct({required int shopId, required Product draft}) async => draft;
+  Future<Product> createProduct({
+    required int shopId,
+    required Product draft,
+  }) async => draft;
 
   @override
   Future<Product> updateProduct(Product product) async => product;
@@ -34,8 +37,10 @@ class _FakeProductsRepository implements ProductsRepository {
   Future<void> deleteProduct(int productId) async {}
 
   @override
-  Future<Product> uploadProductImage({required int productId, required String filePath}) async =>
-      products.firstWhere((p) => p.id == productId);
+  Future<Product> uploadProductImage({
+    required int productId,
+    required String filePath,
+  }) async => products.firstWhere((p) => p.id == productId);
 
   @override
   Future<Product> removeProductImage(int productId) async =>
@@ -55,19 +60,20 @@ final _shop = Shop(
   basketPrice: 4850000,
 );
 
-Product _product(int id, {bool template = true, ProductSection? section}) => Product(
-  id: id,
-  shopId: 1,
-  name: 'Товар $id',
-  specs: 'Описание $id',
-  category: 'tools',
-  unit: 'шт',
-  price: null,
-  availability: ProductAvailability.inStock,
-  isTemplate: template,
-  nameEditable: !template,
-  section: section,
-);
+Product _product(int id, {bool template = true, ProductSection? section}) =>
+    Product(
+      id: id,
+      shopId: 1,
+      name: 'Товар $id',
+      specs: 'Описание $id',
+      category: 'tools',
+      unit: 'шт',
+      price: null,
+      availability: ProductAvailability.inStock,
+      isTemplate: template,
+      nameEditable: !template,
+      section: section,
+    );
 
 Future<void> _pump(WidgetTester tester, List<Product> products) async {
   await tester.pumpWidget(
@@ -75,7 +81,8 @@ Future<void> _pump(WidgetTester tester, List<Product> products) async {
       providers: [
         ChangeNotifierProvider(create: (_) => LanguageProvider()),
         ChangeNotifierProvider(
-          create: (_) => ProductsController(repository: _FakeProductsRepository(products)),
+          create: (_) =>
+              ProductsController(repository: _FakeProductsRepository(products)),
         ),
       ],
       child: MaterialApp(home: ShopProductsScreen(shop: _shop)),
@@ -87,34 +94,42 @@ Future<void> _pump(WidgetTester tester, List<Product> products) async {
 void main() {
   final strings = AppLocalizations(AppLanguage.ru);
 
-  testWidgets('the add button sits outside the scrolling grid, always on screen', (tester) async {
-    await _pump(tester, [for (var i = 0; i < 40; i++) _product(i)]);
+  testWidgets(
+    'the add button sits outside the scrolling grid, always on screen',
+    (tester) async {
+      await _pump(tester, [for (var i = 0; i < 40; i++) _product(i)]);
 
-    expect(find.text(strings.addProductButton), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byType(CustomScrollView),
-        matching: find.text(strings.addProductButton),
-      ),
-      findsNothing,
-      reason: 'it is pinned over the list, not a cell at the end of it',
-    );
+      expect(find.text(strings.addProductButton), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(CustomScrollView),
+          matching: find.text(strings.addProductButton),
+        ),
+        findsNothing,
+        reason: 'it is pinned over the list, not a cell at the end of it',
+      );
 
-    // and it is still there after the list has been scrolled a long way
-    await tester.drag(find.byType(CustomScrollView), const Offset(0, -2000));
-    await tester.pumpAndSettle();
-    expect(find.text(strings.addProductButton), findsOneWidget);
-  });
+      // and it is still there after the list has been scrolled a long way
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -2000));
+      await tester.pumpAndSettle();
+      expect(find.text(strings.addProductButton), findsOneWidget);
+    },
+  );
 
-  testWidgets('a spent allowance greys the button out and says so on it', (tester) async {
+  testWidgets('a spent allowance greys the button out and says so on it', (
+    tester,
+  ) async {
     await _pump(tester, [
       _product(1),
-      for (var i = 0; i < kMaxCustomProducts; i++) _product(100 + i, template: false),
+      for (var i = 0; i < kMaxCustomProducts; i++)
+        _product(100 + i, template: false),
     ]);
 
     expect(find.text(strings.addProductButton), findsNothing);
     expect(
-      find.text(strings.ownProductsUsedLabel(kMaxCustomProducts, kMaxCustomProducts)),
+      find.text(
+        strings.ownProductsUsedLabel(kMaxCustomProducts, kMaxCustomProducts),
+      ),
       findsOneWidget,
     );
   });
@@ -126,7 +141,9 @@ void main() {
     expect(find.text(strings.productsScreenSubtitle), findsOneWidget);
   });
 
-  testWidgets('two sections put the sections disc beside the search field', (tester) async {
+  testWidgets('two sections put the sections disc beside the search field', (
+    tester,
+  ) async {
     await _pump(tester, [
       _product(1, section: ProductSection.electricalLighting),
       _product(2, section: ProductSection.fastenersMounting),
@@ -141,15 +158,21 @@ void main() {
     expect(find.text(strings.sectionAll), findsOneWidget);
   });
 
-  testWidgets('one section is nothing to choose between, so there is no disc', (tester) async {
-    await _pump(tester, [_product(1, section: ProductSection.electricalLighting)]);
+  testWidgets('one section is nothing to choose between, so there is no disc', (
+    tester,
+  ) async {
+    await _pump(tester, [
+      _product(1, section: ProductSection.electricalLighting),
+    ]);
 
     expect(find.byIcon(LucideIcons.sliders_horizontal), findsNothing);
     // the field stays: searching a catalogue has nothing to do with how many sections it has
     expect(find.byType(TextField), findsOneWidget);
   });
 
-  testWidgets('the field on the page filters by name and description', (tester) async {
+  testWidgets('the field on the page filters by name and description', (
+    tester,
+  ) async {
     await _pump(tester, [_product(1), _product(2)]);
 
     await tester.enterText(find.byType(TextField), 'Описание 2');

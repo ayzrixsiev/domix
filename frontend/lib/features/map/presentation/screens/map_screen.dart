@@ -119,7 +119,8 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
 
-    _focus = context.read<MapFocusController>()..addListener(_showRequestedShop);
+    _focus = context.read<MapFocusController>()
+      ..addListener(_showRequestedShop);
 
     // the first sync. IndexedStack keeps this State alive across tab switches, so this runs once per
     // session and every later re-sync comes through didUpdateWidget. deliberately not gated on
@@ -168,7 +169,8 @@ class _MapScreenState extends State<MapScreen> {
     if (map == null || shop == null) return;
 
     _focus.take();
-    if (_category != null && _category != shop.category) setState(() => _category = null);
+    if (_category != null && _category != shop.category)
+      setState(() => _category = null);
     map.flyTo(shop.latitude, shop.longitude);
   }
 

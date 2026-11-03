@@ -35,18 +35,18 @@ enum ShopCategory {
   // an exhaustive switch rather than a map: the analyzer flags a missing case, so a fifth category is
   // a compile error instead of a silently untranslated label
   String label(AppLocalizations strings) => switch (this) {
-        ShopCategory.universal => strings.shopCategoryUniversal,
-        ShopCategory.plumbing => strings.shopCategoryPlumbing,
-        ShopCategory.wood => strings.shopCategoryWood,
-        ShopCategory.wallpaper => strings.shopCategoryWallpaper,
-      };
+    ShopCategory.universal => strings.shopCategoryUniversal,
+    ShopCategory.plumbing => strings.shopCategoryPlumbing,
+    ShopCategory.wood => strings.shopCategoryWood,
+    ShopCategory.wallpaper => strings.shopCategoryWallpaper,
+  };
 
   String description(AppLocalizations strings) => switch (this) {
-        ShopCategory.universal => strings.shopCategoryUniversalHint,
-        ShopCategory.plumbing => strings.shopCategoryPlumbingHint,
-        ShopCategory.wood => strings.shopCategoryWoodHint,
-        ShopCategory.wallpaper => strings.shopCategoryWallpaperHint,
-      };
+    ShopCategory.universal => strings.shopCategoryUniversalHint,
+    ShopCategory.plumbing => strings.shopCategoryPlumbingHint,
+    ShopCategory.wood => strings.shopCategoryWoodHint,
+    ShopCategory.wallpaper => strings.shopCategoryWallpaperHint,
+  };
 
   /// What this kind of shop looks like wherever it is one glyph in a line of UI - the shop card's
   /// avatar, a VIP row, an empty state. **The map does not use it**: a pin is [pinAsset].
@@ -59,11 +59,11 @@ enum ShopCategory {
   /// role. `tree_pine` and `paint_roller` also mark [ProductCategory] tiles, which is accepted: a kind
   /// of *shop* and a kind of *product* never share a surface.
   IconData get icon => switch (this) {
-        ShopCategory.universal => LucideIcons.wrench_off,
-        ShopCategory.plumbing => LucideIcons.bath,
-        ShopCategory.wood => LucideIcons.tree_pine,
-        ShopCategory.wallpaper => LucideIcons.paint_roller,
-      };
+    ShopCategory.universal => LucideIcons.wrench_off,
+    ShopCategory.plumbing => LucideIcons.bath,
+    ShopCategory.wood => LucideIcons.tree_pine,
+    ShopCategory.wallpaper => LucideIcons.paint_roller,
+  };
 
   /// The drawing this kind of shop is plotted as on the map - a pin in its own right rather than a
   /// glyph inside one, so it carries the trade instead of an abstraction of it.
@@ -74,9 +74,9 @@ enum ShopCategory {
   /// point, baked in above that row, plus the clearance the shadow's blur needs at the top and
   /// sides. Replacing one means rebuilding all of that - see [ShopPinIcon].
   String get pinAsset => switch (this) {
-        ShopCategory.universal => 'assets/map/pins/universal.webp',
-        ShopCategory.plumbing => 'assets/map/pins/plumbing.webp',
-        ShopCategory.wood => 'assets/map/pins/wood.webp',
-        ShopCategory.wallpaper => 'assets/map/pins/wallpaper.webp',
-      };
+    ShopCategory.universal => 'assets/map/pins/universal.webp',
+    ShopCategory.plumbing => 'assets/map/pins/plumbing.webp',
+    ShopCategory.wood => 'assets/map/pins/wood.webp',
+    ShopCategory.wallpaper => 'assets/map/pins/wallpaper.webp',
+  };
 }

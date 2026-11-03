@@ -36,7 +36,10 @@ class _FakeHomeRepository implements HomeRepository {
   ) async => const [];
 
   @override
-  Future<List<CategoryProduct>> searchProducts(String query, {int offset = 0}) async {
+  Future<List<CategoryProduct>> searchProducts(
+    String query, {
+    int offset = 0,
+  }) async {
     searched.add(query);
     return const [];
   }

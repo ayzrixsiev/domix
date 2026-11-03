@@ -29,7 +29,8 @@ class AppShellScreen extends StatefulWidget {
   State<AppShellScreen> createState() => _AppShellScreenState();
 }
 
-class _AppShellScreenState extends State<AppShellScreen> with WidgetsBindingObserver {
+class _AppShellScreenState extends State<AppShellScreen>
+    with WidgetsBindingObserver {
   static const _bottomPadding = 96.0;
 
   late final MapFocusController _mapFocus;
@@ -64,26 +65,45 @@ class _AppShellScreenState extends State<AppShellScreen> with WidgetsBindingObse
     }
   }
 
-  /// Корзина is for customers: the server refuses everybody else, so an owner is not offered it at all.
+  /// Корзина is for customers and admins: the server refuses everybody else, so an owner is not offered it.
   List<_ShellTab> _tabsFor(ProfileViewState profile) => [
     for (final tab in _ShellTab.values)
-      if (tab != _ShellTab.cart || !profile.isVendor) tab,
+      if (tab != _ShellTab.cart || profile.seesCart) tab,
   ];
 
-  ShellNavItem _navItem(_ShellTab tab, AppLocalizations strings) => switch (tab) {
-    _ShellTab.home => ShellNavItem(icon: LucideIcons.house, label: strings.homeTab),
-    _ShellTab.cart => ShellNavItem(icon: LucideIcons.shopping_cart, label: strings.cartTab),
-    _ShellTab.map => ShellNavItem(icon: LucideIcons.map_pin, label: strings.mapTab),
-    _ShellTab.messages => ShellNavItem(icon: LucideIcons.message_square, label: strings.messagesTab),
-    _ShellTab.profile => ShellNavItem(icon: LucideIcons.user, label: strings.profileTab),
-  };
+  ShellNavItem _navItem(_ShellTab tab, AppLocalizations strings) =>
+      switch (tab) {
+        _ShellTab.home => ShellNavItem(
+          icon: LucideIcons.house,
+          label: strings.homeTab,
+        ),
+        _ShellTab.cart => ShellNavItem(
+          icon: LucideIcons.shopping_cart,
+          label: strings.cartTab,
+        ),
+        _ShellTab.map => ShellNavItem(
+          icon: LucideIcons.map_pin,
+          label: strings.mapTab,
+        ),
+        _ShellTab.messages => ShellNavItem(
+          icon: LucideIcons.message_square,
+          label: strings.messagesTab,
+        ),
+        _ShellTab.profile => ShellNavItem(
+          icon: LucideIcons.user,
+          label: strings.profileTab,
+        ),
+      };
 
   // built per-frame rather than as a static field: ProfileScreen needs a BuildContext to push
   List<Widget> _buildPages(BuildContext context, _ShellTab current) => [
     const HomeScreen(showScaffold: false, bottomPadding: _bottomPadding),
     // **always in the stack, even for an owner, who simply never sees it.** a page list that changed
     // with the role would shift the map's position and rebuild it from nothing
-    WaybillsScreen(bottomPadding: _bottomPadding, isActive: current == _ShellTab.cart),
+    WaybillsScreen(
+      isActive: current == _ShellTab.cart,
+      onExit: () => _selectTab(_ShellTab.home),
+    ),
     // IndexedStack builds every child and paints one, so the map cannot tell it is back in view -
     // and it needs to, since its shop list is a snapshot that goes stale. this bool is that signal.
     MapScreen(
@@ -98,12 +118,12 @@ class _AppShellScreenState extends State<AppShellScreen> with WidgetsBindingObse
       showScaffold: false,
       bottomPadding: _bottomPadding,
       onFavoritesTap: () => FavoritesScreen.open(context),
-      onAddStoreTap: () => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const AddStoreScreen()),
-      ),
-      onManageShopTap: () => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const MyShopsScreen()),
-      ),
+      onAddStoreTap: () => Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const AddStoreScreen())),
+      onManageShopTap: () => Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const MyShopsScreen())),
     ),
   ];
 
@@ -113,7 +133,8 @@ class _AppShellScreenState extends State<AppShellScreen> with WidgetsBindingObse
     // **a guest's Профиль is a door, not a tab.** there is no profile to show until there is an
     // account, and registering under the nav bar read as a half-open door - so the tap opens the
     // flow over the shell and leaves the current tab where it was.
-    if (tab == _ShellTab.profile && context.read<AuthController>().profileState.isGuest) {
+    if (tab == _ShellTab.profile &&
+        context.read<AuthController>().profileState.isGuest) {
       _openOnboarding();
       return;
     }
@@ -142,31 +163,35 @@ class _AppShellScreenState extends State<AppShellScreen> with WidgetsBindingObse
     final tabs = _tabsFor(context.watch<AuthController>().profileState);
     // a customer who opens a shop from under the cart tab: it is gone, so they land on the home screen
     final current = tabs.contains(_selected) ? _selected : _ShellTab.home;
-    final isMap = current == _ShellTab.map;
+    // the two tabs that run edge to edge and carry a way out of their own - see the nav bar below
+    final isFullScreen = current == _ShellTab.map || current == _ShellTab.cart;
 
     return PopScope(
-      // **only the map takes the back button off the shell.** everywhere else the shell is the root
-      // route and back should still close the app; on the map it is the one screen with no nav bar,
-      // so swallowing the gesture would leave the user holding a full-screen map with one way out.
-      canPop: !isMap,
+      // **only a full-screen tab takes the back button off the shell.** everywhere else the shell is
+      // the root route and back should still close the app; on these two it is the second way out,
+      // beside the button each of them draws.
+      canPop: !isFullScreen,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && isMap) _selectTab(_ShellTab.home);
+        if (!didPop && isFullScreen) _selectTab(_ShellTab.home);
       },
       child: Scaffold(
         backgroundColor: AppColors.background,
         extendBody: true,
-        // **the map is the one tab with no nav bar.** a map is a canvas the user pans and pinches, and
-        // a bar floating over its lower third is both in the way and in the way of the controls that
-        // belong there. the disc left of the search field is the way out, and so is the system back
-        // gesture - see the PopScope above.
-        bottomNavigationBar: isMap
+        // **the map and Корзина have no nav bar.** a map is a canvas the user pans and pinches, and a
+        // bar floating over its lower third is both in the way and in the way of the controls that
+        // belong there; Корзина ends in a pinned «Новая накладная» a floating bar would sit on. Each
+        // draws its own way back, and so does the system back gesture - see the PopScope above.
+        bottomNavigationBar: isFullScreen
             ? null
             : FloatingBottomNavBar(
                 items: [for (final tab in tabs) _navItem(tab, strings)],
                 currentIndex: tabs.indexOf(current),
                 onItemSelected: (index) => _selectTab(tabs[index]),
               ),
-        body: IndexedStack(index: current.index, children: _buildPages(context, current)),
+        body: IndexedStack(
+          index: current.index,
+          children: _buildPages(context, current),
+        ),
       ),
     );
   }

@@ -31,12 +31,12 @@ const double _systemInset = 34;
 const Size _phone = Size(360, 800);
 
 Widget _providers({required Widget child}) => MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => LanguageProvider()),
-        ChangeNotifierProvider.value(value: AuthController()),
-      ],
-      child: MaterialApp(home: child),
-    );
+  providers: [
+    ChangeNotifierProvider(create: (_) => LanguageProvider()),
+    ChangeNotifierProvider.value(value: AuthController()),
+  ],
+  child: MaterialApp(home: child),
+);
 
 void _sizePhone(WidgetTester tester) {
   tester.view.physicalSize = Size(_phone.width * 3, _phone.height * 3);
@@ -94,7 +94,11 @@ void main() {
     await _acceptPolicy(tester);
     await tester.tap(find.text(_strings.nextButton));
     await tester.pumpAndSettle();
-    expect(find.byType(RoleOptionTile), findsNWidgets(AccountRole.values.length), reason: 'we are on the profile step');
+    expect(
+      find.byType(RoleOptionTile),
+      findsNWidgets(AccountRole.values.length),
+      reason: 'we are on the profile step',
+    );
     record('profile', _strings.nextButton);
 
     await tester.enterText(find.byType(TextField).first, 'Азиз');
@@ -215,7 +219,10 @@ void main() {
     await _pumpFlow(tester);
 
     expect(find.text(AppLanguage.ru.displayName), findsOneWidget);
-    expect(find.byType(RoleOptionTile), findsNWidgets(AppLanguage.values.length));
+    expect(
+      find.byType(RoleOptionTile),
+      findsNWidgets(AppLanguage.values.length),
+    );
 
     await tester.tap(find.text(_strings.nextButton));
     await tester.pumpAndSettle();
@@ -225,7 +232,10 @@ void main() {
 
     // the field's own label and nothing above it
     expect(find.text(_strings.nameInputLabel), findsWidgets);
-    expect(find.byType(RoleOptionTile), findsNWidgets(AccountRole.values.length));
+    expect(
+      find.byType(RoleOptionTile),
+      findsNWidgets(AccountRole.values.length),
+    );
   });
 
   // The full policy is a sheet, not the step. Opening it is the thing that has to keep working,

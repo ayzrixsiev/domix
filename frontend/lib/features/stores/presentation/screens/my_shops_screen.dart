@@ -38,18 +38,18 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
   }
 
   Future<void> _openAddStore() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const AddStoreScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const AddStoreScreen()));
     // createShop already inserts into myShops locally; this only picks up what changed server-side
     // while the form was open
     if (mounted) context.read<StoresController>().loadMyShops();
   }
 
   Future<void> _openShop(Shop shop) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => ShopSettingsScreen(shop: shop)),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => ShopSettingsScreen(shop: shop)));
     // an upload changes this shop's product count and an edit changes its name - both already write
     // through to the controller, so this is only re-syncing with whatever else moved server-side
     if (mounted) context.read<StoresController>().loadMyShops();
@@ -85,7 +85,9 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
 
   Widget _buildBody(StoresController controller, AppLocalizations strings) {
     if (controller.isLoadingMyShops && controller.myShops.isEmpty) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.primaryOrange));
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.primaryOrange),
+      );
     }
 
     if (controller.myShopsFailed && controller.myShops.isEmpty) {
@@ -122,7 +124,9 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
       color: AppColors.primaryOrange,
       onRefresh: () => controller.loadMyShops(),
       child: ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
         itemCount: controller.myShops.length,
         separatorBuilder: (_, _) => const SizedBox(height: 10),
@@ -140,7 +144,11 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
 }
 
 class _ShopCard extends StatelessWidget {
-  const _ShopCard({required this.shop, required this.strings, required this.onTap});
+  const _ShopCard({
+    required this.shop,
+    required this.strings,
+    required this.onTap,
+  });
 
   final Shop shop;
   final AppLocalizations strings;
@@ -228,7 +236,10 @@ class _ShopCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 12),
-                const SizedBox(height: 1, child: ColoredBox(color: AppColors.hairline)),
+                const SizedBox(
+                  height: 1,
+                  child: ColoredBox(color: AppColors.hairline),
+                ),
                 const SizedBox(height: 11),
                 _ShopStatsRow(shop: shop, strings: strings),
               ],
@@ -255,7 +266,11 @@ class _ShopStatsRow extends StatelessWidget {
     return Row(
       children: [
         if (hasProducts) ...[
-          const Icon(CupertinoIcons.cube_box, color: AppColors.textFaint, size: 13),
+          const Icon(
+            CupertinoIcons.cube_box,
+            color: AppColors.textFaint,
+            size: 13,
+          ),
           const SizedBox(width: 6),
           Flexible(
             child: Text(

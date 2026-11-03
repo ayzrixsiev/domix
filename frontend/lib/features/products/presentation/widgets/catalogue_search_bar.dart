@@ -55,7 +55,10 @@ class CatalogueSearchBar extends StatelessWidget {
       context,
       strings: strings,
       sections: sections,
-      counts: {for (final s in sections) s: products.where((p) => p.section == s).length},
+      counts: {
+        for (final s in sections)
+          s: products.where((p) => p.section == s).length,
+      },
       total: products.length,
       selected: selected,
     );
@@ -65,7 +68,9 @@ class CatalogueSearchBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasSections = sectionsOf(products).length > 1;
-    final sectionColour = selected == null ? AppColors.textDark : AppColors.primaryOrange;
+    final sectionColour = selected == null
+        ? AppColors.textDark
+        : AppColors.primaryOrange;
 
     if (!searchable) {
       // nothing to search and nothing to pick between: the row would be an empty line of chrome
@@ -87,7 +92,9 @@ class CatalogueSearchBar extends StatelessWidget {
             controller: controller,
             height: height,
             // «Поиск» alone next to the disc: the long hint ellipsises in what is left of the line
-            hint: hasSections ? strings.searchShortHint : strings.shopProductsSearchHint,
+            hint: hasSections
+                ? strings.searchShortHint
+                : strings.shopProductsSearchHint,
             onChanged: onChanged,
             clearTooltip: strings.searchClear,
           ),
@@ -111,7 +118,11 @@ class CatalogueSearchBar extends StatelessWidget {
 /// The disc with its name on it, for the line where there is no field to sit beside. Same capsule,
 /// same height, same orange while a section is picked - it is the disc, labelled.
 class _SectionsButton extends StatelessWidget {
-  const _SectionsButton({required this.label, required this.colour, required this.onTap});
+  const _SectionsButton({
+    required this.label,
+    required this.colour,
+    required this.onTap,
+  });
 
   final String label;
   final Color colour;
@@ -146,7 +157,11 @@ class _SectionsButton extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6),
-            const Icon(LucideIcons.chevron_down, size: 16, color: AppColors.textMuted),
+            const Icon(
+              LucideIcons.chevron_down,
+              size: 16,
+              color: AppColors.textMuted,
+            ),
           ],
         ),
       ),
@@ -198,7 +213,9 @@ class _SectionSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.85),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+      ),
       decoration: const BoxDecoration(
         color: AppColors.surfaceWhite,
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
@@ -286,13 +303,17 @@ class _Row extends StatelessWidget {
               height: 42,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: isSelected ? AppColors.primarySoft : AppColors.background,
+                color: isSelected
+                    ? AppColors.primarySoft
+                    : AppColors.background,
                 borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: Icon(
                 icon,
                 size: 20,
-                color: isSelected ? AppColors.primaryOrange : AppColors.textMuted,
+                color: isSelected
+                    ? AppColors.primaryOrange
+                    : AppColors.textMuted,
               ),
             ),
             const SizedBox(width: 14),
@@ -324,7 +345,11 @@ class _Row extends StatelessWidget {
               child: isSelected
                   ? const Align(
                       alignment: Alignment.centerRight,
-                      child: Icon(LucideIcons.check, size: 18, color: AppColors.primaryOrange),
+                      child: Icon(
+                        LucideIcons.check,
+                        size: 18,
+                        color: AppColors.primaryOrange,
+                      ),
                     )
                   : null,
             ),

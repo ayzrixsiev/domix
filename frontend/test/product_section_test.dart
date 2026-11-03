@@ -24,34 +24,55 @@ void main() {
     _product(5, ProductSection.tapesAbrasives),
   ];
 
-  test('«Все товары» follows the chip order, keeps catalogue order inside, own rows last', () {
-    expect([for (final p in productsBySection(products)) p.id], [2, 5, 1, 4, 3]);
-  });
+  test(
+    '«Все товары» follows the chip order, keeps catalogue order inside, own rows last',
+    () {
+      expect(
+        [for (final p in productsBySection(products)) p.id],
+        [2, 5, 1, 4, 3],
+      );
+    },
+  );
 
   test('a chip keeps only its own section', () {
     expect(
-      [for (final p in productsBySection(products, only: ProductSection.mixesPaints)) p.id],
+      [
+        for (final p in productsBySection(
+          products,
+          only: ProductSection.mixesPaints,
+        ))
+          p.id,
+      ],
       [1, 4],
     );
   });
 
   test('only the sections in use get a chip, in enum order', () {
-    expect(sectionsOf(products), [ProductSection.tapesAbrasives, ProductSection.mixesPaints]);
+    expect(sectionsOf(products), [
+      ProductSection.tapesAbrasives,
+      ProductSection.mixesPaints,
+    ]);
   });
 
-  test('specs and section come off the wire, an unknown section is ignored', () {
-    Product parse(String section) => Product.fromJson({
-      'id': 1,
-      'shop_id': 1,
-      'name': 'LED-панель встраиваемая',
-      'specs': 'Квадратная · 24 Вт · 6500 К',
-      'section': section,
-      'category': 'electrical',
-      'unit': 'шт',
-      'price': null,
-    });
-    expect(parse('electrical_lighting').specs, 'Квадратная · 24 Вт · 6500 К');
-    expect(parse('electrical_lighting').section, ProductSection.electricalLighting);
-    expect(parse('something_new').section, isNull);
-  });
+  test(
+    'specs and section come off the wire, an unknown section is ignored',
+    () {
+      Product parse(String section) => Product.fromJson({
+        'id': 1,
+        'shop_id': 1,
+        'name': 'LED-панель встраиваемая',
+        'specs': 'Квадратная · 24 Вт · 6500 К',
+        'section': section,
+        'category': 'electrical',
+        'unit': 'шт',
+        'price': null,
+      });
+      expect(parse('electrical_lighting').specs, 'Квадратная · 24 Вт · 6500 К');
+      expect(
+        parse('electrical_lighting').section,
+        ProductSection.electricalLighting,
+      );
+      expect(parse('something_new').section, isNull);
+    },
+  );
 }

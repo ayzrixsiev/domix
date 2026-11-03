@@ -87,7 +87,12 @@ class CircleIconButton extends StatelessWidget {
 /// The way back out of a pushed screen - [CircleIconButton] with the chevron already in it, so no
 /// screen has to name the icon.
 class CircleBackButton extends StatelessWidget {
-  const CircleBackButton({super.key, this.onTap, this.floating = false, this.diameter});
+  const CircleBackButton({
+    super.key,
+    this.onTap,
+    this.floating = false,
+    this.diameter,
+  });
 
   /// Defaults to popping the route. Passed only where "back" means something else.
   final VoidCallback? onTap;

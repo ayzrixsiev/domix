@@ -19,6 +19,7 @@ import 'package:frontend/core/widgets/destructive_confirm_dialog.dart';
 import 'package:frontend/core/widgets/pressable_scale.dart';
 import 'package:frontend/core/widgets/role_option_tile.dart';
 import 'package:frontend/core/widgets/segmented_tabs.dart';
+import 'package:frontend/features/map/presentation/widgets/shop_marker.dart';
 import 'package:frontend/features/onboarding/presentation/screens/onboarding_flow.dart';
 import 'package:frontend/features/profile/presentation/controllers/auth_controller.dart';
 import 'package:frontend/features/stores/data/shop_category.dart';
@@ -85,10 +86,9 @@ class _NewWaybillFlowState extends State<NewWaybillFlow> {
   @override
   void initState() {
     super.initState();
-    // three lines, because an empty sheet with one row reads as a one-item form
-    for (var i = 0; i < 3; i++) {
-      _rows.add(_newRow());
-    }
+    // **one line, because every row on the sheet has to be filled before it sends.** a sheet that
+    // opened with three would refuse the customer who wants one thing until they deleted two.
+    _rows.add(_newRow());
   }
 
   @override
@@ -159,10 +159,21 @@ class _NewWaybillFlowState extends State<NewWaybillFlow> {
   // the rows
   // ------------------------------------------------------------------------------------------
 
+  // a sheet that gained or lost a row is not the sheet the last «Отправить» complained about, so the
+  // refusal goes with it - which is also what makes deleting the row it named the way to clear it
+  void _rowsChanged() {
+    _requestId = null;
+    _error = null;
+    _showRowErrors = false;
+  }
+
   void _addRow({bool focus = false}) {
     if (_rows.length >= _maxRows) return;
     final row = _newRow();
-    setState(() => _rows.add(row));
+    setState(() {
+      _rowsChanged();
+      _rows.add(row);
+    });
     if (focus) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) row.nameFocus.requestFocus();
@@ -170,11 +181,12 @@ class _NewWaybillFlowState extends State<NewWaybillFlow> {
     }
   }
 
+  /// Takes a row off the sheet. **The last one stays**, filled or not: a sheet with no rows has no
+  /// way back to one, and the cross is not offered on it - see [_sheet].
   void _removeRow(_RowDraft row) {
-    _requestId = null;
     setState(() {
+      _rowsChanged();
       _rows.remove(row);
-      if (_rows.isEmpty) _rows.add(_newRow());
     });
     // after the frame, while the fields are still attached to the tree they are leaving
     WidgetsBinding.instance.addPostFrameCallback((_) => row.dispose());
@@ -249,9 +261,11 @@ class _NewWaybillFlowState extends State<NewWaybillFlow> {
 
     if (_rows.every((row) => row.isBlank)) return strings.waybillEmptyError;
 
+    // **every row goes, so every row has to be filled.** nothing is dropped on the way out: staff
+    // price what is on the sheet, and a line the customer typed half of is a line they meant.
     for (var i = 0; i < _rows.length; i++) {
       final row = _rows[i];
-      if (row.isBlank || row.isComplete) continue;
+      if (row.isComplete) continue;
       (row.name.isEmpty ? row.nameFocus : row.quantityFocus).requestFocus();
       return strings.waybillRowIncomplete(i + 1);
     }
@@ -280,7 +294,7 @@ class _NewWaybillFlowState extends State<NewWaybillFlow> {
     }
 
     // signing in can land on an owner's account, and the tab that would have said so has just gone
-    if (auth.profileState.isVendor) {
+    if (!auth.profileState.seesCart) {
       setState(() => _error = strings.waybillSendError('customers_only'));
       return;
     }
@@ -307,8 +321,7 @@ class _NewWaybillFlowState extends State<NewWaybillFlow> {
           category: category,
           items: [
             for (final row in _rows)
-              if (!row.isBlank)
-                WaybillItem(name: row.name, quantity: row.quantity),
+              WaybillItem(name: row.name, quantity: row.quantity),
           ],
         );
       }
@@ -419,8 +432,10 @@ class _NewWaybillFlowState extends State<NewWaybillFlow> {
         ),
         const SizedBox(height: 20),
         for (final category in ShopCategory.values) ...[
-          RoleOptionTile(
-            icon: category.icon,
+          RoleOptionTile.artwork(
+            // the pin this market is plotted as on the map: the customer picks here the same drawing
+            // they will go looking for there
+            artwork: ShopPinIcon(category: category, height: 42),
             title: category.label(strings),
             subtitle: category.description(strings),
             isSelected: null,
@@ -474,7 +489,7 @@ class _NewWaybillFlowState extends State<NewWaybillFlow> {
             showError: _showRowErrors,
             onEdited: _edited,
             onNext: () => _nextFrom(_rows[i]),
-            onRemove: () => _removeRow(_rows[i]),
+            onRemove: _rows.length > 1 ? () => _removeRow(_rows[i]) : null,
           ),
       ],
       footer: _rows.length >= _maxRows
@@ -664,7 +679,9 @@ class _EditableRow extends StatelessWidget {
   final bool showError;
   final VoidCallback onEdited;
   final VoidCallback onNext;
-  final VoidCallback onRemove;
+
+  /// Null on the last row left, which has no cross: the sheet always keeps one.
+  final VoidCallback? onRemove;
 
   static const _fieldStyle = TextStyle(
     color: AppColors.textDark,
@@ -692,7 +709,7 @@ class _EditableRow extends StatelessWidget {
         row.quantityController,
       ]),
       builder: (context, _) {
-        final broken = showError && !row.isBlank && !row.isComplete;
+        final broken = showError && !row.isComplete;
         final nameRefused = broken && row.name.isEmpty;
         final quantityRefused = broken && row.quantity.isEmpty;
 
@@ -739,23 +756,25 @@ class _EditableRow extends StatelessWidget {
               quantityRefused,
             ),
           ),
-          // a blank row has nothing to take off, and it is the one that is ignored on sending anyway
-          trailing: row.isBlank
-              ? const SizedBox.shrink()
-              : Tooltip(
-                  message: strings.waybillRemoveRow,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: onRemove,
-                    child: const Center(
-                      child: Icon(
-                        LucideIcons.x,
-                        size: 15,
-                        color: AppColors.textFaint,
-                      ),
-                    ),
+          // **the empty slot, not no slot**: the column has to run the height of the sheet, or the
+          // rule beside the last row steps in by 30px
+          trailing: switch (onRemove) {
+            final VoidCallback remove => Tooltip(
+              message: strings.waybillRemoveRow,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: remove,
+                child: const Center(
+                  child: Icon(
+                    LucideIcons.x,
+                    size: 15,
+                    color: AppColors.textFaint,
                   ),
                 ),
+              ),
+            ),
+            _ => const SizedBox.shrink(),
+          },
         );
       },
     );

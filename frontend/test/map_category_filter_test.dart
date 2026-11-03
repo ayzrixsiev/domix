@@ -12,7 +12,10 @@ void main() {
   final strings = AppLocalizations(AppLanguage.ru);
 
   // the bar holds no state of its own - the map owns the selection, so the harness does too
-  Future<void> pump(WidgetTester tester, ValueNotifier<ShopCategory?> selected) {
+  Future<void> pump(
+    WidgetTester tester,
+    ValueNotifier<ShopCategory?> selected,
+  ) {
     return tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -29,27 +32,30 @@ void main() {
     );
   }
 
-  testWidgets('the cross appears on the picked category and a second tap clears it', (tester) async {
-    final selected = ValueNotifier<ShopCategory?>(null);
-    await pump(tester, selected);
+  testWidgets(
+    'the cross appears on the picked category and a second tap clears it',
+    (tester) async {
+      final selected = ValueNotifier<ShopCategory?>(null);
+      await pump(tester, selected);
 
-    // nothing picked: four plain segments
-    expect(find.byIcon(LucideIcons.x), findsNothing);
+      // nothing picked: four plain segments
+      expect(find.byIcon(LucideIcons.x), findsNothing);
 
-    await tester.tap(find.text(strings.shopCategoryWood));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text(strings.shopCategoryWood));
+      await tester.pumpAndSettle();
 
-    expect(selected.value, ShopCategory.wood);
-    // one cross, and it is on the segment that was picked
-    expect(find.byIcon(LucideIcons.x), findsOneWidget);
+      expect(selected.value, ShopCategory.wood);
+      // one cross, and it is on the segment that was picked
+      expect(find.byIcon(LucideIcons.x), findsOneWidget);
 
-    await tester.tap(find.text(strings.shopCategoryWood));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text(strings.shopCategoryWood));
+      await tester.pumpAndSettle();
 
-    // back to every shop on the map
-    expect(selected.value, isNull);
-    expect(find.byIcon(LucideIcons.x), findsNothing);
-  });
+      // back to every shop on the map
+      expect(selected.value, isNull);
+      expect(find.byIcon(LucideIcons.x), findsNothing);
+    },
+  );
 
   testWidgets('only one category at a time', (tester) async {
     final selected = ValueNotifier<ShopCategory?>(ShopCategory.wood);

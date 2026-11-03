@@ -100,10 +100,9 @@ func TestOnlyACustomerCanUseTheCart(t *testing.T) {
 	wb, _, ctx, _, q := waybillsUnderTest(t)
 
 	owner := makeUser(t, ctx, q, "Owner", "shop_owner")
-	admin := makeUser(t, ctx, q, "Admin", "admin")
 
 	for name, handler := range map[string]http.HandlerFunc{"route": wb.Route, "photo": wb.CreateFromPhoto, "read": wb.Photo} {
-		for _, caller := range []int64{owner, admin} {
+		for _, caller := range []int64{owner} {
 			rec := requestWaybill(t, ctx, wb, http.MethodGet, "/api/waybills/1/photo", caller, "", nil, handler)
 			if rec.Code != http.StatusForbidden {
 				t.Errorf("%s as %d = %d, want 403", name, caller, rec.Code)
@@ -114,6 +113,15 @@ func TestOnlyACustomerCanUseTheCart(t *testing.T) {
 				t.Errorf("%s as %d answered code %q", name, caller, body["code"])
 			}
 		}
+	}
+}
+
+func TestAnAdminCanUseTheCart(t *testing.T) {
+	wb, _, ctx, _, q := waybillsUnderTest(t)
+	admin := makeUser(t, ctx, q, "Admin", "admin")
+
+	if rec := requestWaybill(t, ctx, wb, http.MethodGet, "/api/waybills", admin, "", nil, wb.Route); rec.Code != http.StatusOK {
+		t.Errorf("admin listing = %d, want 200", rec.Code)
 	}
 }
 

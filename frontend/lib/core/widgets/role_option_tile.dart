@@ -13,22 +13,60 @@ import 'package:frontend/core/constants/app_theme.dart';
 class RoleOptionTile extends StatelessWidget {
   const RoleOptionTile({
     super.key,
-    required this.icon,
+    required IconData this.icon,
     required this.title,
     required this.subtitle,
     required this.isSelected,
     required this.onTap,
-  });
+  }) : artwork = null;
 
-  final IconData icon;
+  /// For options that already carry a drawing of their own - the map's pins, on the category step of a
+  /// new накладная. **It replaces the tinted tile rather than going inside it**: a pin brings its own
+  /// orange, and a rounded square behind it is the same shape drawn twice.
+  const RoleOptionTile.artwork({
+    super.key,
+    required Widget this.artwork,
+    required this.title,
+    required this.subtitle,
+    required this.isSelected,
+    required this.onTap,
+  }) : icon = null;
+
+  final IconData? icon;
+
+  /// Non-null only on [RoleOptionTile.artwork], and then it is the whole tile.
+  final Widget? artwork;
+
   final String title;
   final String subtitle;
+
   /// Null on a list that acts on the tap instead of holding a choice - see the class doc.
   final bool? isSelected;
 
   final VoidCallback onTap;
 
   bool get _selected => isSelected ?? false;
+
+  /// The square the glyph or the drawing is laid out in - one size, so a list mixing the two still
+  /// starts every title on the same column.
+  static const double _tileSize = 42;
+
+  Widget _leading() {
+    if (artwork case final drawing?) return Center(child: drawing);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        // the tile stays one step lighter than whatever it sits on, so the glyph never sinks into the row
+        color: _selected ? AppColors.surfaceWhite : AppColors.primarySoft,
+        borderRadius: BorderRadius.circular(AppRadius.xs + 2),
+      ),
+      child: Icon(
+        icon,
+        size: 20,
+        color: _selected ? AppColors.primaryOrange : AppColors.textMuted,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,21 +89,7 @@ class RoleOptionTile extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Container(
-                width: 42,
-                height: 42,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  // the tile stays one step lighter than whatever it sits on, so the glyph never sinks into the row
-                  color: _selected ? AppColors.surfaceWhite : AppColors.primarySoft,
-                  borderRadius: BorderRadius.circular(AppRadius.xs + 2),
-                ),
-                child: Icon(
-                  icon,
-                  size: 20,
-                  color: _selected ? AppColors.primaryOrange : AppColors.textMuted,
-                ),
-              ),
+              SizedBox(width: _tileSize, height: _tileSize, child: _leading()),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -96,7 +120,11 @@ class RoleOptionTile extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               if (isSelected == null)
-                const Icon(LucideIcons.chevron_right, size: 18, color: AppColors.textFaint)
+                const Icon(
+                  LucideIcons.chevron_right,
+                  size: 18,
+                  color: AppColors.textFaint,
+                )
               else
                 _Radio(isSelected: isSelected!),
             ],

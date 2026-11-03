@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
+import 'package:frontend/core/widgets/circle_icon_button.dart';
 import 'package:frontend/features/app_shell/presentation/screens/app_shell_screen.dart';
 import 'package:frontend/features/app_shell/presentation/widgets/floating_bottom_nav_bar.dart';
 import 'package:frontend/features/favorites/presentation/controllers/favorites_controller.dart';
@@ -94,7 +95,7 @@ void main() {
   testWidgets('a customer and a guest have the cart on the bar', (
     tester,
   ) async {
-    for (final role in ['customer', null]) {
+    for (final role in ['customer', 'admin', null]) {
       await _signInAs(role);
       await _pumpShell(tester);
       expect(_navLabel(_strings.cartTab), findsOneWidget, reason: 'as $role');
@@ -102,9 +103,9 @@ void main() {
   });
 
   testWidgets(
-    'a shop owner and an admin do not, and every other tab still lands where it says',
+    'a shop owner does not, and every other tab still lands where it says',
     (tester) async {
-      for (final role in ['shop_owner', 'admin']) {
+      for (final role in ['shop_owner']) {
         await _signInAs(role);
         await _pumpShell(tester);
 
@@ -121,6 +122,33 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     },
   );
+
+  // **the same trap the map guards against** (map_fullscreen_test): Корзина hides the nav bar too, so
+  // a failure to bring it back strands the user on a tab with no way out, and nothing throws.
+  testWidgets('the cart hides the nav bar, and its back disc brings it back', (
+    tester,
+  ) async {
+    await _signInAs('customer');
+    await _pumpShell(tester);
+    expect(find.byType(FloatingBottomNavBar), findsOneWidget);
+
+    await tester.tap(_navLabel(_strings.cartTab));
+    await tester.pumpAndSettle();
+    expect(
+      find.byType(FloatingBottomNavBar),
+      findsNothing,
+      reason: 'the tab runs edge to edge, with its own button over the list',
+    );
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(WaybillsScreen),
+        matching: find.byType(CircleBackButton),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(FloatingBottomNavBar), findsOneWidget);
+  });
 
   testWidgets('a customer who becomes an owner is moved off the cart', (
     tester,

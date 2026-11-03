@@ -195,12 +195,60 @@ void main() {
     await _pumpFlow(tester);
     await _chooseFirstCategory(tester, strings);
 
-    await tester.enterText(find.byType(TextField).at(2), 'Цемент М400');
+    await tester.tap(find.text(strings.waybillAddRow));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField).at(0), 'Цемент М400');
+    await tester.enterText(find.byType(TextField).at(1), '10 мешков');
+    await tester.enterText(find.byType(TextField).at(2), 'Песок');
     await tester.pump();
     await tester.tap(find.text(strings.waybillSend));
     await tester.pump();
 
     expect(find.text(strings.waybillRowIncomplete(2)), findsOneWidget);
+  });
+
+  // **the rule the whole sheet rests on**: every row the customer can see is a row staff will price,
+  // so none of them may go out half-written and none is quietly dropped on the way.
+  testWidgets('a row left blank holds the whole sheet back', (tester) async {
+    await _pumpFlow(tester);
+    await _chooseFirstCategory(tester, strings);
+
+    await tester.enterText(find.byType(TextField).at(0), 'Цемент М400');
+    await tester.enterText(find.byType(TextField).at(1), '10 мешков');
+    await tester.tap(find.text(strings.waybillAddRow));
+    await tester.pump();
+
+    await tester.tap(find.text(strings.waybillSend));
+    await tester.pump();
+    expect(find.text(strings.waybillRowIncomplete(2)), findsOneWidget);
+
+    // taking the empty row off is the other way to answer, and it clears the refusal with it
+    await tester.tap(find.byTooltip(strings.waybillRemoveRow).last);
+    await tester.pumpAndSettle();
+    expect(find.text(strings.waybillRowIncomplete(2)), findsNothing);
+  });
+
+  testWidgets('a blank row is removable, and the last row is not', (
+    tester,
+  ) async {
+    await _pumpFlow(tester);
+    await _chooseFirstCategory(tester, strings);
+
+    // one row and no cross: a sheet with nothing on it has no way back to a row
+    expect(find.byTooltip(strings.waybillRemoveRow), findsNothing);
+
+    await tester.tap(find.text(strings.waybillAddRow));
+    await tester.pump();
+    expect(
+      find.byTooltip(strings.waybillRemoveRow),
+      findsNWidgets(2),
+      reason: 'a row nobody has typed into is the one most worth taking off',
+    );
+
+    await tester.tap(find.byTooltip(strings.waybillRemoveRow).first);
+    await tester.pumpAndSettle();
+    expect(find.byTooltip(strings.waybillRemoveRow), findsNothing);
+    expect(find.byType(TextField), findsNWidgets(2));
   });
 
   testWidgets(
@@ -209,21 +257,22 @@ void main() {
       await _pumpFlow(tester);
       await _chooseFirstCategory(tester, strings);
 
-      await tester.enterText(find.byType(TextField).first, 'Первая');
+      await tester.tap(find.text(strings.waybillAddRow));
+      await tester.pump();
+      await tester.enterText(find.byType(TextField).at(0), 'Первая');
       await tester.enterText(find.byType(TextField).at(2), 'Вторая');
       await tester.pump();
 
       await tester.tap(find.text(strings.waybillAddRow));
       await tester.pump();
-      expect(find.text('4'), findsOneWidget);
+      expect(find.text('3'), findsOneWidget);
       expect(find.text('Первая'), findsOneWidget);
 
-      // the cross on the first row: only a row with something in it offers one
       await tester.tap(find.byTooltip(strings.waybillRemoveRow).first);
       await tester.pumpAndSettle();
       expect(find.text('Первая'), findsNothing);
       expect(find.text('Вторая'), findsOneWidget);
-      expect(find.text('4'), findsNothing);
+      expect(find.text('3'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -271,50 +320,49 @@ void main() {
     expect(find.text(strings.waybillAbandonTitle), findsOneWidget);
   });
 
-  testWidgets(
-    'a retry keeps its id, an edit draws a new one, and blank rows are not sent',
-    (tester) async {
-      await _signInAs('customer');
-      final repository = _RecordingRepository();
-      await _pumpFlow(tester, repository: repository);
-      await _chooseFirstCategory(tester, strings);
+  testWidgets('a retry keeps its id and an edit draws a new one', (
+    tester,
+  ) async {
+    await _signInAs('customer');
+    final repository = _RecordingRepository();
+    await _pumpFlow(tester, repository: repository);
+    await _chooseFirstCategory(tester, strings);
 
-      await tester.enterText(find.byType(TextField).at(0), 'Цемент');
-      await tester.enterText(find.byType(TextField).at(1), '10 мешков');
-      await tester.pump();
+    await tester.enterText(find.byType(TextField).at(0), 'Цемент');
+    await tester.enterText(find.byType(TextField).at(1), '10 мешков');
+    await tester.pump();
 
-      // the connection fails twice, and pressing again must not become a second list on the server
-      await tester.tap(find.text(strings.waybillSend));
-      await tester.pumpAndSettle();
-      expect(find.text(strings.waybillSendError('network')), findsOneWidget);
-      await tester.tap(find.text(strings.waybillSend));
-      await tester.pumpAndSettle();
-      expect(repository.requestIds, hasLength(2));
-      expect(repository.requestIds[1], repository.requestIds[0]);
-      expect(
-        repository.requestIds[0],
-        matches(RegExp(r'^[0-9a-f]{32}$')),
-        reason: 'the shape the server accepts',
-      );
+    // the connection fails twice, and pressing again must not become a second list on the server
+    await tester.tap(find.text(strings.waybillSend));
+    await tester.pumpAndSettle();
+    expect(find.text(strings.waybillSendError('network')), findsOneWidget);
+    await tester.tap(find.text(strings.waybillSend));
+    await tester.pumpAndSettle();
+    expect(repository.requestIds, hasLength(2));
+    expect(repository.requestIds[1], repository.requestIds[0]);
+    expect(
+      repository.requestIds[0],
+      matches(RegExp(r'^[0-9a-f]{32}$')),
+      reason: 'the shape the server accepts',
+    );
 
-      // **the old id would answer with the list as it was before this edit**
-      await tester.enterText(find.byType(TextField).at(1), '12 мешков');
-      await tester.pump();
-      repository.refusal = null;
-      await tester.tap(find.text(strings.waybillSend));
-      await tester.pumpAndSettle();
+    // **the old id would answer with the list as it was before this edit**
+    await tester.enterText(find.byType(TextField).at(1), '12 мешков');
+    await tester.pump();
+    repository.refusal = null;
+    await tester.tap(find.text(strings.waybillSend));
+    await tester.pumpAndSettle();
 
-      expect(repository.requestIds.last, isNot(repository.requestIds.first));
-      expect(repository.lastItems.single.quantity, '12 мешков');
+    expect(repository.requestIds.last, isNot(repository.requestIds.first));
+    expect(repository.lastItems.single.quantity, '12 мешков');
 
-      expect(find.text(strings.waybillNumber(1042)), findsOneWidget);
-      expect(
-        find.text(strings.waybillSentBody('+998 90 123 45 67')),
-        findsOneWidget,
-      );
-      expect(tester.takeException(), isNull);
-    },
-  );
+    expect(find.text(strings.waybillNumber(1042)), findsOneWidget);
+    expect(
+      find.text(strings.waybillSentBody('+998 90 123 45 67')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('an owner is told, and nothing is sent', (tester) async {
     await _signInAs('shop_owner');
@@ -333,6 +381,22 @@ void main() {
       findsOneWidget,
     );
     expect(repository.requestIds, isEmpty);
+  });
+
+  testWidgets('an admin sends like a customer', (tester) async {
+    await _signInAs('admin');
+    final repository = _RecordingRepository();
+    await _pumpFlow(tester, repository: repository);
+    await _chooseFirstCategory(tester, strings);
+
+    await tester.enterText(find.byType(TextField).at(0), 'Цемент');
+    await tester.enterText(find.byType(TextField).at(1), '1');
+    await tester.pump();
+    await tester.tap(find.text(strings.waybillSend));
+    await tester.pumpAndSettle();
+
+    expect(find.text(strings.waybillSendError('customers_only')), findsNothing);
+    expect(repository.requestIds, hasLength(1));
   });
 
   testWidgets(

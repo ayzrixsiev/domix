@@ -48,19 +48,19 @@ enum ProductCategory {
   // an exhaustive switch, so a thirteenth category is a compile error here rather than a blank label
   // discovered in the running app
   String label(AppLocalizations strings) => switch (this) {
-        ProductCategory.mixes => strings.categoryMixes,
-        ProductCategory.blocks => strings.categoryBlocks,
-        ProductCategory.lumber => strings.categoryLumber,
-        ProductCategory.metal => strings.categoryMetal,
-        ProductCategory.fasteners => strings.categoryFasteners,
-        ProductCategory.roofing => strings.categoryRoofing,
-        ProductCategory.insulation => strings.categoryInsulation,
-        ProductCategory.electrical => strings.categoryElectrical,
-        ProductCategory.plumbing => strings.categoryPlumbing,
-        ProductCategory.paints => strings.categoryPaints,
-        ProductCategory.finishing => strings.categoryFinishing,
-        ProductCategory.tools => strings.categoryTools,
-      };
+    ProductCategory.mixes => strings.categoryMixes,
+    ProductCategory.blocks => strings.categoryBlocks,
+    ProductCategory.lumber => strings.categoryLumber,
+    ProductCategory.metal => strings.categoryMetal,
+    ProductCategory.fasteners => strings.categoryFasteners,
+    ProductCategory.roofing => strings.categoryRoofing,
+    ProductCategory.insulation => strings.categoryInsulation,
+    ProductCategory.electrical => strings.categoryElectrical,
+    ProductCategory.plumbing => strings.categoryPlumbing,
+    ProductCategory.paints => strings.categoryPaints,
+    ProductCategory.finishing => strings.categoryFinishing,
+    ProductCategory.tools => strings.categoryTools,
+  };
 
   /// The product shot the home screen's category tile is built on, or null for a category that has
   /// no artwork yet.
@@ -72,34 +72,37 @@ enum ProductCategory {
   /// Still an exhaustive switch: a new category has to say here whether it has a photo rather than
   /// silently inheriting a default.
   String? get photo => switch (this) {
-        ProductCategory.mixes => 'assets/decorations/categories/building_materials.webp',
-        ProductCategory.blocks => null,
-        ProductCategory.lumber => 'assets/decorations/categories/lumber.webp',
-        ProductCategory.metal => null,
-        ProductCategory.fasteners => 'assets/decorations/categories/fasteners.webp',
-        ProductCategory.roofing => 'assets/decorations/categories/roofing.webp',
-        ProductCategory.insulation => null,
-        ProductCategory.electrical => 'assets/decorations/categories/electrical.webp',
-        ProductCategory.plumbing => 'assets/decorations/categories/plumbing.webp',
-        ProductCategory.paints => 'assets/decorations/categories/paints_and_finishing.webp',
-        ProductCategory.finishing => null,
-        ProductCategory.tools => 'assets/decorations/categories/tools.webp',
-      };
+    ProductCategory.mixes =>
+      'assets/decorations/categories/building_materials.webp',
+    ProductCategory.blocks => null,
+    ProductCategory.lumber => 'assets/decorations/categories/lumber.webp',
+    ProductCategory.metal => null,
+    ProductCategory.fasteners => 'assets/decorations/categories/fasteners.webp',
+    ProductCategory.roofing => 'assets/decorations/categories/roofing.webp',
+    ProductCategory.insulation => null,
+    ProductCategory.electrical =>
+      'assets/decorations/categories/electrical.webp',
+    ProductCategory.plumbing => 'assets/decorations/categories/plumbing.webp',
+    ProductCategory.paints =>
+      'assets/decorations/categories/paints_and_finishing.webp',
+    ProductCategory.finishing => null,
+    ProductCategory.tools => 'assets/decorations/categories/tools.webp',
+  };
 
   /// Lucide only, one family and one stroke weight. The glyph belongs on the enum now that two
   /// screens draw the same categories and would otherwise pick different icons for them.
   IconData get icon => switch (this) {
-        ProductCategory.mixes => LucideIcons.container,
-        ProductCategory.blocks => LucideIcons.brick_wall,
-        ProductCategory.lumber => LucideIcons.tree_pine,
-        ProductCategory.metal => LucideIcons.columns_3,
-        ProductCategory.fasteners => LucideIcons.bolt,
-        ProductCategory.roofing => LucideIcons.house,
-        ProductCategory.insulation => LucideIcons.layers,
-        ProductCategory.electrical => LucideIcons.zap,
-        ProductCategory.plumbing => LucideIcons.droplets,
-        ProductCategory.paints => LucideIcons.paint_roller,
-        ProductCategory.finishing => LucideIcons.grid_2x2,
-        ProductCategory.tools => LucideIcons.wrench,
-      };
+    ProductCategory.mixes => LucideIcons.container,
+    ProductCategory.blocks => LucideIcons.brick_wall,
+    ProductCategory.lumber => LucideIcons.tree_pine,
+    ProductCategory.metal => LucideIcons.columns_3,
+    ProductCategory.fasteners => LucideIcons.bolt,
+    ProductCategory.roofing => LucideIcons.house,
+    ProductCategory.insulation => LucideIcons.layers,
+    ProductCategory.electrical => LucideIcons.zap,
+    ProductCategory.plumbing => LucideIcons.droplets,
+    ProductCategory.paints => LucideIcons.paint_roller,
+    ProductCategory.finishing => LucideIcons.grid_2x2,
+    ProductCategory.tools => LucideIcons.wrench,
+  };
 }

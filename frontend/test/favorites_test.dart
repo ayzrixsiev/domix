@@ -63,8 +63,11 @@ Future<FavoritesController> _pumpTile(
               product: _product,
               strings: _strings,
               showBuyerActions: true,
-              isFavorite: context.watch<FavoritesController>().contains(_product.id),
-              onFavoriteToggle: () => context.read<FavoritesController>().toggle(_entry),
+              isFavorite: context.watch<FavoritesController>().contains(
+                _product.id,
+              ),
+              onFavoriteToggle: () =>
+                  context.read<FavoritesController>().toggle(_entry),
             ),
           ),
         ),
@@ -77,13 +80,18 @@ Future<FavoritesController> _pumpTile(
 
 Color _heartColour(WidgetTester tester) {
   final heart = tester.widget<Icon>(
-    find.descendant(of: find.bySemanticsLabel(_strings.addToFavouritesLabel), matching: find.byType(Icon)),
+    find.descendant(
+      of: find.bySemanticsLabel(_strings.addToFavouritesLabel),
+      matching: find.byType(Icon),
+    ),
   );
   return heart.color!;
 }
 
 void main() {
-  testWidgets('tapping the heart fills it and saves the product', (tester) async {
+  testWidgets('tapping the heart fills it and saves the product', (
+    tester,
+  ) async {
     final repository = _FakeRepository();
     final controller = FavoritesController(repository: repository);
 
@@ -93,7 +101,11 @@ void main() {
     await tester.tap(find.bySemanticsLabel(_strings.addToFavouritesLabel));
     await tester.pumpAndSettle();
 
-    expect(_heartColour(tester), isNot(unsaved), reason: 'the heart did not change');
+    expect(
+      _heartColour(tester),
+      isNot(unsaved),
+      reason: 'the heart did not change',
+    );
     expect(controller.contains(_product.id), isTrue);
     expect(repository.calls, [(id: 7, saved: true)]);
   });
@@ -101,7 +113,9 @@ void main() {
   // **the heart moves before the request lands**, so a refusal has to be undone or the app would be
   // showing a favourite the server never took
   testWidgets('a refused save puts the heart back', (tester) async {
-    final controller = FavoritesController(repository: _FakeRepository(fails: true));
+    final controller = FavoritesController(
+      repository: _FakeRepository(fails: true),
+    );
 
     await _pumpTile(tester, controller: controller);
     final unsaved = _heartColour(tester);

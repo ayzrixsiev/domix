@@ -11,7 +11,7 @@ import 'package:frontend/features/home/data/category_product.dart';
 /// so the app holds the answer instead and asks once per session.
 class FavoritesController extends ChangeNotifier {
   FavoritesController({FavoritesRepository? repository})
-      : _repository = repository ?? FavoritesRepository();
+    : _repository = repository ?? FavoritesRepository();
 
   final FavoritesRepository _repository;
 
@@ -71,7 +71,10 @@ class FavoritesController extends ChangeNotifier {
       _items = [item, ..._items.where((existing) => existing.product.id != id)];
     } else {
       ids.remove(id);
-      _items = [for (final existing in _items) if (existing.product.id != id) existing];
+      _items = [
+        for (final existing in _items)
+          if (existing.product.id != id) existing,
+      ];
     }
     _ids = ids;
   }

@@ -67,7 +67,12 @@ class PriceTierBadge extends StatelessWidget {
 
     // the glyph runs a step larger than the dot it replaced at every size: lucide is a stroke font,
     // so it covers far less area than a filled circle of the same nominal width
-    final (double glyph, double gap, double fontSize, FontWeight weight) = switch (size) {
+    final (
+      double glyph,
+      double gap,
+      double fontSize,
+      FontWeight weight,
+    ) = switch (size) {
       PriceTierBadgeSize.pill => (12, 5, 11.5, FontWeight.w600),
       PriceTierBadgeSize.compact => (11, 5, 11, FontWeight.w600),
       PriceTierBadgeSize.headline => (17, 7, 15.5, FontWeight.w700),
@@ -116,7 +121,11 @@ class PriceTierBadge extends StatelessWidget {
 /// The average tier shows no number, just the dot and `≈`: its band is 98-102, and an unsigned "1%"
 /// invites the very question the tier exists to answer.
 class PriceTierPinLabel extends StatelessWidget {
-  const PriceTierPinLabel({super.key, required this.tier, required this.differencePercent});
+  const PriceTierPinLabel({
+    super.key,
+    required this.tier,
+    required this.differencePercent,
+  });
 
   final PriceTier tier;
   final int? differencePercent;

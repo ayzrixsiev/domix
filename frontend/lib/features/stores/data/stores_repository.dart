@@ -9,12 +9,14 @@ import 'shop_model.dart';
 // talks to the go backend's /api/shops endpoint: listing shops (for the map) and creating a new one
 class StoresRepository {
   static final Uri _shopsUri = Uri.parse('${ApiConfig.serverRoot}/api/shops');
-  static final Uri _myShopsUri = Uri.parse('${ApiConfig.serverRoot}/api/shops/mine');
+  static final Uri _myShopsUri = Uri.parse(
+    '${ApiConfig.serverRoot}/api/shops/mine',
+  );
 
   final AuthService _authService;
 
   StoresRepository({AuthService? authService})
-      : _authService = authService ?? AuthService();
+    : _authService = authService ?? AuthService();
 
   // fetch every shop - public data, no login required, used to plot pins on the map
   Future<List<Shop>> fetchStores() async {
@@ -52,7 +54,10 @@ class StoresRepository {
       throw Exception('You must be logged in to view your shops');
     }
 
-    final response = await apiGet(_myShopsUri, headers: {'Authorization': 'Bearer $token'});
+    final response = await apiGet(
+      _myShopsUri,
+      headers: {'Authorization': 'Bearer $token'},
+    );
 
     if (response.statusCode != 200) {
       // a 401 has already signed the user out and SessionExpiryGuard is taking them off this
@@ -106,7 +111,10 @@ class StoresRepository {
 
       String message = 'Failed to create shop';
       try {
-        message = (jsonDecode(response.body) as Map<String, dynamic>)['error'] as String? ?? message;
+        message =
+            (jsonDecode(response.body) as Map<String, dynamic>)['error']
+                as String? ??
+            message;
       } catch (_) {
         // body wasn't the json shape we expected; keep the generic message
       }
@@ -128,7 +136,10 @@ class StoresRepository {
   }) async {
     final token = await _authService.getToken();
     if (token == null || token.isEmpty) {
-      throw const ShopMutationException(code: 'unauthorized', message: 'Not logged in');
+      throw const ShopMutationException(
+        code: 'unauthorized',
+        message: 'Not logged in',
+      );
     }
 
     final response = await appHttpClient
@@ -160,7 +171,10 @@ class StoresRepository {
   Future<void> deleteShop(int shopId) async {
     final token = await _authService.getToken();
     if (token == null || token.isEmpty) {
-      throw const ShopMutationException(code: 'unauthorized', message: 'Not logged in');
+      throw const ShopMutationException(
+        code: 'unauthorized',
+        message: 'Not logged in',
+      );
     }
 
     final response = await appHttpClient
@@ -173,7 +187,8 @@ class StoresRepository {
   }
 
   // built per call rather than kept as a static field, since the id varies
-  static Uri _shopUri(int shopId) => Uri.parse('${ApiConfig.serverRoot}/api/shops/$shopId');
+  static Uri _shopUri(int shopId) =>
+      Uri.parse('${ApiConfig.serverRoot}/api/shops/$shopId');
 
   // a failed edit or delete should never surface as a raw decode crash, so anything unparseable
   // collapses into the same generic code the ui already knows how to render
@@ -186,7 +201,9 @@ class StoresRepository {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       return ShopMutationException(
         code: body['code'] as String? ?? 'server_error',
-        message: body['error'] as String? ?? 'Request failed (${response.statusCode})',
+        message:
+            body['error'] as String? ??
+            'Request failed (${response.statusCode})',
       );
     } catch (_) {
       return ShopMutationException(

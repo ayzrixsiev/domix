@@ -12,7 +12,7 @@ class ProductsRepository {
   final AuthService _authService;
 
   ProductsRepository({AuthService? authService})
-      : _authService = authService ?? AuthService();
+    : _authService = authService ?? AuthService();
 
   // built per call rather than kept as static fields, since every one of these urls carries an id
   static Uri _shopProductsUri(int shopId) =>
@@ -44,7 +44,10 @@ class ProductsRepository {
 
   /// add a product of the owner's own, on top of whatever the category template already gave them.
   /// the backend caps this at 30 and answers `product_limit_reached` past it.
-  Future<Product> createProduct({required int shopId, required Product draft}) async {
+  Future<Product> createProduct({
+    required int shopId,
+    required Product draft,
+  }) async {
     final token = await _requireToken();
 
     final response = await appHttpClient
@@ -94,7 +97,10 @@ class ProductsRepository {
     final token = await _requireToken();
 
     final response = await appHttpClient
-        .delete(_productUri(productId), headers: {'Authorization': 'Bearer $token'})
+        .delete(
+          _productUri(productId),
+          headers: {'Authorization': 'Bearer $token'},
+        )
         .timeout(const Duration(seconds: 10));
 
     if (response.statusCode != 200) {
@@ -108,7 +114,10 @@ class ProductsRepository {
   /// and because a photo is saved the moment it is picked while the rest of the form waits for
   /// «Сохранить». The response is the whole product, so the caller cannot end up with a photo attached
   /// to a stale price.
-  Future<Product> uploadProductImage({required int productId, required String filePath}) async {
+  Future<Product> uploadProductImage({
+    required int productId,
+    required String filePath,
+  }) async {
     final token = await _requireToken();
 
     final request = http.MultipartRequest('POST', _productImageUri(productId))
@@ -134,7 +143,10 @@ class ProductsRepository {
     final token = await _requireToken();
 
     final response = await appHttpClient
-        .delete(_productImageUri(productId), headers: {'Authorization': 'Bearer $token'})
+        .delete(
+          _productImageUri(productId),
+          headers: {'Authorization': 'Bearer $token'},
+        )
         .timeout(const Duration(seconds: 10));
 
     if (response.statusCode != 200) {
@@ -146,7 +158,10 @@ class ProductsRepository {
   Future<String> _requireToken() async {
     final token = await _authService.getToken();
     if (token == null || token.isEmpty) {
-      throw const ProductMutationException(code: 'unauthorized', message: 'Not logged in');
+      throw const ProductMutationException(
+        code: 'unauthorized',
+        message: 'Not logged in',
+      );
     }
     return token;
   }
@@ -162,7 +177,9 @@ class ProductsRepository {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       return ProductMutationException(
         code: body['code'] as String? ?? 'server_error',
-        message: body['error'] as String? ?? 'Request failed (${response.statusCode})',
+        message:
+            body['error'] as String? ??
+            'Request failed (${response.statusCode})',
         limit: body['limit'] as int?,
       );
     } catch (_) {

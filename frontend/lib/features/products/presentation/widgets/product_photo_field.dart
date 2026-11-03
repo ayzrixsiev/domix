@@ -53,7 +53,8 @@ class ProductPhotoField extends StatelessWidget {
   /// with the keyboard up. `contain` inside it: filling a band crops the head off a hammer.
   static const double _height = 190;
 
-  bool get _hasPhoto => localFile != null || (imageUrl != null && imageUrl!.isNotEmpty);
+  bool get _hasPhoto =>
+      localFile != null || (imageUrl != null && imageUrl!.isNotEmpty);
 
   @override
   Widget build(BuildContext context) {
@@ -69,10 +70,14 @@ class ProductPhotoField extends StatelessWidget {
             height: _height,
             width: double.infinity,
             decoration: BoxDecoration(
-              color: _hasPhoto ? AppColors.surfaceWhite : AppColors.surfaceMuted,
+              color: _hasPhoto
+                  ? AppColors.surfaceWhite
+                  : AppColors.surfaceMuted,
               borderRadius: BorderRadius.circular(AppRadius.md),
               border: Border.all(
-                color: _hasPhoto || isLocked ? AppColors.hairline : AppColors.primaryTint,
+                color: _hasPhoto || isLocked
+                    ? AppColors.hairline
+                    : AppColors.primaryTint,
                 // the empty state is an invitation, so its edge is heavier - the same weight the add-product tile
                 // uses. a locked row is not an invitation, so it keeps the plain hairline even when empty.
                 width: _hasPhoto || isLocked ? 1 : 1.4,
@@ -185,8 +190,15 @@ class _EmptyPrompt extends StatelessWidget {
         Container(
           width: 46,
           height: 46,
-          decoration: const BoxDecoration(color: AppColors.primarySoft, shape: BoxShape.circle),
-          child: const Icon(CupertinoIcons.camera, color: AppColors.primaryOrange, size: 21),
+          decoration: const BoxDecoration(
+            color: AppColors.primarySoft,
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            CupertinoIcons.camera,
+            color: AppColors.primaryOrange,
+            size: 21,
+          ),
         ),
         const SizedBox(height: 12),
         Text(
@@ -229,7 +241,10 @@ class _BusyScrim extends StatelessWidget {
         child: SizedBox(
           width: 26,
           height: 26,
-          child: CircularProgressIndicator(strokeWidth: 2.4, color: AppColors.primaryOrange),
+          child: CircularProgressIndicator(
+            strokeWidth: 2.4,
+            color: AppColors.primaryOrange,
+          ),
         ),
       ),
     );
@@ -308,7 +323,11 @@ class _PhotoAction extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 15, color: enabled ? colour : AppColors.textFaint),
+              Icon(
+                icon,
+                size: 15,
+                color: enabled ? colour : AppColors.textFaint,
+              ),
               const SizedBox(width: 7),
               Flexible(
                 child: Text(
@@ -393,7 +412,11 @@ class PhotoSourceSheet extends StatelessWidget {
 enum PhotoSource { camera, gallery }
 
 class _SourceRow extends StatelessWidget {
-  const _SourceRow({required this.label, required this.icon, required this.onTap});
+  const _SourceRow({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
 
   final String label;
   final IconData icon;
@@ -415,7 +438,10 @@ class _SourceRow extends StatelessWidget {
             Container(
               width: 36,
               height: 36,
-              decoration: const BoxDecoration(color: AppColors.primarySoft, shape: BoxShape.circle),
+              decoration: const BoxDecoration(
+                color: AppColors.primarySoft,
+                shape: BoxShape.circle,
+              ),
               child: Icon(icon, color: AppColors.primaryOrange, size: 17),
             ),
             const SizedBox(width: 12),
@@ -429,7 +455,11 @@ class _SourceRow extends StatelessWidget {
                 ),
               ),
             ),
-            const Icon(CupertinoIcons.chevron_right, color: AppColors.textFaint, size: 15),
+            const Icon(
+              CupertinoIcons.chevron_right,
+              color: AppColors.textFaint,
+              size: 15,
+            ),
           ],
         ),
       ),

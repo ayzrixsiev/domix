@@ -15,25 +15,28 @@ import 'package:frontend/features/stores/presentation/controllers/stores_control
 /// here, which is also where they belong.
 void main() {
   group('a deleted account takes its pins with it', () {
-    test('the owner\'s shops leave the public map, and nobody else\'s do', () async {
-      final repo = _FakeStoresRepository(
-        stores: [_shop(1, 'Мой магазин'), _shop(2, 'Чужой магазин')],
-        myShops: [_shop(1, 'Мой магазин')],
-      );
-      final controller = StoresController(repository: repo);
+    test(
+      'the owner\'s shops leave the public map, and nobody else\'s do',
+      () async {
+        final repo = _FakeStoresRepository(
+          stores: [_shop(1, 'Мой магазин'), _shop(2, 'Чужой магазин')],
+          myShops: [_shop(1, 'Мой магазин')],
+        );
+        final controller = StoresController(repository: repo);
 
-      await controller.loadStores();
-      await controller.loadMyShops();
-      expect(controller.stores.map((s) => s.id), [1, 2]);
+        await controller.loadStores();
+        await controller.loadMyShops();
+        expect(controller.stores.map((s) => s.id), [1, 2]);
 
-      controller.handleSessionEnded(true);
+        controller.handleSessionEnded(true);
 
-      // shop 1 is gone from the map at the same instant the account is - the server's cascade
-      // already destroyed it, and waiting for a re-fetch would leave a pin pointing at nothing.
-      // shop 2 belongs to somebody else and is untouched.
-      expect(controller.stores.map((s) => s.id), [2]);
-      expect(controller.myShops, isEmpty);
-    });
+        // shop 1 is gone from the map at the same instant the account is - the server's cascade
+        // already destroyed it, and waiting for a re-fetch would leave a pin pointing at nothing.
+        // shop 2 belongs to somebody else and is untouched.
+        expect(controller.stores.map((s) => s.id), [2]);
+        expect(controller.myShops, isEmpty);
+      },
+    );
 
     test('a plain logout leaves every pin standing', () async {
       final repo = _FakeStoresRepository(
@@ -54,50 +57,62 @@ void main() {
       expect(controller.myShops, isEmpty);
     });
 
-    test('the snapshot is marked stale either way, so the next map visit re-syncs', () async {
-      final repo = _FakeStoresRepository(stores: [_shop(1, 'Магазин')]);
-      final controller = StoresController(repository: repo);
+    test(
+      'the snapshot is marked stale either way, so the next map visit re-syncs',
+      () async {
+        final repo = _FakeStoresRepository(stores: [_shop(1, 'Магазин')]);
+        final controller = StoresController(repository: repo);
 
-      await controller.loadStores();
-      expect(controller.isStoresStale, isFalse);
+        await controller.loadStores();
+        expect(controller.isStoresStale, isFalse);
 
-      controller.handleSessionEnded(true);
+        controller.handleSessionEnded(true);
 
-      // this is what covers the case the subtraction above cannot: an owner who deletes their
-      // account without ever opening "Мои магазины" leaves _myShops empty, so there are no ids to
-      // subtract - and the re-fetch is the only thing that gets those pins off the map.
-      expect(controller.isStoresStale, isTrue);
-      await controller.refreshStoresIfStale();
-      expect(repo.fetchStoresCalls, 2);
-    });
+        // this is what covers the case the subtraction above cannot: an owner who deletes their
+        // account without ever opening "Мои магазины" leaves _myShops empty, so there are no ids to
+        // subtract - and the re-fetch is the only thing that gets those pins off the map.
+        expect(controller.isStoresStale, isTrue);
+        await controller.refreshStoresIfStale();
+        expect(repo.fetchStoresCalls, 2);
+      },
+    );
   });
 
   group('a failed load does not become permanent', () {
-    test('a stale-check after a failure retries, and a fresh list does not', () async {
-      final repo = _FakeStoresRepository(stores: [_shop(1, 'Магазин')], failNextFetch: true);
-      final controller = StoresController(repository: repo);
+    test(
+      'a stale-check after a failure retries, and a fresh list does not',
+      () async {
+        final repo = _FakeStoresRepository(
+          stores: [_shop(1, 'Магазин')],
+          failNextFetch: true,
+        );
+        final controller = StoresController(repository: repo);
 
-      await controller.loadStores();
-      expect(controller.loadFailed, isTrue);
-      expect(controller.stores, isEmpty);
+        await controller.loadStores();
+        expect(controller.loadFailed, isTrue);
+        expect(controller.stores, isEmpty);
 
-      // the bug this exists for: MapScreen.initState runs once per app session and IndexedStack
-      // keeps the State alive, so a failed load used to leave «Не удалось загрузить магазины» on
-      // screen with nothing - not even restarting the app - able to clear it.
-      expect(controller.isStoresStale, isTrue);
-      await controller.refreshStoresIfStale();
-      expect(repo.fetchStoresCalls, 2);
-      expect(controller.loadFailed, isFalse);
-      expect(controller.stores, hasLength(1));
+        // the bug this exists for: MapScreen.initState runs once per app session and IndexedStack
+        // keeps the State alive, so a failed load used to leave «Не удалось загрузить магазины» on
+        // screen with nothing - not even restarting the app - able to clear it.
+        expect(controller.isStoresStale, isTrue);
+        await controller.refreshStoresIfStale();
+        expect(repo.fetchStoresCalls, 2);
+        expect(controller.loadFailed, isFalse);
+        expect(controller.stores, hasLength(1));
 
-      // and the other half: a list fetched a moment ago is left alone, so flicking between tabs is
-      // not a request per switch
-      await controller.refreshStoresIfStale();
-      expect(repo.fetchStoresCalls, 2);
-    });
+        // and the other half: a list fetched a moment ago is left alone, so flicking between tabs is
+        // not a request per switch
+        await controller.refreshStoresIfStale();
+        expect(repo.fetchStoresCalls, 2);
+      },
+    );
 
     test('a second load while one is in flight is dropped', () async {
-      final repo = _FakeStoresRepository(stores: [_shop(1, 'Магазин')], holdFetch: true);
+      final repo = _FakeStoresRepository(
+        stores: [_shop(1, 'Магазин')],
+        holdFetch: true,
+      );
       final controller = StoresController(repository: repo);
 
       final first = controller.loadStores();
@@ -113,14 +128,14 @@ void main() {
 }
 
 Shop _shop(int id, String name) => Shop(
-      id: id,
-      name: name,
-      contactPhone: '+998901112233',
-      address: 'Ташкент',
-      category: ShopCategory.universal,
-      latitude: 41.3,
-      longitude: 69.2,
-    );
+  id: id,
+  name: name,
+  contactPhone: '+998901112233',
+  address: 'Ташкент',
+  category: ShopCategory.universal,
+  latitude: 41.3,
+  longitude: 69.2,
+);
 
 /// Stands in for the HTTP layer. Extends the real repository rather than implementing an interface,
 /// because [StoresController] takes the concrete type - a one-test abstraction would be a second
@@ -163,6 +178,7 @@ class _FakeStoresRepository implements StoresRepository {
   Future<List<Shop>> fetchMyShops() async => List.of(myShops);
 
   @override
-  dynamic noSuchMethod(Invocation invocation) =>
-      throw UnimplementedError('${invocation.memberName} is not used by these tests');
+  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError(
+    '${invocation.memberName} is not used by these tests',
+  );
 }

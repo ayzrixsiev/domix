@@ -29,18 +29,20 @@ HomeShopPreview _shop(
   int? percent,
   int? basket = 5000000,
 }) {
-  return HomeShopPreview.fromShop(Shop(
-    id: name.hashCode,
-    name: name,
-    contactPhone: '+998901112233',
-    address: 'Ташкент',
-    category: ShopCategory.universal,
-    latitude: 41.3,
-    longitude: 69.2,
-    priceTier: tier,
-    priceDifferencePercent: percent,
-    basketPrice: basket,
-  ));
+  return HomeShopPreview.fromShop(
+    Shop(
+      id: name.hashCode,
+      name: name,
+      contactPhone: '+998901112233',
+      address: 'Ташкент',
+      category: ShopCategory.universal,
+      latitude: 41.3,
+      longitude: 69.2,
+      priceTier: tier,
+      priceDifferencePercent: percent,
+      basketPrice: basket,
+    ),
+  );
 }
 
 Future<void> _pump(WidgetTester tester, List<CategoryOffers> groups) async {
@@ -62,7 +64,9 @@ void main() {
   // ranking. It used to render nothing at all - the whole section vanished - and then, briefly,
   // fifteen open places with no strip above them. The strip is the section's axis rather than a
   // filter over what happens to exist, so it is drawn here too.
-  testWidgets('an empty backend still draws every segment and every place', (tester) async {
+  testWidgets('an empty backend still draws every segment and every place', (
+    tester,
+  ) async {
     await _pump(tester, const []);
 
     expect(find.byType(EmptyShopRow), findsNWidgets(BestOffersList.slotCount));
@@ -76,9 +80,14 @@ void main() {
   // one populated category used to hide the control entirely, on the reasoning that a single
   // permanently-selected pill reads as broken. With a constant four segments that case no longer
   // exists - there is always something to switch to.
-  testWidgets('one ranked category still draws all four segments', (tester) async {
+  testWidgets('one ranked category still draws all four segments', (
+    tester,
+  ) async {
     await _pump(tester, [
-      CategoryOffers(category: ShopCategory.universal, shops: [_shop('Единственный')]),
+      CategoryOffers(
+        category: ShopCategory.universal,
+        shops: [_shop('Единственный')],
+      ),
     ]);
 
     for (final category in ShopCategory.values) {
@@ -86,12 +95,20 @@ void main() {
     }
     // Универсальный is first in enum order, so the strip opens on the one that has a ranking
     expect(find.text('Единственный'), findsOneWidget);
-    expect(find.byType(EmptyShopRow), findsNWidgets(BestOffersList.slotCount - 1));
+    expect(
+      find.byType(EmptyShopRow),
+      findsNWidgets(BestOffersList.slotCount - 1),
+    );
   });
 
-  testWidgets('two categories draw tabs, and tapping one switches the list', (tester) async {
+  testWidgets('two categories draw tabs, and tapping one switches the list', (
+    tester,
+  ) async {
     await _pump(tester, [
-      CategoryOffers(category: ShopCategory.universal, shops: [_shop('Стройка')]),
+      CategoryOffers(
+        category: ShopCategory.universal,
+        shops: [_shop('Стройка')],
+      ),
       CategoryOffers(category: ShopCategory.plumbing, shops: [_shop('Трубы')]),
     ]);
 
@@ -106,8 +123,11 @@ void main() {
     expect(find.text('Стройка'), findsNothing);
   });
 
-  testWidgets('four or fewer segments fill the width; more of them scroll', (tester) async {
-    CategoryOffers group(ShopCategory c) => CategoryOffers(category: c, shops: [_shop(c.code)]);
+  testWidgets('four or fewer segments fill the width; more of them scroll', (
+    tester,
+  ) async {
+    CategoryOffers group(ShopCategory c) =>
+        CategoryOffers(category: c, shops: [_shop(c.code)]);
 
     // four fit: no scroll view inside the control
     await _pump(tester, [
@@ -125,9 +145,14 @@ void main() {
   // two refreshes, and a customer looking for обои was told nothing at all. An empty segment says
   // "no shop of this kind has finished pricing", which is the same thing the open places under it
   // say and is worth reading.
-  testWidgets('a category the backend sent nothing for is still a segment', (tester) async {
+  testWidgets('a category the backend sent nothing for is still a segment', (
+    tester,
+  ) async {
     await _pump(tester, [
-      CategoryOffers(category: ShopCategory.universal, shops: [_shop('Стройка')]),
+      CategoryOffers(
+        category: ShopCategory.universal,
+        shops: [_shop('Стройка')],
+      ),
       CategoryOffers(category: ShopCategory.wood, shops: [_shop('Доски')]),
     ]);
 
@@ -142,7 +167,9 @@ void main() {
     expect(find.byType(HomeShopRow), findsNothing);
   });
 
-  testWidgets('the badge is words and a colour, never the index', (tester) async {
+  testWidgets('the badge is words and a colour, never the index', (
+    tester,
+  ) async {
     await _pump(tester, [
       CategoryOffers(
         category: ShopCategory.universal,
@@ -162,7 +189,11 @@ void main() {
 
     // the numbers 96 / 106 / 99 exist nowhere on screen
     for (final index in ['96', '106', '99', '104']) {
-      expect(find.text(index), findsNothing, reason: 'the raw index leaked into the UI');
+      expect(
+        find.text(index),
+        findsNothing,
+        reason: 'the raw index leaked into the UI',
+      );
     }
   });
 
@@ -170,7 +201,9 @@ void main() {
   // migration 000013 a basket price and a tier are produced together or not at all. what this pins
   // is that the row widget draws its two facts independently rather than assuming both - so a
   // backend that grows a third state doesn't take the section down with it.
-  testWidgets('a row renders a price without a badge rather than breaking', (tester) async {
+  testWidgets('a row renders a price without a badge rather than breaking', (
+    tester,
+  ) async {
     await _pump(tester, [
       CategoryOffers(
         category: ShopCategory.wallpaper,
@@ -186,7 +219,11 @@ void main() {
     expect(find.text('2 500 000 сум'), findsOneWidget);
     // no *badge* on the one real row. the open places below it carry the badge's label, which is a
     // field name and not a comparison - hence the exact three sentences rather than "рынка".
-    for (final badge in ['на 0% дешевле рынка', 'Средняя цена по рынку', 'на 0% дороже рынка']) {
+    for (final badge in [
+      'на 0% дешевле рынка',
+      'Средняя цена по рынку',
+      'на 0% дороже рынка',
+    ]) {
       expect(find.text(badge), findsNothing);
     }
   });
@@ -195,15 +232,22 @@ void main() {
 
   // the ranking is the section's whole meaning, so the real shops occupy the top of the list in the
   // order the server sent them - the open places are the tail, never interleaved
-  testWidgets('the real shops come first, in the order they arrived', (tester) async {
+  testWidgets('the real shops come first, in the order they arrived', (
+    tester,
+  ) async {
     await _pump(tester, [
       CategoryOffers(
         category: ShopCategory.universal,
-        shops: [_shop('Дешёвый', basket: 4000000), _shop('Дорогой', basket: 6000000)],
+        shops: [
+          _shop('Дешёвый', basket: 4000000),
+          _shop('Дорогой', basket: 6000000),
+        ],
       ),
     ]);
 
-    final rows = tester.widgetList<HomeShopRow>(find.byType(HomeShopRow)).toList();
+    final rows = tester
+        .widgetList<HomeShopRow>(find.byType(HomeShopRow))
+        .toList();
     expect(rows.map((r) => r.shop.name).toList(), ['Дешёвый', 'Дорогой']);
 
     // and every open place sits below the last real one
@@ -214,7 +258,9 @@ void main() {
 
   // never truncates. the count is a design constant and the server's LIMIT is what it mirrors, so
   // the two disagreeing must cost an extra row rather than hide a shop that earned its place.
-  testWidgets('more shops than places grows the list instead of dropping any', (tester) async {
+  testWidgets('more shops than places grows the list instead of dropping any', (
+    tester,
+  ) async {
     final many = [
       for (var i = 0; i < BestOffersList.slotCount + 3; i++)
         _shop('Магазин $i', basket: 4000000 + i),

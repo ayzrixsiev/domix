@@ -5,7 +5,6 @@ import '../screens/profile_screen.dart';
 
 // decides when to start the telegram handshake, processes what comes back, and tells the ui
 class AuthController extends ChangeNotifier {
-
   // one controller for the app's life; the factory hands back the same instance every time
   static final AuthController _instance = AuthController._internal();
 
@@ -25,7 +24,7 @@ class AuthController extends ChangeNotifier {
   late final _AppLifecycleWatcher _lifecycle;
 
   final AuthService _authService = AuthService();
-  
+
   bool _isLoading = false;
 
   // deliberately *not* _isLoading: that flag draws the "open telegram and share your number" overlay,
@@ -47,6 +46,7 @@ class AuthController extends ChangeNotifier {
 
   bool get isLoading => _isLoading;
   bool get isDeletingAccount => _isDeletingAccount;
+
   /// The raw reason a login attempt failed - **for the log and for nothing else**: it is an English
   /// exception string assembled for whoever debugs it, and it ended up drawn in the waiting overlay
   /// once. Non-null is still the *signal* that the attempt failed.
@@ -133,15 +133,21 @@ class AuthController extends ChangeNotifier {
   /// authorizes the two identically, and the Telegram handler never demotes an admin - so an admin who
   /// signed up as «Владелец магазина» stays one, and comparing against the single literal `shop_owner`
   /// drew them the customer profile with no way in to shops they already own.
-  static bool canManageShops(String role) => role == 'shop_owner' || role == 'admin';
+  static bool canManageShops(String role) =>
+      role == 'shop_owner' || role == 'admin';
 
-  void _applyAccount({required String role, required String name, required String phone}) {
+  void _applyAccount({
+    required String role,
+    required String name,
+    required String phone,
+  }) {
     final wasGuest = _profileState.isGuest;
     _profileState = canManageShops(role)
         ? ProfileViewState.vendor(
             initials: _getInitials(name),
             fullName: name,
             phoneNumber: phone,
+            isAdmin: role == 'admin',
           )
         : ProfileViewState.client(
             initials: _getInitials(name),
@@ -198,7 +204,10 @@ class AuthController extends ChangeNotifier {
   }
 
   /// Step two: the code was right, so the account is on the new number and the profile says so.
-  Future<void> verifyPhoneChange({required String phone, required String code}) async {
+  Future<void> verifyPhoneChange({
+    required String phone,
+    required String code,
+  }) async {
     final me = await _authService.verifyPhoneChange(phone: phone, code: code);
     _applyAccount(role: me.role, name: me.name, phone: me.phone);
   }

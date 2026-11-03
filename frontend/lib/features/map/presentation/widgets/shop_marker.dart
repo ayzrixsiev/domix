@@ -212,7 +212,11 @@ class ShopDot extends StatelessWidget {
         // disappears into a park or a motorway
         border: Border.all(color: Colors.white, width: 2),
         boxShadow: const [
-          BoxShadow(color: Color(0x33101828), blurRadius: 4, offset: Offset(0, 1)),
+          BoxShadow(
+            color: Color(0x33101828),
+            blurRadius: 4,
+            offset: Offset(0, 1),
+          ),
         ],
       ),
     );
@@ -252,7 +256,11 @@ class UserLocationDot extends StatelessWidget {
                 blurRadius: 0,
                 spreadRadius: 5,
               ),
-              const BoxShadow(color: Color(0x33101828), blurRadius: 6, offset: Offset(0, 2)),
+              const BoxShadow(
+                color: Color(0x33101828),
+                blurRadius: 6,
+                offset: Offset(0, 2),
+              ),
             ],
           ),
         ),
@@ -262,7 +270,10 @@ class UserLocationDot extends StatelessWidget {
 }
 
 class _PriceComparisonLabel extends StatelessWidget {
-  const _PriceComparisonLabel({required this.tier, required this.differencePercent});
+  const _PriceComparisonLabel({
+    required this.tier,
+    required this.differencePercent,
+  });
 
   final PriceTier tier;
   final int? differencePercent;
@@ -278,13 +289,20 @@ class _PriceComparisonLabel extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.xs),
         border: Border.all(color: AppColors.hairline),
         boxShadow: const [
-          BoxShadow(color: Color(0x1F101828), blurRadius: 8, offset: Offset(0, 2)),
+          BoxShadow(
+            color: Color(0x1F101828),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
         ],
       ),
       // white, not tinted with the tier's soft colour: a tinted pill inside a white card is two rounded
       // boxes deep for four characters, and those tints are near-invisible over map tiles anyway. the
       // saturated dot inside carries the colour instead.
-      child: PriceTierPinLabel(tier: tier, differencePercent: differencePercent),
+      child: PriceTierPinLabel(
+        tier: tier,
+        differencePercent: differencePercent,
+      ),
     );
   }
 }
@@ -309,7 +327,8 @@ class _PinPainter extends CustomPainter {
     final center = Offset(size.width / 2, radius + inset);
     final tip = Offset(size.width / 2, size.height - inset);
 
-    final circle = Path()..addOval(Rect.fromCircle(center: center, radius: radius));
+    final circle = Path()
+      ..addOval(Rect.fromCircle(center: center, radius: radius));
 
     final d = tip.dy - center.dy;
     Path shape = circle;

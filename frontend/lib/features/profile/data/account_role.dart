@@ -16,7 +16,8 @@ enum AccountRole {
   /// a string rather than the enum index, so reordering cannot silently change what an account is
   final String code;
 
-  static AccountRole of({required bool isVendor}) => isVendor ? shopOwner : client;
+  static AccountRole of({required bool isVendor}) =>
+      isVendor ? shopOwner : client;
 
   /// **A role goes one way only.** A customer may become a shop owner; going back would strip them
   /// of the authorization to edit shops they still own - see PATCH /api/me, which refuses it on the
@@ -26,24 +27,24 @@ enum AccountRole {
   /// The pill in the profile header. The short form for a shop owner - «Продавец» rather than
   /// «Владелец магазина», which is a sentence rather than a badge.
   String badgeLabel(AppLocalizations strings) => switch (this) {
-        AccountRole.client => strings.roleCustomer,
-        AccountRole.shopOwner => strings.vendorBadge,
-      };
+    AccountRole.client => strings.roleCustomer,
+    AccountRole.shopOwner => strings.vendorBadge,
+  };
 
   // exhaustive switches rather than fields on the constructor: the analyzer fails the build on a
   // missing case, so a third role is a compile error instead of an untranslated label
   String label(AppLocalizations strings) => switch (this) {
-        AccountRole.client => strings.roleCustomer,
-        AccountRole.shopOwner => strings.roleVendor,
-      };
+    AccountRole.client => strings.roleCustomer,
+    AccountRole.shopOwner => strings.roleVendor,
+  };
 
   String subtitle(AppLocalizations strings) => switch (this) {
-        AccountRole.client => strings.roleCustomerSub,
-        AccountRole.shopOwner => strings.roleVendorSub,
-      };
+    AccountRole.client => strings.roleCustomerSub,
+    AccountRole.shopOwner => strings.roleVendorSub,
+  };
 
   IconData get icon => switch (this) {
-        AccountRole.client => LucideIcons.house,
-        AccountRole.shopOwner => LucideIcons.store,
-      };
+    AccountRole.client => LucideIcons.house,
+    AccountRole.shopOwner => LucideIcons.store,
+  };
 }

@@ -21,7 +21,8 @@ List<PolicySection> privacyPolicySections(AppLanguage language) =>
     language == AppLanguage.ru ? _russian : _uzbek;
 
 /// What a reader takes away if they read nothing else. It promises nothing the sections do not.
-String privacyPolicyLead(AppLanguage language) => language == AppLanguage.ru ? _leadRu : _leadUz;
+String privacyPolicyLead(AppLanguage language) =>
+    language == AppLanguage.ru ? _leadRu : _leadUz;
 
 const String _leadRu =
     "Здесь мы объясняем, какие данные получает Domix, зачем они нужны и как их удалить. Если коротко:"

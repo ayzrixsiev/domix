@@ -60,8 +60,12 @@ Finder get _navBar => find.byType(FloatingBottomNavBar);
 
 /// The disc left of the search field. Found through the panel's `leading` rather than by glyph: the
 /// icon is a detail, "there is a way out of the map" is the rule.
-Finder get _exitButton =>
-    find.descendant(of: find.byType(MapSearchPanel), matching: find.byType(MapBarButton)).first;
+Finder get _exitButton => find
+    .descendant(
+      of: find.byType(MapSearchPanel),
+      matching: find.byType(MapBarButton),
+    )
+    .first;
 
 Future<void> _openMap(WidgetTester tester) async {
   await tester.tap(find.text('Карта'));
@@ -70,12 +74,18 @@ Future<void> _openMap(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('the map hides the nav bar, and its own button brings it back', (tester) async {
+  testWidgets('the map hides the nav bar, and its own button brings it back', (
+    tester,
+  ) async {
     await _pumpShell(tester);
     expect(_navBar, findsOneWidget, reason: 'the home screen keeps the bar');
 
     await _openMap(tester);
-    expect(_navBar, findsNothing, reason: 'the map runs edge to edge, with no bar over its lower third');
+    expect(
+      _navBar,
+      findsNothing,
+      reason: 'the map runs edge to edge, with no bar over its lower third',
+    );
 
     await tester.tap(_exitButton);
     await tester.pump();

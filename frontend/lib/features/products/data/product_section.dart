@@ -103,7 +103,10 @@ List<ProductSection> sectionsOf(List<Product> products) {
 
 /// [products] grouped by section, catalogue order kept inside each, rows without one last - so
 /// «Все товары» reads in the same order as the chips. [only] narrows to a single section.
-List<Product> productsBySection(List<Product> products, {ProductSection? only}) {
+List<Product> productsBySection(
+  List<Product> products, {
+  ProductSection? only,
+}) {
   if (only != null) {
     return [
       for (final product in products)

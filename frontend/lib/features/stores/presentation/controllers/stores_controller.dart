@@ -33,7 +33,8 @@ class StoresController extends ChangeNotifier {
   bool _isMutatingShop = false;
   ShopMutationException? _shopMutationError;
 
-  StoresController({StoresRepository? repository}) : _repo = repository ?? StoresRepository();
+  StoresController({StoresRepository? repository})
+    : _repo = repository ?? StoresRepository();
 
   List<Shop> get stores => _stores;
   bool get isLoading => _isLoading;
@@ -68,7 +69,6 @@ class StoresController extends ChangeNotifier {
 
   bool get isMutatingShop => _isMutatingShop;
   ShopMutationException? get shopMutationError => _shopMutationError;
-
 
   Future<void> loadStores() async {
     // a second call while one is in flight is a no-op: without it, switching to the map tab during a
@@ -111,7 +111,10 @@ class StoresController extends ChangeNotifier {
   void handleSessionEnded(bool accountDeleted) {
     if (accountDeleted && _myShops.isNotEmpty) {
       final deletedIds = {for (final shop in _myShops) shop.id};
-      _stores = [for (final s in _stores) if (!deletedIds.contains(s.id)) s];
+      _stores = [
+        for (final s in _stores)
+          if (!deletedIds.contains(s.id)) s,
+      ];
     }
 
     _myShops = [];
@@ -171,7 +174,10 @@ class StoresController extends ChangeNotifier {
       // append to both lists rather than re-fetching: the map needs the new pin immediately, and whoever
       // creates a shop is by definition its owner
       _stores = [..._stores, shop];
-      _myShops = [shop, ..._myShops]; // newest first, matching ListShopsByOwner's ordering
+      _myShops = [
+        shop,
+        ..._myShops,
+      ]; // newest first, matching ListShopsByOwner's ordering
       _isSaving = false;
       notifyListeners();
       return true;
@@ -231,7 +237,10 @@ class StoresController extends ChangeNotifier {
     } on ShopMutationException catch (e) {
       _shopMutationError = e;
     } catch (e) {
-      _shopMutationError = ShopMutationException(code: 'server_error', message: e.toString());
+      _shopMutationError = ShopMutationException(
+        code: 'server_error',
+        message: e.toString(),
+      );
     }
 
     _isMutatingShop = false;
@@ -249,15 +258,24 @@ class StoresController extends ChangeNotifier {
       await _repo.deleteShop(shopId);
       // drop it from both lists rather than re-fetching: the pin must leave the map at the same moment
       // the row leaves the management list, and one round trip cannot guarantee that
-      _myShops = [for (final s in _myShops) if (s.id != shopId) s];
-      _stores = [for (final s in _stores) if (s.id != shopId) s];
+      _myShops = [
+        for (final s in _myShops)
+          if (s.id != shopId) s,
+      ];
+      _stores = [
+        for (final s in _stores)
+          if (s.id != shopId) s,
+      ];
       _isMutatingShop = false;
       notifyListeners();
       return true;
     } on ShopMutationException catch (e) {
       _shopMutationError = e;
     } catch (e) {
-      _shopMutationError = ShopMutationException(code: 'server_error', message: e.toString());
+      _shopMutationError = ShopMutationException(
+        code: 'server_error',
+        message: e.toString(),
+      );
     }
 
     _isMutatingShop = false;
@@ -281,7 +299,9 @@ class StoresController extends ChangeNotifier {
 
     // clamped at zero: a count cannot go negative, and letting it would turn one lost sync into a
     // permanently wrong badge
-    final updated = shop.copyWith(productCount: (shop.productCount + delta).clamp(0, 1 << 30));
+    final updated = shop.copyWith(
+      productCount: (shop.productCount + delta).clamp(0, 1 << 30),
+    );
     _myShops = [for (final s in _myShops) s.id == shopId ? updated : s];
     notifyListeners();
   }

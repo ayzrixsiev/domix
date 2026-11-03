@@ -52,7 +52,9 @@ class DestructiveConfirmDialog extends StatelessWidget {
     return Dialog(
       backgroundColor: Colors.white,
       insetPadding: const EdgeInsets.symmetric(horizontal: 32),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(22, 24, 22, 18),
         child: Column(
@@ -62,7 +64,10 @@ class DestructiveConfirmDialog extends StatelessWidget {
               width: 52,
               height: 52,
               alignment: Alignment.center,
-              decoration: const BoxDecoration(color: AppColors.dangerSoft, shape: BoxShape.circle),
+              decoration: const BoxDecoration(
+                color: AppColors.dangerSoft,
+                shape: BoxShape.circle,
+              ),
               child: Icon(icon, color: AppColors.danger, size: 22),
             ),
             const SizedBox(height: 16),
@@ -145,7 +150,11 @@ class _DialogButton extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: foreground, fontSize: 14.5, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: foreground,
+                fontSize: 14.5,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ),

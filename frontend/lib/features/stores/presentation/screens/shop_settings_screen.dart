@@ -58,7 +58,8 @@ class ShopSettingsScreen extends StatelessWidget {
                   icon: CupertinoIcons.cube_box_fill,
                   title: strings.sectionProductsTitle,
                   subtitle: strings.sectionProductsSubtitle,
-                  onTap: () => _open(context, ShopProductsScreen(shop: current)),
+                  onTap: () =>
+                      _open(context, ShopProductsScreen(shop: current)),
                 ),
                 _SectionRow(
                   icon: CupertinoIcons.slider_horizontal_3,
@@ -75,7 +76,9 @@ class ShopSettingsScreen extends StatelessWidget {
   }
 
   Future<void> _open(BuildContext context, Widget screen) {
-    return Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+    return Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => screen));
   }
 
   // EditStoreScreen pops `true` when it deleted the shop. this screen is *about* that shop, so it
@@ -107,7 +110,9 @@ class _ProductCountBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.xs),
       ),
       child: Text(
-        hasProducts ? strings.productsCountLabel(shop.productCount) : strings.noProductsYet,
+        hasProducts
+            ? strings.productsCountLabel(shop.productCount)
+            : strings.noProductsYet,
         style: TextStyle(
           color: hasProducts ? AppColors.textGrey : AppColors.primaryOrange,
           fontSize: 11.5,
@@ -142,7 +147,10 @@ class _SectionGroup extends StatelessWidget {
             if (i > 0)
               const Padding(
                 padding: EdgeInsets.only(left: _SectionRow.textInset),
-                child: SizedBox(height: 1, child: ColoredBox(color: AppColors.hairline)),
+                child: SizedBox(
+                  height: 1,
+                  child: ColoredBox(color: AppColors.hairline),
+                ),
               ),
             children[i],
           ],
@@ -217,7 +225,11 @@ class _SectionRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              const Icon(CupertinoIcons.chevron_forward, color: AppColors.textFaint, size: 15),
+              const Icon(
+                CupertinoIcons.chevron_forward,
+                color: AppColors.textFaint,
+                size: 15,
+              ),
             ],
           ),
         ),

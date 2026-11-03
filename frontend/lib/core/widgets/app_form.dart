@@ -14,13 +14,16 @@ import 'package:frontend/core/constants/app_theme.dart';
 /// Filled, hairline-bordered, orange when focused. Used for every free-text field in a form.
 InputDecoration appFieldDecoration({required String hint, Widget? prefix}) {
   OutlineInputBorder border(Color color) => OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        borderSide: BorderSide(color: color),
-      );
+    borderRadius: BorderRadius.circular(AppRadius.sm),
+    borderSide: BorderSide(color: color),
+  );
 
   return InputDecoration(
     hintText: hint,
-    hintStyle: const TextStyle(color: AppColors.textFaint, fontWeight: FontWeight.w500),
+    hintStyle: const TextStyle(
+      color: AppColors.textFaint,
+      fontWeight: FontWeight.w500,
+    ),
     filled: true,
     fillColor: AppColors.surfaceMuted,
     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -40,7 +43,11 @@ const Widget appPhonePrefix = Padding(
   padding: EdgeInsets.fromLTRB(14, 0, 8, 0),
   child: Text(
     '+998',
-    style: TextStyle(color: AppColors.textDark, fontSize: 16, fontWeight: FontWeight.w700),
+    style: TextStyle(
+      color: AppColors.textDark,
+      fontSize: 16,
+      fontWeight: FontWeight.w700,
+    ),
   ),
 );
 
@@ -104,7 +111,11 @@ class AppErrorLine extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(LucideIcons.circle_alert, size: 16, color: AppColors.danger),
+            const Icon(
+              LucideIcons.circle_alert,
+              size: 16,
+              color: AppColors.danger,
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -164,7 +175,10 @@ class AppWideButton extends StatelessWidget {
                   ? const SizedBox(
                       height: 20,
                       width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.4,
+                        color: Colors.white,
+                      ),
                     )
                   : Text(
                       label,

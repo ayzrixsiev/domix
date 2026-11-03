@@ -40,7 +40,8 @@ class _AddStoreScreenState extends State<AddStoreScreen> {
   // listen: false, and that is not a micro-optimisation - `Provider.of` with listen:true asserts
   // unless it is read during a build, so every read from a tap handler threw and the handler died
   // before doing anything. that is why the category tile "did nothing" while the location tile worked.
-  AppLocalizations get _strings => Provider.of<LanguageProvider>(context, listen: false).strings;
+  AppLocalizations get _strings =>
+      Provider.of<LanguageProvider>(context, listen: false).strings;
 
   @override
   void initState() {
@@ -89,11 +90,18 @@ class _AddStoreScreenState extends State<AddStoreScreen> {
     setState(() {
       _nameError = name.isEmpty ? _strings.shopNameRequiredError : null;
       _phoneError = phone.isEmpty ? _strings.contactPhoneRequiredError : null;
-      _categoryError = _pickedCategory == null ? _strings.categoryRequiredError : null;
-      _locationError = _pickedLocation == null ? _strings.locationRequiredError : null;
+      _categoryError = _pickedCategory == null
+          ? _strings.categoryRequiredError
+          : null;
+      _locationError = _pickedLocation == null
+          ? _strings.locationRequiredError
+          : null;
     });
 
-    if (name.isEmpty || phone.isEmpty || _pickedCategory == null || _pickedLocation == null) {
+    if (name.isEmpty ||
+        phone.isEmpty ||
+        _pickedCategory == null ||
+        _pickedLocation == null) {
       return;
     }
 
@@ -117,7 +125,9 @@ class _AddStoreScreenState extends State<AddStoreScreen> {
           content: Text(_strings.storeCreatedMessage),
           backgroundColor: AppColors.textDark,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+          ),
         ),
       );
     }

@@ -605,15 +605,6 @@ class AppLocalizations {
           : "Yuborib bo'lmadi. Ulanishni tekshiring va qayta urinib ko'ring.",
   };
 
-  // ── Заявки: the job marketplace. three roles, three screens, one nav item ──
-
-  /// The tab's subtitle while no role has been chosen - the header asks the question the screen
-  /// below answers, so the chooser needs no banner of its own.
-
-  // one subtitle per role: three different tabs behind one icon is otherwise something to infer
-
-  /// Why a shop owner is being shown other people's renovation jobs.
-
   // map screen (shop pins)
   String get noShopsYet =>
       isRu ? 'Пока нет магазинов' : "Hozircha do'konlar yo'q";

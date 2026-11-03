@@ -86,13 +86,15 @@ Future<StoresController> _pumpMap(WidgetTester tester) async {
   return stores;
 }
 
-DomixMap _map(WidgetTester tester) => tester.widget<DomixMap>(find.byType(DomixMap));
+DomixMap _map(WidgetTester tester) =>
+    tester.widget<DomixMap>(find.byType(DomixMap));
 
 List<MapPin> _pins(WidgetTester tester) => _map(tester).pins;
 
 /// MapKit reports every camera frame through this callback, programmatic moves included. Calling it
 /// directly is the same thing a pinch would do, minus the gesture arena.
-void _cameraAt(WidgetTester tester, double zoom) => _map(tester).onZoomChanged!(zoom);
+void _cameraAt(WidgetTester tester, double zoom) =>
+    _map(tester).onZoomChanged!(zoom);
 
 /// Taps a category chip and lets its animation settle.
 Future<void> _tapChip(WidgetTester tester, String label) async {
@@ -101,19 +103,28 @@ Future<void> _tapChip(WidgetTester tester, String label) async {
 }
 
 void main() {
-  testWidgets('the map opens zoomed out, every shop drawn as a dot', (tester) async {
+  testWidgets('the map opens zoomed out, every shop drawn as a dot', (
+    tester,
+  ) async {
     final stores = await _pumpMap(tester);
 
-    expect(stores.stores, hasLength(3), reason: 'the fake repository should have loaded');
+    expect(
+      stores.stores,
+      hasLength(3),
+      reason: 'the fake repository should have loaded',
+    );
     expect(
       _pins(tester).map((pin) => pin.visualKey),
       everyElement(ShopDot.visualKey),
-      reason: 'at the opening zoom a shop is a dot - withholding the pins entirely is the bug this '
+      reason:
+          'at the opening zoom a shop is a dot - withholding the pins entirely is the bug this '
           'replaced, since where the shops are is what a city-wide map is for',
     );
   });
 
-  testWidgets('zooming in turns the dots into full pins, and out again', (tester) async {
+  testWidgets('zooming in turns the dots into full pins, and out again', (
+    tester,
+  ) async {
     await _pumpMap(tester);
 
     _cameraAt(tester, 14);
@@ -123,17 +134,23 @@ void main() {
     expect(
       _pins(tester).any((pin) => pin.visualKey == ShopDot.visualKey),
       isFalse,
-      reason: 'zoomed in, every shop carries its own category and price in its key',
+      reason:
+          'zoomed in, every shop carries its own category and price in its key',
     );
 
     _cameraAt(tester, 10);
     await tester.pump();
 
     expect(_pins(tester), hasLength(3));
-    expect(_pins(tester).map((pin) => pin.visualKey), everyElement(ShopDot.visualKey));
+    expect(
+      _pins(tester).map((pin) => pin.visualKey),
+      everyElement(ShopDot.visualKey),
+    );
   });
 
-  testWidgets('the threshold sits above the zoom the map opens at', (tester) async {
+  testWidgets('the threshold sits above the zoom the map opens at', (
+    tester,
+  ) async {
     // the two constants are private, so this checks the property they exist to produce rather than
     // the numbers: at whatever zoom the map opens, shops are dots, and there is some zoom short of
     // the search fly-to that brings the detail in. a change that labels every pin on the first frame
@@ -146,7 +163,8 @@ void main() {
     expect(
       _pins(tester).first.visualKey,
       isNot(ShopDot.visualKey),
-      reason: 'one zoom step in from the city view should already read as pins - a threshold set '
+      reason:
+          'one zoom step in from the city view should already read as pins - a threshold set '
           'higher leaves the map a field of dots for anyone who does not pinch several times',
     );
   });
@@ -180,29 +198,35 @@ void main() {
     );
   });
 
-  testWidgets('a category chip leaves only its own shops, and un-picks on a second tap',
-      (tester) async {
-    await _pumpMap(tester);
+  testWidgets(
+    'a category chip leaves only its own shops, and un-picks on a second tap',
+    (tester) async {
+      await _pumpMap(tester);
 
-    await _tapChip(tester, 'Сантехника');
-    expect(
-      _pins(tester),
-      hasLength(1),
-      reason: 'two of the three fakes are универсальный, so one plumbing shop should be left',
-    );
+      await _tapChip(tester, 'Сантехника');
+      expect(
+        _pins(tester),
+        hasLength(1),
+        reason:
+            'two of the three fakes are универсальный, so one plumbing shop should be left',
+      );
 
-    // the picked chip is the only way back to every shop - there is no «Все» chip to fall back on,
-    // so a tap that did not un-pick would strand the user inside one category
-    await _tapChip(tester, 'Сантехника');
-    expect(_pins(tester), hasLength(3));
-  });
+      // the picked chip is the only way back to every shop - there is no «Все» chip to fall back on,
+      // so a tap that did not un-pick would strand the user inside one category
+      await _tapChip(tester, 'Сантехника');
+      expect(_pins(tester), hasLength(3));
+    },
+  );
 
-  testWidgets('an empty category says so, rather than looking like an empty city', (tester) async {
-    await _pumpMap(tester);
+  testWidgets(
+    'an empty category says so, rather than looking like an empty city',
+    (tester) async {
+      await _pumpMap(tester);
 
-    await _tapChip(tester, 'Обои');
-    expect(_pins(tester), isEmpty);
-    expect(find.text('В этой категории пока нет магазинов'), findsOneWidget);
-    expect(find.text('Пока нет магазинов'), findsNothing);
-  });
+      await _tapChip(tester, 'Обои');
+      expect(_pins(tester), isEmpty);
+      expect(find.text('В этой категории пока нет магазинов'), findsOneWidget);
+      expect(find.text('Пока нет магазинов'), findsNothing);
+    },
+  );
 }

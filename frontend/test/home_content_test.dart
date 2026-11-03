@@ -23,7 +23,9 @@ void main() {
     late HomeContent content;
 
     setUpAll(() {
-      final raw = File('test/fixtures/api_home_response.json').readAsStringSync();
+      final raw = File(
+        'test/fixtures/api_home_response.json',
+      ).readAsStringSync();
       content = HomeContent.fromJson(jsonDecode(raw) as Map<String, dynamic>);
     });
 
@@ -58,7 +60,10 @@ void main() {
         ],
       }).vipShops.single;
 
-      expect(card.imageThumbUrl, '${ApiConfig.serverRoot}/images/shops/uploads/cd/cde3_thumb.jpg');
+      expect(
+        card.imageThumbUrl,
+        '${ApiConfig.serverRoot}/images/shops/uploads/cd/cde3_thumb.jpg',
+      );
       expect(card.productCount, 12);
     });
 
@@ -75,19 +80,23 @@ void main() {
             'is_vip': true,
             'latitude': 41.3,
             'longitude': 69.2,
-            'image_thumb_url': 'https://img.domix-api.uz/shops/uploads/cd/cde3_thumb.jpg',
+            'image_thumb_url':
+                'https://img.domix-api.uz/shops/uploads/cd/cde3_thumb.jpg',
           },
         ],
       }).vipShops.single;
 
-      expect(card.imageThumbUrl, 'https://img.domix-api.uz/shops/uploads/cd/cde3_thumb.jpg');
+      expect(
+        card.imageThumbUrl,
+        'https://img.domix-api.uz/shops/uploads/cd/cde3_thumb.jpg',
+      );
     });
 
     test('best offers arrive grouped into one tab per shop category', () {
-      expect(
-        content.bestOffers.map((g) => g.category).toList(),
-        [ShopCategory.universal, ShopCategory.wallpaper],
-      );
+      expect(content.bestOffers.map((g) => g.category).toList(), [
+        ShopCategory.universal,
+        ShopCategory.wallpaper,
+      ]);
       // сантехника and дерево have no shops, so the backend sends no group and the app draws no tab
       expect(
         content.bestOffers.map((g) => g.category),
@@ -99,11 +108,16 @@ void main() {
       // the ranking is the section's entire meaning, and it belongs to the SQL - a client that
       // re-sorted would be a second opinion about which shop is cheapest
       final universal = content.bestOffers.first.shops;
-      expect(universal.map((s) => s.basketPrice).toList(), [4000000, 5000000, 6000000]);
-      expect(
-        universal.map((s) => s.priceTier).toList(),
-        [PriceTier.cheaper, PriceTier.average, PriceTier.dearer],
-      );
+      expect(universal.map((s) => s.basketPrice).toList(), [
+        4000000,
+        5000000,
+        6000000,
+      ]);
+      expect(universal.map((s) => s.priceTier).toList(), [
+        PriceTier.cheaper,
+        PriceTier.average,
+        PriceTier.dearer,
+      ]);
       expect(universal.first.priceDifferencePercent, 20);
     });
 
@@ -129,19 +143,22 @@ void main() {
     test('the payload carries no category list', () {
       // the twelve tiles are a fixed list the app already holds, so there is nothing to decode -
       // and the shop counts that used to ride along here went with the badges that displayed them
-      final raw = jsonDecode(
-        File('test/fixtures/api_home_response.json').readAsStringSync(),
-      ) as Map<String, dynamic>;
+      final raw =
+          jsonDecode(
+                File('test/fixtures/api_home_response.json').readAsStringSync(),
+              )
+              as Map<String, dynamic>;
       expect(raw.containsKey('categories'), isFalse);
     });
-
   });
 
   group('HomeContent.fromJson edge cases', () {
     test('an empty database decodes to empty lists, not a crash', () {
       // the literal body the server returns today, with no shops in it
       const empty = '{"vip_shops":[],"best_offers":[]}';
-      final content = HomeContent.fromJson(jsonDecode(empty) as Map<String, dynamic>);
+      final content = HomeContent.fromJson(
+        jsonDecode(empty) as Map<String, dynamic>,
+      );
 
       expect(content.vipShops, isEmpty);
       expect(content.bestOffers, isEmpty);
@@ -151,7 +168,9 @@ void main() {
       // the backend uses make(...) everywhere specifically so this cannot happen, but a decoder
       // that dies on it would turn one backend regression into a white screen
       const nulls = '{"vip_shops":null,"best_offers":null}';
-      final content = HomeContent.fromJson(jsonDecode(nulls) as Map<String, dynamic>);
+      final content = HomeContent.fromJson(
+        jsonDecode(nulls) as Map<String, dynamic>,
+      );
 
       expect(content.vipShops, isEmpty);
       expect(content.bestOffers, isEmpty);
@@ -166,7 +185,9 @@ void main() {
           "is_vip":false,"price_tier":null,"price_difference_percent":null,
           "basket_price":null,"latitude":41.3,"longitude":69.2}]}]}
       ''';
-      final content = HomeContent.fromJson(jsonDecode(unpriced) as Map<String, dynamic>);
+      final content = HomeContent.fromJson(
+        jsonDecode(unpriced) as Map<String, dynamic>,
+      );
 
       final shop = content.bestOffers.single.shops.single;
       expect(shop.priceTier, isNull);
@@ -182,7 +203,9 @@ void main() {
       {"vip_shops":[],
        "best_offers":[{"category":"universal","shops":[]},{"category":"spaceships","shops":[]}]}
       ''';
-      final content = HomeContent.fromJson(jsonDecode(extra) as Map<String, dynamic>);
+      final content = HomeContent.fromJson(
+        jsonDecode(extra) as Map<String, dynamic>,
+      );
 
       expect(content.bestOffers, hasLength(1));
       expect(content.bestOffers.single.category, ShopCategory.universal);
@@ -196,22 +219,23 @@ void main() {
   // middle position, so "fills from the centre" and "opens on a real shop" are one statement.
 
   group('vipSlotRing', () {
-    HomeShopPreview shop(String name) => HomeShopPreview.fromShop(Shop(
-          id: name.hashCode,
-          name: name,
-          contactPhone: '+998901112233',
-          address: 'Ташкент',
-          category: ShopCategory.universal,
-          latitude: 41.3,
-          longitude: 69.2,
-          isVip: true,
-        ));
+    HomeShopPreview shop(String name) => HomeShopPreview.fromShop(
+      Shop(
+        id: name.hashCode,
+        name: name,
+        contactPhone: '+998901112233',
+        address: 'Ташкент',
+        category: ShopCategory.universal,
+        latitude: 41.3,
+        longitude: 69.2,
+        isVip: true,
+      ),
+    );
 
     /// The ring as names, with `·` for an open slot - the table in the doc comment, executable.
-    List<String> ringOf(int sold) => vipSlotRing(
-          [for (var i = 0; i < sold; i++) shop(String.fromCharCode(65 + i))],
-          slotCount: 5,
-        ).map((slot) => slot?.name ?? '·').toList();
+    List<String> ringOf(int sold) => vipSlotRing([
+      for (var i = 0; i < sold; i++) shop(String.fromCharCode(65 + i)),
+    ], slotCount: 5).map((slot) => slot?.name ?? '·').toList();
 
     test('fills from the centre outwards, alternating right then left', () {
       expect(ringOf(0), ['·', '·', '·', '·', '·']);
@@ -238,15 +262,17 @@ void main() {
   });
 
   group('rankedSlots', () {
-    HomeShopPreview shop(String name) => HomeShopPreview.fromShop(Shop(
-          id: name.hashCode,
-          name: name,
-          contactPhone: '+998901112233',
-          address: 'Ташкент',
-          category: ShopCategory.universal,
-          latitude: 41.3,
-          longitude: 69.2,
-        ));
+    HomeShopPreview shop(String name) => HomeShopPreview.fromShop(
+      Shop(
+        id: name.hashCode,
+        name: name,
+        contactPhone: '+998901112233',
+        address: 'Ташкент',
+        category: ShopCategory.universal,
+        latitude: 41.3,
+        longitude: 69.2,
+      ),
+    );
 
     test('keeps the server ordering and pads the tail', () {
       // **in order, not centred** - the difference from the ring above. this section is a ranking:
@@ -260,6 +286,5 @@ void main() {
       final shops = [for (var i = 0; i < 8; i++) shop('shop$i')];
       expect(rankedSlots(shops, slotCount: 5), hasLength(8));
     });
-
   });
 }

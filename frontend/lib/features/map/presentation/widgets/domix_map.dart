@@ -190,7 +190,9 @@ class _DomixMapState extends State<DomixMap> with WidgetsBindingObserver {
   /// **Fields, not locals, and that is load-bearing.** MapKit holds its listeners weakly: anything
   /// only the native side points at is collected on the next GC and the callbacks silently stop - a
   /// map that works for ten seconds and then ignores the camera.
-  late final ymk.MapCameraListener _cameraListener = _CameraListener(_onCameraChanged);
+  late final ymk.MapCameraListener _cameraListener = _CameraListener(
+    _onCameraChanged,
+  );
   late final ymk.MapInputListener _inputListener = _InputListener(
     onTap: (_, _) => widget.onMapTap?.call(),
   );
@@ -246,7 +248,10 @@ class _DomixMapState extends State<DomixMap> with WidgetsBindingObserver {
       ..tiltGesturesEnabled = false
       ..move(
         ymk.CameraPosition(
-          ymk.Point(latitude: widget.initialLatitude, longitude: widget.initialLongitude),
+          ymk.Point(
+            latitude: widget.initialLatitude,
+            longitude: widget.initialLongitude,
+          ),
           zoom: widget.initialZoom,
           azimuth: 0,
           tilt: 0,
@@ -270,7 +275,10 @@ class _DomixMapState extends State<DomixMap> with WidgetsBindingObserver {
     // only when the camera has come to rest: `finished` is false for every intermediate frame of a
     // pinch, a fling or an animated flyTo, and the picker's reverse geocode is a network call.
     if (finished) {
-      widget.onCenterChanged?.call(position.target.latitude, position.target.longitude);
+      widget.onCenterChanged?.call(
+        position.target.latitude,
+        position.target.longitude,
+      );
     }
   }
 
@@ -347,7 +355,8 @@ class _DomixMapState extends State<DomixMap> with WidgetsBindingObserver {
 final class _CameraListener implements ymk.MapCameraListener {
   const _CameraListener(this._onChanged);
 
-  final void Function(ymk.Map, ymk.CameraPosition, ymk.CameraUpdateReason, bool) _onChanged;
+  final void Function(ymk.Map, ymk.CameraPosition, ymk.CameraUpdateReason, bool)
+  _onChanged;
 
   @override
   void onCameraPositionChanged(

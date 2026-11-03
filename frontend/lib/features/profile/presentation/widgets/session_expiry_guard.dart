@@ -73,7 +73,9 @@ class _SessionExpiredDialog extends StatelessWidget {
     return Dialog(
       backgroundColor: Colors.white,
       insetPadding: const EdgeInsets.symmetric(horizontal: 32),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(22, 24, 22, 18),
         child: Column(

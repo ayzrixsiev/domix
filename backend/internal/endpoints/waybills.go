@@ -47,7 +47,7 @@ const (
 
 var waybillRequestID = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
-// RequireCustomer sits inside auth.RequireAuth, which is what puts the caller on the context.
+// RequireCustomer lets staff through too, so an admin can try the tab on a phone. it sits inside auth.RequireAuth, which is what puts the caller on the context.
 //
 // **the app hiding the tab is a courtesy and this is the rule**: an owner holds a perfectly valid token,
 // and an old build or a curl walks straight past a missing button. read from the database every time,
@@ -69,7 +69,7 @@ func (wb *Waybills) RequireCustomer(next http.HandlerFunc) http.HandlerFunc {
 			writeAPIError(w, http.StatusServiceUnavailable, "service_unavailable", "could not verify permissions")
 			return
 		}
-		if role != "customer" {
+		if role != "customer" && role != "admin" {
 			writeAPIError(w, http.StatusForbidden, "customers_only", "only customers can send a list")
 			return
 		}

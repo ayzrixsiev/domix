@@ -66,7 +66,9 @@ class _ProductCategoryPickerState extends State<ProductCategoryPicker> {
     // orange while open or once chosen: both are states worth pulling the eye to
     final borderColor = hasError
         ? AppColors.danger
-        : (_isExpanded || selected != null ? AppColors.primaryOrange : AppColors.hairline);
+        : (_isExpanded || selected != null
+              ? AppColors.primaryOrange
+              : AppColors.hairline);
 
     return Column(
       key: _fieldKey,
@@ -104,7 +106,11 @@ class _ProductCategoryPickerState extends State<ProductCategoryPicker> {
                 child: _isExpanded
                     ? Column(
                         children: [
-                          const Divider(height: 1, thickness: 1, color: AppColors.hairline),
+                          const Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: AppColors.hairline,
+                          ),
                           for (final category in ProductCategory.values)
                             _CategoryOption(
                               category: category,
@@ -182,19 +188,26 @@ class _PickerHeaderState extends State<_PickerHeader> {
           children: [
             Icon(
               selected?.icon ?? CupertinoIcons.square_grid_2x2,
-              color: selected != null ? AppColors.primaryOrange : AppColors.textFaint,
+              color: selected != null
+                  ? AppColors.primaryOrange
+                  : AppColors.textFaint,
               size: 18,
             ),
             const SizedBox(width: 11),
             Expanded(
               child: Text(
-                selected?.label(widget.strings) ?? widget.strings.pickProductCategoryPrompt,
+                selected?.label(widget.strings) ??
+                    widget.strings.pickProductCategoryPrompt,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: selected != null ? AppColors.textDark : AppColors.textFaint,
+                  color: selected != null
+                      ? AppColors.textDark
+                      : AppColors.textFaint,
                   fontSize: 14.5,
-                  fontWeight: selected != null ? FontWeight.w600 : FontWeight.w400,
+                  fontWeight: selected != null
+                      ? FontWeight.w600
+                      : FontWeight.w400,
                 ),
               ),
             ),
@@ -206,7 +219,9 @@ class _PickerHeaderState extends State<_PickerHeader> {
               curve: AppMotion.easing,
               child: Icon(
                 CupertinoIcons.chevron_forward,
-                color: widget.isExpanded ? AppColors.primaryOrange : AppColors.textFaint,
+                color: widget.isExpanded
+                    ? AppColors.primaryOrange
+                    : AppColors.textFaint,
                 size: 14,
               ),
             ),
@@ -267,9 +282,13 @@ class _CategoryOptionState extends State<_CategoryOption> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: isActive ? AppColors.primaryOrange : AppColors.textDark,
+                  color: isActive
+                      ? AppColors.primaryOrange
+                      : AppColors.textDark,
                   fontSize: 14,
-                  fontWeight: widget.isSelected ? FontWeight.w600 : FontWeight.w500,
+                  fontWeight: widget.isSelected
+                      ? FontWeight.w600
+                      : FontWeight.w500,
                 ),
               ),
             ),
@@ -339,7 +358,11 @@ class ProductLockedField extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(CupertinoIcons.lock_fill, color: AppColors.textFaint, size: 11),
+              const Icon(
+                CupertinoIcons.lock_fill,
+                color: AppColors.textFaint,
+                size: 11,
+              ),
               const SizedBox(width: 4),
               Text(
                 strings.templateFieldLocked,

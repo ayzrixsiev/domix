@@ -102,11 +102,15 @@ class Product {
       unit: json['unit'] as String,
       // `as int?` and not `as int`: the backend sends json null for an unpriced product
       price: json['price'] as int?,
-      availability: ProductAvailability.fromCode(json['availability'] as String?),
+      availability: ProductAvailability.fromCode(
+        json['availability'] as String?,
+      ),
       isTemplate: json['is_template'] as bool? ?? false,
       // defaults to "not a template row's rule", i.e. editable, so a build talking to a backend from
       // before slots existed behaves exactly as it did then: `!is_template`
-      nameEditable: json['name_editable'] as bool? ?? !(json['is_template'] as bool? ?? false),
+      nameEditable:
+          json['name_editable'] as bool? ??
+          !(json['is_template'] as bool? ?? false),
       // true on a backend from before the rule existed, which is what that backend did
       photoEditable: json['photo_editable'] as bool? ?? true,
       imageUrl: ApiConfig.absoluteImageUrl(json['image_url'] as String?),
@@ -119,7 +123,8 @@ class Product {
       // a catalogue one
       ownImage: json['own_image'] as bool? ?? false,
       // a backend from before membership existed totalled every template row, which is what this says
-      inBasket: json['in_basket'] as bool? ?? (json['is_template'] as bool? ?? false),
+      inBasket:
+          json['in_basket'] as bool? ?? (json['is_template'] as bool? ?? false),
       specs: json['specs'] as String? ?? '',
       section: ProductSection.tryFromCode(json['section'] as String? ?? ''),
     );
@@ -191,7 +196,11 @@ enum ProductAvailability {
 // the same contract as ShopMutationException: the backend writes english and this app renders only
 // ru/uz, so a failed save carries a stable machine-readable `code` that the ui localizes.
 class ProductMutationException implements Exception {
-  const ProductMutationException({required this.code, required this.message, this.limit});
+  const ProductMutationException({
+    required this.code,
+    required this.message,
+    this.limit,
+  });
 
   final String code;
   final String message;

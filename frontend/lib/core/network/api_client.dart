@@ -62,14 +62,13 @@ enum LoadFailure {
   server;
 
   static LoadFailure of(Object error) => switch (error) {
-        ApiException(statusCode: 429 || 503) => busy,
-        ApiException() => server,
-        TimeoutException() ||
-        SocketException() ||
-        HttpException() ||
-        TlsException() ||
-        http.ClientException() =>
-          network,
-        _ => server,
-      };
+    ApiException(statusCode: 429 || 503) => busy,
+    ApiException() => server,
+    TimeoutException() ||
+    SocketException() ||
+    HttpException() ||
+    TlsException() ||
+    http.ClientException() => network,
+    _ => server,
+  };
 }

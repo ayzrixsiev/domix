@@ -76,7 +76,9 @@ class _GlassSurfaceState extends State<GlassSurface> {
     super.initState();
     if (!_canRefract) return;
     if (_loaded != null) return;
-    (_program ??= ui.FragmentProgram.fromAsset('shaders/liquid_glass.frag')).then((program) {
+    (_program ??= ui.FragmentProgram.fromAsset(
+      'shaders/liquid_glass.frag',
+    )).then((program) {
       _loaded = program;
       if (mounted) setState(() {});
     });

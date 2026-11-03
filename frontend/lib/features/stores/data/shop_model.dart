@@ -83,27 +83,29 @@ class Shop {
       productCount: json['product_count'] as int? ?? 0,
       // through the resolver, like a product's: the api sends `/images/…` off its own disk, and
       // Image.network cannot fetch a path without a host - it would just draw an empty frame
-      imageThumbUrl: ApiConfig.absoluteImageUrl(json['image_thumb_url'] as String?),
+      imageThumbUrl: ApiConfig.absoluteImageUrl(
+        json['image_thumb_url'] as String?,
+      ),
     );
   }
 
   // PUT /api/shops/{id} returns the shop without a product count (only /api/shops/mine computes it),
   // so without this an edited shop appears to lose its whole catalogue until the next refresh
   Shop copyWith({int? productCount}) => Shop(
-        id: id,
-        name: name,
-        contactPhone: contactPhone,
-        address: address,
-        category: category,
-        latitude: latitude,
-        longitude: longitude,
-        priceTier: priceTier,
-        priceDifferencePercent: priceDifferencePercent,
-        basketPrice: basketPrice,
-        isVip: isVip,
-        productCount: productCount ?? this.productCount,
-        imageThumbUrl: imageThumbUrl,
-      );
+    id: id,
+    name: name,
+    contactPhone: contactPhone,
+    address: address,
+    category: category,
+    latitude: latitude,
+    longitude: longitude,
+    priceTier: priceTier,
+    priceDifferencePercent: priceDifferencePercent,
+    basketPrice: basketPrice,
+    isVip: isVip,
+    productCount: productCount ?? this.productCount,
+    imageThumbUrl: imageThumbUrl,
+  );
 }
 
 // the same contract as ProductMutationException: the backend writes english and this app renders

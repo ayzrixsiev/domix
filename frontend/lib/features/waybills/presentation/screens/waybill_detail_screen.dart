@@ -40,14 +40,22 @@ class _WaybillDetailScreenState extends State<WaybillDetailScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.waybill.hasPhoto) _loadPhoto();
+    if (widget.waybill.hasPhoto) _photo = _fetchPhoto();
   }
 
   // through the repository and not Image.network: the photo is private, and the bearer token and the
   // 401 handling are all there
-  void _loadPhoto() {
-    final repository = context.read<WaybillsController>().repository;
-    setState(() => _photo = repository.fetchPhoto(widget.waybill.id));
+  Future<Uint8List> _fetchPhoto() => context
+      .read<WaybillsController>()
+      .repository
+      .fetchPhoto(widget.waybill.id);
+
+  // **a block body, not an arrow.** an arrow returns what it assigns, and a setState callback that
+  // returns a Future throws on the spot - which is how the retry button used to take the screen down.
+  void _retryPhoto() {
+    setState(() {
+      _photo = _fetchPhoto();
+    });
   }
 
   @override
@@ -128,7 +136,7 @@ class _WaybillDetailScreenState extends State<WaybillDetailScreen> {
             subtitle: strings.loadErrorHintFor(failure),
             action: PrimaryActionButton(
               label: strings.retryButtonShort,
-              onTap: _loadPhoto,
+              onTap: _retryPhoto,
             ),
           );
         }

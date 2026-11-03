@@ -28,12 +28,13 @@ class ProductGrid extends StatelessWidget {
 
   /// Shared by [ProductGrid] and [ProductSliverGrid] so the two lay out identically. A fixed row
   /// height rather than childAspectRatio - see the comment on [ProductTile.height].
-  static const SliverGridDelegate gridDelegate = SliverGridDelegateWithFixedCrossAxisCount(
-    crossAxisCount: 2,
-    mainAxisSpacing: spacing,
-    crossAxisSpacing: spacing,
-    mainAxisExtent: ProductTile.height,
-  );
+  static const SliverGridDelegate gridDelegate =
+      SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: spacing,
+        crossAxisSpacing: spacing,
+        mainAxisExtent: ProductTile.height,
+      );
 
   @override
   Widget build(BuildContext context) {

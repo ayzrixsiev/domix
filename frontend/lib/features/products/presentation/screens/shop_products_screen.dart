@@ -59,7 +59,8 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
     if (query.isEmpty) return products;
     return [
       for (final product in products)
-        if ('${product.name} ${product.specs}'.toLowerCase().contains(query)) product,
+        if ('${product.name} ${product.specs}'.toLowerCase().contains(query))
+          product,
     ];
   }
 
@@ -125,7 +126,14 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
               // the catalogue is the one thing a second device could have changed, so pull-to-refresh
               // forces past the session cache
               onRefresh: () => controller.loadProducts(shopId, force: true),
-              child: _body(context, strings, controller, products, isLoading, loadFailed),
+              child: _body(
+                context,
+                strings,
+                controller,
+                products,
+                isLoading,
+                loadFailed,
+              ),
             ),
             // not while the first load or its failure is the whole screen: there is nothing to add to
             if (!(products.isEmpty && (isLoading || loadFailed)))
@@ -156,7 +164,9 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
   ) {
     // a spinner only on the very first load: once there are tiles, a refresh happens underneath them
     if (isLoading && products.isEmpty) {
-      return const _FullPageState(child: CircularProgressIndicator(color: AppColors.primaryOrange));
+      return const _FullPageState(
+        child: CircularProgressIndicator(color: AppColors.primaryOrange),
+      );
     }
 
     if (loadFailed && products.isEmpty) {
@@ -172,7 +182,9 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
     }
 
     final customCount = controller.customCountFor(widget.shop.id);
-    final (priced, total) = controller.templatePricingProgressFor(widget.shop.id);
+    final (priced, total) = controller.templatePricingProgressFor(
+      widget.shop.id,
+    );
 
     final sections = sectionsOf(products);
     final section = sections.contains(_section) ? _section : null;
@@ -183,7 +195,9 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
     // each Image.network fires immediately - and the symptom was not slow images but a **failed price
     // save**, the PUT queueing behind them until its own timeout. See ProductSliverGrid.
     return CustomScrollView(
-      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
       slivers: [
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
@@ -261,7 +275,12 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
 
         SliverPadding(
           // clears the floating add button: its height, its two margins and the gradient above it
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, _AddProductBar.clearance),
+          padding: const EdgeInsets.fromLTRB(
+            20,
+            14,
+            20,
+            _AddProductBar.clearance,
+          ),
           sliver: SliverToBoxAdapter(
             child: customCount >= kMaxCustomProducts
                 ? Text(
@@ -314,7 +333,10 @@ class _AddProductBar extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [AppColors.background.withValues(alpha: 0), AppColors.background],
+          colors: [
+            AppColors.background.withValues(alpha: 0),
+            AppColors.background,
+          ],
           stops: const [0, 0.4],
         ),
       ),
@@ -328,7 +350,9 @@ class _AddProductBar extends StatelessWidget {
             decoration: BoxDecoration(
               color: _isFull ? AppColors.trackGrey : AppColors.primaryOrange,
               borderRadius: BorderRadius.circular(999),
-              boxShadow: _isFull ? null : AppShadows.accent(AppColors.primaryOrange),
+              boxShadow: _isFull
+                  ? null
+                  : AppShadows.accent(AppColors.primaryOrange),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -338,7 +362,9 @@ class _AddProductBar extends StatelessWidget {
                   const SizedBox(width: 10),
                 ],
                 Text(
-                  _isFull ? strings.ownProductsUsedLabel(used, max) : strings.addProductButton,
+                  _isFull
+                      ? strings.ownProductsUsedLabel(used, max)
+                      : strings.addProductButton,
                   style: TextStyle(
                     color: _isFull ? AppColors.textGrey : Colors.white,
                     fontSize: 16.5,
@@ -372,7 +398,9 @@ class _FullPageState extends StatelessWidget {
       builder: (context, constraints) => SingleChildScrollView(
         // AlwaysScrollable, or a child that fits exactly has nothing to overscroll and the pull gesture is
         // never recognised - which is precisely the error state
-        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
         child: ConstrainedBox(
           constraints: BoxConstraints(minHeight: constraints.maxHeight),
           child: Center(child: child),
@@ -424,7 +452,11 @@ class _CatalogueSummary extends StatelessWidget {
                   color: AppColors.primarySoft,
                   borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
-                child: const Icon(LucideIcons.store, color: AppColors.primaryOrange, size: 26),
+                child: const Icon(
+                  LucideIcons.store,
+                  color: AppColors.primaryOrange,
+                  size: 26,
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -527,7 +559,10 @@ class _CenteredMessage extends StatelessWidget {
             width: 66,
             height: 66,
             alignment: Alignment.center,
-            decoration: const BoxDecoration(color: AppColors.surfaceMuted, shape: BoxShape.circle),
+            decoration: const BoxDecoration(
+              color: AppColors.surfaceMuted,
+              shape: BoxShape.circle,
+            ),
             child: Icon(icon, color: AppColors.textFaint, size: 27),
           ),
           const SizedBox(height: 16),
@@ -563,7 +598,10 @@ class _CenteredMessage extends StatelessWidget {
                 onTap: onAction,
                 borderRadius: BorderRadius.circular(AppRadius.sm),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
                   child: Text(
                     actionLabel!,
                     style: const TextStyle(

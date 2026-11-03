@@ -131,7 +131,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       LocationPickResult(
         latitude: _centerLatitude,
         longitude: _centerLongitude,
-        address: _resolvedAddress ??
+        address:
+            _resolvedAddress ??
             '${_centerLatitude.toStringAsFixed(5)}, ${_centerLongitude.toStringAsFixed(5)}',
         city: _resolvedCity,
       ),
@@ -199,13 +200,18 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                                   child: SizedBox(
                                     width: 18,
                                     height: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   ),
                                 )
                               : IconButton(
-                                  icon: const Icon(CupertinoIcons.arrow_right_circle_fill),
+                                  icon: const Icon(
+                                    CupertinoIcons.arrow_right_circle_fill,
+                                  ),
                                   color: AppColors.primaryOrange,
-                                  onPressed: () => _performSearch(_searchController.text),
+                                  onPressed: () =>
+                                      _performSearch(_searchController.text),
                                 ),
                         ),
                       ),
@@ -299,12 +305,19 @@ class _SearchResultsList extends StatelessWidget {
           final result = results[index];
           return ListTile(
             dense: true,
-            leading: const Icon(CupertinoIcons.location_solid, color: AppColors.primaryOrange, size: 20),
+            leading: const Icon(
+              CupertinoIcons.location_solid,
+              color: AppColors.primaryOrange,
+              size: 20,
+            ),
             title: Text(
               result.displayName,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             onTap: () => onSelected(result),
           );
@@ -343,19 +356,31 @@ class _AddressPreviewCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(CupertinoIcons.location_solid, color: AppColors.primaryOrange, size: 18),
+          const Icon(
+            CupertinoIcons.location_solid,
+            color: AppColors.primaryOrange,
+            size: 18,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: isResolving
                 ? Text(
                     resolvingLabel,
-                    style: const TextStyle(color: AppColors.textGrey, fontSize: 13, fontWeight: FontWeight.w500),
+                    style: const TextStyle(
+                      color: AppColors.textGrey,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
                   )
                 : Text(
                     address ?? '',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AppColors.textDark, fontSize: 13.5, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                      color: AppColors.textDark,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
           ),
         ],

@@ -30,23 +30,27 @@ final _strings = AppLocalizations(AppLanguage.ru);
 Future<void> _signIn({required String role}) async {
   String chunk(Map<String, dynamic> m) =>
       base64Url.encode(utf8.encode(jsonEncode(m))).replaceAll('=', '');
-  final exp = DateTime.now().add(const Duration(days: 30)).millisecondsSinceEpoch ~/ 1000;
+  final exp =
+      DateTime.now().add(const Duration(days: 30)).millisecondsSinceEpoch ~/
+      1000;
 
   final store = {
-    'domix_jwt_token': '${chunk({'alg': 'HS256'})}.${chunk({'exp': exp})}.signature',
+    'domix_jwt_token':
+        '${chunk({'alg': 'HS256'})}.${chunk({'exp': exp})}.signature',
     'domix_user_role': role,
     'domix_user_name': 'Азиз Рихсиев',
     'domix_user_phone': '998901234567',
   };
 
-  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
-    const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
-    (call) async => switch (call.method) {
-      'read' => store[(call.arguments as Map)['key']],
-      'readAll' => store,
-      _ => null,
-    },
-  );
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(
+        const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+        (call) async => switch (call.method) {
+          'read' => store[(call.arguments as Map)['key']],
+          'readAll' => store,
+          _ => null,
+        },
+      );
 
   // AuthController is a process-wide singleton, so a state left by one test would otherwise leak
   // into the next and make these pass or fail on declaration order
@@ -88,19 +92,27 @@ Future<void> _pumpEditor(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('a customer is offered every role, and told the choice is final', (tester) async {
-    await _signIn(role: 'customer');
-    await _pumpEditor(tester);
+  testWidgets(
+    'a customer is offered every role, and told the choice is final',
+    (tester) async {
+      await _signIn(role: 'customer');
+      await _pumpEditor(tester);
 
-    for (final role in AccountRole.values) {
-      expect(find.text(role.label(_strings)), findsOneWidget,
-          reason: '${role.name} is missing from the picker');
-    }
-    expect(find.text(_strings.roleChangeWarning), findsOneWidget);
-    expect(find.text(_strings.roleLockedNote), findsNothing);
-  });
+      for (final role in AccountRole.values) {
+        expect(
+          find.text(role.label(_strings)),
+          findsOneWidget,
+          reason: '${role.name} is missing from the picker',
+        );
+      }
+      expect(find.text(_strings.roleChangeWarning), findsOneWidget);
+      expect(find.text(_strings.roleLockedNote), findsNothing);
+    },
+  );
 
-  testWidgets('a shop owner gets no way back to any other role', (tester) async {
+  testWidgets('a shop owner gets no way back to any other role', (
+    tester,
+  ) async {
     await _signIn(role: 'shop_owner');
     await _pumpEditor(tester);
 
@@ -110,7 +122,9 @@ void main() {
     expect(find.text(_strings.roleCustomer), findsNothing);
   });
 
-  testWidgets('the number is behind its own step, not a field on the form', (tester) async {
+  testWidgets('the number is behind its own step, not a field on the form', (
+    tester,
+  ) async {
     await _signIn(role: 'customer');
     await _pumpEditor(tester);
 
@@ -129,7 +143,9 @@ void main() {
     expect(find.text(_strings.phoneChangeExplainer), findsOneWidget);
   });
 
-  testWidgets('«Назад» walks one step back, the X abandons the screen', (tester) async {
+  testWidgets('«Назад» walks one step back, the X abandons the screen', (
+    tester,
+  ) async {
     await _signIn(role: 'customer');
     await _pumpEditor(tester);
 

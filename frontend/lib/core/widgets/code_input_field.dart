@@ -120,7 +120,9 @@ class _CodeInputFieldState extends State<CodeInputField> {
       onChanged: (value) {
         // a tap lands the caret wherever it lands, and in an invisible field that is a digit
         // inserted where the eye sees nothing. typing is always at the end here.
-        widget.controller.selection = TextSelection.collapsed(offset: value.length);
+        widget.controller.selection = TextSelection.collapsed(
+          offset: value.length,
+        );
         widget.onChanged?.call(value);
       },
     );
@@ -128,7 +130,11 @@ class _CodeInputFieldState extends State<CodeInputField> {
 }
 
 class _CodeBox extends StatelessWidget {
-  const _CodeBox({required this.digit, required this.isActive, required this.height});
+  const _CodeBox({
+    required this.digit,
+    required this.isActive,
+    required this.height,
+  });
 
   final String? digit;
   final bool isActive;

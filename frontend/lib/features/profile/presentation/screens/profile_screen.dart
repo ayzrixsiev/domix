@@ -31,27 +31,34 @@ class ProfileViewState {
     : state = ProfileAccountState.guest,
       initials = '',
       fullName = '',
-      phoneNumber = '';
+      phoneNumber = '',
+      isAdmin = false;
 
   const ProfileViewState.client({
     required this.initials,
     required this.fullName,
     required this.phoneNumber,
-  }) : state = ProfileAccountState.client;
+  }) : state = ProfileAccountState.client,
+       isAdmin = false;
 
   const ProfileViewState.vendor({
     required this.initials,
     required this.fullName,
     required this.phoneNumber,
+    this.isAdmin = false,
   }) : state = ProfileAccountState.vendor;
 
   final ProfileAccountState state;
   final String initials;
   final String fullName;
   final String phoneNumber;
+  final bool isAdmin;
 
   bool get isGuest => state == ProfileAccountState.guest;
   bool get isVendor => state == ProfileAccountState.vendor;
+
+  /// Корзина is a customer's tab, and staff may use it too: the server lets `admin` through.
+  bool get seesCart => !isVendor || isAdmin;
 }
 
 class ProfileScreen extends StatefulWidget {
@@ -85,8 +92,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   AppLanguage get _currentLang => context.read<LanguageProvider>().language;
 
   void _updateLanguage(AppLanguage newLang) {
-    Provider.of<LanguageProvider>(context, listen: false)
-        .updateLanguage(newLang);
+    Provider.of<LanguageProvider>(
+      context,
+      listen: false,
+    ).updateLanguage(newLang);
   }
 
   // open bottom modal sheet to select between russian and uzbek
@@ -187,12 +196,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // reachable without an account: the map works for a guest, so its licence's «About» link has
           // to as well - and a Play reviewer without Telegram never gets past this screen
           TextButton(
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const AboutScreen()),
-            ),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const AboutScreen())),
             child: Text(
               strings.aboutApp,
-              style: const TextStyle(color: AppColors.textGrey, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                color: AppColors.textGrey,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -247,7 +259,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// caller told the user the wrong thing with nothing able to catch it.
   ///
   /// [detail] is logged and never drawn: the line that debugs this is the line no owner can act on.
-  void _showErrorDialog({required String title, required String body, String? detail}) {
+  void _showErrorDialog({
+    required String title,
+    required String body,
+    String? detail,
+  }) {
     if (detail != null) debugPrint('Auth error: $detail');
 
     showDialog(
@@ -299,7 +315,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 label: _strings.okButton,
                 onTap: () {
                   Navigator.of(dialogCtx).pop();
-                  Provider.of<AuthController>(context, listen: false).clearError();
+                  Provider.of<AuthController>(
+                    context,
+                    listen: false,
+                  ).clearError();
                 },
               ),
             ],
@@ -320,12 +339,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final strings = _strings;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          switch (outcome) {
-            ProfileEditOutcome.profileSaved => strings.accountSavedMessage,
-            ProfileEditOutcome.phoneChanged => strings.phoneChangedMessage,
-          },
-        ),
+        content: Text(switch (outcome) {
+          ProfileEditOutcome.profileSaved => strings.accountSavedMessage,
+          ProfileEditOutcome.phoneChanged => strings.phoneChangedMessage,
+        }),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -334,7 +351,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// The signed-in profile: account header, the shop accordion for owners, and the settings menu.
   /// Only ever reached with a real account - [build] sends a guest to the login card instead - so
   /// nothing in here re-checks for one.
-  Widget _buildAccountBody(ProfileViewState currentProfile, AuthController authController) {
+  Widget _buildAccountBody(
+    ProfileViewState currentProfile,
+    AuthController authController,
+  ) {
     return SafeArea(
       child: ListView(
         physics: const BouncingScrollPhysics(),
@@ -351,12 +371,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               rows: const [],
               leading: _ExpandableMenuSection(
                 isExpanded: _showShopsSubMenu,
-                onToggle: () => setState(() => _showShopsSubMenu = !_showShopsSubMenu),
+                onToggle: () =>
+                    setState(() => _showShopsSubMenu = !_showShopsSubMenu),
                 // the header doubles as the close control once open, so the group needs no separate "collapse"
                 // row: the chevron already rotated to point at what it revealed
                 header: _MenuRowData(
                   icon: CupertinoIcons.bag,
-                  title: _showShopsSubMenu ? _strings.closeButton : _strings.manageShops,
+                  title: _showShopsSubMenu
+                      ? _strings.closeButton
+                      : _strings.manageShops,
                   onTap: null, // supplied by the section, which owns the toggle
                 ),
                 children: [
@@ -390,15 +413,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               _MenuRowData(
                 icon: CupertinoIcons.globe,
-                title: '${_strings.languageSettings} (${_currentLang.displayName})',
+                title:
+                    '${_strings.languageSettings} (${_currentLang.displayName})',
                 onTap: _showLanguagePicker,
               ),
               _MenuRowData(
                 icon: CupertinoIcons.info,
                 title: _strings.aboutApp,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const AboutScreen()),
-                ),
+                onTap: () => Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const AboutScreen())),
               ),
               _MenuRowData(
                 icon: CupertinoIcons.square_arrow_right,
@@ -423,10 +447,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ? const SizedBox(
                         width: 18,
                         height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.danger),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.danger,
+                        ),
                       )
                     : null,
-                onTap: authController.isDeletingAccount ? null : _confirmDeleteAccount,
+                onTap: authController.isDeletingAccount
+                    ? null
+                    : _confirmDeleteAccount,
               ),
             ],
           ),
@@ -446,6 +475,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+
   /// Who this account is, in three lines that read downward.
   ///
   /// **Stacked rather than laid beside the avatar**: the name gets the card's whole width, which is
@@ -475,7 +505,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Positioned(
               top: -70,
               right: -50,
-              child: _decorativeBlob(190, AppColors.primaryOrange.withValues(alpha: 0.08)),
+              child: _decorativeBlob(
+                190,
+                AppColors.primaryOrange.withValues(alpha: 0.08),
+              ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
@@ -574,7 +607,11 @@ class _EditProfileButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(LucideIcons.pencil, size: 13, color: AppColors.primaryOrange),
+              const Icon(
+                LucideIcons.pencil,
+                size: 13,
+                color: AppColors.primaryOrange,
+              ),
               const SizedBox(width: 6),
               Text(
                 label,
@@ -664,7 +701,9 @@ class _LanguageOptionTile extends StatelessWidget {
               Text(
                 language.displayName,
                 style: TextStyle(
-                  color: isSelected ? AppColors.primaryDeep : AppColors.textDark,
+                  color: isSelected
+                      ? AppColors.primaryDeep
+                      : AppColors.textDark,
                   fontSize: 16,
                   fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                 ),
@@ -777,7 +816,9 @@ class _ExpandableMenuSection extends StatelessWidget {
             onTap: onToggle,
             textColor: header.textColor,
             iconColor: isExpanded ? AppColors.primaryDeep : header.iconColor,
-            iconBackground: isExpanded ? AppColors.primarySoft : header.iconBackground,
+            iconBackground: isExpanded
+                ? AppColors.primarySoft
+                : header.iconBackground,
             // 0.25 turns = 90 degrees, so the forward chevron ends up pointing down at the rows it revealed
             trailing: AnimatedRotation(
               turns: isExpanded ? 0.25 : 0,
@@ -787,7 +828,9 @@ class _ExpandableMenuSection extends StatelessWidget {
                 CupertinoIcons.chevron_forward,
                 color: isExpanded
                     ? AppColors.primaryDeep
-                    : (header.textColor ?? AppColors.textDark).withValues(alpha: 0.3),
+                    : (header.textColor ?? AppColors.textDark).withValues(
+                        alpha: 0.3,
+                      ),
                 size: 16,
               ),
             ),
@@ -804,7 +847,10 @@ class _ExpandableMenuSection extends StatelessWidget {
               ? Column(
                   children: [
                     for (var i = 0; i < children.length; i++)
-                      _MenuRow(data: children[i], isLast: i == children.length - 1),
+                      _MenuRow(
+                        data: children[i],
+                        isLast: i == children.length - 1,
+                      ),
                   ],
                 )
               : const SizedBox(width: double.infinity),

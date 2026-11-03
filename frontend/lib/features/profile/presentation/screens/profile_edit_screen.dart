@@ -40,7 +40,10 @@ class ProfileEditScreen extends StatefulWidget {
   /// can say so - null when the screen was abandoned.
   static Future<ProfileEditOutcome?> open(BuildContext context) {
     return Navigator.of(context).push<ProfileEditOutcome>(
-      MaterialPageRoute(builder: (_) => const ProfileEditScreen(), fullscreenDialog: true),
+      MaterialPageRoute(
+        builder: (_) => const ProfileEditScreen(),
+        fullscreenDialog: true,
+      ),
     );
   }
 
@@ -96,8 +99,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
   /// The role the account arrived with - what a change is measured against, and what decides
   /// whether the picker is drawn at all.
-  AccountRole get _originalRole =>
-      AccountRole.of(isVendor: context.read<AuthController>().profileState.isVendor);
+  AccountRole get _originalRole => AccountRole.of(
+    isVendor: context.read<AuthController>().profileState.isVendor,
+  );
 
   // ------------------------------------------------------------------------------------------
   // moving between steps
@@ -113,10 +117,10 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   /// One step back, never the whole screen - the X in the header is what abandons it. Null on the
   /// form, which has nowhere behind it.
   VoidCallback? get _onBack => switch (_step) {
-        _Step.form => null,
-        _Step.phone => () => _goTo(_Step.form),
-        _Step.code => _changePhone,
-      };
+    _Step.form => null,
+    _Step.phone => () => _goTo(_Step.form),
+    _Step.code => _changePhone,
+  };
 
   void _changePhone() {
     _resendTimer?.cancel();
@@ -215,7 +219,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     });
 
     try {
-      final result = await context.read<AuthController>().requestPhoneChangeCode('998$digits');
+      final result = await context
+          .read<AuthController>()
+          .requestPhoneChangeCode('998$digits');
       if (!mounted) return;
       _canonicalPhone = result.phone;
       _startResendCountdown(result.resendAfter);
@@ -259,9 +265,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
     try {
       await context.read<AuthController>().verifyPhoneChange(
-            phone: _canonicalPhone,
-            code: code,
-          );
+        phone: _canonicalPhone,
+        code: code,
+      );
       if (!mounted) return;
       Navigator.of(context).pop(ProfileEditOutcome.phoneChanged);
     } catch (error) {
@@ -278,7 +284,11 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     }
   }
 
-  static const _deadCodeErrors = {'code_attempts_exhausted', 'code_expired', 'code_not_found'};
+  static const _deadCodeErrors = {
+    'code_attempts_exhausted',
+    'code_expired',
+    'code_not_found',
+  };
 
   Future<void> _resendCode() async {
     if (_resendIn > 0 || _busy) return;
@@ -343,7 +353,10 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             child: AnimatedSwitcher(
               duration: AppMotion.base,
               switchInCurve: AppMotion.easing,
-              child: KeyedSubtree(key: ValueKey(_step), child: _stepBody(strings)),
+              child: KeyedSubtree(
+                key: ValueKey(_step),
+                child: _stepBody(strings),
+              ),
             ),
           ),
           _footer(strings),
@@ -353,10 +366,10 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   }
 
   Widget _stepBody(AppLocalizations strings) => switch (_step) {
-        _Step.form => _formStep(strings),
-        _Step.phone => _phoneStep(strings),
-        _Step.code => _codeStep(strings),
-      };
+    _Step.form => _formStep(strings),
+    _Step.phone => _phoneStep(strings),
+    _Step.code => _codeStep(strings),
+  };
 
   /// The step's controls on a scrollable page, with the refusal above them.
   ///
@@ -376,7 +389,11 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           if (body != null) ...[
             Text(
               body,
-              style: const TextStyle(color: AppColors.textMuted, fontSize: 13.5, height: 1.45),
+              style: const TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 13.5,
+                height: 1.45,
+              ),
             ),
             const SizedBox(height: 18),
           ],
@@ -432,13 +449,14 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           ),
           child: Row(
             children: [
-              const Icon(LucideIcons.phone, size: 18, color: AppColors.textMuted),
+              const Icon(
+                LucideIcons.phone,
+                size: 18,
+                color: AppColors.textMuted,
+              ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  formatUzPhone(phone),
-                  style: appPhoneTextStyle,
-                ),
+                child: Text(formatUzPhone(phone), style: appPhoneTextStyle),
               ),
               Text(
                 strings.editProfileButton,
@@ -449,7 +467,11 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                 ),
               ),
               const SizedBox(width: 4),
-              const Icon(LucideIcons.chevron_right, size: 16, color: AppColors.primaryOrange),
+              const Icon(
+                LucideIcons.chevron_right,
+                size: 16,
+                color: AppColors.primaryOrange,
+              ),
             ],
           ),
         ),
@@ -509,7 +531,10 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             LengthLimitingTextInputFormatter(9),
           ],
           style: appPhoneTextStyle,
-          decoration: appFieldDecoration(hint: '90 123 45 67', prefix: appPhonePrefix),
+          decoration: appFieldDecoration(
+            hint: '90 123 45 67',
+            prefix: appPhonePrefix,
+          ),
           onChanged: (_) {
             if (_error != null) setState(() => _error = null);
           },
@@ -533,7 +558,10 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           child: _resendIn > 0
               ? Text(
                   strings.resendCodeIn(_resendIn),
-                  style: const TextStyle(color: AppColors.textFaint, fontSize: 13),
+                  style: const TextStyle(
+                    color: AppColors.textFaint,
+                    fontSize: 13,
+                  ),
                 )
               : TextButton(
                   onPressed: _busy ? null : _resendCode,
@@ -567,7 +595,11 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          AppWideButton(label: label, busy: _busy, onTap: _busy ? null : _onPrimaryAction),
+          AppWideButton(
+            label: label,
+            busy: _busy,
+            onTap: _busy ? null : _onPrimaryAction,
+          ),
           const SizedBox(height: 12),
           SizedBox(
             height: 40,

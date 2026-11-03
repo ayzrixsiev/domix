@@ -13,6 +13,7 @@ import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/core/widgets/app_form.dart';
+import 'package:frontend/core/widgets/app_page_header.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
 import 'package:frontend/core/widgets/plain_page.dart';
 import 'package:frontend/core/widgets/primary_action_button.dart';
@@ -24,18 +25,22 @@ import 'package:frontend/features/waybills/presentation/screens/waybill_detail_s
 
 /// The Корзина tab: what this customer has sent, and the way to send another. The shell keeps it off an
 /// owner's bar, and the server refuses an owner whatever the bar shows.
+///
+/// **It runs edge to edge like the map**, with no nav bar: the list ends in a pinned «Новая накладная»,
+/// and a floating bar over it was a second button's worth of chrome on top of the one that matters.
 class WaybillsScreen extends StatefulWidget {
   const WaybillsScreen({
     super.key,
-    required this.bottomPadding,
     required this.isActive,
+    required this.onExit,
   });
-
-  /// Room left under the content for the shell's floating nav bar.
-  final double bottomPadding;
 
   /// The shell's IndexedStack builds every page at launch, so this is how the tab learns it is in view.
   final bool isActive;
+
+  /// The way back to the rest of the app, drawn as the header's back disc. **Required**: with the nav
+  /// bar gone this is the button, and a tab with no way out is the trap the shell's map test guards.
+  final VoidCallback onExit;
 
   @override
   State<WaybillsScreen> createState() => _WaybillsScreenState();
@@ -62,7 +67,7 @@ class _WaybillsScreenState extends State<WaybillsScreen> {
 
   void _reload() {
     final profile = context.read<AuthController>().profileState;
-    if (profile.isGuest || profile.isVendor) return;
+    if (profile.isGuest || !profile.seesCart) return;
     unawaited(context.read<WaybillsController>().load());
   }
 
@@ -73,7 +78,7 @@ class _WaybillsScreenState extends State<WaybillsScreen> {
   /// An owner's lost product photo must not open a customer's flow, which is why the role is read first.
   Future<void> _recoverLostPhoto() async {
     if (defaultTargetPlatform != TargetPlatform.android) return;
-    if (context.read<AuthController>().profileState.isVendor) return;
+    if (!context.read<AuthController>().profileState.seesCart) return;
 
     final LostDataResponse lost;
     try {
@@ -99,13 +104,17 @@ class _WaybillsScreenState extends State<WaybillsScreen> {
 
     final body = Column(
       children: [
-        PlainPageTitle(title: strings.cartTab),
+        AppPageHeader(title: strings.cartTab, onBack: widget.onExit),
         Expanded(child: _content(waybills, strings)),
       ],
     );
 
     return ColoredBox(color: AppColors.background, child: body);
   }
+
+  /// What the pinned button and the empty states keep clear at the foot: the system inset alone, since
+  /// this tab has no nav bar over it.
+  double get _bottomInset => MediaQuery.viewPaddingOf(context).bottom;
 
   Widget _content(WaybillsController waybills, AppLocalizations strings) {
     if (waybills.isLoading && waybills.items.isEmpty) {
@@ -127,7 +136,7 @@ class _WaybillsScreenState extends State<WaybillsScreen> {
           label: strings.retryButtonShort,
           onTap: _reload,
         ),
-        bottomInset: widget.bottomPadding,
+        bottomInset: _bottomInset,
       );
     }
 
@@ -140,7 +149,7 @@ class _WaybillsScreenState extends State<WaybillsScreen> {
           label: strings.cartNewButton,
           onTap: _newWaybill,
         ),
-        bottomInset: widget.bottomPadding,
+        bottomInset: _bottomInset,
       );
     }
 
@@ -188,7 +197,7 @@ class _WaybillsScreenState extends State<WaybillsScreen> {
             PlainPageTitle.gutter,
             4,
             PlainPageTitle.gutter,
-            widget.bottomPadding + MediaQuery.viewPaddingOf(context).bottom + 4,
+            _bottomInset + 4,
           ),
           child: AppWideButton(
             label: strings.cartNewButton,

@@ -29,23 +29,27 @@ Future<void> _signIn({required String role}) async {
   // hand-built one is exactly as good as a real one here.
   String chunk(Map<String, dynamic> m) =>
       base64Url.encode(utf8.encode(jsonEncode(m))).replaceAll('=', '');
-  final exp = DateTime.now().add(const Duration(days: 30)).millisecondsSinceEpoch ~/ 1000;
+  final exp =
+      DateTime.now().add(const Duration(days: 30)).millisecondsSinceEpoch ~/
+      1000;
 
   final store = {
-    'domix_jwt_token': '${chunk({'alg': 'HS256'})}.${chunk({'exp': exp})}.signature',
+    'domix_jwt_token':
+        '${chunk({'alg': 'HS256'})}.${chunk({'exp': exp})}.signature',
     'domix_user_role': role,
     'domix_user_name': 'Азиз Рихсиев',
     'domix_user_phone': '+998900000000',
   };
 
-  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
-    const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
-    (call) async => switch (call.method) {
-      'read' => store[(call.arguments as Map)['key']],
-      'readAll' => store,
-      _ => null,
-    },
-  );
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(
+        const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+        (call) async => switch (call.method) {
+          'read' => store[(call.arguments as Map)['key']],
+          'readAll' => store,
+          _ => null,
+        },
+      );
 
   // AuthController is a process-wide singleton, so a state left by one test would otherwise leak
   // into the next and make these pass or fail on declaration order
@@ -56,10 +60,11 @@ Future<void> _signIn({required String role}) async {
 /// An empty secure store: nobody is signed in. Same shape as [_signIn] so the singleton is reset
 /// the same way - a state left behind by another test is what would otherwise decide this one.
 Future<void> _signOut() async {
-  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
-    const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
-    (call) async => call.method == 'readAll' ? <String, String>{} : null,
-  );
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(
+        const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+        (call) async => call.method == 'readAll' ? <String, String>{} : null,
+      );
 
   await AuthController().logout();
   await AuthController().checkExistingLogin();
@@ -85,17 +90,22 @@ Future<void> _pumpProfile(WidgetTester tester) async {
 }
 
 void main() {
-  test('every role the server may authorize for shops maps to the owner profile', () {
-    // the pair authz.go lets through, and nothing else
-    expect(AuthController.canManageShops('shop_owner'), isTrue);
-    expect(AuthController.canManageShops('admin'), isTrue);
-    expect(AuthController.canManageShops('customer'), isFalse);
-    // an unknown role is not a shop owner: a value this version does not recognise must not be
-    // handed the destructive half of the app on a guess
-    expect(AuthController.canManageShops('worker'), isFalse);
-  });
+  test(
+    'every role the server may authorize for shops maps to the owner profile',
+    () {
+      // the pair authz.go lets through, and nothing else
+      expect(AuthController.canManageShops('shop_owner'), isTrue);
+      expect(AuthController.canManageShops('admin'), isTrue);
+      expect(AuthController.canManageShops('customer'), isFalse);
+      // an unknown role is not a shop owner: a value this version does not recognise must not be
+      // handed the destructive half of the app on a guess
+      expect(AuthController.canManageShops('worker'), isFalse);
+    },
+  );
 
-  testWidgets('an admin gets the shop-owner profile, not the customer one', (tester) async {
+  testWidgets('an admin gets the shop-owner profile, not the customer one', (
+    tester,
+  ) async {
     await _signIn(role: 'admin');
     await _pumpProfile(tester);
 
@@ -115,7 +125,9 @@ void main() {
     expect(find.text(_strings.deleteAccount), findsOneWidget);
   });
 
-  testWidgets('a guest gets the door into registration, not a profile', (tester) async {
+  testWidgets('a guest gets the door into registration, not a profile', (
+    tester,
+  ) async {
     await _signOut();
     await _pumpProfile(tester);
 
@@ -151,7 +163,9 @@ void main() {
     expect(find.text(_strings.stepCounter(1, 5)), findsOneWidget);
   });
 
-  testWidgets('tapping «Удалить аккаунт» opens the confirmation', (tester) async {
+  testWidgets('tapping «Удалить аккаунт» opens the confirmation', (
+    tester,
+  ) async {
     await _signIn(role: 'shop_owner');
     await _pumpProfile(tester);
 

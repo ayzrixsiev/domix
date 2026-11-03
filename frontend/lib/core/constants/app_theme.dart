@@ -44,7 +44,11 @@ class AppShadows {
 
   // a coloured glow under a primary button - the one place the brand colour bleeds outside its shape
   static List<BoxShadow> accent(Color color) => [
-    BoxShadow(color: color.withValues(alpha: 0.26), blurRadius: 18, offset: const Offset(0, 6)),
+    BoxShadow(
+      color: color.withValues(alpha: 0.26),
+      blurRadius: 18,
+      offset: const Offset(0, 6),
+    ),
   ];
 }
 

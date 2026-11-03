@@ -13,7 +13,6 @@ import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 
-
 /// The page's own title, and the thing every other element on the screen lines up against.
 ///
 /// **It carries the status bar style and the top inset.** Those came free with `AppPageHeader`; a
@@ -257,7 +256,10 @@ class BandRow extends StatelessWidget {
                 width: tileSize,
                 height: tileSize,
                 alignment: Alignment.center,
-                decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: radius),
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: radius,
+                ),
                 child: Icon(icon, size: 20, color: AppColors.primaryOrange),
               ),
               const SizedBox(width: tileGap),
@@ -283,10 +285,14 @@ class BandRow extends StatelessWidget {
                       maxLines: subtitleMaxLines,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: emphasizeSubtitle ? AppColors.textDark : AppColors.textGrey,
+                        color: emphasizeSubtitle
+                            ? AppColors.textDark
+                            : AppColors.textGrey,
                         fontSize: 12.5,
                         height: 1.35,
-                        fontWeight: emphasizeSubtitle ? FontWeight.w600 : FontWeight.w400,
+                        fontWeight: emphasizeSubtitle
+                            ? FontWeight.w600
+                            : FontWeight.w400,
                       ),
                     ),
                   ],
@@ -295,7 +301,11 @@ class BandRow extends StatelessWidget {
               const SizedBox(width: 10),
               ?trailing,
               const SizedBox(width: 4),
-              const Icon(LucideIcons.chevron_right, size: 18, color: AppColors.textFaint),
+              const Icon(
+                LucideIcons.chevron_right,
+                size: 18,
+                color: AppColors.textFaint,
+              ),
             ],
           ),
         ),

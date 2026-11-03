@@ -16,8 +16,12 @@ class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
   // the address Yandex's free-use terms name for this link
-  static final Uri yandexMapsTerms = Uri.parse('https://yandex.ru/legal/maps_api/');
-  static final Uri openStreetMapCopyright = Uri.parse('https://www.openstreetmap.org/copyright');
+  static final Uri yandexMapsTerms = Uri.parse(
+    'https://yandex.ru/legal/maps_api/',
+  );
+  static final Uri openStreetMapCopyright = Uri.parse(
+    'https://www.openstreetmap.org/copyright',
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -40,14 +44,26 @@ class AboutScreen extends StatelessWidget {
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
-                  _LinkRow(icon: LucideIcons.map, title: strings.yandexMapsTerms, uri: yandexMapsTerms),
-                  const Divider(height: 1, thickness: 1, color: AppColors.hairline),
+                  _LinkRow(
+                    icon: LucideIcons.map,
+                    title: strings.yandexMapsTerms,
+                    uri: yandexMapsTerms,
+                  ),
+                  const Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: AppColors.hairline,
+                  ),
                   _LinkRow(
                     icon: LucideIcons.map_pin,
                     title: strings.openStreetMapCredit,
                     uri: openStreetMapCopyright,
                   ),
-                  const Divider(height: 1, thickness: 1, color: AppColors.hairline),
+                  const Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: AppColors.hairline,
+                  ),
                   // the site's home page, not one document: it links the terms and the policy
                   _LinkRow(
                     icon: LucideIcons.file_text,
@@ -98,7 +114,11 @@ class _LinkRow extends StatelessWidget {
                     ),
                   ),
                 ),
-                const Icon(CupertinoIcons.arrow_up_right, color: AppColors.textFaint, size: 15),
+                const Icon(
+                  CupertinoIcons.arrow_up_right,
+                  color: AppColors.textFaint,
+                  size: 15,
+                ),
               ],
             ),
           ),

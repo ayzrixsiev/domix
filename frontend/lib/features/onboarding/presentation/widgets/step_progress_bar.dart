@@ -39,7 +39,9 @@ class StepProgressBar extends StatelessWidget {
                 decoration: BoxDecoration(
                   // trackGrey is the token for something sitting on the page background; a filled
                   // segment is brand orange because finishing a step is progress the user made
-                  color: i <= currentStep ? AppColors.primaryOrange : AppColors.trackGrey,
+                  color: i <= currentStep
+                      ? AppColors.primaryOrange
+                      : AppColors.trackGrey,
                   borderRadius: BorderRadius.circular(AppRadius.xs),
                 ),
               ),

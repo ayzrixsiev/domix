@@ -47,7 +47,10 @@ class OnboardingFlow extends StatefulWidget {
   /// Opens the flow over whatever is on screen, and answers whether an account came out of it.
   static Future<bool> open(BuildContext context) async {
     final signedIn = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const OnboardingFlow(), fullscreenDialog: true),
+      MaterialPageRoute(
+        builder: (_) => const OnboardingFlow(),
+        fullscreenDialog: true,
+      ),
     );
     return signedIn ?? false;
   }
@@ -106,12 +109,12 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   /// the enum - "изменить номер" is the only sensible retreat from a code that went to the wrong
   /// phone.
   VoidCallback? get _onBack => switch (_step) {
-        _Step.language => null,
-        _Step.policy => () => _goTo(_Step.language),
-        _Step.profile => () => _goTo(_Step.policy),
-        _Step.phone => () => _goTo(_Step.profile),
-        _Step.code => _changePhone,
-      };
+    _Step.language => null,
+    _Step.policy => () => _goTo(_Step.language),
+    _Step.profile => () => _goTo(_Step.policy),
+    _Step.phone => () => _goTo(_Step.profile),
+    _Step.code => _changePhone,
+  };
 
   void _changePhone() {
     _resendTimer?.cancel();
@@ -162,10 +165,10 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
 
     try {
       final result = await context.read<AuthController>().requestCode(
-            phone: '998$digits',
-            name: _nameController.text.trim(),
-            role: _role.code,
-          );
+        phone: '998$digits',
+        name: _nameController.text.trim(),
+        role: _role.code,
+      );
       if (!mounted) return;
       _canonicalPhone = result.phone;
       _startResendCountdown(result.resendAfter);
@@ -214,7 +217,10 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     });
 
     try {
-      await context.read<AuthController>().verifyCode(phone: _canonicalPhone, code: code);
+      await context.read<AuthController>().verifyCode(
+        phone: _canonicalPhone,
+        code: code,
+      );
 
       if (!mounted) return;
       // the flow is a route now, so it has to take itself off the screen - the profile it was opened
@@ -236,7 +242,11 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   }
 
   /// The refusals that mean the pending code is gone rather than mistyped - see CodeManager.Verify.
-  static const _deadCodeErrors = {'code_attempts_exhausted', 'code_expired', 'code_not_found'};
+  static const _deadCodeErrors = {
+    'code_attempts_exhausted',
+    'code_expired',
+    'code_not_found',
+  };
 
   Future<void> _resendCode() async {
     if (_resendIn > 0 || _busy) return;
@@ -353,12 +363,12 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   static const double _progressExtent = 18 + 12;
 
   Widget _stepBody(AppLocalizations strings) => switch (_step) {
-        _Step.language => _languageStep(strings),
-        _Step.policy => _policyStep(strings),
-        _Step.profile => _profileStep(strings),
-        _Step.phone => _phoneStep(strings),
-        _Step.code => _codeStep(strings),
-      };
+    _Step.language => _languageStep(strings),
+    _Step.policy => _policyStep(strings),
+    _Step.profile => _profileStep(strings),
+    _Step.phone => _phoneStep(strings),
+    _Step.code => _codeStep(strings),
+  };
 
   /// **The error is drawn here and not in the footer**: in the footer it changed the footer's height,
   /// which moved «Далее» up and down between steps.
@@ -377,7 +387,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         padding: padding,
         physics: const BouncingScrollPhysics(),
         child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: constraints.maxHeight - padding.vertical),
+          constraints: BoxConstraints(
+            minHeight: constraints.maxHeight - padding.vertical,
+          ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -389,7 +401,11 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
               if (body != null) ...[
                 Text(
                   body,
-                  style: const TextStyle(color: AppColors.textMuted, fontSize: 13.5, height: 1.45),
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 13.5,
+                    height: 1.45,
+                  ),
                 ),
                 const SizedBox(height: 18),
               ],
@@ -415,9 +431,12 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
             title: language.displayName,
             // named in the language being offered, so somebody who cannot read the current one can
             // still find theirs
-            subtitle: language == AppLanguage.ru ? 'Русский язык' : "O'zbek tili",
+            subtitle: language == AppLanguage.ru
+                ? 'Русский язык'
+                : "O'zbek tili",
             isSelected: language == current,
-            onTap: () => context.read<LanguageProvider>().updateLanguage(language),
+            onTap: () =>
+                context.read<LanguageProvider>().updateLanguage(language),
           ),
           const SizedBox(height: 10),
         ],
@@ -475,7 +494,11 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
             onPressed: () => _showPolicySheet(strings, language),
-            icon: const Icon(LucideIcons.book_open, size: 16, color: AppColors.primaryOrange),
+            icon: const Icon(
+              LucideIcons.book_open,
+              size: 16,
+              color: AppColors.primaryOrange,
+            ),
             label: Text(
               strings.policyReadFull,
               style: const TextStyle(
@@ -547,7 +570,10 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                   const SizedBox(height: 4),
                   Text(
                     strings.policyRevision(policyVersion),
-                    style: const TextStyle(color: AppColors.textFaint, fontSize: 12),
+                    style: const TextStyle(
+                      color: AppColors.textFaint,
+                      fontSize: 12,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   for (final section in privacyPolicySections(language)) ...[
@@ -628,7 +654,10 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
             LengthLimitingTextInputFormatter(9),
           ],
           style: appPhoneTextStyle,
-          decoration: appFieldDecoration(hint: '90 123 45 67', prefix: appPhonePrefix),
+          decoration: appFieldDecoration(
+            hint: '90 123 45 67',
+            prefix: appPhonePrefix,
+          ),
           onChanged: (_) {
             if (_error != null) setState(() => _error = null);
           },
@@ -656,7 +685,10 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           child: _resendIn > 0
               ? Text(
                   strings.resendCodeIn(_resendIn),
-                  style: const TextStyle(color: AppColors.textFaint, fontSize: 13),
+                  style: const TextStyle(
+                    color: AppColors.textFaint,
+                    fontSize: 13,
+                  ),
                 )
               : TextButton(
                   onPressed: _busy ? null : _resendCode,
@@ -673,7 +705,6 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       ],
     );
   }
-
 
   /// **Both slots are always drawn**, the back one empty on the first step, and the error lives in the
   /// scrolling content - otherwise the footer is three heights across five steps and «Далее» walks up
@@ -693,7 +724,11 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          AppWideButton(label: label, busy: _busy, onTap: _busy ? null : _onPrimaryAction),
+          AppWideButton(
+            label: label,
+            busy: _busy,
+            onTap: _busy ? null : _onPrimaryAction,
+          ),
           // the two were touching: a TextButton's own padding is the only thing that was between
           // them, which read as one control with a caption stuck under it
           const SizedBox(height: 12),
@@ -704,7 +739,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                 : TextButton(
                     onPressed: _busy ? null : _onBack,
                     child: Text(
-                      _step == _Step.code ? strings.changePhoneButton : strings.stepBackButton,
+                      _step == _Step.code
+                          ? strings.changePhoneButton
+                          : strings.stepBackButton,
                       style: const TextStyle(
                         color: AppColors.textMuted,
                         fontSize: 13.5,
@@ -718,8 +755,6 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     );
   }
 }
-
-
 
 /// The consent tick. A whole tappable row rather than a bare `Checkbox`, because a 20px box is
 /// below every touch-target guideline there is and this is the one control that has to be
@@ -752,15 +787,23 @@ class _ConsentCheckbox extends StatelessWidget {
                 height: 22,
                 width: 22,
                 decoration: BoxDecoration(
-                  color: value ? AppColors.primaryOrange : AppColors.surfaceWhite,
+                  color: value
+                      ? AppColors.primaryOrange
+                      : AppColors.surfaceWhite,
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
-                    color: value ? AppColors.primaryOrange : AppColors.trackGrey,
+                    color: value
+                        ? AppColors.primaryOrange
+                        : AppColors.trackGrey,
                     width: 1.5,
                   ),
                 ),
                 child: value
-                    ? const Icon(LucideIcons.check, size: 15, color: Colors.white)
+                    ? const Icon(
+                        LucideIcons.check,
+                        size: 15,
+                        color: Colors.white,
+                      )
                     : null,
               ),
               const SizedBox(width: 12),
@@ -782,5 +825,3 @@ class _ConsentCheckbox extends StatelessWidget {
     );
   }
 }
-
-

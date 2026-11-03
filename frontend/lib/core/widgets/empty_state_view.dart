@@ -91,10 +91,7 @@ class EmptyStateView extends StatelessWidget {
                 ),
               ),
             ],
-            if (action != null) ...[
-              const SizedBox(height: 26),
-              action!,
-            ],
+            if (action != null) ...[const SizedBox(height: 26), action!],
           ],
         ),
       ),

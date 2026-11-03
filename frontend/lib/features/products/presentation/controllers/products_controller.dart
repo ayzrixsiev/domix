@@ -11,7 +11,8 @@ import '../../data/products_repository.dart';
 class ProductsController extends ChangeNotifier {
   final ProductsRepository _repo;
 
-  ProductsController({ProductsRepository? repository}) : _repo = repository ?? ProductsRepository();
+  ProductsController({ProductsRepository? repository})
+    : _repo = repository ?? ProductsRepository();
 
   final Map<int, List<Product>> _byShop = {};
 
@@ -56,7 +57,8 @@ class ProductsController extends ChangeNotifier {
 
   /// the backend enforces the cap; this is only for showing "12 / 20" and greying the add tile out
   /// before a doomed round trip
-  int customCountFor(int shopId) => productsFor(shopId).where((p) => !p.isTemplate).length;
+  int customCountFor(int shopId) =>
+      productsFor(shopId).where((p) => !p.isTemplate).length;
 
   /// How many of the shop's *basket* rows have a price. Basket rows only, and that is not a detail: the
   /// index counts a shop only once every basket row is priced, and neither the owner's own products
@@ -78,8 +80,10 @@ class ProductsController extends ChangeNotifier {
 
   /// [force] re-fetches a shop already in the cache, which is what a pull-to-refresh wants.
   Future<void> loadProducts(int shopId, {bool force = false}) async {
-    if (_loadingShopIds.contains(shopId)) return; // a second call while one is in flight is a no-op
-    if (!force && _byShop.containsKey(shopId) && !_stale.contains(shopId)) return;
+    if (_loadingShopIds.contains(shopId))
+      return; // a second call while one is in flight is a no-op
+    if (!force && _byShop.containsKey(shopId) && !_stale.contains(shopId))
+      return;
 
     _loadingShopIds.add(shopId);
     _failedLoads.remove(shopId);
@@ -99,7 +103,10 @@ class ProductsController extends ChangeNotifier {
 
   /// returns the saved product on success, null on failure ([saveError] then holds the reason) -
   /// which is what lets the caller pop back to a grid that is already correct instead of re-fetching
-  Future<Product?> addProduct({required int shopId, required Product draft}) async {
+  Future<Product?> addProduct({
+    required int shopId,
+    required Product draft,
+  }) async {
     return _mutate(() async {
       final created = await _repo.createProduct(shopId: shopId, draft: draft);
       // appended, not re-fetched: the backend orders template rows first and the owner's own after, so a
@@ -120,8 +127,13 @@ class ProductsController extends ChangeNotifier {
 
   /// Attaches a photo to a product that already exists. [filePath] is what `image_picker` handed
   /// back - a file in the app's own cache, already re-encoded to jpeg at the size asked for.
-  Future<Product?> uploadProductPhoto({required Product product, required String filePath}) {
-    return _mutatePhoto(() => _repo.uploadProductImage(productId: product.id, filePath: filePath));
+  Future<Product?> uploadProductPhoto({
+    required Product product,
+    required String filePath,
+  }) {
+    return _mutatePhoto(
+      () => _repo.uploadProductImage(productId: product.id, filePath: filePath),
+    );
   }
 
   /// Removes it again. The product comes back carrying whatever photo it *should* have now, which for
@@ -166,11 +178,19 @@ class ProductsController extends ChangeNotifier {
     } on ProductMutationException catch (e) {
       _photoError = e;
     } on TimeoutException catch (e) {
-      _photoError = ProductMutationException(code: 'timeout', message: e.toString());
+      _photoError = ProductMutationException(
+        code: 'timeout',
+        message: e.toString(),
+      );
     } catch (e) {
       // the real exception goes to the log rather than into a `message` field nothing renders
-      debugPrint('ProductsController: unexpected error during a photo upload: $e');
-      _photoError = ProductMutationException(code: 'server_error', message: e.toString());
+      debugPrint(
+        'ProductsController: unexpected error during a photo upload: $e',
+      );
+      _photoError = ProductMutationException(
+        code: 'server_error',
+        message: e.toString(),
+      );
     }
 
     _isPhotoBusy = false;
@@ -193,13 +213,19 @@ class ProductsController extends ChangeNotifier {
     } on TimeoutException catch (e) {
       // its own code: "did not come back in ten seconds" is nearly always transient and the advice is to
       // press save again, which is the opposite of what a generic failure message suggests
-      _saveError = ProductMutationException(code: 'timeout', message: e.toString());
+      _saveError = ProductMutationException(
+        code: 'timeout',
+        message: e.toString(),
+      );
     } catch (e) {
       // **the real exception used to end here and go no further** - stored in `message`, which nothing
       // renders, while the ui printed the switch's default and blamed the user's connection. logging it
       // is what makes the next one ten minutes of `adb logcat`.
       debugPrint('ProductsController: unexpected error during mutation: $e');
-      _saveError = ProductMutationException(code: 'server_error', message: e.toString());
+      _saveError = ProductMutationException(
+        code: 'server_error',
+        message: e.toString(),
+      );
     }
 
     _isSaving = false;

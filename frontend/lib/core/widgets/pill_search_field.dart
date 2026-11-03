@@ -100,8 +100,11 @@ class _PillSearchFieldState extends State<PillSearchField> {
       behavior: HitTestBehavior.opaque,
       onTap: _focusNode.requestFocus,
       child: Container(
-        height: widget.height ??
-            (floating ? PillSearchField.floatingHeight : PillSearchField.pageHeight),
+        height:
+            widget.height ??
+            (floating
+                ? PillSearchField.floatingHeight
+                : PillSearchField.pageHeight),
         // wider on the left than a rounded rectangle needed: at a capsule's radius a glyph 14px in
         // sits on the curve rather than beside it
         padding: const EdgeInsets.only(left: 18, right: 10),
@@ -169,7 +172,11 @@ class _PillSearchFieldState extends State<PillSearchField> {
                     child: const SizedBox(
                       width: 36,
                       height: 36,
-                      child: Icon(LucideIcons.x, color: AppColors.textMuted, size: 18),
+                      child: Icon(
+                        LucideIcons.x,
+                        color: AppColors.textMuted,
+                        size: 18,
+                      ),
                     ),
                   );
                   return widget.clearTooltip == null

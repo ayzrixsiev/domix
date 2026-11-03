@@ -59,25 +59,35 @@ Product _product({
 
 /// The header's own fill: the page's colour, so it sits flush instead of reading as a toolbar.
 Finder _headerSurface() => find.descendant(
-      of: find.byType(AppPageHeader),
-      matching: find.byWidgetPredicate(
-        (w) => w is ColoredBox && w.color == AppColors.background,
-      ),
-    );
+  of: find.byType(AppPageHeader),
+  matching: find.byWidgetPredicate(
+    (w) => w is ColoredBox && w.color == AppColors.background,
+  ),
+);
 
 Future<Size> _pumpHeader(WidgetTester tester, AppPageHeader header) async {
-  await tester.pumpWidget(MaterialApp(
-    home: Scaffold(backgroundColor: AppColors.background, appBar: header),
-  ));
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(backgroundColor: AppColors.background, appBar: header),
+    ),
+  );
   return tester.getSize(_headerSurface());
 }
 
 void main() {
   group('the page header', () {
-    testWidgets('spans the full width of the screen and carries no divider', (tester) async {
-      final size = await _pumpHeader(tester, const AppPageHeader(title: 'Мои магазины'));
+    testWidgets('spans the full width of the screen and carries no divider', (
+      tester,
+    ) async {
+      final size = await _pumpHeader(
+        tester,
+        const AppPageHeader(title: 'Мои магазины'),
+      );
 
-      expect(size.width, tester.view.physicalSize.width / tester.view.devicePixelRatio);
+      expect(
+        size.width,
+        tester.view.physicalSize.width / tester.view.devicePixelRatio,
+      );
       expect(size.height, greaterThan(40));
       expect(
         find.byWidgetPredicate(
@@ -87,19 +97,29 @@ void main() {
       );
     });
 
-    testWidgets('sits flush on the page: its own colour, no shadow of its own', (tester) async {
+    testWidgets('sits flush on the page: its own colour, no shadow of its own', (
+      tester,
+    ) async {
       await _pumpHeader(tester, const AppPageHeader(title: 'Мои магазины'));
 
       // a band of a second colour with a shadow under it is what read as a toolbar bolted on: the
       // only decorated box left in a title-only header is the back disc
       expect(
-        find.descendant(of: find.byType(AppPageHeader), matching: find.byType(DecoratedBox)),
+        find.descendant(
+          of: find.byType(AppPageHeader),
+          matching: find.byType(DecoratedBox),
+        ),
         findsOneWidget,
       );
     });
 
-    testWidgets('is exactly as tall with a subtitle as without one', (tester) async {
-      final plain = await _pumpHeader(tester, const AppPageHeader(title: 'Заявки'));
+    testWidgets('is exactly as tall with a subtitle as without one', (
+      tester,
+    ) async {
+      final plain = await _pumpHeader(
+        tester,
+        const AppPageHeader(title: 'Заявки'),
+      );
       final withSubtitle = await _pumpHeader(
         tester,
         const AppPageHeader(title: 'Заявки', subtitle: 'Ваши заявки мастерам'),
@@ -110,7 +130,9 @@ void main() {
       expect(withSubtitle.height, plain.height);
     });
 
-    testWidgets('and its two ends are the same control at the same size', (tester) async {
+    testWidgets('and its two ends are the same control at the same size', (
+      tester,
+    ) async {
       await _pumpHeader(
         tester,
         AppPageHeader(
@@ -119,116 +141,149 @@ void main() {
         ),
       );
 
-      final discs = tester.widgetList<CircleIconButton>(find.byType(CircleIconButton));
+      final discs = tester.widgetList<CircleIconButton>(
+        find.byType(CircleIconButton),
+      );
       expect(discs.length, 2);
-      final sizes = find.byType(CircleIconButton).evaluate().map(
-            (e) => tester.getSize(find.byWidget(e.widget)),
-          );
+      final sizes = find
+          .byType(CircleIconButton)
+          .evaluate()
+          .map((e) => tester.getSize(find.byWidget(e.widget)));
       expect(sizes.toSet().length, 1);
     });
 
-    testWidgets('and a header carrying a search field sizes its discs to the field', (tester) async {
-      final controller = TextEditingController();
-      addTearDown(controller.dispose);
+    testWidgets(
+      'and a header carrying a search field sizes its discs to the field',
+      (tester) async {
+        final controller = TextEditingController();
+        addTearDown(controller.dispose);
 
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          backgroundColor: AppColors.background,
-          appBar: AppPageHeader.custom(
-            action: CircleIconButton(
-              icon: Icons.close_rounded,
-              diameter: AppPageHeader.customDisc,
-              onTap: () {},
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              backgroundColor: AppColors.background,
+              appBar: AppPageHeader.custom(
+                action: CircleIconButton(
+                  icon: Icons.close_rounded,
+                  diameter: AppPageHeader.customDisc,
+                  onTap: () {},
+                ),
+                child: PillSearchField(controller: controller, hint: 'Поиск'),
+              ),
             ),
-            child: PillSearchField(controller: controller, hint: 'Поиск'),
           ),
-        ),
-      ));
-
-      final field = tester.getSize(find.byType(PillSearchField));
-      for (final disc in find.byType(CircleIconButton).evaluate()) {
-        expect(
-          tester.getSize(find.byWidget(disc.widget)).height,
-          field.height,
-          // a disc 8px shorter than the capsule beside it reads as the lesser half of the bar,
-          // which is what the search screen's back button looked like
-          reason: 'a disc beside a search field is that field\'s height',
         );
-      }
-    });
+
+        final field = tester.getSize(find.byType(PillSearchField));
+        for (final disc in find.byType(CircleIconButton).evaluate()) {
+          expect(
+            tester.getSize(find.byWidget(disc.widget)).height,
+            field.height,
+            // a disc 8px shorter than the capsule beside it reads as the lesser half of the bar,
+            // which is what the search screen's back button looked like
+            reason: 'a disc beside a search field is that field\'s height',
+          );
+        }
+      },
+    );
   });
 
   group('the product card', () {
     Future<void> pumpTile(WidgetTester tester, {required Widget tile}) {
-      return tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: SizedBox(width: _narrowestTile, height: ProductTile.height, child: tile),
+      return tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: _narrowestTile,
+                height: ProductTile.height,
+                child: tile,
+              ),
+            ),
           ),
         ),
-      ));
+      );
     }
 
-    testWidgets('fits a long name, the description, a price and a shop at the narrowest width',
-        (tester) async {
-      await pumpTile(
-        tester,
-        tile: ProductTile(
-          product: _product(specs: 'Оригинальный · Иран · Эрон · 1 кг · Белый · Для дерева'),
-          strings: _strings,
-          subtitle: 'Qurilish Baza',
-          showBuyerActions: true,
-        ),
-      );
-
-      // a fixed-height tile that does not fit its content overflows rather than scrolling
-      expect(tester.takeException(), isNull);
-      expect(find.text('В наличии'), findsOneWidget);
-      expect(find.text('Qurilish Baza'), findsOneWidget);
-      expect(find.textContaining('Оригинальный · Иран'), findsOneWidget);
-      expect(find.text('/ кг'), findsOneWidget);
-    });
-
-    testWidgets('states its availability on every tile, not only the awkward ones', (tester) async {
-      for (final (availability, label) in [
-        (ProductAvailability.inStock, 'В наличии'),
-        (ProductAvailability.onOrder, 'Под заказ'),
-        (ProductAvailability.unavailable, 'Нет в наличии'),
-      ]) {
+    testWidgets(
+      'fits a long name, the description, a price and a shop at the narrowest width',
+      (tester) async {
         await pumpTile(
           tester,
-          tile: ProductTile(product: _product(availability: availability), strings: _strings),
+          tile: ProductTile(
+            product: _product(
+              specs: 'Оригинальный · Иран · Эрон · 1 кг · Белый · Для дерева',
+            ),
+            strings: _strings,
+            subtitle: 'Qurilish Baza',
+            showBuyerActions: true,
+          ),
         );
-        expect(find.text(label), findsOneWidget, reason: 'for $availability');
-      }
-    });
+
+        // a fixed-height tile that does not fit its content overflows rather than scrolling
+        expect(tester.takeException(), isNull);
+        expect(find.text('В наличии'), findsOneWidget);
+        expect(find.text('Qurilish Baza'), findsOneWidget);
+        expect(find.textContaining('Оригинальный · Иран'), findsOneWidget);
+        expect(find.text('/ кг'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'states its availability on every tile, not only the awkward ones',
+      (tester) async {
+        for (final (availability, label) in [
+          (ProductAvailability.inStock, 'В наличии'),
+          (ProductAvailability.onOrder, 'Под заказ'),
+          (ProductAvailability.unavailable, 'Нет в наличии'),
+        ]) {
+          await pumpTile(
+            tester,
+            tile: ProductTile(
+              product: _product(availability: availability),
+              strings: _strings,
+            ),
+          );
+          expect(find.text(label), findsOneWidget, reason: 'for $availability');
+        }
+      },
+    );
 
     testWidgets('keeps the heart off the owner\'s own grid', (tester) async {
       await pumpTile(
         tester,
-        tile: ProductTile(product: _product(), strings: _strings, showOwnBadge: true),
-      );
-
-      expect(tester.takeException(), isNull);
-      // the owner is not shopping in their own catalogue
-      expect(find.bySemanticsLabel(_strings.addToFavouritesLabel), findsNothing);
-    });
-
-    testWidgets('an unpriced product still fits, with the prompt where the price goes',
-        (tester) async {
-      await pumpTile(
-        tester,
         tile: ProductTile(
-          product: _product(price: null),
+          product: _product(),
           strings: _strings,
-          subtitle: 'Дом Строй',
-          showBuyerActions: true,
+          showOwnBadge: true,
         ),
       );
 
       expect(tester.takeException(), isNull);
-      expect(find.text(_strings.priceNotSet), findsOneWidget);
+      // the owner is not shopping in their own catalogue
+      expect(
+        find.bySemanticsLabel(_strings.addToFavouritesLabel),
+        findsNothing,
+      );
     });
+
+    testWidgets(
+      'an unpriced product still fits, with the prompt where the price goes',
+      (tester) async {
+        await pumpTile(
+          tester,
+          tile: ProductTile(
+            product: _product(price: null),
+            strings: _strings,
+            subtitle: 'Дом Строй',
+            showBuyerActions: true,
+          ),
+        );
+
+        expect(tester.takeException(), isNull);
+        expect(find.text(_strings.priceNotSet), findsOneWidget);
+      },
+    );
   });
 
   /// The filter field is not on the header until it is asked for - see ProductResultsScreen.
@@ -239,9 +294,9 @@ void main() {
 
   group('the category filter', () {
     CategoryProduct entry(String name, String shop) => CategoryProduct(
-          product: _product(name: name),
-          shopName: shop,
-        );
+      product: _product(name: name),
+      shopName: shop,
+    );
 
     final catalogue = [
       entry('Клей ПВА Эрон', 'Qurilish Baza'),
@@ -250,46 +305,52 @@ void main() {
     ];
 
     Future<void> pumpCategory(WidgetTester tester) async {
-      await tester.pumpWidget(MultiProvider(
-        providers: [
-          ChangeNotifierProvider(create: (_) => LanguageProvider()),
-          // the hearts on the grid read it; nothing here taps one
-          ChangeNotifierProvider(create: (_) => FavoritesController()),
-        ],
-        child: MaterialApp(
-          home: ProductResultsScreen(
-            title: 'Смеси',
-            load: () async => catalogue,
-            emptyIcon: LucideIcons.container,
-            emptyTitle: 'пусто',
-            emptyHint: 'пока ничего',
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => LanguageProvider()),
+            // the hearts on the grid read it; nothing here taps one
+            ChangeNotifierProvider(create: (_) => FavoritesController()),
+          ],
+          child: MaterialApp(
+            home: ProductResultsScreen(
+              title: 'Смеси',
+              load: () async => catalogue,
+              emptyIcon: LucideIcons.container,
+              emptyTitle: 'пусто',
+              emptyHint: 'пока ничего',
+            ),
           ),
         ),
-      ));
+      );
       await tester.pumpAndSettle();
     }
 
-    testWidgets('narrows the loaded list as it is typed, without refetching', (tester) async {
+    testWidgets('narrows the loaded list as it is typed, without refetching', (
+      tester,
+    ) async {
       var loads = 0;
-      await tester.pumpWidget(MultiProvider(
-        providers: [
-          ChangeNotifierProvider(create: (_) => LanguageProvider()),
-          // the hearts on the grid read it; nothing here taps one
-          ChangeNotifierProvider(create: (_) => FavoritesController()),
-        ],
-        child: MaterialApp(
-          home: ProductResultsScreen(
-            title: 'Смеси',
-            load: () async {
-              loads++;
-              return catalogue;
-            },
-            emptyIcon: LucideIcons.container,
-            emptyTitle: 'пусто',
-            emptyHint: 'пока ничего',
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => LanguageProvider()),
+            // the hearts on the grid read it; nothing here taps one
+            ChangeNotifierProvider(create: (_) => FavoritesController()),
+          ],
+          child: MaterialApp(
+            home: ProductResultsScreen(
+              title: 'Смеси',
+              load: () async {
+                loads++;
+                return catalogue;
+              },
+              emptyIcon: LucideIcons.container,
+              emptyTitle: 'пусто',
+              emptyHint: 'пока ничего',
+            ),
           ),
         ),
-      ));
+      );
       await tester.pumpAndSettle();
       expect(find.text('Цемент М400'), findsOneWidget);
 
@@ -303,7 +364,9 @@ void main() {
       expect(loads, 1, reason: 'the filter must not refetch');
     });
 
-    testWidgets('matches every word in any order, and matches the shop too', (tester) async {
+    testWidgets('matches every word in any order, and matches the shop too', (
+      tester,
+    ) async {
       await pumpCategory(tester);
       await openSearch(tester);
 
@@ -319,7 +382,9 @@ void main() {
       expect(find.text('Клей ПВА Эрон'), findsNothing);
     });
 
-    testWidgets('says the filter found nothing, not that the category is bare', (tester) async {
+    testWidgets('says the filter found nothing, not that the category is bare', (
+      tester,
+    ) async {
       await pumpCategory(tester);
       await openSearch(tester);
       await tester.enterText(find.byType(TextField), 'ламинат');
@@ -330,7 +395,9 @@ void main() {
       expect(find.text('пусто'), findsNothing);
     });
 
-    testWidgets('the count in the header follows what is on screen', (tester) async {
+    testWidgets('the count in the header follows what is on screen', (
+      tester,
+    ) async {
       await pumpCategory(tester);
       expect(find.text(_strings.productsCountLabel(3)), findsOneWidget);
 
@@ -350,23 +417,26 @@ void main() {
       expect(find.text(_strings.productsCountLabel(3)), findsOneWidget);
     });
 
-    testWidgets('and there is no field on the header until the magnifier is tapped',
-        (tester) async {
-      await pumpCategory(tester);
+    testWidgets(
+      'and there is no field on the header until the magnifier is tapped',
+      (tester) async {
+        await pumpCategory(tester);
 
-      // the whole point of the magnifier: a category page opens saying which category it is
-      expect(find.byType(TextField), findsNothing);
-      expect(find.text('Смеси'), findsOneWidget);
+        // the whole point of the magnifier: a category page opens saying which category it is
+        expect(find.byType(TextField), findsNothing);
+        expect(find.text('Смеси'), findsOneWidget);
 
-      await openSearch(tester);
+        await openSearch(tester);
 
-      expect(find.byType(TextField), findsOneWidget);
-      // the title has stepped aside rather than moved over
-      expect(find.text('Смеси'), findsNothing);
-    });
+        expect(find.byType(TextField), findsOneWidget);
+        // the title has stepped aside rather than moved over
+        expect(find.text('Смеси'), findsNothing);
+      },
+    );
 
-    testWidgets('the magnifier becomes the field rather than being replaced by one',
-        (tester) async {
+    testWidgets('the magnifier becomes the field rather than being replaced by one', (
+      tester,
+    ) async {
       await pumpCategory(tester);
       await tester.tap(find.byKey(const ValueKey('open-search')));
 
@@ -388,11 +458,20 @@ void main() {
   group('searching from a category page', () {
     // the category holds mixes; the catalogue also holds wallpaper, which the category never returns
     final inCategory = [
-      CategoryProduct(product: _product(name: 'Клей ПВА Эрон'), shopName: 'Qurilish Baza'),
-      CategoryProduct(product: _product(name: 'Цемент М400'), shopName: 'Дом Строй'),
+      CategoryProduct(
+        product: _product(name: 'Клей ПВА Эрон'),
+        shopName: 'Qurilish Baza',
+      ),
+      CategoryProduct(
+        product: _product(name: 'Цемент М400'),
+        shopName: 'Дом Строй',
+      ),
     ];
     final acrossCatalogue = [
-      CategoryProduct(product: _product(name: 'Обои Erismann'), shopName: 'Обои Плюс'),
+      CategoryProduct(
+        product: _product(name: 'Обои Erismann'),
+        shopName: 'Обои Плюс',
+      ),
     ];
 
     Future<void> pump(
@@ -400,32 +479,36 @@ void main() {
       required List<String> searched,
       bool withSearch = true,
     }) async {
-      await tester.pumpWidget(MultiProvider(
-        providers: [
-          ChangeNotifierProvider(create: (_) => LanguageProvider()),
-          // the hearts on the grid read it; nothing here taps one
-          ChangeNotifierProvider(create: (_) => FavoritesController()),
-        ],
-        child: MaterialApp(
-          home: ProductResultsScreen(
-            title: 'Смеси',
-            load: () async => inCategory,
-            onSearch: withSearch
-                ? (q, _) async {
-                    searched.add(q);
-                    return acrossCatalogue;
-                  }
-                : null,
-            emptyIcon: LucideIcons.container,
-            emptyTitle: 'пусто',
-            emptyHint: 'пока ничего',
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => LanguageProvider()),
+            // the hearts on the grid read it; nothing here taps one
+            ChangeNotifierProvider(create: (_) => FavoritesController()),
+          ],
+          child: MaterialApp(
+            home: ProductResultsScreen(
+              title: 'Смеси',
+              load: () async => inCategory,
+              onSearch: withSearch
+                  ? (q, _) async {
+                      searched.add(q);
+                      return acrossCatalogue;
+                    }
+                  : null,
+              emptyIcon: LucideIcons.container,
+              emptyTitle: 'пусто',
+              emptyHint: 'пока ничего',
+            ),
           ),
         ),
-      ));
+      );
       await tester.pumpAndSettle();
     }
 
-    testWidgets('typing narrows this category only, and costs no request', (tester) async {
+    testWidgets('typing narrows this category only, and costs no request', (
+      tester,
+    ) async {
       final searched = <String>[];
       await pump(tester, searched: searched);
       await openSearch(tester);
@@ -438,23 +521,28 @@ void main() {
       expect(searched, isEmpty, reason: 'narrowing must not hit the api');
     });
 
-    testWidgets('the search key leaves the category and searches the whole catalogue',
-        (tester) async {
-      final searched = <String>[];
-      await pump(tester, searched: searched);
-      await openSearch(tester);
+    testWidgets(
+      'the search key leaves the category and searches the whole catalogue',
+      (tester) async {
+        final searched = <String>[];
+        await pump(tester, searched: searched);
+        await openSearch(tester);
 
-      await tester.enterText(find.byType(TextField), 'обои');
-      await tester.testTextInput.receiveAction(TextInputAction.search);
-      await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'обои');
+        await tester.testTextInput.receiveAction(TextInputAction.search);
+        await tester.pumpAndSettle();
 
-      expect(searched, ['обои']);
-      // a product this category could never have returned is now on screen
-      expect(find.text('Обои Erismann'), findsOneWidget);
-      expect(find.text('Клей ПВА Эрон'), findsNothing);
-      // and the header stops claiming these are Смеси
-      expect(find.textContaining(_strings.searchAcrossCategories), findsOneWidget);
-    });
+        expect(searched, ['обои']);
+        // a product this category could never have returned is now on screen
+        expect(find.text('Обои Erismann'), findsOneWidget);
+        expect(find.text('Клей ПВА Эрон'), findsNothing);
+        // and the header stops claiming these are Смеси
+        expect(
+          find.textContaining(_strings.searchAcrossCategories),
+          findsOneWidget,
+        );
+      },
+    );
 
     testWidgets('clearing drops back into the category', (tester) async {
       final searched = <String>[];
@@ -473,10 +561,15 @@ void main() {
 
       expect(find.text('Клей ПВА Эрон'), findsOneWidget);
       expect(find.text('Цемент М400'), findsOneWidget);
-      expect(find.textContaining(_strings.searchAcrossCategories), findsNothing);
+      expect(
+        find.textContaining(_strings.searchAcrossCategories),
+        findsNothing,
+      );
     });
 
-    testWidgets('a query under three characters does not spend a request', (tester) async {
+    testWidgets('a query under three characters does not spend a request', (
+      tester,
+    ) async {
       final searched = <String>[];
       await pump(tester, searched: searched);
       await openSearch(tester);
@@ -485,10 +578,16 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.search);
       await tester.pumpAndSettle();
 
-      expect(searched, isEmpty, reason: 'the server index cannot answer a two-letter word');
+      expect(
+        searched,
+        isEmpty,
+        reason: 'the server index cannot answer a two-letter word',
+      );
     });
 
-    testWidgets('an empty filter points at the search key as the way out', (tester) async {
+    testWidgets('an empty filter points at the search key as the way out', (
+      tester,
+    ) async {
       final searched = <String>[];
       await pump(tester, searched: searched);
       await openSearch(tester);
@@ -526,23 +625,23 @@ void main() {
     }
 
     HomeShopPreview sold() => HomeShopPreview.fromShop(
-          const Shop(
-            id: 1,
-            // the longest real shop name and the longest real address shape: a street, a number,
-            // a district and the city, which is exactly two lines
-            name: 'Строительные материалы Бунёдкор',
-            contactPhone: '+998901112233',
-            address: 'Чорсу майдони, 42, Алмазар тумани, Тошкент шаҳри',
-            category: ShopCategory.universal,
-            latitude: 41.3,
-            longitude: 69.2,
-            priceTier: PriceTier.dearer,
-            priceDifferencePercent: 17,
-            basketPrice: 5600000,
-            isVip: true,
-            productCount: 1284,
-          ),
-        );
+      const Shop(
+        id: 1,
+        // the longest real shop name and the longest real address shape: a street, a number,
+        // a district and the city, which is exactly two lines
+        name: 'Строительные материалы Бунёдкор',
+        contactPhone: '+998901112233',
+        address: 'Чорсу майдони, 42, Алмазар тумани, Тошкент шаҳри',
+        category: ShopCategory.universal,
+        latitude: 41.3,
+        longitude: 69.2,
+        priceTier: PriceTier.dearer,
+        priceDifferencePercent: 17,
+        basketPrice: 5600000,
+        isVip: true,
+        productCount: 1284,
+      ),
+    );
 
     testWidgets('a sold placement fits, down to the last line', (tester) async {
       await pumpCard(tester, sold());
@@ -563,14 +662,23 @@ void main() {
       // **the bars fall because the shop is dearer.** colour is not the only channel on this badge
       // and neither is the sentence: the glyph is read first, so its direction has to agree with
       // the tier rather than being decoration that happens to sit beside it.
-      expect(find.byIcon(LucideIcons.chart_no_axes_column_decreasing), findsOneWidget);
-      expect(find.byIcon(LucideIcons.chart_no_axes_column_increasing), findsNothing);
+      expect(
+        find.byIcon(LucideIcons.chart_no_axes_column_decreasing),
+        findsOneWidget,
+      );
+      expect(
+        find.byIcon(LucideIcons.chart_no_axes_column_increasing),
+        findsNothing,
+      );
 
       // and the storefront is the half of the card it was widened into. the frame is the only
       // ClipRRect inside a slot, and it fills the card's height between its 8dp of padding.
       final frame = tester.getSize(
         find
-            .descendant(of: find.byType(PressableScale).first, matching: find.byType(ClipRRect))
+            .descendant(
+              of: find.byType(PressableScale).first,
+              matching: find.byType(ClipRRect),
+            )
             .first,
       );
       expect(frame.height, VipShopsCarousel.cardHeight - 16);
@@ -581,10 +689,15 @@ void main() {
       );
     });
 
-    testWidgets('an unsold slot fits too, and names its fields', (tester) async {
+    testWidgets('an unsold slot fits too, and names its fields', (
+      tester,
+    ) async {
       await pumpCard(tester, null);
 
-      expect(tester.getSize(find.byType(PressableScale).first).height, VipShopsCarousel.cardHeight);
+      expect(
+        tester.getSize(find.byType(PressableScale).first).height,
+        VipShopsCarousel.cardHeight,
+      );
       expect(find.text(_strings.slotShopNameLabel), findsOneWidget);
       expect(find.text(_strings.slotAddressLabel), findsOneWidget);
       expect(find.text(_strings.slotComparisonLabel), findsOneWidget);
