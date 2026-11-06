@@ -116,7 +116,7 @@ class _CityChip extends StatelessWidget {
       button: true,
       label: semanticsLabel,
       child: ConstrainedBox(
-        // nominatim names can be long ("Мирзо-Улугбекский район"); without a ceiling one would push the
+        // city names can be long ("Мирзо-Улугбекский район"); without a ceiling one would push the
         // bell off the header, so the chip caps its width and ellipsizes
         constraints: const BoxConstraints(maxWidth: 150),
         child: Material(

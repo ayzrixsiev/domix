@@ -4,7 +4,8 @@ import 'package:flutter/foundation.dart';
 ///
 /// Yandex MapKit renders natively and its licence forbids pulling tiles outside the SDK. the free
 /// tier holds only while the app stays free to download, unnavigated and undispatched. `_lite` is that
-/// package; address search stays on OpenStreetMap. Android and iOS only - see [isSupportedPlatform].
+/// package; address search is Yandex's geocoder behind our api (GeocodingService). Android and iOS
+/// only - see [isSupportedPlatform].
 class MapConfig {
   /// The MapKit API key, compiled in with `--dart-define` (`env.json` / `env.prod.json`). It ships
   /// inside the APK and can be read out of it, so it is abusable rather than leakable - it is still

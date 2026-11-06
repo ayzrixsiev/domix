@@ -6,7 +6,7 @@ import 'package:frontend/core/localization/app_localizations.dart';
 /// carries an English version. It lives here as well so it can be read and accepted before an account
 /// exists. `TestTheAppCarriesThePublishedPolicy` compares the two line by line: edit both, and move
 /// [policyVersion] together with the api's `policyVersion`.
-const String policyVersion = '2026-11-02';
+const String policyVersion = '2026-11-06';
 
 /// One heading and the paragraphs under it. Bullets are plain strings beginning with "• ", so the
 /// renderer stays a `Text` per line.
@@ -102,10 +102,10 @@ const List<PolicySection> _russian = [
           "задачи:",
       "• Telegram Gateway — номер телефона и код, чтобы доставить код подтверждения в Telegram.",
       "• Яндекс Карты (MapKit) — запросы карты, пока она открыта.",
-      "• Photon (Komoot GmbH, Германия) — текст, который вы вводите в поиске адреса, чтобы "
-          "показать подсказки.",
-      "• Nominatim (OpenStreetMap Foundation) — координаты точки, которую вы поставили на карте, "
-          "чтобы определить её адрес, и поисковый запрос, когда вы запускаете поиск.",
+      "• Геокодер и Геосаджест Яндекс Карт — текст, который вы вводите в поиске адреса, и координаты "
+          "точки, которую вы поставили на карте, чтобы найти адрес. Запрос отправляет наш сервер, поэтому "
+          "Яндекс не получает ни ваш IP-адрес, ни ваш аккаунт; ответы сервер помнит до недели, не связывая "
+          "их с вами.",
       "• Cloudflare R2 — хранение фотографий товаров.",
       "• Хостинг-провайдер в Узбекистане — сервер и база данных.",
       "Государственным органам мы раскрываем данные только тогда, когда этого требует закон "
@@ -117,7 +117,7 @@ const List<PolicySection> _russian = [
     body: [
       "Аккаунты, номера телефонов, магазины и списки покупок вместе с их фотографиями хранятся в "
           "базе данных на сервере в Республике Узбекистан.",
-      "Telegram, Яндекс, Photon, Nominatim и Cloudflare работают за пределами Узбекистана. "
+      "Telegram, Яндекс и Cloudflare работают за пределами Узбекистана. "
           "Поэтому то, что получает каждый из них (см. раздел 5), передаётся за рубеж: номер телефона"
           " — для доставки кода, адресные запросы и координаты точки — для поиска адреса, фотографии "
           "товаров — для хранения.",
@@ -246,10 +246,10 @@ const List<PolicySection> _uzbek = [
           " faqat o‘z vazifasi uchun keraklisini oladi:",
       "• Telegram Gateway — tasdiqlash kodini Telegram’ga yetkazish uchun telefon raqami va kod.",
       "• Yandex Xaritalar (MapKit) — xarita ochiq turganda uning so‘rovlari.",
-      "• Photon (Komoot GmbH, Germaniya) — takliflarni ko‘rsatish uchun manzil qidiruvida yozgan "
-          "matningiz.",
-      "• Nominatim (OpenStreetMap Foundation) — manzilini aniqlash uchun xaritada qo‘ygan "
-          "nuqtangiz koordinatalari va qidiruvni boshlaganingizdagi so‘rov.",
+      "• Yandex Xaritalar geokoderi va geosadjesti — manzilni topish uchun manzil qidiruvida yozgan "
+          "matningiz va xaritada qo‘ygan nuqtangiz koordinatalari. So‘rovni bizning serverimiz yuboradi, "
+          "shuning uchun Yandex IP-manzilingizni ham, akkauntingizni ham olmaydi; server javoblarni siz "
+          "bilan bog‘lamasdan bir haftagacha eslab qoladi.",
       "• Cloudflare R2 — mahsulot suratlarini saqlash.",
       "• O‘zbekistondagi hosting-provayder — server va ma’lumotlar bazasi.",
       "Davlat organlariga ma’lumotlarni faqat O‘zbekiston Respublikasi qonunchiligi talab "
@@ -261,7 +261,7 @@ const List<PolicySection> _uzbek = [
     body: [
       "Akkauntlar, telefon raqamlari, do‘konlar va suratlari bilan birga xaridlar ro‘yxatlari "
           "O‘zbekiston Respublikasidagi serverda joylashgan ma’lumotlar bazasida saqlanadi.",
-      "Telegram, Yandex, Photon, Nominatim va Cloudflare O‘zbekistondan tashqarida ishlaydi. "
+      "Telegram, Yandex va Cloudflare O‘zbekistondan tashqarida ishlaydi. "
           "Shuning uchun ularning har biri oladigan narsa (5-bo‘limga qarang) chet elga uzatiladi: "
           "telefon raqami — kodni yetkazish uchun, manzil so‘rovlari va nuqta koordinatalari — "
           "manzilni qidirish uchun, mahsulot suratlari — saqlash uchun.",

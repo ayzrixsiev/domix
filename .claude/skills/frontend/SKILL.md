@@ -158,14 +158,18 @@ once, off-screen, with no second frame**, so an `Image` still decoding caches as
 
 ## Address search and «О приложении»
 
-**Typed suggestions come from Photon, a pin's address and a submitted search from Nominatim**
-(`GeocodingService`): Nominatim's policy forbids as-you-type, and the public Photon instance allows it
-but promises no speed, so a typed lookup gives up after a few seconds and the panel asks for «Найти»,
-which is the Nominatim path. Operational detail — the measured outage and the fallback options — is in
-the `deployment` skill.
+**Every lookup goes to our `/api/geo/*`, never to Yandex** (`GeocodingService`): the keys stay on the
+server, which caches for everybody and holds the one daily budget all copies of the app share. Typing
+asks for suggestions, the search key for geocoder results, and **a suggestion has no point until it is
+tapped** — `resolve` is one more lookup, so it is made only for the line actually picked. The panel's
+floor, debounce and session cache are what keep that budget alive; a failure says «Проверьте
+подключение» only when it really was the network (`LoadFailure`), and a budget spent or Yandex down
+says «Поиск адресов сейчас недоступен». The token goes along when there is one, so a signed-in caller
+is metered by account.
 
-`AboutScreen` carries the link Yandex's free MapKit licence requires and the OpenStreetMap credit, and
-is reachable from the guest gate too.
+`AboutScreen` carries the two links Yandex's free terms require — `maps_api` and, under the terms' own
+wording «Условия использования сервиса Яндекс.Карты», `maps_termsofuse` — and is reachable from the
+guest gate too.
 
 ## Images
 

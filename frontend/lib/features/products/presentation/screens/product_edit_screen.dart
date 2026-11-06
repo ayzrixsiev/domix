@@ -165,8 +165,12 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       _priceError = priceIsInvalid ? _strings.productPriceInvalidError : null;
     });
 
-    if (name.isEmpty || categoryCode.isEmpty || unit.isEmpty || priceIsInvalid)
+    if (name.isEmpty ||
+        categoryCode.isEmpty ||
+        unit.isEmpty ||
+        priceIsInvalid) {
       return;
+    }
 
     final controller = context.read<ProductsController>();
 
@@ -278,8 +282,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     });
 
     final product = _product;
-    if (product == null)
-      return; // nothing to attach it to yet - [_save] sends it
+    // nothing to attach it to yet - [_save] sends it
+    if (product == null) return;
 
     final saved = await context.read<ProductsController>().uploadProductPhoto(
       product: product,

@@ -170,6 +170,30 @@ its market's average.
 - Removed down to their tables and to be rebuilt from nothing, **do not restore the old designs**:
   support (migration `000003`) and the job marketplace.
 
+## Address search
+
+`internal/geo`, behind `/api/geo/search`, `/suggest`, `/place` and `/reverse`: Yandex's free HTTP Geocoder
+and Geosuggest, with keys that never leave the server. **Each product allows 1000 calls a day for the whole
+app, and a key that keeps going over is blocked for good**, so every rule here exists to spend fewer.
+
+- **`DailyQuota` counts every call in `geo_calls` before it is made** (migration `000011`), against
+  `geo.DailyCap` (950) over the **last 24 hours**, not a calendar day: Yandex does not say whose midnight it
+  counts from. Postgres rather than RAM because every deploy is a restart. A database that cannot count is
+  a refusal too. The cap is exact because one process holds a mutex around the read-then-write.
+- **The cache key is `NormalizeQuery` plus the language, and the normalized text is what Yandex is sent**,
+  so a cached answer is the answer for its key. Nothing found is cached; a failure never is. An entry
+  exists only for an answer Yandex gave, so the budget bounds the map. **The privacy policy promises an
+  answer is held at most a week** — `cacheTTL` plus `cacheStaleFor`.
+- A suggestion carries no coordinates: the app hands its `uri` back to `/place`, a geocoder call.
+- **Reverse asks for the nearest house first**: without `kind=house` a pin on a shop beside a park answers
+  with the park. Only when no house is within 100 m does a second call take any object.
+- Typed lookups are bounded to Tashkent and its oblast **by Yandex** (`rspn`, `strict_bounds`,
+  `countries`): the terms (5.1.2) forbid dropping or reordering results ourselves.
+- **A `*url.Error` prints the url, and the url carries the key** — `cleanURLError` is what keeps a timeout
+  from writing it into the log.
+- Answers: an empty list or a 404 `address_not_found` is "no such address"; 502 `geocoder_unavailable` and
+  503 `geocoder_budget_spent` are "could not ask". The app says different sentences for them.
+
 ## Product search
 
 `GET /api/products/search` matches every word of the query, in any order, against

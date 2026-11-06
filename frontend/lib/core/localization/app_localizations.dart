@@ -654,11 +654,11 @@ class AppLocalizations {
       ? 'Не удалось найти адрес. Проверьте подключение.'
       : "Manzilni topib bo'lmadi. Ulanishni tekshiring.";
 
-  /// the typed lookup gave up - the free suggestion service can be slow - and pressing search asks a
-  /// second one, so the sentence names the key rather than blaming the connection
-  String get mapPlacesSearchSlow => isRu
-      ? 'Подсказки не успели загрузиться. Нажмите «Найти» на клавиатуре.'
-      : "Takliflar yuklanmadi. Klaviaturadagi «Qidirish» tugmasini bosing.";
+  /// the server answered and could not search - yandex down, or the day's budget spent - so the
+  /// connection is not what to check
+  String get mapPlacesSearchUnavailable => isRu
+      ? 'Поиск адресов сейчас недоступен. Попробуйте позже или найдите место на карте.'
+      : "Manzil qidiruvi hozir ishlamayapti. Keyinroq urinib ko'ring yoki joyni xaritadan toping.";
   String get mapShopsUnavailable =>
       isRu ? 'Магазины не загрузились' : "Do'konlar yuklanmadi";
 
@@ -899,15 +899,18 @@ class AppLocalizations {
       ? 'Этот товар пока не входит в сравнение цен: без цены магазин из сравнения не выпадет. Укажите её, когда будет удобно.'
       : "Bu mahsulot hozircha narx taqqoslashiga kirmaydi: narxsiz ham do'kon taqqoslashdan chiqmaydi. Qulay paytda ko'rsating.";
 
-  // ── about. **Yandex's free MapKit licence asks for a link to its terms in an «About» section**, and
-  // the address search is OpenStreetMap data, whose licence asks for the credit - so both live here.
+  // ── about. **Yandex's free terms ask for links to them in an «About» section**: the map's licence and
+  // the maps service's own terms, which also cover the address search.
   String get aboutApp => isRu ? 'О приложении' : 'Ilova haqida';
+
+  /// the document's own title: beside the maps service's terms, a shorter name read as the same link twice
   String get yandexMapsTerms => isRu
-      ? 'Условия использования Яндекс Карт'
-      : 'Yandex Xaritalar foydalanish shartlari';
-  String get openStreetMapCredit => isRu
-      ? 'Данные адресов: © участники OpenStreetMap'
-      : "Manzillar ma'lumoti: © OpenStreetMap ishtirokchilari";
+      ? 'Условия использования отдельных сервисов Яндекс Карт'
+      : 'Yandex Xaritalar alohida xizmatlaridan foydalanish shartlari';
+
+  /// **the wording is the terms' own (4.1.3.2)**, so it stays russian in both languages
+  String get yandexMapsServiceTerms =>
+      'Условия использования сервиса Яндекс.Карты';
   String get termsAndPrivacy => isRu
       ? 'Условия использования и конфиденциальность'
       : 'Foydalanish shartlari va maxfiylik';

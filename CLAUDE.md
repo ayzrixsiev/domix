@@ -52,6 +52,7 @@ Detail and reasoning live in the `backend` skill.
 - "Basket" means the price index. A customer's list is a `waybill`, whatever the tab says.
 - A waybill's photo lives in its Postgres row, never in `imagestore`, which is public and abroad.
 - Waybills are customers-only on the server. Hiding the tab from owners is not the rule.
+- Yandex address lookups go through `internal/geo` only, which counts each call in `geo_calls` before making it. The keys never ship to the app.
 
 ## Commands
 Backend, from `backend/`:

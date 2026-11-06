@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
+import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import '../../data/geocoding_service.dart';
 import '../widgets/domix_map.dart';
@@ -24,7 +25,7 @@ class LocationPickResult {
   final double longitude;
   final String address;
 
-  /// the city containing the picked point, when nominatim could name one
+  /// the city containing the picked point, when Yandex names one
   final String? city;
 }
 
@@ -68,7 +69,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     super.dispose();
   }
 
-  // debounced so we don't hammer nominatim's free reverse lookup on every frame while the user is still dragging
+  // debounced: every pin that comes to rest is a lookup from the budget the whole app shares, so a
+  // burst of drags settles into one
   void _resolveAddressForCurrentCenter() {
     _debounce?.cancel();
     setState(() => _isResolvingAddress = true);
@@ -78,34 +80,57 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     final languageCode = context.read<LanguageProvider>().language.code;
 
     _debounce = Timer(const Duration(milliseconds: 700), () async {
-      final result = await _geocodingService.reverseGeocodeDetailed(
-        _centerLatitude,
-        _centerLongitude,
-        languageCode: languageCode,
-      );
-      if (!mounted) return;
+      final latitude = _centerLatitude;
+      final longitude = _centerLongitude;
+
+      ReverseGeocodeResult? result;
+      try {
+        result = await _geocodingService.reverseGeocode(
+          latitude,
+          longitude,
+          languageCode: languageCode,
+        );
+      } catch (e) {
+        debugPrint('LocationPickerScreen: reverse geocode failed: $e');
+      }
+
+      // an answer for a spot the pin has already left would name the wrong place
+      if (!mounted ||
+          latitude != _centerLatitude ||
+          longitude != _centerLongitude) {
+        return;
+      }
+      // a failure or an empty spot keeps the coordinates, so a hiccup never blocks the add-store flow
       setState(() {
-        _resolvedAddress = result.address;
-        _resolvedCity = result.city;
+        _resolvedAddress = result?.address ?? _coordinates(latitude, longitude);
+        _resolvedCity = result?.city;
         _isResolvingAddress = false;
       });
     });
   }
+
+  static String _coordinates(double latitude, double longitude) =>
+      '${latitude.toStringAsFixed(5)}, ${longitude.toStringAsFixed(5)}';
 
   Future<void> _performSearch(String query) async {
     if (query.trim().isEmpty) return;
     FocusScope.of(context).unfocus();
     setState(() => _isSearching = true);
 
-    List<GeocodeResult> results;
+    final strings = context.read<LanguageProvider>().strings;
+    var results = const <GeocodeResult>[];
+    String? notice;
     try {
-      // a button, so always a submit - the one kind of lookup the Nominatim fallback may serve
-      results = await _geocodingService.search(query, submitted: true);
+      results = await _geocodingService.search(
+        query,
+        languageCode: strings.language.code,
+      );
+      if (results.isEmpty) notice = strings.searchNoResults;
     } catch (e) {
-      // the picker has its own way out - drag the map onto the spot - so a failed lookup is logged and
-      // reads as no results, as it did before search() started throwing
       debugPrint('LocationPickerScreen: address search failed: $e');
-      results = <GeocodeResult>[];
+      notice = LoadFailure.of(e) == LoadFailure.network
+          ? strings.mapPlacesSearchFailed
+          : strings.mapPlacesSearchUnavailable;
     }
 
     if (!mounted) return;
@@ -113,6 +138,12 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       _searchResults = results;
       _isSearching = false;
     });
+    // the picker has its own way out - drag the map onto the spot - so a line is enough
+    if (notice != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(notice)));
+    }
   }
 
   void _selectSearchResult(GeocodeResult result) {
@@ -121,7 +152,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       _centerLatitude = result.latitude;
       _centerLongitude = result.longitude;
       _searchResults = [];
-      _searchController.text = result.displayName;
+      _searchController.text = result.address;
     });
     _resolveAddressForCurrentCenter();
   }
@@ -132,8 +163,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         latitude: _centerLatitude,
         longitude: _centerLongitude,
         address:
-            _resolvedAddress ??
-            '${_centerLatitude.toStringAsFixed(5)}, ${_centerLongitude.toStringAsFixed(5)}',
+            _resolvedAddress ?? _coordinates(_centerLatitude, _centerLongitude),
         city: _resolvedCity,
       ),
     );
@@ -311,7 +341,7 @@ class _SearchResultsList extends StatelessWidget {
               size: 20,
             ),
             title: Text(
-              result.displayName,
+              result.address,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(

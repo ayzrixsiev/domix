@@ -1,0 +1,1 @@
+{"response":{"GeoObjectCollection":{"metaDataProperty":{"GeocoderResponseMetaData":{"Point":{"pos":"63.5 42.3"},"boundedBy":{"Envelope":{"lowerCorner":"63.497506 42.297497","upperCorner":"63.5025 42.302499"}},"request":"63.5,42.3","results":"1","found":"0"}},"featureMember":[]}}}

@@ -169,8 +169,9 @@ class _MapScreenState extends State<MapScreen> {
     if (map == null || shop == null) return;
 
     _focus.take();
-    if (_category != null && _category != shop.category)
+    if (_category != null && _category != shop.category) {
       setState(() => _category = null);
+    }
     map.flyTo(shop.latitude, shop.longitude);
   }
 

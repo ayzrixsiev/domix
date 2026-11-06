@@ -19,6 +19,7 @@ import (
 	"domix/backend/internal/catalog"
 	"domix/backend/internal/dbctx"
 	"domix/backend/internal/endpoints"
+	"domix/backend/internal/geo"
 	"domix/backend/internal/imagestore"
 	"domix/backend/internal/ratelimit"
 	"domix/backend/internal/verify"
@@ -60,6 +61,8 @@ func main() {
 	// opened here because deleting an account deletes its photos, not only its rows
 	productImages, imageURLs := mustOpenPhotoStorage()
 
+	addressSearch := mustOpenAddressSearch(queries)
+
 	// **signed-in callers by account, others by address**: one carrier IP fronts thousands of users.
 	// none of these guards the code-sending bill - the per-phone and daily budgets in auth.CodeManager do.
 	byCaller := func(r *http.Request) string {
@@ -82,6 +85,10 @@ func main() {
 	// one is a few hundred string comparisons, while the shape of the traffic is a request every few
 	// keystrokes from everybody typing at once - behind one carrier address.
 	suggestLimiter := ratelimit.New(20, 60, 10*time.Minute)
+
+	// **every miss here spends a call from a budget the whole app shares**, so this only stops one caller
+	// taking the day's share in a minute. the ceiling is geo.DailyCap, and repeats answer from geo's cache.
+	geoLimiter := ratelimit.New(0.25, 20, 30*time.Minute).Keyed(byCaller)
 
 	// held in memory for a minute, which is what makes publicLimiter affordable at those numbers
 	publicReads := endpoints.NewPublicCache(time.Minute)
@@ -152,6 +159,12 @@ func main() {
 	// the as-you-type panel over that field. not behind publicLimiter: it shares no budget with the
 	// reads that cost a connection, and the limiter it does have is only a floor against a flood.
 	http.HandleFunc("/api/products/suggest", endpoints.WithJSON(suggestLimiter.Wrap(homeEndpoints.SuggestProducts)))
+
+	geoEndpoints := &endpoints.Geo{Service: addressSearch}
+	http.HandleFunc("/api/geo/search", endpoints.WithJSON(geoLimiter.Wrap(geoEndpoints.Search)))
+	http.HandleFunc("/api/geo/suggest", endpoints.WithJSON(geoLimiter.Wrap(geoEndpoints.Suggest)))
+	http.HandleFunc("/api/geo/place", endpoints.WithJSON(geoLimiter.Wrap(geoEndpoints.Place)))
+	http.HandleFunc("/api/geo/reverse", endpoints.WithJSON(geoLimiter.Wrap(geoEndpoints.Reverse)))
 
 	favoritesEndpoints := &endpoints.Favorites{Queries: queries, URLs: imageURLs}
 	http.HandleFunc("/api/favorites", endpoints.WithJSON(apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, favoritesEndpoints.Route))))
@@ -326,7 +339,7 @@ func mustOpenCodeSender() (verify.Sender, bool) {
 // **the policy's date and the support address have to match the app's copy** (privacy_policy.dart):
 // two copies of one document that disagree read as two different policies.
 const (
-	policyVersion = "2026-11-02"
+	policyVersion = "2026-11-06"
 	termsVersion  = "2026-10-08"
 	supportEmail  = "domix.support@gmail.com"
 )
@@ -361,6 +374,16 @@ func mustReadReviewAccount() (phone, code string) {
 	log.Printf("Play review account is ARMED for %s - its code is fixed and never delivered. "+
 		"Unset PLAY_REVIEW_PHONE and PLAY_REVIEW_CODE once the review is over.", auth.MaskPhone(canonical))
 	return canonical, code
+}
+
+// both yandex keys or no boot: without them every shop created gets an error for an address.
+func mustOpenAddressSearch(queries *db.Queries) *geo.Service {
+	service, err := geo.New(geo.SettingsFromEnv(), geo.NewDailyQuota(queries))
+	if err != nil {
+		log.Fatalf("Cannot configure address search: %v - set %s and %s", err, geo.EnvGeocoderKey, geo.EnvSuggestKey)
+	}
+	log.Printf("Address search: yandex geocoder and geosuggest, %d calls a day each", geo.DailyCap)
+	return service
 }
 
 // reads product_templates into internal/catalog's in-memory copy, or dies trying.

@@ -80,10 +80,11 @@ class ProductsController extends ChangeNotifier {
 
   /// [force] re-fetches a shop already in the cache, which is what a pull-to-refresh wants.
   Future<void> loadProducts(int shopId, {bool force = false}) async {
-    if (_loadingShopIds.contains(shopId))
-      return; // a second call while one is in flight is a no-op
-    if (!force && _byShop.containsKey(shopId) && !_stale.contains(shopId))
+    // a second call while one is in flight is a no-op
+    if (_loadingShopIds.contains(shopId)) return;
+    if (!force && _byShop.containsKey(shopId) && !_stale.contains(shopId)) {
       return;
+    }
 
     _loadingShopIds.add(shopId);
     _failedLoads.remove(shopId);

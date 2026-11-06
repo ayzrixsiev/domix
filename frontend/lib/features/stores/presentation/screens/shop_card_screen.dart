@@ -268,8 +268,9 @@ class _ShopCardViewState extends State<ShopCardView> {
   }
 
   Future<void> _dial() async {
-    if (!await _tryOpen(Uri.parse('tel:${widget.shop.contactPhone}')))
+    if (!await _tryOpen(Uri.parse('tel:${widget.shop.contactPhone}'))) {
       _reportNothingToOpenWith();
+    }
   }
 
   // **plain text, not a link to us**: there is no page per shop and no deep link into the app, so a

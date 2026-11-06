@@ -114,7 +114,8 @@ Cloudflare does not sell `.uz`, so the registration stays at eskiz permanently.
 Order: server → Cloudflare account access → `A` record for the apex → Postgres (**with a UTF-8 locale**:
 migration `000002` refuses a database that cannot lowercase Cyrillic) and nginx → certbot → deploy the
 binary → R2 bucket and `img.` → **upload `images/` to the bucket** → fill in `.env` (`IMAGE_BASE_URL` **and**
-the four `R2_*` keys, or the api will not start; `TRUST_PROXY=true`) → point `env.prod.json` at
+the four `R2_*` keys, and `YANDEX_GEOCODER_KEY` and `YANDEX_SUGGEST_KEY`, or the api will not start;
+`TRUST_PROXY=true`) → point `env.prod.json` at
 `https://domix-api.uz` → ship the `.aab`.
 
 **Verify before buying:** that an international Visa/Mastercard is accepted by Hetzner and Cloudflare. Uzbek
@@ -201,12 +202,10 @@ mechanics are in the `backend` skill.
   polish item on this list.**
 - **No error reporting.** When the app breaks on an owner's phone, nobody finds out. Structured server logs
   plus a crash reporter would turn "it doesn't work" into a stack trace.
-- **Photon's public instance promises no speed** — measured at ~20 s after answering instantly a week
-  earlier, which is why a typed lookup gives up after 4 s and falls back to «Найти» (the rule is in the
-  `frontend` skill). If that becomes common: self-host Photon on the VPS (open source, an Uzbekistan extract
-  is small, wants Java and ~1–2 GB RAM), take a keyed free tier (LocationIQ ~5 000/day, Geoapify ~3 000/day),
-  or pay Yandex. All are OSM data, so «© OpenStreetMap contributors» stays under the results and in «О
-  приложении».
+- **Address search has a thousand Yandex calls a day per key, for every user together** (the `backend`
+  skill has the guard). Once the log starts saying `the geocoder budget for today is spent`, lookups past
+  the cache answer «Поиск адресов сейчас недоступен» until the window frees. The way out is a paid
+  licence: going over the free limit regularly gets the key blocked for good.
 - **Nothing exposes `pool.Stat().EmptyAcquireCount()`** — the count of requests that waited for a connection,
   and the only evidence that would justify changing `DB_MAX_CONNS`. Ten lines behind a token-protected
   `/metrics`.

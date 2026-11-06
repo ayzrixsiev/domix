@@ -23,6 +23,12 @@ type Favorite struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type GeoCall struct {
+	Product string             `json:"product"`
+	Hour    pgtype.Timestamptz `json:"hour"`
+	Used    int32              `json:"used"`
+}
+
 type Product struct {
 	ID           int64              `json:"id"`
 	ShopID       int64              `json:"shop_id"`

@@ -19,14 +19,13 @@ At 300–400 users DAU is far below 1 000. **There is no hard cap: set a usage a
 The free licence requires: free to download and open registration, no turn-by-turn navigation, no
 real-time tracking of vehicles or staff, Yandex's logo and copyright untouched, **a link to
 `https://yandex.ru/legal/maps_api/` in the app's «О приложении»** (`AboutScreen`, reachable by guests
-too), and **nothing the API returns stored or modified** — which is why a Yandex geocoder could not
-fill `shops.address` on the free terms. **If any of these changes, revisit the licence before the
+too). **If any of these changes, revisit the licence before the
 code.** Phase three's job tickets are the likeliest thing to touch "tracking staff".
 
 **Lite, not the full package.** `yandex_maps_mapkit_lite` gives map, map objects, camera, user
-location. Search, routing and panoramas are paid and unused — address search stays on OpenStreetMap
-services: **Photon** for typed suggestions, **Nominatim** for a pin's address and as the fallback of a
-submitted search (`GeocodingService`).
+location. Search, routing and panoramas are paid and unused — address search is the separate HTTP
+**Geocoder** and **Geosuggest**, called by the api with keys the app never holds (`internal/geo`).
+«О приложении» carries both links the terms name: `maps_api` and `maps_termsofuse`.
 
 **`domix_map.dart` is the entire boundary.** `DomixMap`, `DomixMapController` and `MapPin` are all
 the screens see; nothing outside that file imports the SDK. **Keep it that way.**

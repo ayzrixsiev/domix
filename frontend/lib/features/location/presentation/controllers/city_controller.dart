@@ -11,7 +11,7 @@ class CityController extends ChangeNotifier {
   /// re-picking fixes it.
   String? get city => _city;
 
-  /// Two cases deliberately do nothing: a blank [picked] (Nominatim could not name that point, and
+  /// Two cases deliberately do nothing: a blank [picked] (Yandex could not name that point, and
   /// blanking the pill is worse than keeping the last one), and one naming the city already shown -
   /// skipping `notifyListeners` there is the point, since nothing on screen changed.
   void selectCity(String? picked) {
@@ -23,7 +23,7 @@ class CityController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // case-insensitive: nominatim does not guarantee the same capitalization twice, and a pill
+  // case-insensitive: a geocoder does not promise the same capitalization twice, and a pill
   // flickering between "Toshkent" and "toshkent" is a change the user never made
   static bool _isSameCity(String a, String? b) {
     if (b == null) return false;

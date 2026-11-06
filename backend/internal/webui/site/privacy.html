@@ -50,8 +50,7 @@
     <ul>
       <li>Telegram Gateway — номер телефона и код, чтобы доставить код подтверждения в Telegram.</li>
       <li>Яндекс Карты (MapKit) — запросы карты, пока она открыта.</li>
-      <li>Photon (Komoot GmbH, Германия) — текст, который вы вводите в поиске адреса, чтобы показать подсказки.</li>
-      <li>Nominatim (OpenStreetMap Foundation) — координаты точки, которую вы поставили на карте, чтобы определить её адрес, и поисковый запрос, когда вы запускаете поиск.</li>
+      <li>Геокодер и Геосаджест Яндекс Карт — текст, который вы вводите в поиске адреса, и координаты точки, которую вы поставили на карте, чтобы найти адрес. Запрос отправляет наш сервер, поэтому Яндекс не получает ни ваш IP-адрес, ни ваш аккаунт; ответы сервер помнит до недели, не связывая их с вами.</li>
       <li>Cloudflare R2 — хранение фотографий товаров.</li>
       <li>Хостинг-провайдер в Узбекистане — сервер и база данных.</li>
     </ul>
@@ -60,7 +59,7 @@
   <section>
     <h2>6. Где хранятся данные</h2>
     <p>Аккаунты, номера телефонов, магазины и списки покупок вместе с их фотографиями хранятся в базе данных на сервере в Республике Узбекистан.</p>
-    <p>Telegram, Яндекс, Photon, Nominatim и Cloudflare работают за пределами Узбекистана. Поэтому то, что получает каждый из них (см. раздел 5), передаётся за рубеж: номер телефона — для доставки кода, адресные запросы и координаты точки — для поиска адреса, фотографии товаров — для хранения.</p>
+    <p>Telegram, Яндекс и Cloudflare работают за пределами Узбекистана. Поэтому то, что получает каждый из них (см. раздел 5), передаётся за рубеж: номер телефона — для доставки кода, адресные запросы и координаты точки — для поиска адреса, фотографии товаров — для хранения.</p>
   </section>
   <section>
     <h2>7. Сколько мы храним данные</h2>
@@ -149,8 +148,7 @@
     <ul>
       <li>Telegram Gateway — tasdiqlash kodini Telegram’ga yetkazish uchun telefon raqami va kod.</li>
       <li>Yandex Xaritalar (MapKit) — xarita ochiq turganda uning so‘rovlari.</li>
-      <li>Photon (Komoot GmbH, Germaniya) — takliflarni ko‘rsatish uchun manzil qidiruvida yozgan matningiz.</li>
-      <li>Nominatim (OpenStreetMap Foundation) — manzilini aniqlash uchun xaritada qo‘ygan nuqtangiz koordinatalari va qidiruvni boshlaganingizdagi so‘rov.</li>
+      <li>Yandex Xaritalar geokoderi va geosadjesti — manzilni topish uchun manzil qidiruvida yozgan matningiz va xaritada qo‘ygan nuqtangiz koordinatalari. So‘rovni bizning serverimiz yuboradi, shuning uchun Yandex IP-manzilingizni ham, akkauntingizni ham olmaydi; server javoblarni siz bilan bog‘lamasdan bir haftagacha eslab qoladi.</li>
       <li>Cloudflare R2 — mahsulot suratlarini saqlash.</li>
       <li>O‘zbekistondagi hosting-provayder — server va ma’lumotlar bazasi.</li>
     </ul>
@@ -159,7 +157,7 @@
   <section>
     <h2>6. Ma’lumotlar qayerda saqlanadi</h2>
     <p>Akkauntlar, telefon raqamlari, do‘konlar va suratlari bilan birga xaridlar ro‘yxatlari O‘zbekiston Respublikasidagi serverda joylashgan ma’lumotlar bazasida saqlanadi.</p>
-    <p>Telegram, Yandex, Photon, Nominatim va Cloudflare O‘zbekistondan tashqarida ishlaydi. Shuning uchun ularning har biri oladigan narsa (5-bo‘limga qarang) chet elga uzatiladi: telefon raqami — kodni yetkazish uchun, manzil so‘rovlari va nuqta koordinatalari — manzilni qidirish uchun, mahsulot suratlari — saqlash uchun.</p>
+    <p>Telegram, Yandex va Cloudflare O‘zbekistondan tashqarida ishlaydi. Shuning uchun ularning har biri oladigan narsa (5-bo‘limga qarang) chet elga uzatiladi: telefon raqami — kodni yetkazish uchun, manzil so‘rovlari va nuqta koordinatalari — manzilni qidirish uchun, mahsulot suratlari — saqlash uchun.</p>
   </section>
   <section>
     <h2>7. Ma’lumotlarni qancha saqlaymiz</h2>
@@ -248,8 +246,7 @@
     <ul>
       <li>Telegram Gateway: your phone number and the code, to deliver the verification code in Telegram.</li>
       <li>Yandex Maps (MapKit): map requests while the map is open.</li>
-      <li>Photon (Komoot GmbH, Germany): what you type into the address search, to suggest matches.</li>
-      <li>Nominatim (OpenStreetMap Foundation): the coordinates of the point you place on the map, to work out its address, and your query when you run a search.</li>
+      <li>Yandex Maps Geocoder and Geosuggest: what you type into the address search and the coordinates of the point you place on the map, to find the address. Our server sends the request, so Yandex receives neither your IP address nor your account; the server remembers the answers for up to a week without linking them to you.</li>
       <li>Cloudflare R2: storage for product photos.</li>
       <li>A hosting provider in Uzbekistan: the server and the database.</li>
     </ul>
@@ -258,7 +255,7 @@
   <section>
     <h2>6. Where data is stored</h2>
     <p>Accounts, phone numbers, stores and shopping lists with their photos are kept in a database on a server in the Republic of Uzbekistan.</p>
-    <p>Telegram, Yandex, Photon, Nominatim and Cloudflare operate outside Uzbekistan, so what each of them receives (see section 5) is transferred abroad: your phone number to deliver the code, address queries and map coordinates to look up addresses, and product photos for storage.</p>
+    <p>Telegram, Yandex and Cloudflare operate outside Uzbekistan, so what each of them receives (see section 5) is transferred abroad: your phone number to deliver the code, address queries and map coordinates to look up addresses, and product photos for storage.</p>
   </section>
   <section>
     <h2>7. How long we keep it</h2>

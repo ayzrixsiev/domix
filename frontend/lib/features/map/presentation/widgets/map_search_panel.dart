@@ -5,14 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
+import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/core/widgets/pill_search_field.dart';
 import 'package:frontend/features/map/data/geocoding_service.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 
 // The map's search field and its results panel. **Shops** are already in memory and match on every
-// keystroke; **addresses** come from Photon over HTTP, debounced - a service built for search as you
-// type, unlike Nominatim, whose policy forbids it (see GeocodingService). The debounce, the
-// three-letter floor and the session cache are what "be fair" means for it.
+// keystroke; **addresses** are Yandex suggestions while typing and a geocoder search on the search key,
+// both through our api (GeocodingService). Every lookup that reaches Yandex spends a budget the whole
+// app shares for the day, which is what the debounce, the three-letter floor and the session cache save.
 //
 // It owns the text state and reports only *selections* upward, which keeps MapScreen concerned with
 // the camera and the sheets rather than with text editing.
@@ -51,9 +52,6 @@ class MapSearchPanel extends StatefulWidget {
 }
 
 class _MapSearchPanelState extends State<MapSearchPanel> {
-  /// below this, a query matches half of Tashkent and is not worth a network round trip
-  static const _minRemoteQueryLength = 3;
-
   /// keeps the dropdown from covering the whole map on a long result list
   static const _maxPanelHeight = 296.0;
 
@@ -69,15 +67,15 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
   /// The text the addresses on screen were looked up for: typing on retires them, so the list never
   /// contradicts the field.
   String? _placesQuery;
+
+  /// whether what is on screen answers the search key (points) or the typing (suggestions)
+  bool _placesSubmitted = false;
+  List<AddressSuggestion> _suggestions = const [];
   List<GeocodeResult> _places = const [];
   bool _isSearchingPlaces = false;
 
-  /// **a flag, not the exception** - the card draws one written sentence, the reason goes to the log
-  bool _placesFailed = false;
-
-  /// a typed lookup that gave up, as opposed to a submitted one: the first has a way forward - press
-  /// search - and the sentence on the card says so
-  bool _placesFailedWhileTyping = false;
+  /// **the kind, not the exception** - the card draws one written sentence, the reason goes to the log
+  LoadFailure? _placesFailure;
 
   @override
   void initState() {
@@ -100,7 +98,7 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
   void _onQueryChanged(String value) {
     _debounce?.cancel();
     final trimmed = value.trim();
-    final lookUp = trimmed.length >= _minRemoteQueryLength;
+    final lookUp = trimmed.length >= GeocodingService.minQueryLength;
 
     setState(() {
       _query = value;
@@ -109,57 +107,111 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
       if (lookUp) _isSearchingPlaces = true;
     });
 
-    if (lookUp) _debounce = Timer(_debounceDelay, () => _searchPlaces(trimmed));
+    if (lookUp) {
+      _debounce = Timer(
+        _debounceDelay,
+        () => _lookUpPlaces(trimmed, submitted: false),
+      );
+    }
   }
 
   /// called from inside a setState
   void _forgetPlaces() {
     _placesQuery = null;
+    _placesSubmitted = false;
+    _suggestions = const [];
     _places = const [];
-    _placesFailed = false;
-    _placesFailedWhileTyping = false;
+    _placesFailure = null;
     _isSearchingPlaces = false;
   }
 
-  /// Repeats cost nothing: GeocodingService answers them from its cache. [submitted] is the keyboard's
-  /// search key, which is what lets a lookup that timed out while typing go to the fallback.
-  Future<void> _searchPlaces(String raw, {bool submitted = false}) async {
+  String get _languageCode => widget.strings.language.code;
+
+  /// Suggestions while typing, points on [submitted]. Repeats cost nothing: GeocodingService answers
+  /// them from its cache.
+  Future<void> _lookUpPlaces(String raw, {required bool submitted}) async {
     final query = raw.trim();
-    if (query.length < _minRemoteQueryLength) return;
-    if (query == _placesQuery && !_placesFailed) return;
+    if (query.length < GeocodingService.minQueryLength) return;
+    if (query == _placesQuery &&
+        submitted == _placesSubmitted &&
+        _placesFailure == null) {
+      return;
+    }
 
     setState(() {
+      _forgetPlaces();
       _placesQuery = query;
-      _places = const [];
-      _placesFailed = false;
+      _placesSubmitted = submitted;
       _isSearchingPlaces = true;
     });
 
-    var results = const <GeocodeResult>[];
-    var failed = false;
+    var suggestions = const <AddressSuggestion>[];
+    var places = const <GeocodeResult>[];
+    LoadFailure? failure;
     try {
-      results = await _geocoding.search(query, submitted: submitted);
+      if (submitted) {
+        places = await _geocoding.search(query, languageCode: _languageCode);
+      } else {
+        suggestions = await _geocoding.suggest(
+          query,
+          languageCode: _languageCode,
+        );
+      }
     } catch (e) {
       debugPrint('MapSearchPanel: address lookup failed: $e');
-      failed = true;
+      failure = LoadFailure.of(e);
     }
 
-    // the user may have typed on while the request was in flight; its answer is for a query the field
-    // no longer holds
-    if (!mounted || _textController.text.trim() != query) return;
+    // the user may have typed on, or pressed search, while the request was in flight; its answer is for
+    // a question the panel is no longer asking
+    if (!mounted ||
+        _textController.text.trim() != query ||
+        _placesSubmitted != submitted) {
+      return;
+    }
 
     setState(() {
-      _places = results;
-      _placesFailed = failed;
-      _placesFailedWhileTyping = failed && !submitted;
+      _suggestions = suggestions;
+      _places = places;
+      _placesFailure = failure;
       _isSearchingPlaces = false;
     });
   }
 
-  /// the keyboard's search key: the lookup runs now instead of after the pause, and as a submit
+  /// A suggestion has no point until it is resolved, which is one more lookup - so it is made only for
+  /// the line actually tapped.
+  Future<void> _pickSuggestion(AddressSuggestion suggestion) async {
+    _debounce?.cancel();
+    final query = _textController.text.trim();
+    setState(() => _isSearchingPlaces = true);
+
+    GeocodeResult? place;
+    LoadFailure? failure;
+    try {
+      place = await _geocoding.resolve(suggestion, languageCode: _languageCode);
+    } catch (e) {
+      debugPrint('MapSearchPanel: resolving a suggestion failed: $e');
+      failure = LoadFailure.of(e);
+    }
+
+    if (!mounted || _textController.text.trim() != query) return;
+    if (place == null) {
+      setState(() {
+        _suggestions = const [];
+        _placesFailure = failure;
+        _isSearchingPlaces = false;
+      });
+      return;
+    }
+
+    _select(suggestion.title);
+    widget.onPlaceSelected(place);
+  }
+
+  /// the keyboard's search key: the lookup runs now instead of after the pause, and as a search
   void _onSubmitted(String value) {
     _debounce?.cancel();
-    _searchPlaces(value, submitted: true);
+    _lookUpPlaces(value, submitted: true);
   }
 
   /// case-insensitive match on name or address, capped so the dropdown stays a shortlist. ё is read as
@@ -248,18 +300,29 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
                     maxHeight: _maxPanelHeight,
                     shops: shops,
                     shopsFailed: widget.shopsFailed,
-                    places: _places,
+                    places: [
+                      for (final suggestion in _suggestions)
+                        (
+                          title: suggestion.title,
+                          subtitle: suggestion.subtitle,
+                          onTap: () => _pickSuggestion(suggestion),
+                        ),
+                      for (final place in _places)
+                        (
+                          title: place.title,
+                          subtitle: place.subtitle,
+                          onTap: () {
+                            _select(place.title);
+                            widget.onPlaceSelected(place);
+                          },
+                        ),
+                    ],
                     isSearchingPlaces: _isSearchingPlaces,
-                    placesFailed: _placesFailed,
-                    placesFailedWhileTyping: _placesFailedWhileTyping,
+                    placesFailure: _placesFailure,
                     strings: widget.strings,
                     onShopTap: (shop) {
                       _select(shop.name);
                       widget.onShopSelected(shop);
-                    },
-                    onPlaceTap: (place) {
-                      _select(place.displayName);
-                      widget.onPlaceSelected(place);
                     },
                   ),
                 )
@@ -331,31 +394,30 @@ class _ResultsCard extends StatelessWidget {
     required this.shopsFailed,
     required this.places,
     required this.isSearchingPlaces,
-    required this.placesFailed,
-    required this.placesFailedWhileTyping,
+    required this.placesFailure,
     required this.strings,
     required this.onShopTap,
-    required this.onPlaceTap,
   });
 
   final double maxHeight;
   final List<Shop> shops;
   final bool shopsFailed;
-  final List<GeocodeResult> places;
+
+  /// suggestions and search results draw the same row, so the card is told only what to write
+  final List<({String title, String subtitle, VoidCallback onTap})> places;
   final bool isSearchingPlaces;
-  final bool placesFailed;
-  final bool placesFailedWhileTyping;
+  final LoadFailure? placesFailure;
 
   final AppLocalizations strings;
   final ValueChanged<Shop> onShopTap;
-  final ValueChanged<GeocodeResult> onPlaceTap;
 
   @override
   Widget build(BuildContext context) {
     // a failed shop list keeps its section, with a line saying so: "nothing matched" would be a claim
     // about shops nobody could check
     final showShops = shops.isNotEmpty || shopsFailed;
-    final showPlaces = places.isNotEmpty || isSearchingPlaces || placesFailed;
+    final showPlaces =
+        places.isNotEmpty || isSearchingPlaces || placesFailure != null;
 
     return Container(
       constraints: BoxConstraints(maxHeight: maxHeight),
@@ -409,38 +471,31 @@ class _ResultsCard extends StatelessWidget {
                           ),
                         ),
                       )
-                    else if (placesFailed)
+                    else if (placesFailure case final failure?)
                       _NoticeRow(
-                        label: placesFailedWhileTyping
-                            ? strings.mapPlacesSearchSlow
-                            : strings.mapPlacesSearchFailed,
-                        icon: CupertinoIcons.wifi_exclamationmark,
+                        label: failure == LoadFailure.network
+                            ? strings.mapPlacesSearchFailed
+                            : strings.mapPlacesSearchUnavailable,
+                        icon: failure == LoadFailure.network
+                            ? CupertinoIcons.wifi_exclamationmark
+                            : CupertinoIcons.exclamationmark_circle,
                         isError: true,
                       )
-                    else ...[
+                    else
                       for (final place in places)
                         _ResultRow(
                           icon: CupertinoIcons.location_solid,
                           iconColor: AppColors.textGrey,
                           iconBackground: AppColors.surfaceMuted,
-                          title: _shortPlaceName(place.displayName),
-                          subtitle: place.displayName,
-                          onTap: () => onPlaceTap(place),
+                          title: place.title,
+                          subtitle: place.subtitle,
+                          onTap: place.onTap,
                         ),
-                      const _OsmAttribution(),
-                    ],
                   ],
                 ],
               ),
       ),
     );
-  }
-
-  // the result is the whole address, most specific first; the first segment is the part a person
-  // actually recognises, so it becomes the title and the full string stays underneath as context
-  static String _shortPlaceName(String displayName) {
-    final head = displayName.split(',').first.trim();
-    return head.isEmpty ? displayName : head;
   }
 }
 
@@ -585,29 +640,6 @@ class _NoticeRow extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// the addresses are OpenStreetMap data, and its licence asks for the credit wherever they are
-// shown. the map underneath is Yandex's and credits only Yandex, so this line under the results is the
-// one place it can go.
-class _OsmAttribution extends StatelessWidget {
-  const _OsmAttribution();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(14, 0, 14, 8),
-      child: Text(
-        '© OpenStreetMap contributors',
-        textAlign: TextAlign.right,
-        style: TextStyle(
-          color: AppColors.textFaint,
-          fontSize: 10.5,
-          fontWeight: FontWeight.w500,
-        ),
       ),
     );
   }

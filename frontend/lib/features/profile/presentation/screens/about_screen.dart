@@ -9,18 +9,21 @@ import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/app_page_header.dart';
 
-/// «О приложении». **It exists for two licences, not for decoration**: Yandex's free MapKit terms
-/// ask for a link to them in an app's «About» section, and the address search is OpenStreetMap data,
-/// whose licence asks for the credit. A rejected MapKit licence switches the map off for everybody.
+/// «О приложении». **It exists for Yandex's free terms, not for decoration**: they ask for links in an
+/// app's «About» section, to the terms of the separate services (MapKit, the geocoder, geosuggest) and
+/// to the maps service's own. A rejected licence switches the map and the address search off for
+/// everybody.
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
-  // the address Yandex's free-use terms name for this link
+  // the address Yandex's free-use summary names for this link
   static final Uri yandexMapsTerms = Uri.parse(
     'https://yandex.ru/legal/maps_api/',
   );
-  static final Uri openStreetMapCopyright = Uri.parse(
-    'https://www.openstreetmap.org/copyright',
+
+  // the address clause 4.1.3.2 of those terms names
+  static final Uri yandexMapsServiceTerms = Uri.parse(
+    'https://yandex.ru/legal/maps_termsofuse',
   );
 
   @override
@@ -56,8 +59,8 @@ class AboutScreen extends StatelessWidget {
                   ),
                   _LinkRow(
                     icon: LucideIcons.map_pin,
-                    title: strings.openStreetMapCredit,
-                    uri: openStreetMapCopyright,
+                    title: strings.yandexMapsServiceTerms,
+                    uri: yandexMapsServiceTerms,
                   ),
                   const Divider(
                     height: 1,
