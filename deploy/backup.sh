@@ -152,8 +152,14 @@ backup_database() {
     # --format=custom rather than plain sql: it is compressed, pg_restore can read its table of
     # contents - which is what the verify step below leans on - and a restore can be driven table by
     # table on the day one table is the problem.
+    #
+    # **spatial_ref_sys is postgis's own table and belongs to the extension, not to us.** postgis
+    # marks it as configuration data, so pg_dump copies all 8 500 rows of it; on a rebuilt server
+    # CREATE EXTENSION has already filled it and the copy is refused, because the api's role does not
+    # own it. Excluding the data is what lets a restore run to the end.
     STEP="dumping the database"
-    pg_dump --format=custom --file="$plain" --dbname="$PG_CONN"
+    pg_dump --format=custom --file="$plain" --dbname="$PG_CONN" \
+        --exclude-table-data=public.spatial_ref_sys
 
     STEP="encrypting the dump"
     openssl enc "${CIPHER[@]}" -pass "file:$BACKUP_PASSPHRASE_FILE" -in "$plain" -out "$encrypted"
