@@ -54,26 +54,60 @@ replace is the one way to own a backup of nothing. See the backups section below
 
 ## Still open before release
 
-**Nothing below is in progress.** The first three are ordered and gate everything else.
+**The server is built and serving.** `https://domix-app.uz` answers, the api runs under systemd,
+the nightly backup has run and a restore from the bucket has been proven. What is left is the Play
+side and one thing nobody has tested yet.
 
 ### Do these first
 
-1. **Buy the Play developer account** ($25, one-time) and **start the closed test.** A personal account
-   created after 2023-11-13 cannot apply for production until it has run a closed test with **12 testers
-   opted in for 14 continuous days**. "Opted in" means accepted the invite **and installed** under the
-   matching Google account — invited-but-not-installed does not count, and dropping to 11 restarts the 14
-   days. Google also checks the testers genuinely *used* the app. Production review then takes up to ~7
-   days. **The real calendar is 3 weeks minimum, and it runs independently of everything else — start it
-   before the infrastructure work.**
-2. **Copy `secrets.vault.enc` off this laptop.** The script has been run and verified once, so the
-   passphrase works, but **the vault does not exist on disk right now**, leaving the keystore, the
-   repo-root `.env` and `key.properties` on one laptop and nowhere else. Passphrase on paper, off the
-   laptop.
-3. **Stand the production infrastructure up.** `env.prod.json` still says `https://REPLACE_ME` and
-   `make release` refuses until it does not. Android 9+ blocks cleartext HTTP, so an `http://` address
-   fails every request silently in release. Nothing else can be tested end to end without it.
+1. **Sign in once through real Telegram, on a real phone.** The webhook is registered and the api is
+   up, but **no human has completed the handshake against production** - every test so far was a unit
+   test. One sign-in proves the bot, the webhook secret, the contact check and the session in one
+   go. Until it happens the app's only door is unverified.
+2. **Create the app in Play Console and start the closed test.** The developer account is bought and
+   verified. A personal account created after 2023-11-13 needs **12 testers opted in for 14
+   continuous days** - accepted the invite *and* installed, under the matching Google account;
+   dropping to 11 restarts the 14 days. Production review then takes up to ~7 days. **The real
+   calendar is 3 weeks minimum**, and it runs independently of everything else.
+3. **Delete `DevicePreview` from `frontend/lib/main.dart`, then `make release`.** `env.prod.json`
+   already points at `https://domix-app.uz/api/auth`.
 
-### The production stack — decided, not yet bought
+**The Play reviewer cannot sign in.** Codes are gone and the Telegram handshake needs a real Telegram
+account. The founder decided on 2026-11-09 to declare it in the App access form and deal with a
+rejection if one comes. The fallback, if asked for credentials: `PLAY_REVIEW_PHONE` and
+`PLAY_REVIEW_CODE` still arm the code flow on the server - what is missing is a screen to type them
+into, so re-add the phone+code screen behind a long-press on the onboarding logo and hand Google the
+pair plus the gesture.
+
+### How the server was actually built, 2026-11-09
+
+The install order below was followed; these are the parts that differed from it and would be got
+wrong again:
+
+- **The Airnet image ships a broken apt source** - `deb file:///cdrom noble main` - and every
+  `apt-get update` fails until that line is deleted from `/etc/apt/sources.list`.
+- **Postgres came from PGDG, not Ubuntu.** Ubuntu 24.04 ships 16; development is on 18.6, and a dump
+  restores into an older postgres only by accident. `apt.postgresql.org` `noble-pgdg`, then
+  `postgresql-18`, `postgresql-18-postgis-3`.
+- **Go came from the tarball.** `go.mod` asks for 1.26 and Ubuntu packages 1.22.
+- **rclone must come from upstream, not apt.** Ubuntu's 1.60 answers every R2 upload with
+  `501 Not Implemented` on the first attempt and only succeeds on rclone's retry - 558 errors a night
+  for a backup that technically worked. 1.76 from `downloads.rclone.org` uploads clean in 8 seconds.
+- **The repo is cloned over a read-only GitHub deploy key** (`~/.ssh/github` on the server, public
+  half in the repo's Settings -> Deploy keys). The repository stays private and the server cannot
+  push.
+- **The timezone is `Asia/Tashkent`**, because `domix-backup.timer` fires on local time and names
+  each night's objects after the local date.
+- **ufw allows 22, 80 and 443 and nothing else.** Postgres and the api listen on loopback only, so
+  this is a second lock rather than the first.
+
+Four things the first real deploy found, all now fixed in the repo: the baseline migration carried a
+**stale catalogue** whose `image_path` pointed at names no file has had since the photos were renamed
+to content hashes; it also carried `schema_migrations`, `COMMENT ON EXTENSION` and psql `\restrict`
+lines, each of which stops a migration or a restore dead; and the nightly dump included postgis's own
+`spatial_ref_sys`, which a restore cannot write back.
+
+### The production stack — bought, installed and live
 
 Domain **`domix-app.uz`**, registered at Turn Cloud (my.tdc.uz), expires 2027-09-02. One host serves
 everything, and there are no subdomains:
@@ -377,10 +411,11 @@ either; nginx, the units and the migrations are in this repo.
 
 ### Infrastructure and operations
 
-- **Backups are built and proven, and not running yet.** The scripts, the reasoning and the install
-  steps are in the section above; the bucket, the R2 token, the dead man's switch account and a
-  passphrase that also exists off the server are deploy-time steps. Until that timer is enabled every
-  shop's hand-typed catalogue and every sent shopping list exist in exactly one place.
+- **Backups run nightly at 03:30 Tashkent time and have been restored from once.** The bucket, the
+  scoped R2 token, the healthchecks.io dead man's switch and the passphrase file are all in place;
+  `restore.sh db <date> <url>` rebuilt the 283-row catalogue into a throwaway database on
+  2026-11-09. **The passphrase also lives off the server**, because the file that holds it dies with
+  the machine the backups exist to replace.
 - **No error reporting.** When the app breaks on an owner's phone, nobody finds out. Structured server logs
   plus a crash reporter would turn "it doesn't work" into a stack trace.
 - **Three Yandex budgets, not one**, each shown separately in the cabinet under «Подключенные

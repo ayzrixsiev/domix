@@ -37,9 +37,13 @@ Cloudflare) resolves to **95.182.119.72**, an Ubuntu 24.04 VPS at Airnet in Uzbe
 3.8 GB RAM. `ssh ubuntu@95.182.119.72`, password login, the password is **not in this repo**: ask the
 founder. One box runs everything: nginx on 80/443, the Go api on 127.0.0.1:8080, Postgres, and the
 product photos on its own disk. Cloudflare R2 holds the nightly backup and serves nothing.
-**Nothing is deployed to it yet.** The `deployment` skill has the server table, the `.env` table, the
-install order, the admin-panel tunnel and everything still open before a Play submission; read it
-before touching the server, nginx, certbot, the backups or a release build.
+**It is deployed and serving.** `https://domix-app.uz/health` answers `ok`, the api runs as the
+`domix` user under `domix-api.service`, Postgres 18.6 with PostGIS holds the 283-row catalogue, and
+`domix-backup.timer` mirrors both to R2 every night at 03:30. **Nobody has signed in through real
+Telegram yet** - that, and the Play listing, are what is left. The `deployment` skill has the server
+table, the `.env` table, how the box was actually built, the admin-panel tunnel and the open list;
+read it before touching the server, nginx, certbot, the backups or a release build. Passwords are in
+this project's memory directory, never in this repo.
 
 ## Roadmap
 Build the current phase only; never scaffold a later one.
