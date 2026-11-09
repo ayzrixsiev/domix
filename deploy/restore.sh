@@ -13,14 +13,14 @@
 #
 # REBUILDING ON A NEW SERVER, from the bucket alone
 #
-#   1. Postgres of the same major version, with the extensions migration 000001 and 000002 create
-#      (postgis, pg_trgm) installable: `apt install postgresql-16-postgis-3`. A dump restores into an
-#      older postgres only by accident.
-#   2. Create the role and an empty database with a UTF-8 locale - migration 000002 refuses a
+#   1. Postgres of the same major version as production (18), with postgis and pg_trgm installable:
+#      `apt install postgresql-18-postgis-3` from the PGDG repository, since Ubuntu ships 16. A dump
+#      restores into an older postgres only by accident.
+#   2. Create the role and an empty database with a UTF-8 locale - migration 000001 refuses a
 #      database that cannot lowercase Cyrillic:
-#        createdb -T template0 -E UTF8 --locale=C.UTF-8 domix_db
-#   3. `restore.sh db <date> <url>` as a superuser connection: the dump creates extensions, which an
-#      ordinary role may not.
+#        createdb -T template0 -E UTF8 --locale=en_US.UTF-8 domix
+#   3. Create both extensions as the postgres superuser in that database: postgis is untrusted, so
+#      the api's own role cannot. Then `restore.sh db <date> <url>`.
 #   4. `restore.sh photos /srv/domix/images`, then `chown -R domix:www-data` so the api can write and
 #      nginx can read.
 #   5. Point .env at the restored database and that directory, and start the api.
@@ -122,8 +122,12 @@ cmd_db() {
     # --exit-on-error because pg_restore otherwise prints "errors ignored on restore: N" and carries
     # on: a database missing one table would be reported as restored.
     # --no-owner/--no-privileges because the roles are the old server's, and this is a new one.
+    # **--no-comments or the restore stops on the first object**: the only comments a Domix dump
+    # carries are pg_dump's two on postgis and pg_trgm, and on a rebuilt server a superuser created
+    # those extensions, so the api's role may not comment on them. With --exit-on-error that is not
+    # a warning, it is the end of the restore.
     log "restoring into ${target##*@}"
-    pg_restore --dbname="$PG_CONN" --no-owner --no-privileges --exit-on-error "$STAGING/dump"
+    pg_restore --dbname="$PG_CONN" --no-owner --no-privileges --no-comments --exit-on-error "$STAGING/dump"
 
     # pg_restore builds the indexes but leaves the planner with no statistics, and the home screen's
     # queries read as broken-slow until something analyses
