@@ -39,8 +39,8 @@ founder. One box runs everything: nginx on 80/443, the Go api on 127.0.0.1:8080,
 product photos on its own disk. Cloudflare R2 holds the nightly backup and serves nothing.
 **It is deployed and serving.** `https://domix-app.uz/health` answers `ok`, the api runs as the
 `domix` user under `domix-api.service`, Postgres 18.6 with PostGIS holds the 283-row catalogue, and
-`domix-backup.timer` mirrors both to R2 every night at 03:30. **Nobody has signed in through real
-Telegram yet** - that, and the Play listing, are what is left. The `deployment` skill has the server
+`domix-backup.timer` mirrors both to R2 every night at 03:30. A real phone has signed in through Telegram against
+production, so the whole chain is proven; the Play listing is what is left. The `deployment` skill has the server
 table, the `.env` table, how the box was actually built, the admin-panel tunnel and the open list;
 read it before touching the server, nginx, certbot, the backups or a release build. Passwords are in
 this project's memory directory, never in this repo.

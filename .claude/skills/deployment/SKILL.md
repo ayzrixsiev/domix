@@ -54,23 +54,25 @@ replace is the one way to own a backup of nothing. See the backups section below
 
 ## Still open before release
 
-**The server is built and serving.** `https://domix-app.uz` answers, the api runs under systemd,
-the nightly backup has run and a restore from the bucket has been proven. What is left is the Play
-side and one thing nobody has tested yet.
+**The server is built, serving, and has signed a real person in.** On 2026-11-09 the founder
+installed the production APK on a Redmi Note 9S and completed the Telegram handshake against
+production: account created, session issued, role switched to shop owner, a plumbing shop seeded with
+135 template products - no errors in the journal. What is left is the Play side.
+
+**The one number that moved**: placing that single shop's address spent **27 geocoder calls**, because
+the picker reverse-geocodes while the pin is dragged. Twelve testers doing the same is ~300 of the 990
+a day. Fine now; the first thing to look at if the log ever says the budget is spent.
 
 ### Do these first
 
-1. **Sign in once through real Telegram, on a real phone.** The webhook is registered and the api is
-   up, but **no human has completed the handshake against production** - every test so far was a unit
-   test. One sign-in proves the bot, the webhook secret, the contact check and the session in one
-   go. Until it happens the app's only door is unverified.
-2. **Create the app in Play Console and start the closed test.** The developer account is bought and
+1. **Create the app in Play Console and start the closed test.** The developer account is bought and
    verified. A personal account created after 2023-11-13 needs **12 testers opted in for 14
    continuous days** - accepted the invite *and* installed, under the matching Google account;
    dropping to 11 restarts the 14 days. Production review then takes up to ~7 days. **The real
    calendar is 3 weeks minimum**, and it runs independently of everything else.
-3. **Delete `DevicePreview` from `frontend/lib/main.dart`, then `make release`.** `env.prod.json`
-   already points at `https://domix-app.uz/api/auth`.
+2. **Delete `DevicePreview` from `frontend/lib/main.dart`, then `make release`.** `env.prod.json`
+   already points at `https://domix-app.uz/api/auth`. The wrapper is inert in a release build
+   (`enabled: !kReleaseMode`), so this is about not shipping a development dependency, not a bug.
 
 **The Play reviewer cannot sign in.** Codes are gone and the Telegram handshake needs a real Telegram
 account. The founder decided on 2026-11-09 to declare it in the App access form and deal with a
