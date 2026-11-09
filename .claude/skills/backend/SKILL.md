@@ -329,10 +329,14 @@ that regular overruns are blocked for good. The `deployment` skill has the numbe
   both need undoing the day the app opens a second city: Samarkand, Fergana and Namangan return nothing
   at all, and the box would become a soft bias (`ll` + `spn` toward the current view, plus
   `countries=uz`), with the rounded view area added to the cache key.
-- **Suggestions ask for `types=geo` only, so organisations never appear.** This is why "Central Asian
-  University" and "CAEX" come back empty while a street name works. `types=geo,biz` is the fix, and it
-  is held back only because nothing has yet confirmed the Geocoder can turn an organisation's `uri`
-  into a point — test that by hand before changing it.
+- **Suggestions ask for `types=geo,biz`, so a landmark is findable.** `geo` alone is toponyms —
+  streets, houses, districts, parks — and a university, a mall or a bazaar is an organisation, so for
+  months "Central Asian University" and "CAEx" came back empty while a street name worked. Confirmed
+  by hand on 2026-11-09 before the change: the suggestion arrives as `ymapsbm1://org?oid=…` and the
+  **Geocoder resolves it with the key we already have**, so `biz` costs no extra call and no second
+  Yandex product. It also returns bus stops named after a place; the subtitle (`ВУЗ · …` against
+  `Остановка общественного транспорта · …`) says which is which, and filtering on those strings would
+  be a hardcoded guess at Yandex's own wording that fails silently when they reword it.
 - **A `*url.Error` prints the url, and the url carries the key** — `cleanURLError` is what keeps a timeout
   from writing it into the log.
 - Answers: an empty list or a 404 `address_not_found` is "no such address"; 502 `geocoder_unavailable` and

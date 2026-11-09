@@ -75,7 +75,12 @@ func (y *yandex) suggest(ctx context.Context, text string, lang Lang) ([]Suggest
 		"text":          {text},
 		"lang":          {string(lang)},
 		"results":       {maxResults},
-		"types":         {"geo"},
+		// **geo alone cannot answer "Central Asian University".** geo is toponyms - streets, houses,
+		// districts, parks - and a university, a mall or a bazaar is an organization, so asking for geo
+		// only makes a landmark unfindable however it is spelled. biz costs no extra call and the
+		// geocoder resolves an ymapsbm1://org uri with the same key. it also returns bus stops named
+		// after the place; the subtitle says which is which, so they are left in.
+		"types":         {"geo,biz"},
 		"attrs":         {"uri"},
 		"bbox":          {searchArea},
 		"strict_bounds": {"1"},
