@@ -317,6 +317,10 @@ that regular overruns are blocked for good. The `deployment` skill has the numbe
   exists only for an answer Yandex gave, so the budget bounds the map. **The privacy policy promises an
   answer is held at most a week** — `cacheTTL` plus `cacheStaleFor`.
 - A suggestion carries no coordinates: the app hands its `uri` back to `/place`, a geocoder call.
+- **`/reverse` answers Yandex's short name** («проспект Амира Темура, 39»), falling back to the full line
+  where there is none, and that is what a shop stores: the full line opens on «Узбекистан, Ташкент», which
+  is all an ellipsis leaves. Never cut a prefix off in the app; outside Tashkent it would not match.
+  Shops saved before this keep their long address until re-saved.
 - **Reverse asks for the nearest house first**: without `kind=house` a pin on a shop beside a park answers
   with the park. Only when no house is within 100 m does a second call take any object.
 - Typed lookups are bounded to Tashkent and its oblast **by Yandex** (`rspn`, `strict_bounds`,

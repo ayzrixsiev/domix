@@ -54,11 +54,13 @@ class AddressSuggestion {
       );
 }
 
-// kept apart because callers want different halves: the add-store form stores the whole address
-// on `shops.address`, the home header's city pill only the city
+// kept apart because callers want different halves: the add-store form stores the address on
+// `shops.address`, the home header's city pill only the city
 class ReverseGeocodeResult {
   const ReverseGeocodeResult({required this.address, this.city});
 
+  /// the short form the server picks, «проспект Амира Темура, 39», or the whole line where Yandex
+  /// names none
   final String address;
 
   /// null when Yandex names no city there - callers keep whatever city they were showing

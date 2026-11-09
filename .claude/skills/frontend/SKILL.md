@@ -194,6 +194,10 @@ floor, debounce and session cache are what keep that budget alive; a failure say
 says «Поиск адресов сейчас недоступен». The token goes along when there is one, so a signed-in caller
 is metered by account.
 
+**The location picker's field is the map's panel**, `MapSearchPanel.addresses`: the same debounce, floor
+and dropdown with no shops, and nothing drawn under three letters. Do not give the picker a list of its
+own again. The address it returns, which is what a shop stores, is the server's short form (below).
+
 `AboutScreen` carries the two links Yandex's free terms require — `maps_api` and, under the terms' own
 wording «Условия использования сервиса Яндекс.Карты», `maps_termsofuse` — and is reachable from the
 guest gate too.

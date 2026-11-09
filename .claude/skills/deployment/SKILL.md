@@ -61,7 +61,8 @@ production: account created, session issued, role switched to shop owner, a plum
 
 **The one number that moved**: placing that single shop's address spent **27 geocoder calls**, because
 the picker reverse-geocodes while the pin is dragged. Twelve testers doing the same is ~300 of the 990
-a day. Fine now; the first thing to look at if the log ever says the budget is spent.
+a day. Fine now; the first thing to look at if the log ever says the budget is spent. The picker now also
+spends **Geosuggest** while the address is typed (its own 1000 a day), five to eight calls an address.
 
 ### Do these first
 

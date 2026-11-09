@@ -4,12 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
-import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import '../../data/geocoding_service.dart';
 import '../widgets/domix_map.dart';
 import '../widgets/shop_marker.dart';
-import 'package:frontend/core/widgets/pill_search_field.dart';
 import '../widgets/map_search_panel.dart';
 
 // what the caller gets back once the user confirms a location
@@ -23,6 +21,8 @@ class LocationPickResult {
 
   final double latitude;
   final double longitude;
+
+  /// the short form, «проспект Амира Темура, 39» - what the shop stores and every screen shows
   final String address;
 
   /// the city containing the picked point, when Yandex names one
@@ -32,7 +32,9 @@ class LocationPickResult {
 // lets a shop owner find their shop's location: search by address, drag the map to fine-tune
 // (the pin stays fixed at the center - you move the map underneath it), then confirm.
 class LocationPickerScreen extends StatefulWidget {
-  const LocationPickerScreen({super.key});
+  const LocationPickerScreen({super.key, this.geocoding});
+
+  final GeocodingService? geocoding;
 
   // tashkent, since that's where domix currently operates - a sensible default center
   static const _defaultLatitude = 41.2995;
@@ -44,16 +46,13 @@ class LocationPickerScreen extends StatefulWidget {
 
 class _LocationPickerScreenState extends State<LocationPickerScreen> {
   DomixMapController? _map;
-  final _geocodingService = GeocodingService();
-  final _searchController = TextEditingController();
+  late final _geocodingService = widget.geocoding ?? GeocodingService();
 
   double _centerLatitude = LocationPickerScreen._defaultLatitude;
   double _centerLongitude = LocationPickerScreen._defaultLongitude;
   String? _resolvedAddress;
   String? _resolvedCity;
   bool _isResolvingAddress = false;
-  List<GeocodeResult> _searchResults = [];
-  bool _isSearching = false;
   Timer? _debounce;
 
   @override
@@ -65,7 +64,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   @override
   void dispose() {
     _debounce?.cancel();
-    _searchController.dispose();
     super.dispose();
   }
 
@@ -112,47 +110,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   static String _coordinates(double latitude, double longitude) =>
       '${latitude.toStringAsFixed(5)}, ${longitude.toStringAsFixed(5)}';
 
-  Future<void> _performSearch(String query) async {
-    if (query.trim().isEmpty) return;
-    FocusScope.of(context).unfocus();
-    setState(() => _isSearching = true);
-
-    final strings = context.read<LanguageProvider>().strings;
-    var results = const <GeocodeResult>[];
-    String? notice;
-    try {
-      results = await _geocodingService.search(
-        query,
-        languageCode: strings.language.code,
-      );
-      if (results.isEmpty) notice = strings.searchNoResults;
-    } catch (e) {
-      debugPrint('LocationPickerScreen: address search failed: $e');
-      notice = LoadFailure.of(e) == LoadFailure.network
-          ? strings.mapPlacesSearchFailed
-          : strings.mapPlacesSearchUnavailable;
-    }
-
-    if (!mounted) return;
-    setState(() {
-      _searchResults = results;
-      _isSearching = false;
-    });
-    // the picker has its own way out - drag the map onto the spot - so a line is enough
-    if (notice != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(notice)));
-    }
-  }
-
   void _selectSearchResult(GeocodeResult result) {
     _map?.flyTo(result.latitude, result.longitude, zoom: 16);
     setState(() {
       _centerLatitude = result.latitude;
       _centerLongitude = result.longitude;
-      _searchResults = [];
-      _searchController.text = result.address;
     });
     _resolveAddressForCurrentCenter();
   }
@@ -201,58 +163,27 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             ),
           ),
 
-          // back button + search bar
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      // **MapBarButton, not the page's round control**: three things form one bar
-                      // over the map here, and a 40 disc beside the 50 floating field is the odd
-                      // one out - the same reason the full-screen map's exit is this button
-                      MapBarButton(
-                        icon: LucideIcons.chevron_left,
-                        tooltip: strings.stepBackButton,
-                        onTap: () => Navigator.of(context).maybePop(),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: PillSearchField(
-                          controller: _searchController,
-                          floating: true,
-                          hint: strings.searchLocationHint,
-                          onSubmitted: _performSearch,
-                          trailing: _isSearching
-                              ? const Padding(
-                                  padding: EdgeInsets.all(13),
-                                  child: SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  ),
-                                )
-                              : IconButton(
-                                  icon: const Icon(
-                                    CupertinoIcons.arrow_right_circle_fill,
-                                  ),
-                                  color: AppColors.primaryOrange,
-                                  onPressed: () =>
-                                      _performSearch(_searchController.text),
-                                ),
-                        ),
-                      ),
-                    ],
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                child: MapSearchPanel.addresses(
+                  strings: strings,
+                  geocoding: _geocodingService,
+                  // **MapBarButton, not the page's round control**: it and the field form one bar
+                  // over the map, and a 40 disc beside the 50 floating field is the odd one out -
+                  // the same reason the full-screen map's exit is this button
+                  leading: MapBarButton(
+                    icon: LucideIcons.chevron_left,
+                    tooltip: strings.stepBackButton,
+                    onTap: () => Navigator.of(context).maybePop(),
                   ),
-                  if (_searchResults.isNotEmpty)
-                    _SearchResultsList(
-                      results: _searchResults,
-                      onSelected: _selectSearchResult,
-                    ),
-                ],
+                  onPlaceSelected: _selectSearchResult,
+                ),
               ),
             ),
           ),
@@ -299,59 +230,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _SearchResultsList extends StatelessWidget {
-  const _SearchResultsList({required this.results, required this.onSelected});
-
-  final List<GeocodeResult> results;
-  final ValueChanged<GeocodeResult> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      constraints: const BoxConstraints(maxHeight: 220),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ListView.separated(
-        shrinkWrap: true,
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        itemCount: results.length,
-        separatorBuilder: (_, _) => const Divider(height: 1),
-        itemBuilder: (context, index) {
-          final result = results[index];
-          return ListTile(
-            dense: true,
-            leading: const Icon(
-              CupertinoIcons.location_solid,
-              color: AppColors.primaryOrange,
-              size: 20,
-            ),
-            title: Text(
-              result.address,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            onTap: () => onSelected(result),
-          );
-        },
       ),
     );
   }

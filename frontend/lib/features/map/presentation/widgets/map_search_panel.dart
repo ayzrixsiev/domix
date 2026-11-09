@@ -10,27 +10,44 @@ import 'package:frontend/core/widgets/pill_search_field.dart';
 import 'package:frontend/features/map/data/geocoding_service.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 
-// The map's search field and its results panel. **Shops** are already in memory and match on every
-// keystroke; **addresses** are Yandex suggestions while typing and a geocoder search on the search key,
-// both through our api (GeocodingService). Every lookup that reaches Yandex spends a budget the whole
-// app shares for the day, which is what the debounce, the three-letter floor and the session cache save.
+// The map's search field and its results panel, and the location picker's. **Shops** are already in
+// memory and match on every keystroke; **addresses** are Yandex suggestions while typing and a geocoder
+// search on the search key, both through our api (GeocodingService). Every lookup that reaches Yandex
+// spends a budget the whole app shares for the day, which is what the debounce, the three-letter floor
+// and the session cache save.
 //
-// It owns the text state and reports only *selections* upward, which keeps MapScreen concerned with
+// It owns the text state and reports only *selections* upward, which keeps its screen concerned with
 // the camera and the sheets rather than with text editing.
 class MapSearchPanel extends StatefulWidget {
   const MapSearchPanel({
     super.key,
-    required this.shops,
+    required List<Shop> this.shops,
     required this.strings,
-    required this.onShopSelected,
+    required ValueChanged<Shop> this.onShopSelected,
     required this.onPlaceSelected,
     this.shopsFailed = false,
     this.leading,
     this.action,
-  });
+  }) : geocoding = null;
 
-  /// the shops currently plotted on the map - searched locally, never re-fetched
-  final List<Shop> shops;
+  /// Addresses alone, for the location picker: an owner placing their shop is looking for a street,
+  /// and another shop is not an answer to that.
+  const MapSearchPanel.addresses({
+    super.key,
+    required this.strings,
+    required this.onPlaceSelected,
+    this.geocoding,
+    this.leading,
+  }) : shops = null,
+       onShopSelected = null,
+       shopsFailed = false,
+       action = null;
+
+  /// the shops currently plotted on the map - searched locally, never re-fetched. null on addresses alone
+  final List<Shop>? shops;
+
+  /// the picker's own, so one service answers both its pin and its field
+  final GeocodingService? geocoding;
 
   /// the map's shop list failed to load, so "no shop matched" would be a claim nobody checked
   final bool shopsFailed;
@@ -44,7 +61,7 @@ class MapSearchPanel extends StatefulWidget {
   final Widget? action;
 
   final AppLocalizations strings;
-  final ValueChanged<Shop> onShopSelected;
+  final ValueChanged<Shop>? onShopSelected;
   final ValueChanged<GeocodeResult> onPlaceSelected;
 
   @override
@@ -57,7 +74,7 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
 
   final _textController = TextEditingController();
   final _focusNode = FocusNode();
-  final _geocoding = GeocodingService();
+  late final _geocoding = widget.geocoding ?? GeocodingService();
 
   static const _debounceDelay = Duration(milliseconds: 450);
 
@@ -217,10 +234,11 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
   /// case-insensitive match on name or address, capped so the dropdown stays a shortlist. ё is read as
   /// е on both sides, as the product search does: customers rarely type it, owners sometimes do.
   List<Shop> get _matchingShops {
+    final shops = widget.shops;
     final needle = _fold(_query.trim());
-    if (needle.isEmpty) return const [];
+    if (shops == null || needle.isEmpty) return const [];
 
-    return widget.shops
+    return shops
         .where(
           (shop) =>
               _fold(shop.name).contains(needle) ||
@@ -255,8 +273,15 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
   @override
   Widget build(BuildContext context) {
     final shops = _matchingShops;
-    final hasQuery = _query.trim().isNotEmpty;
-    final showResults = _focusNode.hasFocus && hasQuery;
+    final addressesOnly = widget.shops == null;
+    final trimmed = _query.trim();
+    // on addresses alone nothing answers under the floor, so «Ничего не найдено» there would be a
+    // claim nobody checked
+    final showResults =
+        _focusNode.hasFocus &&
+        (addressesOnly
+            ? trimmed.length >= GeocodingService.minQueryLength
+            : trimmed.isNotEmpty);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -273,7 +298,9 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
                 controller: _textController,
                 focusNode: _focusNode,
                 floating: true,
-                hint: widget.strings.mapSearchHint,
+                hint: addressesOnly
+                    ? widget.strings.searchLocationHint
+                    : widget.strings.mapSearchHint,
                 onChanged: _onQueryChanged,
                 onSubmitted: _onSubmitted,
                 // the panel's own clear: it drops the results list with the text
@@ -322,7 +349,7 @@ class _MapSearchPanelState extends State<MapSearchPanel> {
                     strings: widget.strings,
                     onShopTap: (shop) {
                       _select(shop.name);
-                      widget.onShopSelected(shop);
+                      widget.onShopSelected?.call(shop);
                     },
                   ),
                 )

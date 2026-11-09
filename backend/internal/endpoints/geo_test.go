@@ -43,3 +43,21 @@ func TestARefusedYandexCallAnswersLikeTheCallersOwnBucket(t *testing.T) {
 		t.Fatalf("Retry-After %q, want 12 - one token at three hundred an hour", got)
 	}
 }
+
+func TestAPinsAddressIsTheShortFormAndNeverEmpty(t *testing.T) {
+	house := addressFrom(geo.Place{
+		Name:        "проспект Амира Темура, 39",
+		Description: "Мирабадский район, Ташкент, Узбекистан",
+		Address:     "Узбекистан, Ташкент, Мирабадский район, проспект Амира Темура, 39",
+		City:        "Ташкент",
+	})
+	if house.Address != "проспект Амира Темура, 39" {
+		t.Fatalf("want the short form, got %q", house.Address)
+	}
+
+	// a shop saved with an empty address is a card with nothing under its name
+	field := addressFrom(geo.Place{Address: "Узбекистан, Ташкентская область"})
+	if field.Address != "Узбекистан, Ташкентская область" {
+		t.Fatalf("want the full line where yandex names no short form, got %q", field.Address)
+	}
+}

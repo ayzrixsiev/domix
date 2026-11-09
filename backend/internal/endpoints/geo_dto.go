@@ -19,7 +19,8 @@ type SuggestionResponse struct {
 	URI      string `json:"uri"`
 }
 
-// a pin's address. city is null where yandex names none, and the header keeps the city it was showing
+// a pin's address, which is what a shop stores. city is null where yandex names none, and the header
+// keeps the city it was showing
 type AddressResponse struct {
 	Address string  `json:"address"`
 	City    *string `json:"city"`
@@ -39,8 +40,13 @@ func suggestionFrom(s geo.Suggestion) SuggestionResponse {
 	return SuggestionResponse{Title: s.Title, Subtitle: s.Subtitle, URI: s.URI}
 }
 
+// the short form, «проспект Амира Темура, 39»: the full line opens on the country and the city, which is
+// all an ellipsis leaves of it. a pin in open country has no short form, and the full line is all there is
 func addressFrom(p geo.Place) AddressResponse {
-	out := AddressResponse{Address: p.Address}
+	out := AddressResponse{Address: p.Name}
+	if out.Address == "" {
+		out.Address = p.Address
+	}
 	if p.City != "" {
 		out.City = &p.City
 	}
