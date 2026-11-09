@@ -10,7 +10,11 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
+
+	"domix/backend/internal/ratelimit"
 )
 
 func fixture(t *testing.T, name string) []byte {
@@ -170,7 +174,7 @@ func serviceUnderTest(t *testing.T, quota Quota, answer func(r *http.Request) (i
 		geocoderURL: server.URL + "/geocode",
 		suggestURL:  server.URL + "/suggest",
 		client:      server.Client(),
-	}, quota), fake
+	}, quota, nil), fake
 }
 
 func TestSpellingsOfOneQueryShareOneCallAndOneUnitOfBudget(t *testing.T) {
@@ -306,7 +310,7 @@ func TestAnUnreachableYandexNeverPutsTheKeyInTheError(t *testing.T) {
 		geocoderKey: "secret-geocoder-key",
 		geocoderURL: "http://127.0.0.1:1/geocode",
 		client:      http.DefaultClient,
-	}, &countingQuota{left: 1})
+	}, &countingQuota{left: 1}, nil)
 
 	_, err := service.Search(context.Background(), "чорсу", Russian)
 	if !errors.Is(err, ErrUnavailable) {
@@ -314,5 +318,58 @@ func TestAnUnreachableYandexNeverPutsTheKeyInTheError(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "secret-geocoder-key") {
 		t.Fatalf("the api key leaked into the error: %v", err)
+	}
+}
+
+// **the pace is spent on yandex calls, not on requests**: an account looping past it must not cost
+// anybody a lookup the cache already holds, and a refused call must cost no budget
+func TestThePaceRefusesACallButNeverACachedAnswer(t *testing.T) {
+	quota := &countingQuota{left: 10}
+	search := fixture(t, "geocoder_search.json")
+	service, fake := serviceUnderTest(t, quota, func(*http.Request) (int, []byte) { return 200, search })
+	service.pace = ratelimit.New(0, 1, time.Minute) // one call, then never another
+
+	if _, err := service.Search(context.Background(), "амира темура", Russian); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Search(context.Background(), "чорсу", Russian); !errors.Is(err, ErrBusy) {
+		t.Fatalf("a call past the pace: want ErrBusy, got %v", err)
+	}
+	if places, err := service.Search(context.Background(), "Амира Темура", Russian); err != nil || len(places) != 5 {
+		t.Fatalf("a cached answer was refused along with the call: %d places (%v)", len(places), err)
+	}
+	if fake.count() != 1 || quota.spent != 1 {
+		t.Fatalf("want one call and one unit spent, got %d calls and %d units", fake.count(), quota.spent)
+	}
+}
+
+// **a failure is shared with the callers queued behind it**: on a slow yandex day each retry would be
+// another unit spent and another wait for the caller after it
+func TestCallersQueuedBehindAFailedCallShareItsFailure(t *testing.T) {
+	quota := &countingQuota{left: 10}
+	service, fake := serviceUnderTest(t, quota, func(*http.Request) (int, []byte) {
+		// long enough that every other caller is queued on the key by the time this fails
+		time.Sleep(100 * time.Millisecond)
+		return http.StatusInternalServerError, nil
+	})
+
+	var callers sync.WaitGroup
+	var failed atomic.Int32
+	for range 5 {
+		callers.Add(1)
+		go func() {
+			defer callers.Done()
+			if _, err := service.Suggest(context.Background(), "юнусабад", Russian); errors.Is(err, ErrUnavailable) {
+				failed.Add(1)
+			}
+		}()
+	}
+	callers.Wait()
+
+	if failed.Load() != 5 {
+		t.Fatalf("%d of 5 callers were told yandex could not be asked", failed.Load())
+	}
+	if fake.count() != 1 || quota.spent != 1 {
+		t.Fatalf("five queued callers made %d calls and spent %d units, want one of each", fake.count(), quota.spent)
 	}
 }

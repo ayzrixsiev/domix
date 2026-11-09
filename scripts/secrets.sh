@@ -12,7 +12,7 @@
 #
 #   ~/domix-upload-key.jks          the Google Play upload key. lose it and there is no way to ship
 #                                   an update to the installed app, ever - only a new listing.
-#   .env                            DB_URL, TELEGRAM_BOT_TOKEN, JWT_SECRET, WEBHOOK_URL, PORT.
+#   .env                            DB_URL, TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET, JWT_SECRET, PORT.
 #
 # Both belong in a backup. Neither belongs in git *as plain text*, and the reason is not that the
 # repository is public - it is private today. The reason is that git history is permanent and
@@ -37,7 +37,16 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VAULT="$REPO_ROOT/secrets.vault.enc"
+KEY_PROPERTIES="$REPO_ROOT/frontend/android/key.properties"
+
+# **read from key.properties rather than assumed**: gradle signs with whatever that file's storeFile
+# points at, so a path guessed here could differ from the keystore actually in use - and a vault
+# missing the real one still says "wrote secrets.vault.enc" and is discovered on a dead laptop.
 KEYSTORE="$HOME/domix-upload-key.jks"
+if [[ -f "$KEY_PROPERTIES" ]]; then
+    from_properties="$(sed -n 's/^storeFile=//p' "$KEY_PROPERTIES" | tail -1)"
+    if [[ -n "$from_properties" ]]; then KEYSTORE="$from_properties"; fi
+fi
 
 # the scratch directory is a global rather than a `local`, because the EXIT trap that deletes it
 # runs after the function has returned and a local would be out of scope by then - under `set -u`
@@ -77,7 +86,13 @@ cmd_backup() {
         echo "  + domix-upload-key.jks"
         found=$((found + 1))
     else
-        echo "  ! keystore not found at $KEYSTORE - skipping"
+        # **fatal rather than skipped**: the keystore is the one file in here that cannot be
+        # regenerated, and a vault written without it reads as a successful backup
+        echo "  ! keystore NOT FOUND at $KEYSTORE" >&2
+        echo >&2
+        echo "Refusing to write a vault without it: losing this file means never shipping an update" >&2
+        echo "to the installed app again. Fix storeFile in $KEY_PROPERTIES, or generate the key." >&2
+        exit 1
     fi
 
     if [[ -f "$REPO_ROOT/frontend/android/key.properties" ]]; then

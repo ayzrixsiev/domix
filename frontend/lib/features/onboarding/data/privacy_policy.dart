@@ -6,7 +6,7 @@ import 'package:frontend/core/localization/app_localizations.dart';
 /// carries an English version. It lives here as well so it can be read and accepted before an account
 /// exists. `TestTheAppCarriesThePublishedPolicy` compares the two line by line: edit both, and move
 /// [policyVersion] together with the api's `policyVersion`.
-const String policyVersion = '2026-11-06';
+const String policyVersion = '2026-11-09';
 
 /// One heading and the paragraphs under it. Bullets are plain strings beginning with "• ", so the
 /// renderer stays a `Text` per line.
@@ -40,15 +40,15 @@ const List<PolicySection> _russian = [
     body: [
       "Domix разрабатывает и поддерживает команда Domix (далее — «мы»), г. Ташкент, Республика "
           "Узбекистан. Мы отвечаем за данные, о которых говорится в этой политике.",
-      "Политика относится к мобильному приложению Domix для Android и к сайту domix-api.uz. Если "
+      "Политика относится к мобильному приложению Domix для Android и к сайту domix-app.uz. Если "
           "у вас есть вопрос о ваших данных, пишите на domix.support@gmail.com.",
     ],
   ),
   PolicySection(
     title: "2. Какие данные мы получаем",
     body: [
-      "• Номер телефона. Без него нельзя войти: на номер приходит код подтверждения, и по номеру "
-          "мы узнаём вас при следующем входе.",
+      "• Номер телефона. Без него нельзя войти: вы подтверждаете его в Telegram кнопкой "
+          "«Поделиться номером» в нашем боте, и по номеру мы узнаём вас при следующем входе.",
       "• Имя. Вы указываете его сами, оно отображается в вашем профиле.",
       "• Роль: покупатель или владелец магазина.",
       "• Данные магазина, если вы его открываете: название, адрес, точку на карте, контактный "
@@ -75,7 +75,7 @@ const List<PolicySection> _russian = [
       "• Контакты, сообщения, файлы и рекламный идентификатор устройства.",
       "• Ничего для рекламы и аналитики: в Domix нет систем аналитики, трекеров и рекламных "
           "библиотек.",
-      "• Пароли. В Domix их нет: вход только по одноразовому коду.",
+      "• Пароли. В Domix их нет: вход только через Telegram.",
       "Разрешение на геолокацию в карточке приложения в Google Play — от этой кнопки. Android "
           "спрашивает его в момент первого нажатия, отказаться можно, и всё остальное в приложении "
           "продолжит работать как прежде. Доступ к местоположению в фоне мы не запрашиваем.",
@@ -100,13 +100,17 @@ const List<PolicySection> _russian = [
       "Мы не продаём данные и не передаём их другим компаниям для их собственных целей. Часть "
           "работы за нас делают сервисы-подрядчики, и каждый получает только то, что нужно для его "
           "задачи:",
-      "• Telegram Gateway — номер телефона и код, чтобы доставить код подтверждения в Telegram.",
+      "• Telegram — бот Domix (@domix_manager_bot) получает от Telegram ваш номер телефона, "
+          "когда вы им делитесь, и отвечает вам сообщениями о входе. Telegram знает, что вы "
+          "написали нашему боту. Имя и идентификатор Telegram, которые приходят вместе с номером, "
+          "мы не сохраняем.",
       "• Яндекс Карты (MapKit) — запросы карты, пока она открыта.",
       "• Геокодер и Геосаджест Яндекс Карт — текст, который вы вводите в поиске адреса, и координаты "
           "точки, которую вы поставили на карте, чтобы найти адрес. Запрос отправляет наш сервер, поэтому "
           "Яндекс не получает ни ваш IP-адрес, ни ваш аккаунт; ответы сервер помнит до недели, не связывая "
           "их с вами.",
-      "• Cloudflare R2 — хранение фотографий товаров.",
+      "• Cloudflare R2 — ночные резервные копии: фотографии товаров и зашифрованная копия базы "
+          "данных.",
       "• Хостинг-провайдер в Узбекистане — сервер и база данных.",
       "Государственным органам мы раскрываем данные только тогда, когда этого требует закон "
           "Республики Узбекистан.",
@@ -116,20 +120,24 @@ const List<PolicySection> _russian = [
     title: "6. Где хранятся данные",
     body: [
       "Аккаунты, номера телефонов, магазины и списки покупок вместе с их фотографиями хранятся в "
-          "базе данных на сервере в Республике Узбекистан.",
-      "Telegram, Яндекс и Cloudflare работают за пределами Узбекистана. "
-          "Поэтому то, что получает каждый из них (см. раздел 5), передаётся за рубеж: номер телефона"
-          " — для доставки кода, адресные запросы и координаты точки — для поиска адреса, фотографии "
-          "товаров — для хранения.",
+          "базе данных на сервере в Республике Узбекистан. Фотографии товаров лежат на том же "
+          "сервере, и приложение загружает их оттуда.",
+      "Telegram, Яндекс и Cloudflare работают за пределами Узбекистана. Поэтому то, что "
+          "получает каждый из них (см. раздел 5), передаётся за рубеж: переписка с ботом Domix — "
+          "для входа, адресные запросы и координаты точки — для поиска адреса, фотографии товаров и "
+          "копия базы данных — для резервного хранения. Копия базы данных шифруется до того, как "
+          "покидает сервер, а ключ остаётся в Узбекистане, поэтому читаемых персональных данных за "
+          "рубежом нет.",
     ],
   ),
   PolicySection(
     title: "7. Сколько мы храним данные",
     body: [
       "• Аккаунт, магазины, товары, списки покупок и избранное — пока вы пользуетесь Domix.",
-      "• Код подтверждения — 5 минут. Он хранится только в оперативной памяти сервера и только в "
-          "виде хэша, поэтому от начатой и брошенной регистрации ничего не остаётся.",
+      "• Незавершённый вход — 10 минут. Он хранится только в оперативной памяти сервера, "
+          "поэтому от начатой и брошенной регистрации ничего не остаётся.",
       "• Журналы сервера — до 90 дней.",
+      "• Резервные копии базы данных и фотографий — 30 дней.",
     ],
   ),
   PolicySection(
@@ -140,17 +148,19 @@ const List<PolicySection> _russian = [
           "domix.support@gmail.com.",
       "Удалить аккаунт можно двумя способами:",
       "• в приложении: «Профиль» → «Удалить аккаунт»;",
-      "• без приложения: на странице domix-api.uz/delete-account.",
+      "• без приложения: на странице domix-app.uz/delete-account.",
       "Аккаунт удаляется сразу, а не по заявке. Вместе с ним удаляются ваши магазины, товары, "
           "списки покупок, загруженные фотографии и избранное. Восстановить их нельзя. В журналах сервера до 90 дней "
-          "может остаться числовой номер удалённого аккаунта — без имени и телефона.",
+          "может остаться числовой номер удалённого аккаунта — без имени и телефона. Из ночных "
+          "резервных копий данные исчезают в течение 30 дней.",
     ],
   ),
   PolicySection(
     title: "9. Безопасность",
     body: [
       "Соединение с сервером зашифровано (TLS). Ключ сессии хранится в защищённом хранилище "
-          "Android. Коды подтверждения хранятся только в виде хэша, а число попыток ввода ограничено.",
+          "Android. Принимается только номер, принадлежащий вашему собственному аккаунту Telegram: "
+          "пересланный чужой контакт не подходит.",
       "Полностью защищённых систем не бывает. Если заметили в своём аккаунте что-то "
           "подозрительное, напишите нам.",
     ],
@@ -184,15 +194,15 @@ const List<PolicySection> _uzbek = [
       "Domix’ni Domix jamoasi («biz») ishlab chiqadi va qo‘llab-quvvatlaydi, Toshkent shahri, "
           "O‘zbekiston Respublikasi. Ushbu siyosatda so‘z yuritilgan ma’lumotlar uchun biz javob "
           "beramiz.",
-      "Siyosat Android uchun Domix mobil ilovasiga va domix-api.uz saytiga tegishli. "
+      "Siyosat Android uchun Domix mobil ilovasiga va domix-app.uz saytiga tegishli. "
           "Ma’lumotlaringiz bo‘yicha savolingiz bo‘lsa, domix.support@gmail.com manziliga yozing.",
     ],
   ),
   PolicySection(
     title: "2. Qanday ma’lumotlarni olamiz",
     body: [
-      "• Telefon raqami. Usiz kirib bo‘lmaydi: raqamga tasdiqlash kodi keladi, keyingi safar esa "
-          "sizni shu raqam orqali taniymiz.",
+      "• Telefon raqami. Usiz kirib bo‘lmaydi: uni Telegram’da botimizdagi «Raqamni ulashish» "
+          "tugmasi bilan tasdiqlaysiz, keyingi safar esa sizni shu raqam orqali taniymiz.",
       "• Ism. Uni o‘zingiz kiritasiz, u profilingizda ko‘rinadi.",
       "• Rol: xaridor yoki do‘kon egasi.",
       "• Do‘kon ma’lumotlari, agar do‘kon ochsangiz: nomi, manzili, xaritadagi nuqtasi, aloqa "
@@ -219,7 +229,7 @@ const List<PolicySection> _uzbek = [
       "• Kontaktlar, xabarlar, fayllar va qurilmaning reklama identifikatori.",
       "• Reklama va tahlil uchun hech narsa: Domix’da tahlil tizimlari, kuzatuvchilar va reklama "
           "kutubxonalari yo‘q.",
-      "• Parollar. Domix’da ular yo‘q: kirish faqat bir martalik kod orqali.",
+      "• Parollar. Domix’da ular yo‘q: kirish faqat Telegram orqali.",
       "Google Play’dagi ilova sahifasidagi geolokatsiya ruxsati — ana shu tugma uchun. Android uni"
           " birinchi marta bosganingizda so‘raydi, rad etishingiz mumkin, qolgan hamma narsa "
           "avvalgidek ishlaydi. Fon rejimida joylashuvga ruxsat so‘ramaymiz.",
@@ -244,13 +254,17 @@ const List<PolicySection> _uzbek = [
       "Biz ma’lumotlarni sotmaymiz va boshqa kompaniyalarga ularning o‘z maqsadlari uchun "
           "bermaymiz. Ishning bir qismini biz uchun pudratchi xizmatlar bajaradi va ularning har biri"
           " faqat o‘z vazifasi uchun keraklisini oladi:",
-      "• Telegram Gateway — tasdiqlash kodini Telegram’ga yetkazish uchun telefon raqami va kod.",
+      "• Telegram — Domix boti (@domix_manager_bot) raqamingizni ulashganingizda uni "
+          "Telegram’dan oladi va sizga kirish haqidagi xabarlar bilan javob beradi. Telegram "
+          "botimizga yozganingizni biladi. Raqam bilan birga keladigan Telegram ismi va "
+          "identifikatorini saqlamaymiz.",
       "• Yandex Xaritalar (MapKit) — xarita ochiq turganda uning so‘rovlari.",
       "• Yandex Xaritalar geokoderi va geosadjesti — manzilni topish uchun manzil qidiruvida yozgan "
           "matningiz va xaritada qo‘ygan nuqtangiz koordinatalari. So‘rovni bizning serverimiz yuboradi, "
           "shuning uchun Yandex IP-manzilingizni ham, akkauntingizni ham olmaydi; server javoblarni siz "
           "bilan bog‘lamasdan bir haftagacha eslab qoladi.",
-      "• Cloudflare R2 — mahsulot suratlarini saqlash.",
+      "• Cloudflare R2 — tungi zaxira nusxalari: mahsulot suratlari va ma’lumotlar bazasining "
+          "shifrlangan nusxasi.",
       "• O‘zbekistondagi hosting-provayder — server va ma’lumotlar bazasi.",
       "Davlat organlariga ma’lumotlarni faqat O‘zbekiston Respublikasi qonunchiligi talab "
           "qilgandagina oshkor qilamiz.",
@@ -260,11 +274,14 @@ const List<PolicySection> _uzbek = [
     title: "6. Ma’lumotlar qayerda saqlanadi",
     body: [
       "Akkauntlar, telefon raqamlari, do‘konlar va suratlari bilan birga xaridlar ro‘yxatlari "
-          "O‘zbekiston Respublikasidagi serverda joylashgan ma’lumotlar bazasida saqlanadi.",
-      "Telegram, Yandex va Cloudflare O‘zbekistondan tashqarida ishlaydi. "
-          "Shuning uchun ularning har biri oladigan narsa (5-bo‘limga qarang) chet elga uzatiladi: "
-          "telefon raqami — kodni yetkazish uchun, manzil so‘rovlari va nuqta koordinatalari — "
-          "manzilni qidirish uchun, mahsulot suratlari — saqlash uchun.",
+          "O‘zbekiston Respublikasidagi serverda joylashgan ma’lumotlar bazasida saqlanadi. "
+          "Mahsulot suratlari ham shu serverda turadi, ilova ularni shu yerdan yuklaydi.",
+      "Telegram, Yandex va Cloudflare O‘zbekistondan tashqarida ishlaydi. Shuning uchun "
+          "ularning har biri oladigan narsa (5-bo‘limga qarang) chet elga uzatiladi: Domix boti "
+          "bilan yozishma — kirish uchun, manzil so‘rovlari va nuqta koordinatalari — manzilni "
+          "qidirish uchun, mahsulot suratlari va ma’lumotlar bazasining nusxasi — zaxira saqlash "
+          "uchun. Ma’lumotlar bazasining nusxasi serverdan chiqishidan oldin shifrlanadi, kalit esa "
+          "O‘zbekistonda qoladi, shuning uchun chet elda o‘qiladigan shaxsiy ma’lumotlar yo‘q.",
     ],
   ),
   PolicySection(
@@ -272,10 +289,10 @@ const List<PolicySection> _uzbek = [
     body: [
       "• Akkaunt, do‘konlar, mahsulotlar, xaridlar ro‘yxatlari va tanlanganlar — Domix’dan foydalanar "
           "ekansiz.",
-      "• Tasdiqlash kodi — 5 daqiqa. U faqat server tezkor xotirasida va faqat xesh ko‘rinishida "
-          "saqlanadi, shuning uchun boshlangan va tashlab ketilgan ro‘yxatdan o‘tishdan hech narsa "
-          "qolmaydi.",
+      "• Tugallanmagan kirish — 10 daqiqa. U faqat server tezkor xotirasida saqlanadi, shuning "
+          "uchun boshlangan va tashlab ketilgan ro‘yxatdan o‘tishdan hech narsa qolmaydi.",
       "• Server jurnallari — 90 kungacha.",
+      "• Ma’lumotlar bazasi va suratlarning zaxira nusxalari — 30 kun.",
     ],
   ),
   PolicySection(
@@ -286,19 +303,20 @@ const List<PolicySection> _uzbek = [
           "o‘zgartiriladi, qolganlari — domix.support@gmail.com manziliga xat orqali.",
       "Akkauntni ikki yo‘l bilan o‘chirish mumkin:",
       "• ilovada: «Profil» → «Akkauntni o‘chirish»;",
-      "• ilovasiz: domix-api.uz/delete-account sahifasida.",
+      "• ilovasiz: domix-app.uz/delete-account sahifasida.",
       "Akkaunt ariza bo‘yicha emas, darhol o‘chiriladi. U bilan birga do‘konlaringiz, "
           "mahsulotlaringiz, xaridlar ro‘yxatlari, yuklangan suratlar va tanlanganlar ham o‘chiriladi. Ularni tiklab "
           "bo‘lmaydi. Server jurnallarida 90 kungacha o‘chirilgan akkauntning raqamli identifikatori "
-          "qolishi mumkin — ismsiz va telefonsiz.",
+          "qolishi mumkin — ismsiz va telefonsiz. Tungi zaxira nusxalaridan ma’lumotlar 30 kun "
+          "ichida yo‘qoladi.",
     ],
   ),
   PolicySection(
     title: "9. Xavfsizlik",
     body: [
-      "Server bilan aloqa shifrlangan (TLS). Sessiya kaliti Android’ning himoyalangan xotirasida "
-          "saqlanadi. Tasdiqlash kodlari faqat xesh ko‘rinishida saqlanadi, kiritish urinishlari soni"
-          " esa cheklangan.",
+      "Server bilan aloqa shifrlangan (TLS). Sessiya kaliti Android’ning himoyalangan "
+          "xotirasida saqlanadi. Faqat o‘z Telegram akkauntingizga tegishli raqam qabul qilinadi: "
+          "birovning yuborilgan kontakti o‘tmaydi.",
       "To‘liq himoyalangan tizimlar bo‘lmaydi. Akkauntingizda shubhali narsani sezsangiz, bizga "
           "yozing.",
     ],

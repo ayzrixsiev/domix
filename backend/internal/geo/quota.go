@@ -12,16 +12,17 @@ import (
 	"domix/backend/db"
 )
 
-// DailyCap is how many calls each product may make in any 24 hours, below yandex's 1000 so a few
-// lookups by hand while debugging never tip the key over.
-const DailyCap = 950
+// DailyCap is how many calls each product may make in any 24 hours: **ten under yandex's 1000 and no
+// lower**, so the app's own «Поиск адресов сейчас недоступен» answers before yandex starts refusing.
+// it is not a margin against the bill - going past 1000 is a paid plan, bought in the cabinet.
+const DailyCap = 990
 
 // DailyQuota counts calls in postgres (geo_calls), so the count survives the restart every deploy is.
 type DailyQuota struct {
 	queries *db.Queries
 
 	// **one process is the only writer, and this is what makes the cap exact**: the statement reads the
-	// sum and writes in two steps, so two spends at once could both pass at 949.
+	// sum and writes in two steps, so two spends at once could both pass at 989.
 	mu    sync.Mutex
 	swept time.Time
 	cap   int32

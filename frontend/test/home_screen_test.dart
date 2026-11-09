@@ -5,6 +5,8 @@
 // whether or not anybody has earned them, so the screen is full of card-shaped things that must never
 // acquire a name, an address or a price.
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +14,7 @@ import 'package:frontend/features/favorites/presentation/controllers/favorites_c
 
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
+import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/features/home/data/home_content.dart';
 import 'package:frontend/features/home/data/home_repository.dart';
 import 'package:frontend/features/home/presentation/controllers/home_controller.dart';
@@ -370,12 +373,12 @@ void main() {
     final strings = AppLocalizations(AppLanguage.ru);
     final controller = await _pumpHome(
       tester,
-      _FakeHomeRepository(error: Exception('connection refused')),
+      _FakeHomeRepository(error: const SocketException('connection refused')),
     );
 
-    // a flag, not the exception's text: what the reader gets is written copy, and
-    // `connection refused` goes to the log. see AppLocalizations.loadErrorHint.
-    expect(controller.loadFailed, isTrue);
+    // a kind, not the exception's text: what the reader gets is written copy, and
+    // `connection refused` goes to the log. see AppLocalizations.loadErrorHintFor.
+    expect(controller.failure, LoadFailure.network);
     // no plausible shops standing in for the ones we could not fetch - the failure is what is shown
     expect(controller.vipShops, isEmpty);
     expect(controller.bestOffers, isEmpty);
@@ -400,6 +403,27 @@ void main() {
     expect(find.text('connection refused'), findsNothing);
     expect(find.textContaining('Exception'), findsNothing);
   });
+
+  // **"Проверьте подключение" over a server that answered sends somebody off to fix a working phone**,
+  // and the home screen is the first thing every session opens
+  for (final (status, failure) in [
+    (500, LoadFailure.server),
+    (429, LoadFailure.busy),
+  ]) {
+    testWidgets('a $status from the server never blames the connection', (
+      tester,
+    ) async {
+      final strings = AppLocalizations(AppLanguage.ru);
+      final controller = await _pumpHome(
+        tester,
+        _FakeHomeRepository(error: ApiException(status)),
+      );
+
+      expect(controller.failure, failure);
+      expect(find.text(strings.loadErrorHintFor(failure)), findsOneWidget);
+      expect(find.text(strings.loadErrorHint), findsNothing);
+    });
+  }
 
   testWidgets('real shops fill the slots from the front, and nothing is invented', (
     tester,

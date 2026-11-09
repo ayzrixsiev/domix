@@ -37,34 +37,11 @@ InputDecoration appFieldDecoration({required String hint, Widget? prefix}) {
   );
 }
 
-/// The fixed country code a phone field wears instead of a picker: Domix is one country, and a
-/// picker is a way to send a paid message to a number no Uzbek operator will deliver.
-const Widget appPhonePrefix = Padding(
-  padding: EdgeInsets.fromLTRB(14, 0, 8, 0),
-  child: Text(
-    '+998',
-    style: TextStyle(
-      color: AppColors.textDark,
-      fontSize: 16,
-      fontWeight: FontWeight.w700,
-    ),
-  ),
-);
-
-/// What a phone field's own text looks like - wider tracking, so nine digits can be checked against
-/// the number in somebody's head.
-const TextStyle appPhoneTextStyle = TextStyle(
-  color: AppColors.textDark,
-  fontSize: 16,
-  fontWeight: FontWeight.w600,
-  letterSpacing: 0.4,
-);
-
 /// `998901234567` as `+998 90 123 45 67`.
 ///
 /// **Grouped rather than raw**: a twelve-digit run is not something a reader can check their own
-/// number against at a glance, and every place this number is shown - the profile header, "we sent
-/// a code to ..." - is asking them to do exactly that. Anything that is not twelve digits is handed
+/// number against at a glance, and every place this number is shown - the profile header, a waybill -
+/// is asking them to do exactly that. Anything that is not twelve digits is handed
 /// back untouched, since a number we cannot parse is still better shown than hidden.
 String formatUzPhone(String phone) {
   final digits = phone.replaceAll(RegExp(r'\D'), '');

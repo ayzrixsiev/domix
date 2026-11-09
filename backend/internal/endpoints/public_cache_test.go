@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -197,5 +198,54 @@ func TestAStaleCopyIsNotServedForever(t *testing.T) {
 
 	if rec := ask(); rec.Code != http.StatusInternalServerError {
 		t.Fatalf("answered %d on a copy too old to show, want 500", rec.Code)
+	}
+}
+
+// **a failed rebuild is shared like a good one.** against a database that hangs, each caller behind it
+// retrying in turn would wait five seconds per caller ahead of them - the last good copy reaching
+// nobody before the app gave up on it.
+func TestCallersQueuedBehindAFailedBuildShareItsResult(t *testing.T) {
+	for name, held := range map[string]bool{"with a copy to fall back on": true, "with nothing held": false} {
+		t.Run(name, func(t *testing.T) {
+			cache := NewPublicCache(20 * time.Millisecond)
+			if held {
+				cache.serve(httptest.NewRecorder(), cacheRequest(), "home", "home content",
+					func(context.Context) (any, error) { return map[string]int{"shops": 3}, nil })
+				time.Sleep(30 * time.Millisecond) // past the ttl, so the next caller rebuilds
+			}
+
+			var builds atomic.Int32
+			codes := make(chan int, 20)
+			var callers sync.WaitGroup
+			for range 20 {
+				callers.Add(1)
+				go func() {
+					defer callers.Done()
+					rec := httptest.NewRecorder()
+					cache.serve(rec, cacheRequest(), "home", "home content", func(context.Context) (any, error) {
+						builds.Add(1)
+						// long enough that every other caller is queued on the key by the time this fails
+						time.Sleep(100 * time.Millisecond)
+						return nil, errors.New("database is hanging")
+					})
+					codes <- rec.Code
+				}()
+			}
+			callers.Wait()
+			close(codes)
+
+			if builds.Load() != 1 {
+				t.Fatalf("20 queued callers caused %d rebuilds, want 1", builds.Load())
+			}
+			want := http.StatusInternalServerError
+			if held {
+				want = http.StatusOK
+			}
+			for code := range codes {
+				if code != want {
+					t.Fatalf("a queued caller answered %d, want %d", code, want)
+				}
+			}
+		})
 	}
 }

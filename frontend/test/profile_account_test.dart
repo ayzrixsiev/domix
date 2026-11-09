@@ -160,7 +160,7 @@ void main() {
     expect(find.text(_strings.onboardingNoAccount), findsOneWidget);
     expect(find.text(AppLanguage.ru.displayName), findsOneWidget);
     expect(find.text(AppLanguage.uz.displayName), findsOneWidget);
-    expect(find.text(_strings.stepCounter(1, 5)), findsOneWidget);
+    expect(find.text(_strings.stepCounter(1, 4)), findsOneWidget);
   });
 
   testWidgets('tapping «Удалить аккаунт» opens the confirmation', (

@@ -38,6 +38,10 @@ type cachedAnswer struct {
 	mu        sync.Mutex
 	body      []byte
 	writtenAt time.Time
+
+	// the last rebuild that failed, taken as their own answer by the callers queued behind it
+	err      error
+	failedAt time.Time
 }
 
 // NewPublicCache is called once, in main.go, and handed to the endpoints that share it.
@@ -67,6 +71,7 @@ func (c *publicCache) body(w http.ResponseWriter, r *http.Request, key, what str
 	}
 
 	entry := c.entryFor(key)
+	asked := time.Now()
 
 	// released before the body is written, so a slow phone downloading last second's answer cannot
 	// hold up the next rebuild
@@ -78,20 +83,29 @@ func (c *publicCache) body(w http.ResponseWriter, r *http.Request, key, what str
 		return entry.body, true
 	}
 
-	body, err := buildBody(r, build)
-	if err != nil {
-		// the copy we already hold, rather than an error, while it is still worth showing
-		if entry.body != nil && age < c.ttl+c.staleFor {
-			log.Printf("WARNING: serving %s from a %s-old copy - the rebuild failed: %v", what, age.Round(time.Second), err)
-			return entry.body, true
+	// **a failed rebuild is shared like a good one**: a caller who queued behind it takes its result
+	// instead of trying again. against a database that hangs, each retry would hold the next caller in
+	// line another five seconds - the stale copy below never reaching anybody in time.
+	err := entry.err
+	if !entry.failedAt.After(asked) {
+		body, buildErr := buildBody(r, build)
+		if buildErr == nil {
+			entry.body, entry.writtenAt = body, time.Now()
+			entry.err, entry.failedAt = nil, time.Time{}
+			return body, true
 		}
-		// nothing is cached either way: the next caller asks the database again rather than being
-		// handed this error for the rest of the ttl
-		return nil, failedToLoad(w, r, what, err)
+		err = buildErr
+		entry.err, entry.failedAt = buildErr, time.Now()
 	}
 
-	entry.body, entry.writtenAt = body, time.Now()
-	return body, true
+	// the copy we already hold, rather than an error, while it is still worth showing
+	if entry.body != nil && age < c.ttl+c.staleFor {
+		log.Printf("WARNING: serving %s from a %s-old copy - the rebuild failed: %v", what, age.Round(time.Second), err)
+		return entry.body, true
+	}
+	// the next caller to arrive asks the database again rather than being handed this error for the
+	// rest of the ttl
+	return nil, failedToLoad(w, r, what, err)
 }
 
 func (c *publicCache) entryFor(key string) *cachedAnswer {

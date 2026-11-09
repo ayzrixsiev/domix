@@ -9,6 +9,7 @@ import (
 	"image/draw"
 	"image/jpeg"
 	"math"
+	"runtime"
 
 	// registers the png decoder with image.Decode - the format is discovered from the bytes
 	_ "image/png"
@@ -41,6 +42,11 @@ const (
 	maxSourceSide   = 12000
 	maxSourcePixels = 60_000_000
 )
+
+// **the two bounds above cap one decode, and this caps how many run at once.** a 60-megapixel png fits
+// in a few hundred kilobytes and decodes to 240 MB, and one account's burst of uploads arriving together
+// would otherwise be gigabytes on a 4 GB server. one slot per core, since more would not finish sooner.
+var decodeSlots = make(chan struct{}, runtime.NumCPU())
 
 // sentinels, so the handler can turn each into its own code: "this is not a photo" and "this photo
 // is enormous" need different words
@@ -104,6 +110,10 @@ func decodeUpright(src []byte, maxSide int) (*image.RGBA, error) {
 		cfg.Width*cfg.Height > maxSourcePixels {
 		return nil, fmt.Errorf("%w: %dx%d", ErrTooLarge, cfg.Width, cfg.Height)
 	}
+
+	// taken after the header checks, so a refused file never waits for one
+	decodeSlots <- struct{}{}
+	defer func() { <-decodeSlots }()
 
 	img, _, err := image.Decode(bytes.NewReader(src))
 	if err != nil {

@@ -155,12 +155,6 @@
   .btn-w{width:100%}
   .btn-s{padding:9px 15px;font-size:13.5px;border-radius:var(--r-1)}
 
-  .l-fld{width:100%;height:48px;border:1px solid var(--line-2);background:var(--card);border-radius:var(--r-2);
-         padding:0 15px;font:inherit;font-size:15.5px;color:var(--ink);outline:none;margin-bottom:12px;
-         transition:border-color .16s,box-shadow .16s}
-  .l-fld:focus{border-color:var(--o-300);box-shadow:0 0 0 3px var(--o-50)}
-  /* the code is the whole of the field, so it is centred and spaced out to be read off a screen */
-  .l-fld.code{text-align:center;letter-spacing:.4em;font-size:21px;font-weight:650;padding-left:.4em}
   .waiting{display:flex;align-items:center;justify-content:center;gap:10px;color:var(--ink-2);font-size:13.5px;margin-top:22px}
   .spin{width:15px;height:15px;border:2px solid var(--o-200);border-top-color:var(--o);border-radius:50%;animation:sp .7s linear infinite}
   @keyframes sp{to{transform:rotate(360deg)}}
@@ -847,21 +841,17 @@
       Domix
     </div>
     <h1>Админ-панель</h1>
-    <p>Код придёт в Telegram — тот же вход, что и в приложении.</p>
+    <p>Вход через Telegram — тот же, что и в приложении.</p>
 
-    <form id="l-start">
-      <input class="l-fld" id="l-phone" type="tel" inputmode="numeric" autocomplete="tel"
-             placeholder="+998 90 123 45 67" maxlength="18" aria-label="Телефон">
-      <button class="btn btn-p btn-w" id="l-go" type="submit" disabled>Получить код</button>
-    </form>
+    <div id="l-start">
+      <button class="btn btn-p btn-w" id="l-go" type="button">Войти через Telegram</button>
+    </div>
 
-    <form id="l-wait" hidden>
-      <input class="l-fld code" id="l-code" type="text" inputmode="numeric" autocomplete="one-time-code"
-             placeholder="000000" maxlength="6" aria-label="Код">
-      <button class="btn btn-p btn-w" id="l-confirm" type="submit" disabled>Войти</button>
-      <p class="hint">Код отправлен на <b id="l-sent"></b>. Действует 5 минут.<br>
-        <a href="#" id="l-again">Другой номер</a></p>
-    </form>
+    <div id="l-wait" hidden>
+      <a class="btn btn-p btn-w" id="l-open" href="#" target="_blank" rel="noopener">Открыть Telegram</a>
+      <div class="waiting"><span class="spin" aria-hidden="true"></span>Нажмите в боте «Поделиться номером»</div>
+      <p class="hint">Ссылка действует 10 минут.<br><a href="#" id="l-again">Отменить</a></p>
+    </div>
 
     <div id="l-err" hidden></div>
   </div>
@@ -1193,73 +1183,71 @@ function loginError(title, detail) {
   a.appendChild(t); box.appendChild(a);
 }
 
-// **the panel signs in exactly as the app does** - a code to the number - and it asks for nothing
-// more. `role:"customer"` is what it registers an unknown number as, because the api maps anything
-// that is not `shop_owner` to `customer` and nothing typed here can grant anything. The role is
-// decided one step later, by `/api/me` against the database.
-var loginPhone = null;
+// **the panel signs in exactly as the app does** - the bot hands over a number telegram verified -
+// and it asks for nothing more. no name, so an existing account is not renamed, and no role: an
+// unknown number becomes a customer and nothing here can grant anything. the role is decided one
+// step later, by `/api/me` against the database.
+//
+// the panel is opened through the ssh tunnel on localhost:8081, and that is fine: the link goes to
+// t.me on this laptop, the poll goes back down the tunnel, and only telegram's webhook needs the
+// public address.
+var login = { session: null, deadline: 0, timer: null, busy: false };
 
-// the codes are keyed by the canonical spelling the server echoes back, so verify sends that and
-// never the digits as typed - anything else is a lookup miss the reader sees as "wrong code"
-function startLogin(event) {
-  if (event) event.preventDefault();
-
-  var typed = $("#l-phone").value.replace(/\D/g, "");
-  if (typed.length < 9) return;
-
+// **the link is a button pressed after the session exists**, not a window opened by script: a
+// window.open after a fetch is a popup every browser blocks
+function startLogin() {
   var b = $("#l-go"); b.disabled = true; $("#l-err").hidden = true;
-  api("/api/auth/request-code", {
-    method: "POST",
-    body: JSON.stringify({ phone: typed, name: "Domix Admin", role: "customer" })
-  })
+  api("/api/auth/init", { method: "POST", body: JSON.stringify({ role: "customer", lang: "ru" }) })
     .then(function (d) {
-      loginPhone = d.phone;
-      $("#l-sent").textContent = "+" + d.phone;
+      b.disabled = false;
+      login.session = d.session;
+      login.deadline = Date.now() + d.expires_in * 1000;
+      $("#l-open").href = d.link;
       $("#l-start").hidden = true; $("#l-wait").hidden = false;
-      $("#l-code").value = ""; $("#l-confirm").disabled = true; $("#l-code").focus();
+      login.timer = setInterval(pollLogin, 2000);
     })
     .catch(function (e) {
       b.disabled = false;
-      loginError("Не удалось отправить код", loginProblem(e));
+      loginError("Не удалось начать вход", loginProblem(e));
     });
 }
 
-function finishLogin(event) {
-  if (event) event.preventDefault();
-
-  var code = $("#l-code").value;
-  if (code.length !== 6) return;
-
-  var b = $("#l-confirm"); b.disabled = true; $("#l-err").hidden = true;
-  api("/api/auth/verify", { method:"POST", body: JSON.stringify({ phone: loginPhone, code: code }) })
-    .then(function (d) { return adopt(d.token); })
-    .catch(function (e) {
-      b.disabled = false;
-      loginError("Не удалось войти", loginProblem(e));
-    });
+function pollLogin() {
+  if (!login.session || login.busy) return;
+  if (Date.now() > login.deadline) { resetLogin(); loginError("Время вышло", "Номер не подтвердили за 10 минут. Начните заново."); return; }
+  var asked = login.session;
+  login.busy = true;
+  api("/api/auth/status", { method: "POST", body: JSON.stringify({ session: asked }) })
+    .then(function (d) {
+      // an answer for a login since cancelled is not this one's
+      if (asked !== login.session || d.status === "pending") return;
+      resetLogin();
+      if (d.status === "success") { adopt(d.token); return; }
+      loginError("Не удалось войти", loginProblem({ code: d.status }));
+    })
+    // a dropped request is retried by the next tick
+    .catch(function () {})
+    .then(function () { login.busy = false; });
 }
 
-// the api answers with a stable `code`; this is where it becomes a sentence
+// the api answers with a stable `code` or `status`; this is where it becomes a sentence
 function loginProblem(e) {
   switch (e && e.code) {
-    case "invalid_phone":           return "Проверьте номер телефона.";
-    case "code_invalid":            return "Неверный код.";
-    case "code_expired":            return "Срок действия кода истёк — запросите новый.";
-    case "code_attempts_exhausted": return "Слишком много попыток — запросите новый код.";
-    case "code_not_found":          return "Код не запрашивался. Начните заново.";
-    case "code_cooldown":           return "Код уже отправлен. Подождите немного.";
-    case "code_quota":              return "Слишком много кодов на этот номер. Попробуйте позже.";
-    case "rate_limited":            return "Слишком много попыток. Подождите минуту.";
-    case "code_not_sent":           return "Telegram не принял сообщение. Попробуйте ещё раз.";
-    default:                        return (e && e.message) || "";
+    case "rate_limited": return "Слишком много попыток. Подождите минуту.";
+    case "busy":         return "Сервер занят. Попробуйте через минуту.";
+    case "expired":      return "Время вышло. Начните заново.";
+    case "not_uzbek":    return "Domix работает только с узбекскими номерами.";
+    case "failed":       return "Сервер не смог завершить вход. Попробуйте ещё раз.";
+    default:             return (e && e.message) || "";
   }
 }
 
 function resetLogin(){
-  loginPhone = null;
+  if (login.timer) { clearInterval(login.timer); login.timer = null; }
+  login.session = null;
+  $("#l-open").href = "#";
   $("#l-wait").hidden = true; $("#l-start").hidden = false;
-  $("#l-go").disabled = $("#l-phone").value.replace(/\D/g, "").length < 9;
-  $("#l-confirm").disabled = true;
+  $("#l-go").disabled = false;
 }
 
 function adopt(token) {
@@ -2117,8 +2105,8 @@ var STORAGE = [
 ];
 
 // **It is the only panel that does not load itself, and that is deliberate.** Answering it means
-// listing every file in the store and reading every image path out of the database - on R2, a paged
-// listing over the network - and `loadStats` runs every 45 seconds for as long as the tab is open.
+// listing every file in the store and reading every image path out of the database - every file in
+// the market - and `loadStats` runs every 45 seconds for as long as the tab is open.
 // «Проверить» is a button and the result lives in `state.storage` until the page is reloaded.
 function drawStorage() {
   var host = $("#tpl-storage"); if (!host) return;
@@ -4446,18 +4434,12 @@ function modal(o) {
 
 // ═══════════════════════ wiring ═══════════════════════
 
-$("#l-start").addEventListener("submit", startLogin);
-$("#l-wait").addEventListener("submit", finishLogin);
-$("#l-phone").addEventListener("input", function (e) {
-  $("#l-go").disabled = e.target.value.replace(/\D/g, "").length < 9;
-});
-$("#l-code").addEventListener("input", function (e) {
-  e.target.value = e.target.value.replace(/\D/g, "").slice(0, 6);
-  $("#l-confirm").disabled = e.target.value.length !== 6;
-});
+$("#l-go").addEventListener("click", startLogin);
 $("#l-again").addEventListener("click", function (e) {
-  e.preventDefault(); $("#l-err").hidden = true; resetLogin(); $("#l-phone").focus();
+  e.preventDefault(); $("#l-err").hidden = true; resetLogin();
 });
+// the tab sat in the background while the admin was in telegram, and browsers slow its timers
+document.addEventListener("visibilitychange", function () { if (!document.hidden) pollLogin(); });
 $("#l-out").addEventListener("click", function(){ signOut(); });
 $("#refresh").addEventListener("click", function(){ refresh(); });
 $("#tpl-info").addEventListener("click", templateHelp);

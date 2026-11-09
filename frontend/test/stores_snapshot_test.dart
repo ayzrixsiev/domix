@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/features/stores/data/shop_category.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 import 'package:frontend/features/stores/data/stores_repository.dart';
@@ -79,34 +80,33 @@ void main() {
   });
 
   group('a failed load does not become permanent', () {
-    test(
-      'a stale-check after a failure retries, and a fresh list does not',
-      () async {
-        final repo = _FakeStoresRepository(
-          stores: [_shop(1, 'Магазин')],
-          failNextFetch: true,
-        );
-        final controller = StoresController(repository: repo);
+    test('a stale-check after a failure retries, and a fresh list does not', () async {
+      final repo = _FakeStoresRepository(
+        stores: [_shop(1, 'Магазин')],
+        failNextFetch: true,
+      );
+      final controller = StoresController(repository: repo);
 
-        await controller.loadStores();
-        expect(controller.loadFailed, isTrue);
-        expect(controller.stores, isEmpty);
+      await controller.loadStores();
+      // a 503 is a busy server, so the map says to wait a minute rather than to check a connection
+      // that is working
+      expect(controller.loadFailure, LoadFailure.busy);
+      expect(controller.stores, isEmpty);
 
-        // the bug this exists for: MapScreen.initState runs once per app session and IndexedStack
-        // keeps the State alive, so a failed load used to leave «Не удалось загрузить магазины» on
-        // screen with nothing - not even restarting the app - able to clear it.
-        expect(controller.isStoresStale, isTrue);
-        await controller.refreshStoresIfStale();
-        expect(repo.fetchStoresCalls, 2);
-        expect(controller.loadFailed, isFalse);
-        expect(controller.stores, hasLength(1));
+      // the bug this exists for: MapScreen.initState runs once per app session and IndexedStack
+      // keeps the State alive, so a failed load used to leave «Не удалось загрузить магазины» on
+      // screen with nothing - not even restarting the app - able to clear it.
+      expect(controller.isStoresStale, isTrue);
+      await controller.refreshStoresIfStale();
+      expect(repo.fetchStoresCalls, 2);
+      expect(controller.loadFailure, isNull);
+      expect(controller.stores, hasLength(1));
 
-        // and the other half: a list fetched a moment ago is left alone, so flicking between tabs is
-        // not a request per switch
-        await controller.refreshStoresIfStale();
-        expect(repo.fetchStoresCalls, 2);
-      },
-    );
+      // and the other half: a list fetched a moment ago is left alone, so flicking between tabs is
+      // not a request per switch
+      await controller.refreshStoresIfStale();
+      expect(repo.fetchStoresCalls, 2);
+    });
 
     test('a second load while one is in flight is dropped', () async {
       final repo = _FakeStoresRepository(
@@ -169,7 +169,7 @@ class _FakeStoresRepository implements StoresRepository {
     if (holdFetch) await _gate.future;
     if (failNextFetch) {
       failNextFetch = false;
-      throw Exception('Failed to load shops (503)');
+      throw const ApiException(503);
     }
     return List.of(stores);
   }

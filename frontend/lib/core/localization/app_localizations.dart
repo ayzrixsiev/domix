@@ -111,72 +111,54 @@ class AppLocalizations {
       ? 'Чтобы продолжить, примите политику конфиденциальности'
       : "Davom etish uchun maxfiylik siyosatini qabul qiling";
 
-  String get phoneInputLabel => isRu ? 'Номер телефона' : 'Telefon raqami';
-  String get phoneInvalidError => isRu
-      ? 'Введите номер из 9 цифр, например 90 123 45 67'
-      : "9 xonali raqam kiriting, masalan 90 123 45 67";
-  String get sendCodeButton => isRu ? 'Получить код' : 'Kodni olish';
+  // step 4 - telegram
+  String get telegramStepBody => isRu
+      ? 'Откроется наш бот в Telegram. Нажмите там «Поделиться номером» — и вы вернётесь в Domix уже со входом.'
+      : "Telegram'da botimiz ochiladi. U yerda «Raqamni ulashish» tugmasini bosing — Domix'ga kirgan holda qaytasiz.";
+  String get telegramSignInButton => isRu
+      ? 'Зарегистрироваться через Telegram'
+      : "Telegram orqali ro'yxatdan o'tish";
+  String get telegramWaitingTitle =>
+      isRu ? 'Ждём номер из Telegram' : "Telegram'dan raqamni kutyapmiz";
+  String get telegramWaitingBody => isRu
+      ? 'Нажмите в боте «Поделиться номером». Этот экран обновится сам.'
+      : "Botda «Raqamni ulashish» tugmasini bosing. Bu ekran o'zi yangilanadi.";
+  String get telegramReopenButton =>
+      isRu ? 'Открыть Telegram снова' : "Telegram'ni qayta ochish";
 
-  String codeSentTo(String phone) => isRu
-      ? 'Мы отправили шестизначный код на $phone'
-      : "Biz $phone raqamiga olti xonali kod yubordik";
-  String get verifyCodeButton => isRu ? 'Подтвердить' : 'Tasdiqlash';
-  String get resendCodeButton =>
-      isRu ? 'Отправить код ещё раз' : 'Kodni qayta yuborish';
-
-  /// The countdown on the resend control. Seconds, because a minute is the whole wait.
-  String resendCodeIn(int seconds) => isRu
-      ? 'Отправить повторно можно через $seconds с'
-      : "Qayta yuborish $seconds soniyadan keyin";
-  String get changePhoneButton =>
-      isRu ? 'Изменить номер' : "Raqamni o'zgartirish";
-
-  /// Every refusal `/api/auth/request-code` and `/api/auth/verify` can answer with, as written copy.
-  /// **A code, not the server's sentence**: the server speaks one language and the app speaks the
-  /// reader's, and an unrecognised code has to land somewhere rather than draw an empty string.
+  /// Every refusal the sign-in can end in, as written copy: the api's error `code` on a refused
+  /// request, or the poll's `status` on a finished one. **A code, not the server's sentence**: the
+  /// server speaks one language and the app the reader's, and an unknown one has to land somewhere.
   String authErrorFor(String? code) => switch (code) {
-    'invalid_phone' => phoneInvalidError,
     'name_too_long' => nameTooLongError,
-    'code_cooldown' || 'code_quota' => authTooManyRequests,
-    'code_not_sent' => authCodeNotSent,
-    'code_invalid' => authCodeWrong,
-    'code_expired' => authCodeExpired,
-    'code_not_found' => authCodeNotFound,
-    'code_attempts_exhausted' => authAttemptsExhausted,
-    'rate_limited' => authTooManyRequests,
+    'rate_limited' || 'busy' => authTooManyRequests,
+    'expired' => authSessionExpired,
+    'not_uzbek' => authNotUzbek,
+    'telegram_not_opened' => authTelegramNotOpened,
     _ => authGenericError,
   };
 
   String get nameTooLongError => isRu ? 'Имя слишком длинное' : 'Ism juda uzun';
-  String get authCodeWrong => isRu
-      ? 'Неверный код. Проверьте и введите снова.'
-      : "Kod noto'g'ri. Tekshirib qayta kiriting.";
-  String get authCodeExpired => isRu
-      ? 'Срок действия кода истёк. Запросите новый.'
-      : "Kod muddati tugadi. Yangisini so'rang.";
-  String get authCodeNotFound => isRu
-      ? 'Код не найден. Запросите новый.'
-      : "Kod topilmadi. Yangisini so'rang.";
-  String get authAttemptsExhausted => isRu
-      ? 'Слишком много попыток. Запросите новый код.'
-      : "Urinishlar juda ko'p. Yangi kod so'rang.";
   String get authTooManyRequests => isRu
       ? 'Слишком много запросов. Подождите немного.'
       : "So'rovlar juda ko'p. Biroz kuting.";
-  String get authCodeNotSent => isRu
-      ? 'Не удалось отправить код. Попробуйте ещё раз.'
-      : "Kodni yuborib bo'lmadi. Qayta urinib ko'ring.";
+  String get authSessionExpired => isRu
+      ? 'Время вышло: номер не подтвердили за 10 минут. Попробуйте ещё раз.'
+      : "Vaqt tugadi: raqam 10 daqiqa ichida tasdiqlanmadi. Qayta urinib ko'ring.";
+  String get authNotUzbek => isRu
+      ? 'Domix работает только с узбекскими номерами (+998).'
+      : "Domix faqat O'zbekiston raqamlari (+998) bilan ishlaydi.";
+  String get authTelegramNotOpened => isRu
+      ? 'Не удалось открыть Telegram. Попробуйте ещё раз.'
+      : "Telegram'ni ochib bo'lmadi. Qayta urinib ko'ring.";
   String get authGenericError => isRu
       ? 'Что-то пошло не так. Попробуйте ещё раз.'
       : "Nimadir xato ketdi. Qayta urinib ko'ring.";
 
-  /// Every refusal PATCH /api/me and the phone-change steps can answer with. Falls through to
-  /// [authErrorFor], which already covers the code flow those steps share with the login.
+  /// Every refusal PATCH /api/me can answer with. Falls through to [authErrorFor].
   String profileErrorFor(String? code) => switch (code) {
     'name_required' => nameRequiredError,
     'role_locked' => roleLockedNote,
-    'phone_taken' => phoneTakenError,
-    'phone_unchanged' => phoneUnchangedError,
     'account_deleted' => sessionExpiredBody,
     _ => authErrorFor(code),
   };
@@ -188,15 +170,14 @@ class AppLocalizations {
       : "Mahsulotlarni saqlash, do'konlarga yozish va o'zingiznikini ochish uchun hisob kerak.";
   String get profileGuestAction => isRu ? 'Войти' : 'Kirish';
   String get onboardingNoAccount => isRu
-      ? 'Аккаунта ещё нет? Он создастся сам — просто введите номер.'
-      : "Hisobingiz yo'qmi? U o'zi yaratiladi — shunchaki raqamingizni kiriting.";
+      ? 'Аккаунта ещё нет? Он создастся сам — просто войдите через Telegram.'
+      : "Hisobingiz yo'qmi? U o'zi yaratiladi — shunchaki Telegram orqali kiring.";
 
   // ── editing the profile ──
   String get editProfileTitle => isRu ? 'Профиль' : 'Profil';
   String get editProfileSubtitle =>
       isRu ? 'Имя и роль аккаунта' : 'Hisob ismi va roli';
 
-  /// The action on the number row, which already shows the number - so the word is the verb alone
   String get editProfileButton => isRu ? 'Изменить' : "O'zgartirish";
   String get accountSavedMessage =>
       isRu ? 'Профиль сохранён' : 'Profil saqlandi';
@@ -214,22 +195,6 @@ class AppLocalizations {
       ? 'Аккаунт станет «$role». Вернуть прежнюю роль будет нельзя.'
       : "Hisob «$role» bo'ladi. Avvalgi rolni qaytarib bo'lmaydi.";
   String get roleChangeConfirmAction => isRu ? 'Сменить' : "O'zgartirish";
-
-  // ── moving the account onto another number ──
-  /// Its own step, not a field: the change costs a paid message and a code typed back, so a
-  /// «Сохранить» that sometimes sends one would be a button nobody can predict.
-  String get phoneChangeExplainer => isRu
-      ? 'Мы отправим код на новый номер. Аккаунт перейдёт на него после подтверждения.'
-      : "Yangi raqamga kod yuboramiz. Tasdiqlagandan so'ng hisob unga o'tadi.";
-  String get currentPhoneLabel => isRu ? 'Текущий номер' : 'Joriy raqam';
-  String get newPhoneLabel => isRu ? 'Новый номер' : 'Yangi raqam';
-  String get phoneChangedMessage =>
-      isRu ? 'Номер изменён' : "Raqam o'zgartirildi";
-  String get phoneTakenError => isRu
-      ? 'Этот номер уже занят другим аккаунтом.'
-      : "Bu raqam boshqa hisobga biriktirilgan.";
-  String get phoneUnchangedError =>
-      isRu ? 'Это ваш текущий номер.' : 'Bu sizning joriy raqamingiz.';
 
   String get nameInputLabel => isRu ? 'Имя и фамилия' : "Ism va familiyangiz";
   String get nameRequiredError =>
@@ -472,8 +437,9 @@ class AppLocalizations {
       ? 'Переписка с магазинами и поддержкой Domix появится в одном из ближайших обновлений.'
       : "Do'konlar va Domix qo'llab-quvvatlash xizmati bilan yozishmalar yaqin yangilanishlarda paydo bo'ladi.";
 
-  /// The sentence under **every** failed read in the app: an exception is written for whoever fixes
-  /// it, never for whoever hit it, so the raw string goes to `debugPrint` and this goes on screen.
+  /// The sentence under a read that got no answer at all - [loadErrorHintFor]'s network case. An
+  /// exception is written for whoever fixes it, never for whoever hit it, so the raw string goes to
+  /// `debugPrint` and this goes on screen.
   String get loadErrorHint => isRu
       ? 'Проверьте подключение и попробуйте снова.'
       : "Ulanishni tekshirib, qayta urinib ko'ring.";
@@ -599,6 +565,12 @@ class AppLocalizations {
       isRu
           ? 'Это фото не подходит. Выберите другое.'
           : 'Bu rasm mos kelmaydi. Boshqasini tanlang.',
+    // the server answered, so the connection is not what to check - and a retry is safe, it keeps its id
+    'rate_limited' => loadErrorHintFor(LoadFailure.busy),
+    'server_error' =>
+      isRu
+          ? 'Не удалось отправить. Попробуйте ещё раз чуть позже.'
+          : "Yuborib bo'lmadi. Birozdan so'ng qayta urinib ko'ring.",
     _ =>
       isRu
           ? 'Не удалось отправить. Проверьте подключение и попробуйте ещё раз.'
@@ -637,8 +609,22 @@ class AppLocalizations {
       : "Joylashuvni aniqlab bo'lmadi";
   String get openSettingsButton => isRu ? 'Настройки' : 'Sozlamalar';
 
-  String get mapLoadError =>
-      isRu ? 'Не удалось загрузить магазины' : "Do'konlarni yuklab bo'lmadi";
+  /// The map's banner when the shop list did not arrive, by why - see [LoadFailure]. Two lines at most
+  /// beside «Повторить», which is why it is not [loadErrorHintFor] appended to a title.
+  String mapLoadErrorFor(LoadFailure failure) => switch (failure) {
+    LoadFailure.network =>
+      isRu
+          ? 'Не удалось загрузить магазины. Проверьте подключение.'
+          : "Do'konlarni yuklab bo'lmadi. Ulanishni tekshiring.",
+    LoadFailure.busy =>
+      isRu
+          ? 'Сервер сейчас перегружен. Попробуйте через минуту.'
+          : "Server hozir band. Bir daqiqadan so'ng urinib ko'ring.",
+    LoadFailure.server =>
+      isRu
+          ? 'Не удалось загрузить магазины. Попробуйте позже.'
+          : "Do'konlarni yuklab bo'lmadi. Keyinroq urinib ko'ring.",
+  };
   String get loadingShops =>
       isRu ? 'Загружаем магазины...' : "Do'konlar yuklanmoqda...";
 
@@ -742,9 +728,19 @@ class AppLocalizations {
   String get storeCreatedMessage => isRu
       ? 'Магазин успешно добавлен! 🎉'
       : "Do'kon muvaffaqiyatli qo'shildi! 🎉";
-  String get storeCreationFailed => isRu
-      ? 'Не удалось создать магазин. Проверьте подключение и попробуйте снова.'
-      : "Do'konni yaratib bo'lmadi. Ulanishni tekshirib, qayta urinib ko'ring.";
+
+  /// Under the add-store form, by why the save failed - see [LoadFailure].
+  String storeCreationFailedFor(LoadFailure failure) => switch (failure) {
+    LoadFailure.network =>
+      isRu
+          ? 'Не удалось создать магазин. Проверьте подключение и попробуйте снова.'
+          : "Do'konni yaratib bo'lmadi. Ulanishni tekshirib, qayta urinib ko'ring.",
+    LoadFailure.busy => loadErrorHintFor(LoadFailure.busy),
+    LoadFailure.server =>
+      isRu
+          ? 'Не удалось создать магазин. Попробуйте ещё раз чуть позже.'
+          : "Do'konni yaratib bo'lmadi. Birozdan so'ng qayta urinib ko'ring.",
+  };
 
   // my shops screen (list of shops the current owner has, opened from shopSettings above)
   String get myShopsScreenTitle => isRu ? 'Мои магазины' : "Mening do'konlarim";
@@ -863,9 +859,6 @@ class AppLocalizations {
       ? 'Управляйте товарами вашего магазина'
       : "Do'koningiz mahsulotlarini boshqaring";
   // naming the two realistic causes at least points somewhere, which a bare "не удалось" does not
-  String get productsLoadErrorHint => isRu
-      ? 'Проверьте подключение к интернету. Если оно есть — сервер временно недоступен, попробуйте позже.'
-      : "Internet aloqasini tekshiring. Aloqa bo'lsa — server vaqtincha ishlamayapti, keyinroq urinib ko'ring.";
 
   String get productsLoadError =>
       isRu ? 'Не удалось загрузить товары' : "Mahsulotlarni yuklab bo'lmadi";

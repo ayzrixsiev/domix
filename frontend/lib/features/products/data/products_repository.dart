@@ -28,12 +28,13 @@ class ProductsRepository {
   static const Duration _uploadTimeout = Duration(seconds: 30);
 
   /// every product in one shop. public - this is what fills the grid on a shop's card, which any
-  /// customer can open without logging in.
+  /// customer can open without logging in. a refusal is an [ApiException] like every other read, so
+  /// the grid can tell a busy server from an offline phone.
   Future<List<Product>> fetchShopProducts(int shopId) async {
     final response = await apiGet(_shopProductsUri(shopId));
 
     if (response.statusCode != 200) {
-      throw _exceptionFrom(response);
+      throw ApiException(response.statusCode);
     }
 
     final List<dynamic> data = jsonDecode(response.body);

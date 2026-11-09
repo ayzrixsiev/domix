@@ -7,6 +7,8 @@ package ratelimit
 
 import (
 	"encoding/json"
+	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -111,24 +113,55 @@ func (l *Limiter) client(r *http.Request) string {
 func (l *Limiter) Wrap(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !l.Allow(l.client(r)) {
-			w.Header().Set("Content-Type", "application/json")
-			w.Header().Set("Retry-After", "1")
-			w.WriteHeader(http.StatusTooManyRequests)
-			json.NewEncoder(w).Encode(map[string]string{
-				"code":  "rate_limited",
-				"error": "too many requests, slow down",
-			})
+			Refuse(w, l.RetryAfter())
 			return
 		}
 		next(w, r)
 	}
 }
 
-// is the api behind a proxy that writes the caller into X-Forwarded-For? it also makes main.go
+// Refuse writes the one 429 every bucket answers with, so the app reads a single code whichever
+// bucket said no - including one checked deeper than a handler, like geo's pace on yandex calls.
+func Refuse(w http.ResponseWriter, retryAfter time.Duration) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter/time.Second)))
+	w.WriteHeader(http.StatusTooManyRequests)
+	json.NewEncoder(w).Encode(map[string]string{
+		"code":  "rate_limited",
+		"error": "too many requests, slow down",
+	})
+}
+
+// RetryAfter is how long a refused caller waits for one token at the sustained rate, in whole
+// seconds and never zero: a refused bucket holds less than one token, so this is never too early,
+// and "retry in 0" is an immediate retry.
+func (l *Limiter) RetryAfter() time.Duration {
+	if l.rate <= 0 {
+		// a bucket that never refills - only the tests build one
+		return time.Hour
+	}
+	return time.Duration(math.Ceil(1/l.rate)) * time.Second
+}
+
+// EnvTrustProxy says whether a proxy writes the caller into X-Forwarded-For. it also makes main.go
 // listen on loopback only, so nothing can reach the api around the proxy.
+const EnvTrustProxy = "TRUST_PROXY"
+
 func TrustProxy() bool {
-	on, _ := strconv.ParseBool(strings.TrimSpace(os.Getenv("TRUST_PROXY")))
+	on, _ := TrustProxySetting()
 	return on
+}
+
+// TrustProxySetting is EnvTrustProxy as written, and an error for anything that is not a boolean -
+// **unset included, because a wrong guess is silent**: false behind nginx puts every caller in the
+// country in 127.0.0.1's bucket, and a lenient read would turn a typo such as "yes" into that false.
+func TrustProxySetting() (bool, error) {
+	raw := strings.TrimSpace(os.Getenv(EnvTrustProxy))
+	on, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false, fmt.Errorf("%s=%q: write true behind nginx or ngrok, false when phones reach this process directly", EnvTrustProxy, raw)
+	}
+	return on, nil
 }
 
 // ClientIP is the caller's network address. behind a proxy it is the **last** X-Forwarded-For entry: the

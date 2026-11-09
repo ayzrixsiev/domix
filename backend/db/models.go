@@ -85,12 +85,13 @@ type ShopBasketIndex struct {
 }
 
 type User struct {
-	ID        int64              `json:"id"`
-	Name      pgtype.Text        `json:"name"`
-	Phone     string             `json:"phone"`
-	Role      string             `json:"role"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID           int64              `json:"id"`
+	Name         pgtype.Text        `json:"name"`
+	Phone        string             `json:"phone"`
+	Role         string             `json:"role"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	TokenVersion int32              `json:"token_version"`
 }
 
 type Waybill struct {

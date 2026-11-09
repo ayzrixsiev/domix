@@ -12,15 +12,18 @@ import (
 type TokenClaims struct {
 	UserID int64  `json:"user_id"`
 	Phone  string `json:"phone"`
+	// users.token_version when this was minted; RequireAuth refuses a token whose value is behind the row
+	Version int32 `json:"ver"`
 	jwt.RegisteredClaims
 }
 
 const tokenLifetimeMonths = 4
 
-func GenerateJWT(userID int64, phone string, secretKey string) (string, error) {
+func GenerateJWT(userID int64, phone string, version int32, secretKey string) (string, error) {
 	claims := TokenClaims{
-		UserID: userID,
-		Phone:  phone,
+		UserID:  userID,
+		Phone:   phone,
+		Version: version,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().AddDate(0, tokenLifetimeMonths, 0)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

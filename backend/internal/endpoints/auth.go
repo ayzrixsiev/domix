@@ -20,12 +20,12 @@ import (
 const maxUserNameLen = 150
 
 // /api/me: the caller reading, editing or destroying their own account. Signing in lives in
-// endpoints.PhoneAuth, and moving an account onto a new number in phone_change.go.
+// endpoints.TelegramAuth.
 type Auth struct {
 	Queries *db.Queries
 
 	// only DeleteMe needs it: an account's photos go with the account - see eraseAccount
-	Images imagestore.Storage
+	Images *imagestore.Disk
 }
 
 // the account, as GET /api/me and the login both answer with it
@@ -37,8 +37,8 @@ type MeResponse struct {
 }
 
 // dispatches /api/me by method - all three act on the caller's own account, behind one RequireAuth
-// applied where the route is registered. the number is not editable here: moving an account onto a
-// different phone needs that phone proven first (PhoneAuth.RequestPhoneChangeCode).
+// applied where the route is registered. the number is not editable at all: it is the one telegram
+// proved, and a different number is a different account.
 func (a *Auth) RouteMe(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -54,7 +54,7 @@ func (a *Auth) RouteMe(w http.ResponseWriter, r *http.Request) {
 
 // PATCH /api/me - rename the caller, and let a customer become a shop owner.
 //
-// **a role only ever goes up, and only from `customer`** (the same rule PhoneAuth.upsertUser
+// **a role only ever goes up, and only from `customer`** (the same rule upsertUser
 // applies): a shop owner who demoted themselves would keep every shop while losing the right to
 // edit any of them. `admin` is refused by the same branch - an admin is made in the database.
 func (a *Auth) UpdateMe(w http.ResponseWriter, r *http.Request) {
@@ -179,4 +179,33 @@ func (a *Auth) DeleteMe(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]bool{"deleted": true})
+}
+
+// POST /api/me/logout - ends every session of the account, not only this phone's: there is one
+// token_version per account, and a copied token is the case this exists for.
+func (a *Auth) Logout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID, ok := auth.UserIDFromContext(r.Context())
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "not signed in")
+		return
+	}
+
+	ctx, cancel := dbctx.WithTimeout(r.Context())
+	defer cancel()
+
+	if err := a.Queries.BumpTokenVersion(ctx, userID); err != nil {
+		log.Printf("CRITICAL: failed to log user %d out: %v", userID, err)
+		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not log out")
+		return
+	}
+
+	log.Printf("User %d logged out", userID)
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]bool{"logged_out": true})
 }

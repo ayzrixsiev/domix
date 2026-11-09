@@ -143,15 +143,15 @@ func TestVerifyingACode(t *testing.T) {
 	}
 }
 
-// The login and the phone change share one pending map, because the cooldown and budget are per-number.
-// A login code typed into the phone-change endpoint has to read as "no code was requested" *and* leave
-// the entry alive, or the flow that is waiting on it breaks.
+// The login and the deletion page share one pending map, because the cooldown and budget are per-number.
+// A login code typed into the deletion endpoint has to read as "no code was requested" *and* leave the
+// entry alive, or the flow that is waiting on it breaks.
 func TestACodeCannotBeSpentOnTheWrongFlow(t *testing.T) {
 	m := NewCodeManager(true)
 	sent := issueFor(t, m, testPhone) // a login code
 
-	if _, err := m.Verify(CodePhoneChange, testPhone, sent); !errors.Is(err, ErrNoPendingCode) {
-		t.Fatalf("a login code verified as a phone change: %v", err)
+	if _, err := m.Verify(CodeDeletion, testPhone, sent); !errors.Is(err, ErrNoPendingCode) {
+		t.Fatalf("a login code verified as a deletion: %v", err)
 	}
 
 	// untouched, attempts included: the wrong flow asking must not cost the right one a guess

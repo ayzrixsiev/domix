@@ -1,4 +1,4 @@
-// The guest flow, at three things that only show up on a real phone.
+// The guest flow, at the things that only show up on a real phone.
 //
 // **The footer sits at one height on every step**: both slots are always drawn and the error lives in
 // the scrolling content, or the pair walks up and down the screen as you advance. The assertion is a
@@ -20,7 +20,6 @@ import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/role_option_tile.dart';
 import 'package:frontend/features/onboarding/data/privacy_policy.dart';
 import 'package:frontend/features/onboarding/presentation/screens/onboarding_flow.dart';
-import 'package:frontend/core/widgets/code_input_field.dart';
 import 'package:frontend/features/profile/presentation/controllers/auth_controller.dart';
 
 final _strings = AppLocalizations(AppLanguage.ru);
@@ -104,7 +103,7 @@ void main() {
     await tester.enterText(find.byType(TextField).first, 'Азиз');
     await tester.tap(find.text(_strings.nextButton));
     await tester.pumpAndSettle();
-    record('phone', _strings.sendCodeButton);
+    record('telegram', _strings.telegramSignInButton);
 
     final heights = positions.values.toSet();
     expect(
@@ -182,34 +181,32 @@ void main() {
     expect(find.text('open'), findsOneWidget);
   });
 
-  // The code is six boxes over one hidden field, and the value has to survive that: what the reader
-  // types has to appear in the boxes, one digit each, left to right.
-  testWidgets('the code is drawn one digit per box', (tester) async {
-    _sizePhone(tester);
-
-    final controller = TextEditingController();
-    addTearDown(controller.dispose);
-
-    await tester.pumpWidget(
-      _providers(
-        child: Scaffold(
-          body: Padding(
-            padding: const EdgeInsets.all(20),
-            child: CodeInputField(controller: controller, autofocus: false),
-          ),
-        ),
-      ),
-    );
+  // The last step is one button, and the name and role typed before it are what it carries: a
+  // name left empty is refused on the profile step, never discovered after Telegram has opened.
+  testWidgets('the last step is the telegram button, behind a name', (
+    tester,
+  ) async {
+    await _pumpFlow(tester);
+    await tester.tap(find.text(_strings.nextButton));
+    await tester.pumpAndSettle();
+    await _acceptPolicy(tester);
+    await tester.tap(find.text(_strings.nextButton));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField), '4821');
+    await tester.tap(find.text(_strings.nextButton));
+    await tester.pumpAndSettle();
+    expect(find.text(_strings.nameRequiredError), findsOneWidget);
+    expect(find.text(_strings.telegramSignInButton), findsNothing);
+
+    await tester.enterText(find.byType(TextField).first, 'Азиз');
+    await tester.tap(find.text(_strings.nextButton));
     await tester.pumpAndSettle();
 
-    for (final digit in ['4', '8', '2', '1']) {
-      expect(find.text(digit), findsOneWidget);
-    }
-    // and the two boxes still to be filled are empty rather than showing a placeholder glyph
-    expect(find.text('–'), findsNothing);
+    expect(find.text(_strings.telegramSignInButton), findsOneWidget);
+    expect(find.text(_strings.telegramStepBody), findsOneWidget);
+    expect(find.text(_strings.stepCounter(4, 4)), findsOneWidget);
+    // and no field for a number anywhere in the flow
+    expect(find.byType(TextField), findsNothing);
   });
 
   // The steps carry no headline of their own: the screen header names the flow, the progress bar

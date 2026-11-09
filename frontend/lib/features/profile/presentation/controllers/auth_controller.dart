@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import '../../data/auth_service.dart';
 import '../screens/profile_screen.dart';
 
-// decides when to start the telegram handshake, processes what comes back, and tells the ui
+// the signed-in account: the telegram handshake that opens it, the checks that keep it honest, the
+// ways it ends
 class AuthController extends ChangeNotifier {
   // one controller for the app's life; the factory hands back the same instance every time
   static final AuthController _instance = AuthController._internal();
@@ -25,12 +26,7 @@ class AuthController extends ChangeNotifier {
 
   final AuthService _authService = AuthService();
 
-  bool _isLoading = false;
-
-  // deliberately *not* _isLoading: that flag draws the "open telegram and share your number" overlay,
-  // which is the wrong thing to show somebody who just asked to be deleted
   bool _isDeletingAccount = false;
-  String? _loginErrorDetail;
 
   // a session died under a request the user made themselves, and nobody has told them yet.
   // SessionExpiryGuard watches this: it shows the dialog and then pops back to the shell.
@@ -44,13 +40,7 @@ class AuthController extends ChangeNotifier {
   /// be selected when the request was made.
   String? _deleteAccountErrorCode;
 
-  bool get isLoading => _isLoading;
   bool get isDeletingAccount => _isDeletingAccount;
-
-  /// The raw reason a login attempt failed - **for the log and for nothing else**: it is an English
-  /// exception string assembled for whoever debugs it, and it ended up drawn in the waiting overlay
-  /// once. Non-null is still the *signal* that the attempt failed.
-  String? get loginErrorDetail => _loginErrorDetail;
   String? get deleteAccountErrorCode => _deleteAccountErrorCode;
   ProfileViewState get profileState => _profileState;
   bool get sessionExpiredUnseen => _sessionExpiredUnseen;
@@ -83,7 +73,7 @@ class AuthController extends ChangeNotifier {
       // readable offline, and a user whose token ran out must not see their own profile for the half
       // second it takes a network call to fail.
       if (AuthService.isTokenExpired(token)) {
-        await logout();
+        await _endSession();
         return;
       }
 
@@ -110,9 +100,8 @@ class AuthController extends ChangeNotifier {
     try {
       final me = await _authService.fetchMe();
 
-      // the server's answer wins over the cache. this is also how a role change reaches an installed app:
-      // a customer who registers a shop becomes a shop_owner during the telegram flow, and the owner
-      // screens used to stay hidden until they signed out and back in.
+      // the server's answer wins over the cache. this is also how a role change made elsewhere - the
+      // admin panel, another phone - reaches this one without a sign-out.
       await _authService.saveSession(
         token: (await _authService.getToken())!,
         role: me.role,
@@ -121,16 +110,16 @@ class AuthController extends ChangeNotifier {
       );
       _applyAccount(role: me.role, name: me.name, phone: me.phone);
     } on SessionExpiredException {
-      // fetchMe already fired onSessionInvalidated; logging out twice is harmless and keeps the guarantee
+      // fetchMe already fired onSessionInvalidated; ending it twice is harmless and keeps the guarantee
       // local to the caller that can see it
-      await logout();
+      await _endSession();
     } catch (_) {
       // network trouble: keep the cached session exactly as it was
     }
   }
 
   /// Whether a server role may own and edit shops: `shop_owner`, **and `admin` too**. The backend
-  /// authorizes the two identically, and the Telegram handler never demotes an admin - so an admin who
+  /// authorizes the two identically, and signing in never demotes an admin - so an admin who
   /// signed up as «Владелец магазина» stays one, and comparing against the single literal `shop_owner`
   /// drew them the customer profile with no way in to shops they already own.
   static bool canManageShops(String role) =>
@@ -160,28 +149,29 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Step one of signing in: ask the server to send a one-time code to [phone].
+  /// Step one of signing in: a session on the server and the link that opens our bot on it.
   ///
-  /// Returns the number in the server's canonical spelling (`998XXXXXXXXX`), which is what
-  /// [verifyCode] must be called with. Throws [AuthApiException] carrying the server's refusal code.
-  ///
-  /// **Nothing is stored and no state changes here**: until a code comes back verified there is no
-  /// account, which is why the server keeps pending codes out of its database too.
-  Future<CodeRequestResult> requestCode({
-    required String phone,
+  /// **Nothing is stored and no state changes here**: until telegram hands the number over there is
+  /// no account, which is why the server keeps the session out of its database too.
+  Future<TelegramHandshake> startTelegramSignIn({
     required String name,
     required String role,
+    required String lang,
   }) {
-    return _authService.requestCode(phone: phone, name: name, role: role);
+    return _authService.startTelegramSignIn(name: name, role: role, lang: lang);
   }
 
-  /// Step two: exchange the code for a session. On success the token is already in secure storage
-  /// and the profile state has flipped to signed-in, so the caller only has to leave the screen.
-  Future<void> verifyCode({required String phone, required String code}) async {
-    final me = await _authService.verifyCode(phone: phone, code: code);
+  /// One poll of that session. On `success` the token is already in secure storage and the profile
+  /// has flipped to signed-in, so the caller only has to leave the screen.
+  Future<String> pollTelegramSignIn(String session) async {
+    final poll = await _authService.pollTelegramSignIn(session);
+    final me = poll.me;
     // the same mapping the cached and /api/me paths use, rather than a second copy of the role
     // comparison - it was a second copy once, and only one of the two learned about `admin`
-    _applyAccount(role: me.role, name: me.name, phone: me.phone);
+    if (me != null) {
+      _applyAccount(role: me.role, name: me.name, phone: me.phone);
+    }
+    return poll.status;
   }
 
   /// Saves an edited profile: the display name, and the one role change the server allows
@@ -195,43 +185,26 @@ class AuthController extends ChangeNotifier {
     _applyAccount(role: me.role, name: me.name, phone: me.phone);
   }
 
-  /// Step one of moving this account onto another number: a code to the *new* one.
-  ///
-  /// Nothing changes here - the number is not the account's until the code comes back verified,
-  /// which is why this returns the server's canonical spelling for [verifyPhoneChange] to use.
-  Future<CodeRequestResult> requestPhoneChangeCode(String phone) {
-    return _authService.requestPhoneChangeCode(phone);
-  }
-
-  /// Step two: the code was right, so the account is on the new number and the profile says so.
-  Future<void> verifyPhoneChange({
-    required String phone,
-    required String code,
-  }) async {
-    final me = await _authService.verifyPhoneChange(phone: phone, code: code);
-    _applyAccount(role: me.role, name: me.name, phone: me.phone);
-  }
-
-  // dismiss the current error once the user has read it, so it doesn't linger forever
-  void clearError() {
-    _loginErrorDetail = null;
-    notifyListeners();
-  }
-
   // the server told us this token is dead. not a button - it fires from whichever repository made the
   // request that came back 401, and the guest check keeps several in-flight 401s to one logout.
   // silent is the launch/resume check: nobody asked for it, so it signs out without a word.
   void _onSessionInvalidated({required bool silent}) {
     if (_profileState.isGuest) return;
     if (!silent) _sessionExpiredUnseen = true;
-    unawaited(logout());
+    unawaited(_endSession());
+  }
+
+  /// The «Выйти» button: ends the session on the server, then on this phone **whatever the server
+  /// answered**, so an offline phone still signs out. Server first, because a revoke still in flight
+  /// after a fresh sign-in would end that one too.
+  Future<void> logout() async {
+    await _authService.revokeSession();
+    await _endSession();
   }
 
   // wipe local storage and reset the interface back to guest
-  Future<void> logout({bool accountDeleted = false}) async {
-    _isLoading = false;
-    _loginErrorDetail = null;
-    await _authService.logout();
+  Future<void> _endSession({bool accountDeleted = false}) async {
+    await _authService.clearSession();
     _profileState = const ProfileViewState.guest();
     // fired before notifyListeners, so whatever rebuilds below already sees the cleared shop lists -
     // the other order paints one frame of the old owner's shops onto the guest screen
@@ -239,7 +212,7 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Destroys the account on the server, then does everything [logout] does.
+  /// Destroys the account on the server, then wipes the phone the way [logout] does.
   ///
   /// **Server first, phone second, and the order is the whole design**: wiping storage first throws
   /// away the token the request needs, and wiping it after a *failed* request signs the user out of an
@@ -255,7 +228,7 @@ class AuthController extends ChangeNotifier {
       await _authService.deleteAccount();
       // `accountDeleted: true` is what takes this owner's pins off the map. a plain logout must not do
       // that - the shops are still there, they are simply no longer ours to edit.
-      await logout(accountDeleted: true);
+      await _endSession(accountDeleted: true);
       return true;
     } on TimeoutException catch (e) {
       // its own code, because it is its own instruction: the request may well have reached the server, so

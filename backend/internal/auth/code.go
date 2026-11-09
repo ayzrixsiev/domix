@@ -60,14 +60,13 @@ var (
 	ErrSendBudget      = errors.New("auth: too many codes have been sent to this number")
 )
 
-// what a code was minted *for*. the login and the phone change share one map, because the cooldown and
+// what a code was minted *for*. the login and the deletion page share one map, because the cooldown and
 // the budget are per-number, so this is what stops a code issued for one being spent on the other.
 type CodePurpose string
 
 const (
-	CodeLogin       CodePurpose = "login"
-	CodePhoneChange CodePurpose = "phone_change"
-	CodeDeletion    CodePurpose = "deletion"
+	CodeLogin    CodePurpose = "login"
+	CodeDeletion CodePurpose = "deletion"
 )
 
 // what a correct code proves, and what Issue takes: minting and proving share one shape, so a new field
@@ -76,7 +75,7 @@ type Pending struct {
 	Purpose CodePurpose
 	Phone   string // canonical, 998XXXXXXXXX
 
-	// both empty on [CodePhoneChange]: the account already exists and neither is being set.
+	// both empty on [CodeDeletion]: the account already exists and neither is being set.
 	Name string
 	Role string
 }

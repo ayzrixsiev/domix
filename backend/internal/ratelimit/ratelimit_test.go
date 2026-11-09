@@ -103,3 +103,45 @@ func TestKeyedBucketsByAccountRatherThanAddress(t *testing.T) {
 		t.Fatalf("a second request from one account answered %d, want 429", rec.Code)
 	}
 }
+
+// **a Retry-After shorter than the refill invites the retry that will be refused**: the app-wide geo
+// pace earns a token every twelve seconds, and a one-second answer tells a client to come back early.
+func TestARefusalSaysWhenTheNextTokenArrives(t *testing.T) {
+	cases := map[string]struct {
+		limiter *Limiter
+		want    string
+	}{
+		"twenty a second rounds up, never to zero": {New(20, 1, time.Minute), "1"},
+		"three hundred an hour":                    {New(300.0/3600, 1, time.Minute), "12"},
+		"one per ten minutes":                      {New(1.0/600, 1, time.Minute), "600"},
+	}
+	for name, c := range cases {
+		handler := c.limiter.Wrap(func(w http.ResponseWriter, r *http.Request) {})
+		handler(httptest.NewRecorder(), requestFrom("203.0.113.7:51000"))
+
+		rec := httptest.NewRecorder()
+		handler(rec, requestFrom("203.0.113.7:51000"))
+		if rec.Code != http.StatusTooManyRequests {
+			t.Fatalf("%s: the second request answered %d, want 429", name, rec.Code)
+		}
+		if got := rec.Header().Get("Retry-After"); got != c.want {
+			t.Errorf("%s: Retry-After %q, want %q", name, got, c.want)
+		}
+	}
+}
+
+// **both wrong guesses are silent in production**, so neither an absent line nor a typo may boot
+func TestTrustProxyMustBeWrittenAsABoolean(t *testing.T) {
+	for _, raw := range []string{"", "yes", "on "} {
+		t.Setenv(EnvTrustProxy, raw)
+		if _, err := TrustProxySetting(); err == nil {
+			t.Errorf("TRUST_PROXY=%q was accepted, want a refusal", raw)
+		}
+	}
+	for raw, want := range map[string]bool{"true": true, " false ": false, "1": true} {
+		t.Setenv(EnvTrustProxy, raw)
+		if got, err := TrustProxySetting(); err != nil || got != want {
+			t.Errorf("TRUST_PROXY=%q read as %v (%v), want %v", raw, got, err, want)
+		}
+	}
+}

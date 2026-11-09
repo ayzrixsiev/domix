@@ -37,7 +37,7 @@ func requestWaybill(t *testing.T, ctx context.Context, wb *Waybills, method, tar
 	contentType string, body []byte, handler http.HandlerFunc) *httptest.ResponseRecorder {
 	t.Helper()
 
-	token, err := auth.GenerateJWT(asUserID, "+998900000000", testJWTSecret)
+	token, err := auth.GenerateJWT(asUserID, "+998900000000", 0, testJWTSecret)
 	if err != nil {
 		t.Fatalf("sign a token: %v", err)
 	}
@@ -428,7 +428,7 @@ func TestAListWithBothRowsAndAPhotoCannotExist(t *testing.T) {
 func requestWaybillAsAdmin(t *testing.T, ctx context.Context, a *Admin, asUserID, id int64, handler http.HandlerFunc) *httptest.ResponseRecorder {
 	t.Helper()
 
-	token, err := auth.GenerateJWT(asUserID, "+998900000000", testJWTSecret)
+	token, err := auth.GenerateJWT(asUserID, "+998900000000", 0, testJWTSecret)
 	if err != nil {
 		t.Fatalf("sign a token: %v", err)
 	}

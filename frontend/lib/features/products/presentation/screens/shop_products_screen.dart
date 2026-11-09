@@ -6,6 +6,7 @@ import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
+import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 import '../../data/product_category.dart';
 import '../../data/product_model.dart';
@@ -108,7 +109,7 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
     final shopId = widget.shop.id;
     final products = controller.productsFor(shopId);
     final isLoading = controller.isLoadingFor(shopId);
-    final loadFailed = controller.loadFailedFor(shopId);
+    final failure = controller.loadFailureFor(shopId);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -132,11 +133,11 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
                 controller,
                 products,
                 isLoading,
-                loadFailed,
+                failure,
               ),
             ),
             // not while the first load or its failure is the whole screen: there is nothing to add to
-            if (!(products.isEmpty && (isLoading || loadFailed)))
+            if (!(products.isEmpty && (isLoading || failure != null)))
               Positioned(
                 left: 0,
                 right: 0,
@@ -160,7 +161,7 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
     ProductsController controller,
     List<Product> products,
     bool isLoading,
-    bool loadFailed,
+    LoadFailure? failure,
   ) {
     // a spinner only on the very first load: once there are tiles, a refresh happens underneath them
     if (isLoading && products.isEmpty) {
@@ -169,12 +170,14 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
       );
     }
 
-    if (loadFailed && products.isEmpty) {
+    if (failure != null && products.isEmpty) {
       return _FullPageState(
         child: _CenteredMessage(
-          icon: CupertinoIcons.exclamationmark_circle,
+          icon: failure == LoadFailure.network
+              ? CupertinoIcons.wifi_exclamationmark
+              : CupertinoIcons.exclamationmark_circle,
           title: strings.productsLoadError,
-          subtitle: strings.productsLoadErrorHint,
+          subtitle: strings.loadErrorHintFor(failure),
           actionLabel: strings.retryButtonShort,
           onAction: () => controller.loadProducts(widget.shop.id, force: true),
         ),

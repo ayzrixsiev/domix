@@ -28,6 +28,10 @@ type cacheEntry[T any] struct {
 	value     T
 	held      bool
 	writtenAt time.Time
+
+	// the last fetch that failed, taken as their own answer by the callers queued behind it
+	err      error
+	failedAt time.Time
 }
 
 func newCache[T any](ttl, staleFor time.Duration) *cache[T] {
@@ -38,6 +42,7 @@ func newCache[T any](ttl, staleFor time.Duration) *cache[T] {
 
 func (c *cache[T]) get(ctx context.Context, key string, fetch func(context.Context) (T, error)) (T, error) {
 	entry := c.entryFor(key)
+	asked := time.Now()
 	entry.mu.Lock()
 	defer entry.mu.Unlock()
 
@@ -46,26 +51,35 @@ func (c *cache[T]) get(ctx context.Context, key string, fetch func(context.Conte
 		return entry.value, nil
 	}
 
-	// its own context: the answer belongs to everybody waiting on this key, so the first caller hanging up
-	// must not cancel it for the rest, and a call already paid for should land in the cache
-	fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), fetchTimeout)
-	defer cancel()
+	// **a failure is shared like an answer**: a caller who queued behind a fetch that failed takes its
+	// result instead of asking again. each retry spends budget, and on a slow yandex day each would hold
+	// the next caller in line another five seconds - past the app's timeout, and nginx's in the end.
+	err := entry.err
+	if !entry.failedAt.After(asked) {
+		// its own context: the answer belongs to everybody waiting on this key, so the first caller
+		// hanging up must not cancel it for the rest, and a call already paid for should land in the cache
+		fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), fetchTimeout)
+		defer cancel()
 
-	value, err := fetch(fetchCtx)
-	if err != nil {
-		if entry.held && age < c.ttl+c.staleFor {
-			log.Printf("WARNING: answering %q from a %s-old copy - %v", key, age.Round(time.Minute), err)
-			return entry.value, nil
+		value, fetchErr := fetch(fetchCtx)
+		if fetchErr == nil {
+			entry.value, entry.held, entry.writtenAt = value, true, time.Now()
+			entry.err, entry.failedAt = nil, time.Time{}
+			return value, nil
 		}
-		if !entry.held {
-			c.forget(key, entry)
-		}
-		var zero T
-		return zero, err
+		err = fetchErr
+		entry.err, entry.failedAt = fetchErr, time.Now()
 	}
 
-	entry.value, entry.held, entry.writtenAt = value, true, time.Now()
-	return value, nil
+	if entry.held && age < c.ttl+c.staleFor {
+		log.Printf("WARNING: answering %q from a %s-old copy - %v", key, age.Round(time.Minute), err)
+		return entry.value, nil
+	}
+	if !entry.held {
+		c.forget(key, entry)
+	}
+	var zero T
+	return zero, err
 }
 
 func (c *cache[T]) entryFor(key string) *cacheEntry[T] {

@@ -131,7 +131,7 @@ class _AddStoreScreenState extends State<AddStoreScreen> {
         ),
       );
     }
-    // on failure controller.saveFailed is now true, and build() shows the inline error card
+    // on failure controller.saveFailure is now set, and build() shows the inline error card
   }
 
   @override
@@ -188,9 +188,11 @@ class _AddStoreScreenState extends State<AddStoreScreen> {
               strings: _strings,
               onTap: _pickLocation,
             ),
-            if (controller.saveFailed) ...[
+            if (controller.saveFailure case final failure?) ...[
               const SizedBox(height: 18),
-              StoreInlineErrorCard(message: _strings.storeCreationFailed),
+              StoreInlineErrorCard(
+                message: _strings.storeCreationFailedFor(failure),
+              ),
             ],
             const SizedBox(height: 28),
             StoreSubmitButton(

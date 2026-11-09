@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -269,6 +270,7 @@ func (wb *Waybills) allowSend(w http.ResponseWriter, r *http.Request) bool {
 	}
 	userID, _ := auth.UserIDFromContext(r.Context())
 	if !wb.Sends.Allow("user:" + strconv.FormatInt(userID, 10)) {
+		w.Header().Set("Retry-After", strconv.Itoa(int(wb.Sends.RetryAfter()/time.Second)))
 		writeAPIError(w, http.StatusTooManyRequests, "too_many_waybills", "too many lists at once, wait a little")
 		return false
 	}

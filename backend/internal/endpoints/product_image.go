@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -225,6 +226,7 @@ func (p *Products) allowUpload(w http.ResponseWriter, r *http.Request) bool {
 	}
 
 	if !p.Uploads.Allow("user:" + strconv.FormatInt(userID, 10)) {
+		w.Header().Set("Retry-After", strconv.Itoa(int(p.Uploads.RetryAfter()/time.Second)))
 		writeAPIError(w, http.StatusTooManyRequests, "too_many_uploads",
 			"too many photos at once, wait a moment")
 		return false

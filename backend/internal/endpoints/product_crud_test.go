@@ -73,7 +73,7 @@ func callProduct(
 ) *httptest.ResponseRecorder {
 	t.Helper()
 
-	token, err := auth.GenerateJWT(asUserID, "+998900000000", testJWTSecret)
+	token, err := auth.GenerateJWT(asUserID, "+998900000000", 0, testJWTSecret)
 	if err != nil {
 		t.Fatalf("sign a token: %v", err)
 	}
@@ -99,7 +99,7 @@ func callProductInShop(
 ) *httptest.ResponseRecorder {
 	t.Helper()
 
-	token, err := auth.GenerateJWT(asUserID, "+998900000000", testJWTSecret)
+	token, err := auth.GenerateJWT(asUserID, "+998900000000", 0, testJWTSecret)
 	if err != nil {
 		t.Fatalf("sign a token: %v", err)
 	}
@@ -387,7 +387,7 @@ func TestAForgedTokenIsRefused(t *testing.T) {
 	shopID := makeSeededShop(t, ctx, tx, q, "Форж", catalog.CategoryUniversal, false)
 	productID := seededProductID(t, ctx, tx, shopID, "universal.nails")
 
-	token, err := auth.GenerateJWT(shopOwnerID(t, ctx, tx, shopID), "+998900000000", "a-different-secret")
+	token, err := auth.GenerateJWT(shopOwnerID(t, ctx, tx, shopID), "+998900000000", 0, "a-different-secret")
 	if err != nil {
 		t.Fatalf("sign: %v", err)
 	}

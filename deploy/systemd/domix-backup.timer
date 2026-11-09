@@ -1,0 +1,20 @@
+# Fires deploy/backup.sh once a night. Enable with:
+#   systemctl enable --now domix-backup.timer
+#   systemctl list-timers domix-backup.timer     # when it last ran and when it runs next
+
+[Unit]
+Description=Domix nightly backup
+
+[Timer]
+# local time on the server, which is also the date the night's objects are named after. 03:30 is
+# after the quiet hour and well before anybody opens the app.
+OnCalendar=*-*-* 03:30:00
+# **Persistent=true is what makes a missed night catch up**: a server that was off or rebooting at
+# 03:30 runs the backup when it comes back instead of skipping the day in silence.
+Persistent=true
+# nothing else runs at 03:30, but a fixed minute is also the one a provider's maintenance window
+# picks
+RandomizedDelaySec=15m
+
+[Install]
+WantedBy=timers.target

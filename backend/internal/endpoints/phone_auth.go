@@ -25,9 +25,10 @@ import (
 //	POST /api/auth/request-code  {phone, name, role} -> a code is delivered to that number
 //	POST /api/auth/verify        {phone, code}       -> the account is created or found, jwt back
 //
-// the proof of ownership is the code itself, so there is no session to poll and nothing to guess.
-// name and role travel with the *request* - by the time the code comes back there is no screen left
-// to ask on - and they sit in ram with it, so an abandoned signup leaves no row behind.
+// **no screen calls this any more, and it stays: a founder decision, against CLAUDE.md's dead-code
+// rule.** every sign-in goes through the telegram bot (TelegramAuth) because Gateway wants a $100
+// balance; this flow, internal/verify and auth.CodeManager are how the project switches back the day
+// that is paid. it works and it is tested - do not tidy it away.
 type PhoneAuth struct {
 	Queries   *db.Queries
 	Codes     *auth.CodeManager
@@ -185,7 +186,7 @@ func (p *PhoneAuth) Verify(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := dbctx.WithTimeout(r.Context())
 	defer cancel()
 
-	user, err := p.upsertUser(ctx, pending)
+	user, err := upsertUser(ctx, p.Queries, pending)
 	if err != nil {
 		log.Printf("CRITICAL: could not register %s after a correct code: %v", auth.MaskPhone(phone), err)
 		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not finish signing in")
@@ -193,7 +194,7 @@ func (p *PhoneAuth) Verify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// role is deliberately not a claim (internal/auth/jwt.go): a token outlives a role change
-	token, err := auth.GenerateJWT(user.ID, user.Phone, p.JWTSecret)
+	token, err := auth.GenerateJWT(user.ID, user.Phone, user.TokenVersion, p.JWTSecret)
 	if err != nil {
 		log.Printf("CRITICAL: could not sign a token for user %d: %v", user.ID, err)
 		writeAPIError(w, http.StatusInternalServerError, "server_error", "could not finish signing in")
@@ -203,7 +204,7 @@ func (p *PhoneAuth) Verify(w http.ResponseWriter, r *http.Request) {
 	log.Printf("User %d signed in with a code (role %s)", user.ID, user.Role)
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(PhoneAuthResponse{Token: token, User: user})
+	json.NewEncoder(w).Encode(PhoneAuthResponse{Token: token, User: meResponseOf(user)})
 }
 
 // four codes rather than one: "that code is wrong" and "that code is dead" send the user to
@@ -223,30 +224,35 @@ func writeCodeError(w http.ResponseWriter, err error) {
 
 // upsertUser turns a proven number into an account row: found, upgraded, or created. a role only
 // ever goes up (a returning owner who tapped "я покупатель" must not lose their shops); a name is
-// taken as typed. identical to what the telegram handler does, while both flows are live.
-func (p *PhoneAuth) upsertUser(ctx context.Context, pending auth.Pending) (MeResponse, error) {
-	existing, found, err := p.findUser(ctx, pending.Phone)
+// taken as typed, and an empty one renames nothing. **it is why signing in and registering are one
+// button**: whichever the user meant, a proven number lands here.
+func upsertUser(ctx context.Context, q *db.Queries, pending auth.Pending) (db.User, error) {
+	existing, found, err := findUser(ctx, q, pending.Phone)
 	if err != nil {
-		return MeResponse{}, err
+		return db.User{}, err
 	}
 
 	if !found {
-		created, err := p.Queries.CreateUser(ctx, db.CreateUserParams{
-			Name:  pgtype.Text{String: pending.Name, Valid: pending.Name != ""},
+		name := pending.Name
+		if name == "" {
+			name = defaultUserName
+		}
+		created, err := q.CreateUser(ctx, db.CreateUserParams{
+			Name:  pgtype.Text{String: name, Valid: true},
 			Phone: pending.Phone,
 			Role:  pending.Role,
 		})
 		if err != nil {
-			return MeResponse{}, err
+			return db.User{}, err
 		}
 		log.Printf("Registered a new account for %s", auth.MaskPhone(pending.Phone))
-		return meResponseOf(created), nil
+		return created, nil
 	}
 
 	roleChanged := existing.Role == "customer" && pending.Role == "shop_owner"
 	nameChanged := pending.Name != "" && pending.Name != existing.Name.String
 	if !roleChanged && !nameChanged {
-		return meResponseOf(existing), nil
+		return existing, nil
 	}
 
 	newRole := existing.Role
@@ -258,7 +264,7 @@ func (p *PhoneAuth) upsertUser(ctx context.Context, pending auth.Pending) (MeRes
 		newName = pending.Name
 	}
 
-	updated, err := p.Queries.UpdateUserProfile(ctx, db.UpdateUserProfileParams{
+	updated, err := q.UpdateUserProfile(ctx, db.UpdateUserProfileParams{
 		ID:   existing.ID,
 		Name: pgtype.Text{String: newName, Valid: newName != ""},
 		Role: newRole,
@@ -267,16 +273,15 @@ func (p *PhoneAuth) upsertUser(ctx context.Context, pending auth.Pending) (MeRes
 		// the login itself did not fail, so signing them in with what is stored beats refusing over
 		// a changed display name
 		log.Printf("WARNING: could not update the profile of user %d while signing in: %v", existing.ID, err)
-		return meResponseOf(existing), nil
+		return existing, nil
 	}
 
-	return meResponseOf(updated), nil
+	return updated, nil
 }
 
-// findUser looks a proven number up. one spelling, because migration 000003 normalized every row
-// that the telegram flow had written with a leading '+' and nothing writes that form any more.
-func (p *PhoneAuth) findUser(ctx context.Context, phone string) (db.User, bool, error) {
-	user, err := p.Queries.GetUserByPhone(ctx, phone)
+// findUser looks a proven number up, by the one canonical spelling every row is written in.
+func findUser(ctx context.Context, q *db.Queries, phone string) (db.User, bool, error) {
+	user, err := q.GetUserByPhone(ctx, phone)
 	if err != nil {
 		// errors.Is, never a substring match: a database that fell over must not be read as "no such
 		// user" and send us into CreateUser

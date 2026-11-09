@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 // how much of a request body we are willing to read. without it a decoder reads until the client
@@ -12,9 +13,21 @@ import (
 // of short fields; the one multipart endpoint has its own limit (imagestore.MaxUploadBytes).
 const maxRequestBody = 64 << 10 // 64 KiB
 
+// how long those 64 KiB may take to arrive. **MaxBytesReader bounds the bytes and nothing bounds the
+// time**: without this a caller sends valid headers, passes the rate limiter, then feeds the body one
+// byte at a time and holds the handler open forever - and an unfinished request never becomes a
+// counted one. the deadline lives here rather than in Server.ReadTimeout because that would also
+// budget the multipart photo upload, which is slow on purpose on 3G and reads its body elsewhere.
+// a var so the test for it does not have to wait out the real one.
+var bodyReadTimeout = 15 * time.Second
+
 // decodeJSONBody reads one json request body, writing the 400 itself on failure. callers just
 // `return` when it reports false - one helper, so the size limit cannot be forgotten on a new route.
 func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst any) bool {
+	// the error is ignored on purpose: httptest's recorder cannot set a deadline, and a handler that
+	// refused to run under test while working in production is the worse failure
+	_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(bodyReadTimeout))
+
 	// r.Body is replaced rather than shadowed, so the decoder cannot read the unwrapped original
 	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody)
 

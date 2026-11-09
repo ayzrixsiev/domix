@@ -11,10 +11,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const bumpTokenVersion = `-- name: BumpTokenVersion :exec
+UPDATE users SET token_version = token_version + 1 WHERE id = $1
+`
+
+func (q *Queries) BumpTokenVersion(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, bumpTokenVersion, id)
+	return err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (name, phone, role)
 VALUES ($1, $2, $3)
-RETURNING id, name, phone, role, created_at, updated_at
+RETURNING id, name, phone, role, created_at, updated_at, token_version
 `
 
 type CreateUserParams struct {
@@ -33,6 +42,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Role,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TokenVersion,
 	)
 	return i, err
 }
@@ -44,6 +54,18 @@ DELETE FROM users WHERE id = $1
 func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, deleteUser, id)
 	return err
+}
+
+const getTokenVersion = `-- name: GetTokenVersion :one
+SELECT token_version FROM users WHERE id = $1
+`
+
+// RequireAuth's one read per request: a missing row is a deleted account, a higher value a revoked token
+func (q *Queries) GetTokenVersion(ctx context.Context, id int64) (int32, error) {
+	row := q.db.QueryRow(ctx, getTokenVersion, id)
+	var token_version int32
+	err := row.Scan(&token_version)
+	return token_version, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
@@ -70,7 +92,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, er
 }
 
 const getUserByPhone = `-- name: GetUserByPhone :one
-SELECT id, name, phone, role, created_at, updated_at
+SELECT id, name, phone, role, created_at, updated_at, token_version
 FROM users
 WHERE phone = $1
 `
@@ -85,6 +107,7 @@ func (q *Queries) GetUserByPhone(ctx context.Context, phone string) (User, error
 		&i.Role,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TokenVersion,
 	)
 	return i, err
 }
@@ -134,42 +157,13 @@ func (q *Queries) ListUploadedImagesOfUser(ctx context.Context, userID int64) ([
 	return items, nil
 }
 
-const updateUserPhone = `-- name: UpdateUserPhone :one
-UPDATE users
-SET phone = $2,
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
-RETURNING id, name, phone, role, created_at, updated_at
-`
-
-type UpdateUserPhoneParams struct {
-	ID    int64  `json:"id"`
-	Phone string `json:"phone"`
-}
-
-// separate from UpdateUserProfile because phone is the identity column: UNIQUE, and what every login
-// looks an account up by, so the one write that touches it is the one the code flow guards.
-func (q *Queries) UpdateUserPhone(ctx context.Context, arg UpdateUserPhoneParams) (User, error) {
-	row := q.db.QueryRow(ctx, updateUserPhone, arg.ID, arg.Phone)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Phone,
-		&i.Role,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const updateUserProfile = `-- name: UpdateUserProfile :one
 UPDATE users
 SET name = $2,
     role = $3,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, name, phone, role, created_at, updated_at
+RETURNING id, name, phone, role, created_at, updated_at, token_version
 `
 
 type UpdateUserProfileParams struct {
@@ -188,6 +182,7 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.Role,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TokenVersion,
 	)
 	return i, err
 }

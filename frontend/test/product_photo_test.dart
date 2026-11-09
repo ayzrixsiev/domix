@@ -68,15 +68,12 @@ void main() {
   test('an absolute address is passed through untouched', () {
     final product = Product.fromJson(
       _json(
-        image: 'https://img.domix-api.uz/universal/001.jpg',
-        thumb: 'https://img.domix-api.uz/universal/001_thumb.jpg',
+        image: 'https://photos.example/universal/001.jpg',
+        thumb: 'https://photos.example/universal/001_thumb.jpg',
       ),
     );
 
-    expect(
-      product.thumbUrl,
-      'https://img.domix-api.uz/universal/001_thumb.jpg',
-    );
+    expect(product.thumbUrl, 'https://photos.example/universal/001_thumb.jpg');
   });
 
   testWidgets('the grid tile loads the thumbnail, not the full-size photo', (
@@ -84,8 +81,8 @@ void main() {
   ) async {
     final product = Product.fromJson(
       _json(
-        image: 'https://img.domix-api.uz/universal/001.jpg',
-        thumb: 'https://img.domix-api.uz/universal/001_thumb.jpg',
+        image: 'https://photos.example/universal/001.jpg',
+        thumb: 'https://photos.example/universal/001_thumb.jpg',
       ),
     );
 

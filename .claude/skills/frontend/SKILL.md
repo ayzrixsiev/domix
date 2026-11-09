@@ -23,9 +23,36 @@ singletons through `MultiProvider`.
   `profile/` from importing `stores/` or `favorites/`.
 - **Сообщения is a placeholder.** It stays in the nav bar and says «скоро». Do not rebuild a feature
   into it.
+- **A failed read keeps its kind, never a bool.** A repository throws `ApiException(status)` for any
+  refusal, `LoadFailure.of` sorts it into network, busy (429/503) or server, and the screen picks its
+  sentence with `loadErrorHintFor`. **«Проверьте подключение» is only ever the network case**: under a
+  500 it sends somebody off to fix a phone that works. Home, the map, a shop's catalogue, «Мои
+  магазины», favourites, Корзина and the add-store and send errors all follow it, and
+  `failure_copy_test` holds every one of those sentences to it. A new loader that throws a plain
+  `Exception` lands in "server" whatever happened.
 - **The shell names its tabs (`_ShellTab`) and never numbers them**, because Корзина is missing from an
   owner's bar and the same position means a different tab depending on who is signed in. The page list
   stays fixed so the map is never rebuilt. A customer who becomes an owner while on Корзина lands on home.
+
+## Signing in
+
+`OnboardingFlow`: **Язык → Политика → Имя и роль → «Зарегистрироваться через Telegram»**, one route
+with an X, and one button for registering and signing in because the server finds or creates the
+account either way. The bot hands over a number and nothing else, which is why the name and role are
+asked first and ride in the session (`AuthService.startTelegramSignIn`).
+
+- **Polling, not a deep link back.** The flow opens the t.me link with `launchUrl(externalApplication)`
+  — **its return value is the signal, never `canLaunchUrl`**, which lies on Android 11+ without the
+  manifest's `<queries>` — then asks `/api/auth/status` every two seconds and **at once on `resumed`**,
+  since the reader is in Telegram and Android holds a background app's timers back. It stops at
+  `expires_in` with «Время вышло».
+- **A finished login is handed out once**, so `pollTelegramSignIn` saves the session before it returns:
+  dropping that answer would leave a signed-in account looking like a guest with no second read.
+- **A `success` closes the flow even after «Отменить»**: the account is signed in on the phone by then.
+- Telegram being absent needs no handling — everyone in Uzbekistan has it; a link that does not open
+  says «Не удалось открыть Telegram» and the button opens it again.
+- **The number cannot be edited.** `ProfileEditScreen` is the name and the role; the number is the one
+  Telegram proved, and a different number is a different account.
 
 ## Design system
 

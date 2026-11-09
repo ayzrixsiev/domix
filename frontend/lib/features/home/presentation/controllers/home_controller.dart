@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/features/home/data/category_product.dart';
 import 'package:frontend/features/home/data/home_content.dart';
 import 'package:frontend/features/home/data/home_repository.dart';
@@ -19,7 +20,7 @@ class HomeController extends ChangeNotifier {
   Map<ShopCategory, int> _templateSizes = const {};
 
   bool _isLoading = false;
-  bool _loadFailed = false;
+  LoadFailure? _failure;
   bool _hasLoaded = false;
 
   /// the shops holding a live paid placement, cheapest basket first (an unpriced one last) - only
@@ -35,8 +36,8 @@ class HomeController extends ChangeNotifier {
 
   bool get isLoading => _isLoading;
 
-  /// **a bool, not a message** - the screen owns the sentence, and the exception is a debugPrint
-  bool get loadFailed => _loadFailed;
+  /// **the kind, not a message** - the screen owns the sentence, and the exception is a debugPrint
+  LoadFailure? get failure => _failure;
 
   /// tells "still starting up" from "genuinely has nothing", which are different things to draw
   bool get hasLoaded => _hasLoaded;
@@ -44,7 +45,7 @@ class HomeController extends ChangeNotifier {
   /// [force] re-fetches even when content is already held, which is what a pull-to-refresh wants.
   Future<void> loadHome({bool force = false}) async {
     if (_isLoading) return; // a second call while one is in flight is a no-op
-    if (!force && _hasLoaded && !_loadFailed) return;
+    if (!force && _hasLoaded && _failure == null) return;
 
     _isLoading = true;
     notifyListeners();
@@ -54,7 +55,7 @@ class HomeController extends ChangeNotifier {
       _vipShops = content.vipShops;
       _bestOffers = content.bestOffers;
       _templateSizes = content.templateSizes;
-      _loadFailed = false;
+      _failure = null;
     } catch (e) {
       // the sections are emptied as well: leaving the last successful load under a failure banner shows
       // prices from an unknown time ago as though they were current
@@ -63,7 +64,7 @@ class HomeController extends ChangeNotifier {
       // **the flag is the state; the exception is a log line** - it used to be the error card's subtitle,
       // which put a raw ClientException in front of a customer looking for cement
       debugPrint('HomeController: could not load home content: $e');
-      _loadFailed = true;
+      _failure = LoadFailure.of(e);
     }
 
     _isLoading = false;

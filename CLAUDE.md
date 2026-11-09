@@ -31,19 +31,30 @@ Good: `// signed-in callers by account, others by address: one carrier IP fronts
 ## Architecture
 One binary, one Postgres. No gRPC, message broker, Redis or separate search engine: each buys cross-service throughput we do not have and adds a deploy target to run. Keep domain packages clean so any of them is cheap to adopt once there is a second process.
 
+## Production
+**The domain and the server are bought and live.** `domix-app.uz` (registered at Turn Cloud, DNS in
+Cloudflare) resolves to **95.182.119.72**, an Ubuntu 24.04 VPS at Airnet in Uzbekistan — 2 cores,
+3.8 GB RAM. `ssh ubuntu@95.182.119.72`, password login, the password is **not in this repo**: ask the
+founder. One box runs everything: nginx on 80/443, the Go api on 127.0.0.1:8080, Postgres, and the
+product photos on its own disk. Cloudflare R2 holds the nightly backup and serves nothing.
+**Nothing is deployed to it yet.** The `deployment` skill has the server table, the `.env` table, the
+install order, the admin-panel tunnel and everything still open before a Play submission; read it
+before touching the server, nginx, certbot, the backups or a release build.
+
 ## Roadmap
 Build the current phase only; never scaffold a later one.
 1. **Shops and products** (current): shop creation, template catalogue, prices, map, search.
 2. **Exchange**: a client posts a basket, shops answer with their own price and advantages. Competing offers, not a checkout.
 3. **Masters and clients**: job tickets for workers.
 
-Removed down to their tables, to be rebuilt from scratch. Do not restore the old code: **support** (migration `000003`) and the **job marketplace**.
+Removed down to their tables, to be rebuilt from scratch. Do not restore the old code: **support** and the **job marketplace**.
 
 **Корзина** (the tab that was Заявки) is live: a customer sends a list to Domix and staff read it in the panel. It is not phase 2: no shop sees a list and nothing is offered back.
 
 ## Invariants that fail silently
 Detail and reasoning live in the `backend` skill.
-- Pending auth codes live in RAM (`internal/auth/code.go`), never in Postgres.
+- Sign-in sessions (`internal/auth/session.go`) and pending codes live in RAM, never in Postgres.
+- A shared contact signs in only when `contact.user_id == from.id`; anything else is a forwarded card.
 - Signed-in requests are rate-limited by account id, never by address.
 - A cached public read must never depend on who is asking.
 - `products.image_path` is a relative path, never a url. Write files, then point the row, then unlink the old ones.

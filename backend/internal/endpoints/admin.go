@@ -41,7 +41,7 @@ type Admin struct {
 	URLs imagestore.URLs
 
 	// where uploaded photos live, for the orphan sweep at the bottom of this file
-	Images imagestore.Storage
+	Images *imagestore.Disk
 }
 
 // how many rows one list request may return. the panel filters and sorts client-side so it wants
@@ -1248,7 +1248,7 @@ type adminTemplateItem struct {
 
 	// the 400px copy, so the panel can show the photo instead of a path - which is how a founder
 	// checks that five sizes really do share the right picture. built here because only the server
-	// knows whether photos come from this api or from img.domix-api.uz.
+	// knows whether photos come from this api or from whatever host IMAGE_BASE_URL names.
 	ImageThumbURL string `json:"image_thumb_url,omitempty"`
 
 	// whether the price comparison totals this row. a product added to a template starts outside the
@@ -2182,7 +2182,7 @@ func (a *Admin) UploadCataloguePhoto(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	// the path is what a row stores; the urls are what the editor shows, built here because only the
-	// server knows whether photos come from this api or from img.domix-api.uz
+	// server knows whether photos come from this api or from whatever host IMAGE_BASE_URL names
 	json.NewEncoder(w).Encode(catalogueFile{
 		Path: stored, ThumbURL: a.URLs.Thumb(stored), Used: false,
 		Size: int64(len(normalized.Master)),
@@ -2207,13 +2207,13 @@ func (a *Admin) UploadCataloguePhoto(w http.ResponseWriter, r *http.Request) {
 const (
 	orphanMinAge = time.Hour
 
-	// **how long one press may spend deleting, and it is a deadline rather than a count**: each R2 delete is
-	// a network round trip, and nginx cuts a proxied request off at 60s. a large backlog takes several
-	// presses, and the response says how many are left.
+	// **how long one press may spend deleting, and it is a deadline rather than a count**: nginx cuts a
+	// proxied request off at 60s, and the scan before this is a walk of the whole store. a large backlog
+	// takes several presses, and the response says how many are left.
 	orphanSweepBudget = 30 * time.Second
 
-	// a ceiling underneath the deadline, so a local disk store (where deletions are instant) does
-	// not turn one press into an unbounded loop either.
+	// a ceiling underneath the deadline: deletions on disk are instant, so without it one press would
+	// last as long as the backlog.
 	orphanSweepLimit = 2000
 )
 
@@ -2281,7 +2281,7 @@ type sweepScope struct {
 
 	// the storage door. a catalogue file and an owner upload are deleted by different methods, so a
 	// bug in one sweep cannot reach the other's files.
-	remove func(images imagestore.Storage, ctx context.Context, rel string) error
+	remove func(images *imagestore.Disk, ctx context.Context, rel string) error
 
 	// which stored paths protect a file
 	referenced func(ctx context.Context, q *db.Queries) ([]string, error)
@@ -2298,7 +2298,7 @@ var uploadSweep = sweepScope{
 	name:   "uploaded",
 	prefix: imagestore.UploadDir,
 	owns:   imagestore.IsUpload,
-	remove: func(images imagestore.Storage, ctx context.Context, rel string) error {
+	remove: func(images *imagestore.Disk, ctx context.Context, rel string) error {
 		return images.RemoveFile(ctx, rel)
 	},
 	referenced: func(ctx context.Context, q *db.Queries) ([]string, error) {
@@ -2313,7 +2313,7 @@ var catalogueSweep = sweepScope{
 	name:   "catalogue",
 	prefix: imagestore.CatalogueRoot,
 	owns:   imagestore.IsCatalogue,
-	remove: func(images imagestore.Storage, ctx context.Context, rel string) error {
+	remove: func(images *imagestore.Disk, ctx context.Context, rel string) error {
 		return images.RemoveCatalogueFile(ctx, rel)
 	},
 	// **every referenced path, not only the templates'**: a shop seeded before a template's photo

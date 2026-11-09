@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:frontend/core/network/api_client.dart';
 import '../../data/product_model.dart';
 import '../../data/products_repository.dart';
 
@@ -22,9 +23,9 @@ class ProductsController extends ChangeNotifier {
 
   final Set<int> _loadingShopIds = {};
 
-  /// The shops whose last catalogue load failed. **A set of ids, not a map of messages** - the
-  /// screens read it as "did this shop's catalogue fail" and draw a written sentence of their own.
-  final Set<int> _failedLoads = {};
+  /// Why each shop's last catalogue load failed. **The kind, not a message** - the screens draw a
+  /// written sentence of their own from it.
+  final Map<int, LoadFailure> _failedLoads = {};
 
   // one busy flag rather than one per product: only one edit sheet is ever open at a time, and the
   // screen disables its save and delete buttons together
@@ -46,7 +47,7 @@ class ProductsController extends ChangeNotifier {
   List<Product> productsFor(int shopId) => _byShop[shopId] ?? const [];
 
   bool isLoadingFor(int shopId) => _loadingShopIds.contains(shopId);
-  bool loadFailedFor(int shopId) => _failedLoads.contains(shopId);
+  LoadFailure? loadFailureFor(int shopId) => _failedLoads[shopId];
   bool hasLoaded(int shopId) => _byShop.containsKey(shopId);
 
   bool get isSaving => _isSaving;
@@ -94,7 +95,7 @@ class ProductsController extends ChangeNotifier {
       _byShop[shopId] = await _repo.fetchShopProducts(shopId);
       _stale.remove(shopId);
     } catch (e) {
-      _failedLoads.add(shopId);
+      _failedLoads[shopId] = LoadFailure.of(e);
       debugPrint('loadProducts failed for shop $shopId: $e');
     }
 

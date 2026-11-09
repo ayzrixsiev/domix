@@ -5,13 +5,13 @@
 ```mermaid
 erDiagram
     %% --- User cluster ---
-    %% support_messages and support_thread_reads were dropped in migration 000003. The feature is
+    %% support_messages and support_thread_reads were dropped with the support section. The feature is
     %% being rebuilt from nothing, so the old tables are deliberately not documented here.
 
     User {
         bigint id PK "Internal Sequential ID"
         varchar name "Contact Name (Nullable)"
-        varchar phone UK "Unique Phone Number - canonical 998XXXXXXXXX, one spelling only (migration 000003)"
+        varchar phone UK "Unique Phone Number - canonical 998XXXXXXXXX, one spelling only"
         varchar role "Role (customer, shop_owner, admin)"
         timestamp created_at "Creation timestamp"
         timestamp updated_at "Update timestamp"
@@ -113,36 +113,81 @@ Parent context in this function means that we need to pass it an existing ctx wh
 
 # Auth
 
-**Current flow: a 6-digit code delivered by Telegram Gateway.** `POST /api/auth/request-code` holds the
-name, role and a hash of the code in RAM (`internal/auth/code.go`); `POST /api/auth/verify` checks the
-code and mints the JWT. The same code backs the phone change and the `/delete-account` page. There is
-no bot, no webhook and no session id.
+**Current flow: the telegram bot handshake.** Every sign-in - the app, the `/admin` panel - and the
+`/delete-account` page go through `@domix_manager_bot`. Telegram hands us the user's phone number,
+which Telegram itself has verified, so there is no code, no sms and nothing to pay for.
 
----
+The six-digit Telegram Gateway code flow (`POST /api/auth/request-code`, `/api/auth/verify`,
+`internal/verify`, `auth.CodeManager`) is **still in the code and still routed, but no screen calls it**.
+Gateway needs a $100 balance; the day that is paid, those are how the project switches back. Keeping
+them is a founder decision against the delete-dead-code rule - do not tidy them away.
 
-## ARCHIVED — the telegram bot handshake (removed, kept here as the restore point)
+## SessionManager
 
-*Nothing below is live. `internal/telegram`, `auth.SessionManager`, `/api/auth/init`,
-`/api/auth/status` and the bot's `/delete-account` flow were all deleted. This is the record to
-rebuild from if the code flow is ever rolled back.*
+Our authentication works around the `SessionManager` struct (`backend/internal/auth/session.go`),
+which contains two `sync.Map`s. One, called `sessions`, links a session id to `SessionData` - the name,
+role and language the Flutter app sent, the purpose, and once it is finished, the outcome. The other,
+`chatToSession`, links a telegram chat id to a session id, so we know whose session a contact shared in
+that chat belongs to. We use `sync.Map` to avoid race conditions (two or more goroutines - e.g. from
+http requests - writing into one shared container at once). The steps that must happen exactly once use
+its atomic operations: a contact *claims* a session with `LoadAndDelete` on the chat link plus a
+`CompareAndSwap` on the session, and a poll *collects* a finished session with `LoadAndDelete`, so a
+token is handed out once.
 
-Our authentication works around SessionManager struct, which contains two sync.Map, one called `session` for linking sessionID and data that we got from flutter app - name and role, this data is saved inside another struct named SessionData, another sync map called chatToSession links telegram chatID to sessionID. We used sync.Map deliberately to avoid race condition (two or more goroutines e.g from http requests trying to allocate a store inside one shared container), so sync.Map saves us from concurrency problem. Each sync map contains their entries, and i set up goroutines to watch those entries, if one of the entries in sessions sync.Map get older than 10 minutes it gets cleaned up, if user stuck in the telegram chat without sending a phone number, session and session data will be deleted after 10 minuets as i described above, which will create an orphaned chatToSession - chat id pointing to non existing session id, so the same goroutine cleans it up as soon as it cleand sessions entry.
+A cleanup goroutine wakes up every minute. Any session older than its expiry - 10 minutes for one
+nobody finished, 2 minutes after it finished for one nobody collected - is deleted. A user stuck in the
+telegram chat without sending a phone number therefore leaves an orphaned `chatToSession` entry (a chat
+id pointing to a session that no longer exists), so the same goroutine cleans that up right after.
+**A panic in that goroutine would take the whole api down**, so each sweep recovers, like
+`startBasketHistory`. On top of that, at most 20 000 sessions can be live at once, which bounds what a
+flood of `/api/auth/init` calls can hold in RAM.
 
-1. User presses create account in flutter app then he is prompted to choose a role (customer or shop owner) and write down his name, after that he presses "Verify through telegram" button.
-2. Flutter app hits http point api/auth/init and sends a json containing gathered info: role, name.
-3. Our backend receives this json data and generates random sessionID, after that using SessionManager's sync map called sessions, it links this sessionID with SessionData, like this:
+Every session has a **purpose**, login or deletion. A deletion session never mints a token, and asking
+`/api/auth/status` about a deletion session id answers exactly like asking about an unknown one - this
+is what stops a deletion confirmation being spent as a login.
+
+## The flow
+
+1. The user picks a language, accepts the policy, types their name and picks a role, then presses
+   «Зарегистрироваться через Telegram». One button for both signing in and registering, because the
+   server finds or creates the account either way (`upsertUser`).
+2. The app hits `POST /api/auth/init` with `{name, role, lang}`.
+3. The backend generates a random session id (32 bytes, base64url - telegram's `start=` parameter
+   allows 64 characters of `[A-Za-z0-9_-]` and silently drops anything else) and stores it:
 ```go
-sm.sessions.Store(sessionID, SessionData{           
-	Status:    "pending",               
-	Name:      receivedName,                    
-	Role:      receivedRole,                    
-	CreatedAt: time.Now(),              
-})      
-```                                
-1. Our backend sends telegram link and attaches to it sessionID to the flutter app, flutter app opens a telegram with that sessionID, sessionID is then send by telegram bot back to our backend with telegram's chatID.
-2. Our backend using SessionManager's sync map called chatToSession, connects that sessionID with chatID, and this way we know who's phone number we will get from this particular chat.
-3. After that we prompt a user to send his phone number, once he does that, telegram sends chatID along side his phone number to our backend, we check whether the user exists (if yes we check whether his role and name changed, if yes we edit it), if he does we log in, if no we sign him up and generate jwt token and send it to the flutter app.
-   
+m.sessions.Store(id, SessionData{
+	Purpose:   HandshakeLogin,
+	Status:    SessionPending,
+	Name:      name,
+	Role:      role,
+	Lang:      lang,
+	expiresAt: m.now().Add(SessionTTL),
+})
+```
+4. The backend answers with the session id and `https://t.me/domix_manager_bot?start=<id>`. The app
+   opens that link; Telegram shows the bot, and pressing Start sends `/start <id>` to our webhook
+   (`POST /api/telegram/webhook`), with our secret in the `X-Telegram-Bot-Api-Secret-Token` header -
+   the webhook is a public url, and a call without the secret is refused.
+5. Using `chatToSession`, the backend links that chat id to the session id, then answers in the
+   session's language with a one-time keyboard holding a single **request-contact** button.
+6. The user presses it, and telegram posts a `contact` to the webhook. **The backend checks that
+   `contact.user_id` equals `from.id`** - without it anyone could forward somebody else's contact card
+   and sign in as them.
+7. The number goes through `auth.CanonicalPhone`. We look the user up: found, we log in (a role only
+   goes up, customer → shop owner; the name is updated if they typed a new one); not found, we sign
+   them up. Then we mint the JWT exactly as `/api/auth/verify` does and put it on the session.
+8. All this time the app has been polling `POST /api/auth/status` every 2 seconds - and once more the
+   moment it comes back from Telegram to the foreground. When the answer is `success` it saves the
+   token and the flow closes. It gives up when the 10 minutes are over.
+
+The `/delete-account` page is the same handshake with the deletion purpose (`POST
+/api/account-deletion/start`, then `POST /api/account-deletion/status`): the bot's button reads
+«Подтвердить удаление», and the account on the shared number - its shops, products and photos - is
+deleted. The `/admin` panel signs in through the login handshake with no name, so an existing account is
+not renamed; it works through the ssh tunnel because only telegram's webhook needs the public address.
+
+Changing the phone number was removed: the number is the one Telegram verified, and a different number
+is a different account.
 
 <br>
 <br>
@@ -157,7 +202,6 @@ sm.sessions.Store(sessionID, SessionData{
 - TRUNCATE TABLE users RESTART IDENTITY CASCADE;
 - ngrok http --url=jeep-prepay-penholder.ngrok-free.dev 8080
 - go run ./cmd/api
-
-With `TELEGRAM_GATEWAY_TOKEN` empty the console sender prints each login code into the api's own log,
-so the whole flow can be walked without spending anything.    
+- point the bot at the tunnel, once per tunnel url (the secret is `TELEGRAM_WEBHOOK_SECRET` from `.env`):
+  `curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" -d url=https://jeep-prepay-penholder.ngrok-free.dev/api/telegram/webhook -d secret_token=$TELEGRAM_WEBHOOK_SECRET -d 'allowed_updates=["message"]'`
 - make apk-test

@@ -81,7 +81,7 @@ func callUpload(
 		t.Fatalf("multipart close: %v", err)
 	}
 
-	token, err := auth.GenerateJWT(asUserID, "+998900000000", testJWTSecret)
+	token, err := auth.GenerateJWT(asUserID, "+998900000000", 0, testJWTSecret)
 	if err != nil {
 		t.Fatalf("sign a token: %v", err)
 	}
@@ -102,7 +102,7 @@ func callRemoveImage(
 ) *httptest.ResponseRecorder {
 	t.Helper()
 
-	token, err := auth.GenerateJWT(asUserID, "+998900000000", testJWTSecret)
+	token, err := auth.GenerateJWT(asUserID, "+998900000000", 0, testJWTSecret)
 	if err != nil {
 		t.Fatalf("sign a token: %v", err)
 	}

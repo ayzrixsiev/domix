@@ -18,12 +18,13 @@ class StoresRepository {
   StoresRepository({AuthService? authService})
     : _authService = authService ?? AuthService();
 
-  // fetch every shop - public data, no login required, used to plot pins on the map
+  // fetch every shop - public data, no login required, used to plot pins on the map. a refusal throws
+  // ApiException with the status, so the map can tell a busy server from an offline phone
   Future<List<Shop>> fetchStores() async {
     final response = await apiGet(_shopsUri);
 
     if (response.statusCode != 200) {
-      throw Exception('Failed to load shops (${response.statusCode})');
+      throw ApiException(response.statusCode);
     }
 
     final List<dynamic> data = jsonDecode(response.body);
@@ -40,7 +41,7 @@ class StoresRepository {
 
     if (response.statusCode == 404) return null;
     if (response.statusCode != 200) {
-      throw Exception('Failed to load shop (${response.statusCode})');
+      throw ApiException(response.statusCode);
     }
 
     return Shop.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
@@ -63,7 +64,7 @@ class StoresRepository {
       // a 401 has already signed the user out and SessionExpiryGuard is taking them off this
       // screen, so there is nothing left to report. everything else is a real failure.
       if (AuthService.handleUnauthorized(response)) return const [];
-      throw Exception('Failed to load your shops (${response.statusCode})');
+      throw ApiException(response.statusCode);
     }
 
     final List<dynamic> data = jsonDecode(response.body);
@@ -108,17 +109,7 @@ class StoresRepository {
 
     if (response.statusCode != 201) {
       if (AuthService.handleUnauthorized(response)) return null;
-
-      String message = 'Failed to create shop';
-      try {
-        message =
-            (jsonDecode(response.body) as Map<String, dynamic>)['error']
-                as String? ??
-            message;
-      } catch (_) {
-        // body wasn't the json shape we expected; keep the generic message
-      }
-      throw Exception(message);
+      throw ApiException(response.statusCode);
     }
 
     return Shop.fromJson(jsonDecode(response.body) as Map<String, dynamic>);

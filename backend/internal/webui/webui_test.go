@@ -110,8 +110,8 @@ func TestTheAppCarriesThePublishedPolicy(t *testing.T) {
 	page := render(t, testSite(t).Page("privacy"))
 
 	version := regexp.MustCompile(`policyVersion = '([^']+)'`).FindStringSubmatch(dart)
-	if version == nil || version[1] != "2026-11-06" {
-		t.Fatalf("the app's policyVersion is %v, the site's is 2026-11-06 - move both", version)
+	if version == nil || version[1] != "2026-11-09" {
+		t.Fatalf("the app's policyVersion is %v, the site's is 2026-11-09 - move both", version)
 	}
 
 	for lang, names := range map[string][2]string{"ru": {"_leadRu", "_russian"}, "uz": {"_leadUz", "_uzbek"}} {

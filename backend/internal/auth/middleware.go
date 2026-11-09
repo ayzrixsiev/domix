@@ -19,11 +19,11 @@ const userIDContextKey contextKey = "userID"
 const bearerPrefix = "Bearer "
 
 type UserStore interface {
-	GetUserRole(ctx context.Context, id int64) (string, error)
+	GetTokenVersion(ctx context.Context, id int64) (int32, error)
 }
 
-// runs a handler only once the caller's jwt is valid *and* the account it names still exists - the
-// second half is a live database read, so a deleted account stops working immediately
+// runs a handler only once the caller's jwt is valid *and* the account it names still exists at the
+// token's version - one live database read, so a deletion or a logout stops the token immediately
 func RequireAuth(jwtSecret string, users UserStore, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
@@ -43,13 +43,19 @@ func RequireAuth(jwtSecret string, users UserStore, next http.HandlerFunc) http.
 		ctx, cancel := dbctx.WithTimeout(r.Context())
 		defer cancel()
 
-		if _, err := users.GetUserRole(ctx, claims.UserID); err != nil {
+		current, err := users.GetTokenVersion(ctx, claims.UserID)
+		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				respondUnauthorized(w, "account_deleted", "this account no longer exists")
 				return
 			}
 			log.Printf("CRITICAL: cannot verify user %d: %v", claims.UserID, err)
 			respondServiceUnavailable(w)
+			return
+		}
+		// the same answer an expired token gets, which is what lands the app on the login screen
+		if claims.Version < current {
+			respondUnauthorized(w, "unauthorized", "invalid or expired token")
 			return
 		}
 

@@ -1,0 +1,41 @@
+# The api itself, started at boot and brought back when it dies. Install beside the backup units:
+#
+#   useradd --system --home /srv/domix --shell /usr/sbin/nologin domix    # once; the backup runs as it too
+#   cd /srv/domix/backend && go build -o api ./cmd/api
+#   cp deploy/systemd/domix-api.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now domix-api
+#   journalctl -fu domix-api        # the boot log names the proxy mode, the code sender and the photo store
+#
+# Assumes the repo at /srv/domix with .env beside it. **main.go reads ../.env relative to its working
+# directory**, so WorkingDirectory is what finds the configuration - started from anywhere else the api
+# reads no .env and stops on the missing DB_URL.
+
+[Unit]
+Description=Domix api
+After=network-online.target postgresql.service
+Wants=network-online.target
+# **never give up restarting.** systemd's default stops a unit after five starts in ten seconds, and at
+# boot the api can die that often waiting for postgres - leaving it down until somebody looks.
+StartLimitIntervalSec=0
+
+[Service]
+User=domix
+Group=domix
+WorkingDirectory=/srv/domix/backend
+ExecStart=/srv/domix/backend/api
+
+# a crash is a three-second gap rather than a dead app: a log.Fatal at boot and a panic outside any
+# handler both end the process
+Restart=always
+RestartSec=3
+
+# waitForShutdown gives requests in flight ten seconds; this is that plus room to close the pool
+TimeoutStopSec=15
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target

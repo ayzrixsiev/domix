@@ -1,10 +1,17 @@
 -- name: GetUserByPhone :one
-SELECT id, name, phone, role, created_at, updated_at
+SELECT id, name, phone, role, created_at, updated_at, token_version
 FROM users
 WHERE phone = $1;
 
 -- name: GetUserRole :one
 SELECT role FROM users WHERE id = $1;
+
+-- name: GetTokenVersion :one
+-- RequireAuth's one read per request: a missing row is a deleted account, a higher value a revoked token
+SELECT token_version FROM users WHERE id = $1;
+
+-- name: BumpTokenVersion :exec
+UPDATE users SET token_version = token_version + 1 WHERE id = $1;
 
 -- name: GetUserByID :one
 SELECT id, name, phone, role FROM users WHERE id = $1;
@@ -12,7 +19,7 @@ SELECT id, name, phone, role FROM users WHERE id = $1;
 -- name: CreateUser :one
 INSERT INTO users (name, phone, role)
 VALUES ($1, $2, $3)
-RETURNING id, name, phone, role, created_at, updated_at;
+RETURNING id, name, phone, role, created_at, updated_at, token_version;
 
 -- name: UpdateUserProfile :one
 UPDATE users
@@ -20,16 +27,7 @@ SET name = $2,
     role = $3,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, name, phone, role, created_at, updated_at;
-
--- name: UpdateUserPhone :one
--- separate from UpdateUserProfile because phone is the identity column: UNIQUE, and what every login
--- looks an account up by, so the one write that touches it is the one the code flow guards.
-UPDATE users
-SET phone = $2,
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
-RETURNING id, name, phone, role, created_at, updated_at;
+RETURNING id, name, phone, role, created_at, updated_at, token_version;
 
 -- name: DeleteUser :exec
 DELETE FROM users WHERE id = $1;

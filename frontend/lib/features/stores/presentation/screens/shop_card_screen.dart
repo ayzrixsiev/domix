@@ -9,6 +9,7 @@ import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
+import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
 import 'package:frontend/core/widgets/price_tier_badge.dart';
 import 'package:frontend/core/widgets/primary_action_button.dart';
@@ -83,6 +84,7 @@ class _ShopByIdScreenState extends State<ShopByIdScreen> {
   // the one outcome worth a *different* sentence - nothing to retry. everything else is the retryable
   // branch, which never carries the exception onto the screen.
   bool _gone = false;
+  LoadFailure _failure = LoadFailure.server;
 
   @override
   void initState() {
@@ -119,6 +121,7 @@ class _ShopByIdScreenState extends State<ShopByIdScreen> {
       debugPrint('ShopByIdScreen: could not load shop ${widget.shopId}: $e');
       setState(() {
         _isLoading = false;
+        _failure = LoadFailure.of(e);
       });
     }
   }
@@ -148,10 +151,13 @@ class _ShopByIdScreenState extends State<ShopByIdScreen> {
                         subtitle: strings.shopGoneBody,
                       )
                     : EmptyStateView(
-                        icon: CupertinoIcons.wifi_exclamationmark,
+                        icon: _failure == LoadFailure.network
+                            ? CupertinoIcons.wifi_exclamationmark
+                            : CupertinoIcons.exclamationmark_circle,
                         iconColor: AppColors.danger,
                         iconBackground: AppColors.dangerSoft,
                         title: strings.shopLoadError,
+                        subtitle: strings.loadErrorHintFor(_failure),
                         action: PrimaryActionButton(
                           label: strings.retryButtonShort,
                           onTap: _load,
@@ -439,7 +445,7 @@ class _ShopCardViewState extends State<ShopCardView> {
             isFirstLoad: isFirstLoad,
             // three empty states, and telling them apart is the point: the request failed, the shop has priced
             // nothing, or this search matched nothing
-            hasFailed: controller.loadFailedFor(shop.id),
+            hasFailed: controller.loadFailureFor(shop.id) != null,
             isFiltered: _query.trim().isNotEmpty || section != null,
           ),
         ),

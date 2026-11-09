@@ -16,13 +16,12 @@ const (
 	dirPerm  = 0o755
 )
 
-// Disk writes into `root`/shops/uploads. **not the legacy implementation**: it is what runs on the laptop
-// and in `go test ./...`, which is the argument for [Storage] being an interface at all.
+// Disk is where product photos live: `root`/shops, on the laptop, in `go test ./...` and in
+// production alike. **the files are served by nginx, not by this process**, so a write has to be
+// atomic and a name has to be new - see [Disk.write] and [randomName].
 type Disk struct {
 	root string
 }
-
-var _ Storage = (*Disk)(nil)
 
 // creates the uploads directory at startup rather than on the first upload: a directory the process
 // cannot write is a misconfigured deployment, and a shop owner should not be the one to find out
@@ -39,8 +38,9 @@ func (d *Disk) Dir() string { return filepath.Join(d.root, UploadDir) }
 
 func (d *Disk) Describe() string { return "local disk at " + d.Dir() }
 
-// writes both copies and returns the master's relative path. **the master goes down last**, so no
-// reader can ever find a master whose thumbnail has not landed yet.
+// writes both copies and returns the master's relative path, which is what goes into
+// products.image_path - the thumbnail's is not stored anywhere, it is [ThumbPath] of this one.
+// **the master goes down last**, so no reader can ever find a master whose thumbnail has not landed.
 func (d *Disk) Save(_ context.Context, photo Photo) (string, error) {
 	master, thumb, err := newPaths()
 	if err != nil {
@@ -49,6 +49,9 @@ func (d *Disk) Save(_ context.Context, photo Photo) (string, error) {
 	return d.savePair(master, thumb, photo)
 }
 
+// the same, into `shops/<category>/` instead. **a second write door rather than an argument on the one
+// above**, mirroring the two deletion doors: a curated photo is drawn by every shop of a category and
+// an upload by exactly one row. the returned path passes [IsCatalogue] or nothing is written.
 func (d *Disk) SaveCatalogue(_ context.Context, category string, photo Photo) (string, error) {
 	master, thumb, err := newCataloguePaths(category)
 	if err != nil {
@@ -70,6 +73,8 @@ func (d *Disk) savePair(master, thumb string, photo Photo) (string, error) {
 	return master, nil
 }
 
+// unlinks a master and its thumbnail. a file already gone is a success; anything outside
+// [UploadDir] is [ErrOutsideUploads].
 func (d *Disk) Remove(ctx context.Context, rel string) error {
 	if !IsUpload(rel) {
 		return fmt.Errorf("%w: %q", ErrOutsideUploads, rel)
@@ -81,6 +86,8 @@ func (d *Disk) Remove(ctx context.Context, rel string) error {
 	return d.RemoveFile(ctx, rel)
 }
 
+// exactly one file, assuming nothing about its partner - the sweep collects stray thumbnails whose
+// master is already gone, which [Disk.Remove] would refuse to handle
 func (d *Disk) RemoveFile(_ context.Context, rel string) error {
 	if !IsUpload(rel) {
 		return fmt.Errorf("%w: %q", ErrOutsideUploads, rel)
@@ -88,6 +95,8 @@ func (d *Disk) RemoveFile(_ context.Context, rel string) error {
 	return d.removeAt(rel)
 }
 
+// exactly one *curated* file. **a second door with its own guard rather than relaxing the one above**:
+// neither method accepts a path of the other kind, so a bug in one sweep cannot reach the other's files.
 func (d *Disk) RemoveCatalogueFile(_ context.Context, rel string) error {
 	if !IsCatalogue(rel) {
 		return fmt.Errorf("%w: %q", ErrOutsideCatalogue, rel)
@@ -95,8 +104,8 @@ func (d *Disk) RemoveCatalogueFile(_ context.Context, rel string) error {
 	return d.removeAt(rel)
 }
 
-// walks one prefix under the images root, returning relative forward-slashed paths - directly
-// comparable with products.image_path on either backend
+// every file under `prefix` - "shops/uploads" for one sweep, "shops" for the other; only they call it.
+// returns relative forward-slashed paths, directly comparable with products.image_path.
 func (d *Disk) List(_ context.Context, prefix string) ([]Object, error) {
 	dir := filepath.Join(d.root, filepath.FromSlash(path.Clean(prefix)))
 	var out []Object

@@ -298,11 +298,12 @@ class _MapScreenState extends State<MapScreen> {
     if (controller.isLoading && controller.stores.isEmpty) {
       return _MapMessageBanner(message: strings.loadingShops, isBusy: true);
     }
-    if (controller.loadFailed && controller.stores.isEmpty) {
+    if (controller.loadFailure case final failure?
+        when controller.stores.isEmpty) {
       // the retry is the whole point of this branch: the automatic re-sync only fires on a tab switch,
       // which is not something anyone should have to guess at
       return _MapMessageBanner(
-        message: strings.mapLoadError,
+        message: strings.mapLoadErrorFor(failure),
         isError: true,
         actionLabel: strings.retryButtonShort,
         onAction: () => controller.loadStores(),
@@ -397,7 +398,8 @@ class _MapScreenState extends State<MapScreen> {
                     // only when there is nothing at all to search: a list that loaded before a failed
                     // refresh is still worth searching
                     shopsFailed:
-                        controller.loadFailed && controller.stores.isEmpty,
+                        controller.loadFailure != null &&
+                        controller.stores.isEmpty,
                     strings: strings,
                     leading: switch (widget.onExit) {
                       final VoidCallback exit => MapBarButton(

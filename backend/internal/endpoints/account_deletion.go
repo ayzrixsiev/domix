@@ -19,11 +19,14 @@ import (
 	"domix/backend/internal/verify"
 )
 
-// the /delete-account page's api - the same six-digit code the login uses, typed on a web page
-// instead of in the app. Google Play requires deletion to be reachable without installing the app.
+// the /delete-account page's code flow - the same six-digit code the login uses, typed on a web page.
 //
 //	POST /api/account-deletion/request-code  {phone}        -> a code goes to that number
 //	POST /api/account-deletion/confirm       {phone, code}  -> the account, its shops and products
+//
+// **the page no longer calls it - it uses the telegram handshake (TelegramAuth.StartDeletion) - and
+// it stays with PhoneAuth, by the same founder decision**: it is the deletion half of switching back
+// to Gateway. do not tidy it away.
 //
 // **the answer is identical whether or not an account exists, and a code is only sent when one does.**
 // anything else turns a public page into a way to ask whether a number is registered with Domix, and
@@ -35,7 +38,7 @@ type AccountDeletion struct {
 	Sender  verify.Sender
 
 	// where the owner's photos live, so deleting the account deletes them too - see eraseAccount
-	Images imagestore.Storage
+	Images *imagestore.Disk
 }
 
 // POST /api/account-deletion/request-code
@@ -164,7 +167,7 @@ func (d *AccountDeletion) accountExists(ctx context.Context, phone string) (bool
 	return true, nil
 }
 
-// long enough for a shop's worth of photos on R2 (two round trips each), short of nginx's 60s cut
+// a ceiling on unlinking an account's photos, short of nginx's 60s cut
 const photoRemovalBudget = 30 * time.Second
 
 // eraseAccount deletes an account and then the photos its owner uploaded; the app's path and the web
@@ -173,7 +176,7 @@ const photoRemovalBudget = 30 * time.Second
 // **the paths are read before the delete**, which cascades through shops and products and leaves no
 // row naming those files. **the rows go before the files**, so a failure part-way leaves orphans for
 // the sweep rather than a row naming a file that is gone.
-func eraseAccount(ctx context.Context, q *db.Queries, images imagestore.Storage, userID int64) error {
+func eraseAccount(ctx context.Context, q *db.Queries, images *imagestore.Disk, userID int64) error {
 	uploads, err := q.ListUploadedImagesOfUser(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("listing the photos of user %d: %w", userID, err)
@@ -187,9 +190,9 @@ func eraseAccount(ctx context.Context, q *db.Queries, images imagestore.Storage,
 
 // removeUploads unlinks the photos of an account that is already deleted. a photo that cannot be
 // removed does not undo anything: it is logged and left for the orphan sweep.
-func removeUploads(ctx context.Context, images imagestore.Storage, userID int64, uploads []string) {
+func removeUploads(ctx context.Context, images *imagestore.Disk, userID int64, uploads []string) {
 	// detached from the request: the account is already gone, and a client hanging up now must not
-	// strand its photos in the bucket
+	// strand its photos on disk
 	removeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), photoRemovalBudget)
 	defer cancel()
 

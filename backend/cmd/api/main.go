@@ -22,6 +22,7 @@ import (
 	"domix/backend/internal/geo"
 	"domix/backend/internal/imagestore"
 	"domix/backend/internal/ratelimit"
+	"domix/backend/internal/telegram"
 	"domix/backend/internal/verify"
 	"domix/backend/internal/webui"
 
@@ -45,8 +46,15 @@ func main() {
 	if dbURL == "" {
 		log.Fatal("Critical error: DB_URL must be configured")
 	}
-	if jwtSecret == "" {
-		log.Fatal("Critical error: JWT_SECRET must be configured")
+	// **a short secret is a forged token for any account**: one real token is enough to guess it offline.
+	// 32 bytes is HS256's own floor (RFC 7518 3.2) - `openssl rand -base64 48` writes one.
+	if len(jwtSecret) < 32 {
+		log.Fatal("Critical error: JWT_SECRET must be at least 32 bytes")
+	}
+	// required rather than defaulted: every per-address bucket below is only as true as this line
+	trustProxy, err := ratelimit.TrustProxySetting()
+	if err != nil {
+		log.Fatalf("Cannot tell who is calling: %v", err)
 	}
 
 	dbPool := mustConnectDB(dbURL)
@@ -60,8 +68,6 @@ func main() {
 
 	// opened here because deleting an account deletes its photos, not only its rows
 	productImages, imageURLs := mustOpenPhotoStorage()
-
-	addressSearch := mustOpenAddressSearch(queries)
 
 	// **signed-in callers by account, others by address**: one carrier IP fronts thousands of users.
 	// none of these guards the code-sending bill - the per-phone and daily budgets in auth.CodeManager do.
@@ -86,9 +92,17 @@ func main() {
 	// keystrokes from everybody typing at once - behind one carrier address.
 	suggestLimiter := ratelimit.New(20, 60, 10*time.Minute)
 
-	// **every miss here spends a call from a budget the whole app shares**, so this only stops one caller
-	// taking the day's share in a minute. the ceiling is geo.DailyCap, and repeats answer from geo's cache.
-	geoLimiter := ratelimit.New(0.25, 20, 30*time.Minute).Keyed(byCaller)
+	// **address search has two buckets, because it asks two questions** (backend skill). this one asks
+	// whether one client is looping: 450ms of debounce and a three-letter floor make one address five to
+	// eight lookups, retyped three or four times, and a bucket a person can feel is set wrong.
+	geoLimiter := ratelimit.New(2, 60, 10*time.Minute).Keyed(byCaller)
+
+	// and this one whether one free account can drain what every copy of the app shares. spent inside
+	// geo on a yandex call, never on a cached answer, and far above real traffic: it bounds how fast the
+	// day's budget can go, never how much. kept two hours, its refill from empty, or a quiet spell would
+	// hand it back full early.
+	geoPace := ratelimit.New(300.0/3600, 600, 2*time.Hour)
+	addressSearch := mustOpenAddressSearch(queries, geoPace)
 
 	// held in memory for a minute, which is what makes publicLimiter affordable at those numbers
 	publicReads := endpoints.NewPublicCache(time.Minute)
@@ -96,21 +110,40 @@ func main() {
 	// tighter, because every call here can spend money
 	codeLimiter := ratelimit.New(0.5, 10, 30*time.Minute)
 
-	// request-code spends money so it sits behind codeLimiter; verify only reads ram
+	// **the code flow is kept routed and called by no screen, a founder decision**: it is how the
+	// project goes back to Telegram Gateway once that is paid for. see endpoints.PhoneAuth.
 	phoneAuth := &endpoints.PhoneAuth{Queries: queries, Codes: codeMgr, Sender: codeSender, JWTSecret: jwtSecret}
 	http.HandleFunc("/api/auth/request-code", endpoints.WithJSON(codeLimiter.Wrap(phoneAuth.RequestCode)))
 	http.HandleFunc("/api/auth/verify", endpoints.WithJSON(loginLimiter.Wrap(phoneAuth.Verify)))
 
-	// the same two steps and buckets, with RequireAuth on top: this edits an account rather than opening one
-	http.HandleFunc("/api/me/phone/request-code", endpoints.WithJSON(codeLimiter.Wrap(
-		auth.RequireAuth(jwtSecret, queries, phoneAuth.RequestPhoneChangeCode))))
-	http.HandleFunc("/api/me/phone/verify", endpoints.WithJSON(loginLimiter.Wrap(
-		auth.RequireAuth(jwtSecret, queries, phoneAuth.VerifyPhoneChange))))
+	// every sign-in in every ui: the bot hands us a number telegram has verified.
+	// init holds ram for ten minutes, so it has a floor of its own; the real bound on a flood is the
+	// session manager's cap. status is polled every two seconds by everybody signing in from one
+	// carrier address and reads ram only, so its bucket is wide. the webhook's single bucket is
+	// spent inside the handler, after the secret, so only telegram can spend it.
+	botSettings := mustReadBotSettings()
+	handshakeLimiter := ratelimit.New(2, 60, 30*time.Minute)
+	pollLimiter := ratelimit.New(20, 200, 10*time.Minute)
+	telegramAuth := &endpoints.TelegramAuth{
+		Queries:   queries,
+		Sessions:  auth.NewSessionManager(),
+		Bot:       telegram.NewBot(botSettings.Token),
+		Secret:    botSettings.Secret,
+		JWTSecret: jwtSecret,
+		Images:    productImages,
+		Updates:   ratelimit.New(30, 300, time.Hour),
+	}
+	http.HandleFunc("/api/auth/init", endpoints.WithJSON(handshakeLimiter.Wrap(telegramAuth.Init)))
+	http.HandleFunc("/api/auth/status", endpoints.WithJSON(pollLimiter.Wrap(telegramAuth.Status)))
+	http.HandleFunc("/api/account-deletion/start", endpoints.WithJSON(handshakeLimiter.Wrap(telegramAuth.StartDeletion)))
+	http.HandleFunc("/api/account-deletion/status", endpoints.WithJSON(pollLimiter.Wrap(telegramAuth.DeletionStatus)))
+	http.HandleFunc("/api/telegram/webhook", endpoints.WithJSON(telegramAuth.Webhook))
 
 	authEndpoints := &endpoints.Auth{Queries: queries, Images: productImages}
 	http.HandleFunc("/api/me", endpoints.WithJSON(apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, authEndpoints.RouteMe))))
+	http.HandleFunc("/api/me/logout", endpoints.WithJSON(apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, authEndpoints.Logout))))
 
-	// the /delete-account page Google Play requires: public, so request-code takes the money bucket too
+	// the /delete-account page's code flow, kept with PhoneAuth for the switch back to Gateway
 	deletionEndpoints := &endpoints.AccountDeletion{Queries: queries, Codes: codeMgr, Sender: codeSender, Images: productImages}
 	http.HandleFunc("/api/account-deletion/request-code", endpoints.WithJSON(codeLimiter.Wrap(deletionEndpoints.RequestCode)))
 	http.HandleFunc("/api/account-deletion/confirm", endpoints.WithJSON(loginLimiter.Wrap(deletionEndpoints.Confirm)))
@@ -262,8 +295,12 @@ func main() {
 	// behind a proxy the api listens on loopback only, or a caller could skip the proxy and write
 	// X-Forwarded-For themselves.
 	addr := ":" + port
-	if ratelimit.TrustProxy() {
+	if trustProxy {
 		addr = "127.0.0.1:" + port
+		log.Printf("Behind a proxy: a caller is the last X-Forwarded-For entry, and only loopback can connect")
+	} else {
+		log.Printf("No proxy in front: a caller is the socket's address. Behind nginx or ngrok that is "+
+			"127.0.0.1 for everybody, sharing one bucket - set %s=true there", ratelimit.EnvTrustProxy)
 	}
 	srv := &http.Server{
 		Addr:              addr,
@@ -336,10 +373,21 @@ func mustOpenCodeSender() (verify.Sender, bool) {
 	}
 }
 
+// both bot values or no boot: without them nobody can sign in anywhere, and an api that boots green
+// and answers every login with a link to a bot that never replies is found by the first real user.
+func mustReadBotSettings() telegram.Settings {
+	settings := telegram.SettingsFromEnv()
+	if err := settings.Validate(); err != nil {
+		log.Fatalf("Cannot run the sign-in bot: %v", err)
+	}
+	log.Printf("Sign-in: telegram bot @%s, webhook at /api/telegram/webhook", telegram.BotUsername)
+	return settings
+}
+
 // **the policy's date and the support address have to match the app's copy** (privacy_policy.dart):
 // two copies of one document that disagree read as two different policies.
 const (
-	policyVersion = "2026-11-06"
+	policyVersion = "2026-11-09"
 	termsVersion  = "2026-10-08"
 	supportEmail  = "domix.support@gmail.com"
 )
@@ -377,8 +425,8 @@ func mustReadReviewAccount() (phone, code string) {
 }
 
 // both yandex keys or no boot: without them every shop created gets an error for an address.
-func mustOpenAddressSearch(queries *db.Queries) *geo.Service {
-	service, err := geo.New(geo.SettingsFromEnv(), geo.NewDailyQuota(queries))
+func mustOpenAddressSearch(queries *db.Queries, pace *ratelimit.Limiter) *geo.Service {
+	service, err := geo.New(geo.SettingsFromEnv(), geo.NewDailyQuota(queries), pace)
 	if err != nil {
 		log.Fatalf("Cannot configure address search: %v - set %s and %s", err, geo.EnvGeocoderKey, geo.EnvSuggestKey)
 	}
@@ -469,46 +517,23 @@ func productImagesDir() string {
 	return filepath.Join("..", "images")
 }
 
-// **storage and urls are two settings that have to agree**: photos in a bucket with urls pointing at
-// local disk is a server whose /health is green and whose every product tile is blank. so it refuses
-// to boot.
-func mustOpenPhotoStorage() (imagestore.Storage, imagestore.URLs) {
+// photos live on this server's disk, served by nginx in production and by staticFiles behind the
+// tunnel. IMAGE_BASE_URL only renames the host in front of that directory.
+func mustOpenPhotoStorage() (*imagestore.Disk, imagestore.URLs) {
 	urls := imagestore.NewURLs(os.Getenv("IMAGE_BASE_URL"))
 
-	r2cfg, wanted, err := imagestore.R2ConfigFromEnv()
+	// created at boot, not on the first upload: a directory the process cannot write is a
+	// misconfigured deployment, and this is the right moment to find out
+	disk, err := imagestore.NewDisk(productImagesDir())
 	if err != nil {
-		// a partly-filled .env: falling back to disk would lose every photo on the next redeploy
-		log.Fatalf("Cannot configure photo storage: %v", err)
+		log.Fatalf("Cannot prepare the product photo directory: %v", err)
 	}
 
-	if !wanted {
-		// created at boot, not on the first upload: a directory the process cannot write is a
-		// misconfigured deployment, and this is the right moment to find out
-		disk, err := imagestore.NewDisk(productImagesDir())
-		if err != nil {
-			log.Fatalf("Cannot prepare the product photo directory: %v", err)
-		}
-		log.Printf("Product photos: %s", disk.Describe())
-		if urls.Configured() {
-			// legitimate: nginx or a CDN serving the same directory under its own hostname
-			log.Printf("Product photo urls: %s", urls.Master("<path>"))
-		}
-		return disk, urls
+	log.Printf("Product photos: %s", disk.Describe())
+	if urls.Configured() {
+		log.Printf("Product photo urls: %s", urls.Master("<path>"))
 	}
-
-	if !urls.Configured() {
-		log.Fatalf("R2 is configured but IMAGE_BASE_URL is not - photos would be written to the "+
-			"bucket %q and served from this api's own /images/, which does not have them. "+
-			"Set IMAGE_BASE_URL to the bucket's public hostname (https://img.domix-api.uz).", r2cfg.Bucket)
-	}
-
-	bucket, err := imagestore.NewR2(r2cfg)
-	if err != nil {
-		log.Fatalf("Cannot configure R2: %v", err)
-	}
-	log.Printf("Product photos: %s", bucket.Describe())
-	log.Printf("Product photo urls: %s", urls.Master("<path>"))
-	return bucket, urls
+	return disk, urls
 }
 
 func staticFiles(prefix, dir string) http.Handler {

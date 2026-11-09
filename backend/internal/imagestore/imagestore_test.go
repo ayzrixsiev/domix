@@ -15,6 +15,7 @@ import (
 	"path"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // This package is pure - no database, no network - so these run everywhere. They pin the four things
@@ -518,5 +519,34 @@ func TestACataloguePhotoIsWrittenIntoItsOwnCategoryAndNowhereElse(t *testing.T) 
 	}
 	if err := store.RemoveCatalogueFile(ctx, rel); err != nil {
 		t.Fatalf("RemoveCatalogueFile on what SaveCatalogue wrote: %v", err)
+	}
+}
+
+// **a decode is the one step here that can take a quarter of a gigabyte**, so with every slot taken a
+// photo has to wait rather than decode beside the others
+func TestADecodeWaitsForAFreeSlot(t *testing.T) {
+	photo := encodeJPEG(t, testImage(200, 200, color.RGBA{R: 200, A: 255}))
+	for range cap(decodeSlots) {
+		decodeSlots <- struct{}{}
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := Normalize(photo)
+		done <- err
+	}()
+
+	select {
+	case <-done:
+		t.Fatal("a photo was decoded while every slot was taken")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	<-decodeSlots
+	if err := <-done; err != nil {
+		t.Fatalf("the photo failed once a slot was free: %v", err)
+	}
+	for range cap(decodeSlots) - 1 {
+		<-decodeSlots
 	}
 }

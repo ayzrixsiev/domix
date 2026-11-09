@@ -122,7 +122,7 @@ says what the category is worth, the line says whether that is moving.
 ### The history is written down, because it cannot be recomputed
 
 `shop_basket_index` is recomputed on every write that can move it, so it always answers about *now* and
-yesterday's basket is gone the moment an owner retypes a number. `basket_history` (migration `000001`) is one
+yesterday's basket is gone the moment an owner retypes a number. `basket_history` is one
 row per `(day, category)`, upserted by **`startBasketHistory`, a goroutine in `main.go`**.
 
 - **Hourly, not nightly.** A daily ticker fires at whatever moment the process happened to start, so a server

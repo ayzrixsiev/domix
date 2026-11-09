@@ -59,7 +59,7 @@ const (
 	searchOffersPerLine = 6
 
 	// three characters in at least one word - the shortest piece the trigram index can look up
-	// (migration 000002). the app enforces the same rule before sending.
+	// the app enforces the same rule before sending.
 	minSearchWordLen = 3
 
 	// an unbounded query string is an anonymous caller deciding how much work the database does

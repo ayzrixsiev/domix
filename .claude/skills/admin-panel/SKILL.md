@@ -51,24 +51,27 @@ Four pages in one shell: `/` (home), `/privacy`, `/terms`, `/delete-account`, wi
 that works *without installing the app* — the point is that somebody who has already uninstalled can
 still be forgotten.
 
-**The page performs the deletion; it does not describe where to ask for one.** It is the app's own code
-flow pointed at delete: the number, the code that arrives in Telegram, gone.
+**The page performs the deletion; it does not describe where to ask for one.** It is the app's own
+telegram handshake pointed at delete: «Подтвердить в Telegram», the bot's «Подтвердить удаление» button
+(which shares the number), gone. Nothing is typed on the page — the contact is the number, and the
+account on it is the one deleted (`TelegramAuth.StartDeletion`, `/api/account-deletion/status`).
 
-- **The answer to `request-code` is identical whether or not the number has an account**, and a code is
-  only paid for when one does — otherwise a public page is a way to ask from a browser whether any
-  number in the country is registered with Domix. The pending entry is minted either way, so the
-  cooldown cannot be used to tell the two apart either.
-- One centred card, three steps swapped by the `hidden` attribute. **`[hidden]{display:none !important}`
-  in `layout.html` is load-bearing** — `hidden` is styled by the *browser's* stylesheet, which any
-  author rule outranks, so `.btn{display:flex}` would silently un-hide every button carrying it.
+- **«no account» is said only after the number is proven**, in the bot and on the page, so the page
+  cannot be used to ask whether a number is registered: nothing before the contact touches the database.
+- **A deletion session is its own purpose** and can never be read back as a login
+  (`TestADeletionCannotBeUsedAsALogin`).
+- **The «Открыть Telegram» link is an anchor drawn after `/start` answers**, never a `window.open` from
+  script: a window opened after a fetch is a popup every browser blocks. The page then polls every two
+  seconds, at once on `visibilitychange` (a background tab's timers are slowed while the reader is in
+  Telegram), and gives up at `expires_in`.
+- Three steps swapped by the `hidden` attribute. **`[hidden]{display:none !important}` in `layout.html`
+  is load-bearing** — `hidden` is styled by the *browser's* stylesheet, which any author rule outranks,
+  so `.btn{display:flex}` would silently un-hide every button carrying it.
 - **Every dynamic string is written in all three languages** (`say`), so switching language after an
-  answer has landed does not blank it out. Every refusal the api can answer with has a sentence keyed by
-  the server's stable `code`, and an unrecognised one falls through to `default`.
-- **A wrong code is fixed in place, not on a result screen.** Only a completed deletion and an outright
-  failure reach step three; «Начать заново» is hidden on success alone, since there is no account left to
-  start again with.
-- **Confirm sends the number the server echoed back**, never the digits as typed: pending codes are keyed
-  by the canonical spelling, and anything else is a lookup miss read as "wrong code".
+  answer has landed does not blank it out. Every poll status has an outcome, and an unrecognised one
+  falls through to `failed`. «Начать заново» is hidden on `deleted` alone, since there is no account left.
+- The code-based `/api/account-deletion/request-code` and `/confirm` are still routed for the switch
+  back to Telegram Gateway (`backend` skill), and the page does not call them.
 - **Deleting an account deletes the owner's uploaded photos** (`eraseAccount`): the cascade takes the
   rows, never the files, so the paths are read first and unlinked after. The panel's own delete does the
   same through `removeUploads`. A file that fails to go is left for the orphan sweep, never undoing the
@@ -84,12 +87,17 @@ flow pointed at delete: the number, the code that arrives in Telegram, gone.
 
 ## `/admin` — the security model
 
-Served publicly as html: everything privileged is behind the API, and hiding the page would only be
-obscurity.
+**Not on the internet**: nginx refuses `/admin` and `/api/admin/`, and the panel is opened through an SSH
+tunnel (below). Everything privileged is still behind `RequireAdmin` — the tunnel is a second lock, not a
+replacement for the first.
 
-**Authentication is the app's own code flow, reused.** The page POSTs `/api/auth/request-code`, takes the
-six digits through `/api/auth/verify`, then calls `GET /api/me` to check the role. **No new credential
-exists** — no admin password, nothing to leak.
+**Authentication is the app's own telegram handshake, reused.** «Войти через Telegram» POSTs
+`/api/auth/init` with no name and `role: customer` (so an existing account is not renamed and nothing
+typed here grants anything), draws «Открыть Telegram» as an anchor to the t.me link, polls
+`/api/auth/status` every two seconds, then calls `GET /api/me` to check the role. **No new credential
+exists** — no admin password, nothing to leak. **It works through the tunnel unchanged**: the link opens
+Telegram on the laptop, the poll goes down the tunnel to the server's loopback, and only telegram's
+webhook needs the public address.
 
 **`RequireAdmin` is the whole security model, and it is one comparison.** It composes *inside*
 `auth.RequireAuth`: that one proves who the caller is, this one asks the database what role that id holds
@@ -126,10 +134,28 @@ permanent compromise rather than one that ends when the token expires.**
   UPDATE users SET role = 'shop_owner' WHERE phone = '998...';  -- revoke
   ```
 
-**ROADMAP: the panel becomes reachable only through an SSH tunnel once the server exists.** nginx answers
-`deny all` on `/admin` and `/api/admin/` (not in `deploy/nginx.conf` yet), and the panel is opened as
-`ssh -L 8081:127.0.0.1:8080 <server>` → `http://localhost:8081/admin`. That is what makes a stolen admin
-token useless from the internet. No code change is needed: the panel uses relative paths.
+**Decided: the panel is reachable only through an SSH tunnel.** nginx answers `deny all` on `/admin` and
+`/api/admin/`, so neither the page nor its api exists as far as the internet is concerned. It is opened
+with
+
+```bash
+ssh -L 8081:127.0.0.1:8080 ubuntu@<server>   # leave this terminal open
+```
+
+then `http://localhost:8081/admin` in a browser on that same laptop. The port is forwarded through the
+ssh connection, so the laptop is talking to the server's own loopback. No code change is needed: every call
+the panel makes is root-relative (`/api/admin/…`) and `/admin/` redirects with a relative `Location`, so
+both follow whatever origin served the page. The token is stored per origin, so `localhost:8081` signs in
+on its own. A request through the tunnel carries no `X-Forwarded-For`, so its per-address buckets are
+keyed `127.0.0.1` — which nothing else ever is, since nginx always writes the header. **This is what makes a stolen admin token useless from the internet** — `RequireAdmin`
+is still the authorization, the tunnel just means an attacker never reaches the door to try.
+
+**The trade-off, taken knowingly: a second administrator needs a login on the production server**, which
+is more power than the panel itself — shell, the database, the photos. Acceptable for co-founders, wrong
+for anyone else. The alternative considered and rejected for now was an nginx password (`htpasswd`) in
+front of those two paths, which grants exactly the panel and nothing more, is revocable per person by
+deleting one line, and works from any computer without server access. **Revisit the day somebody who
+should not have shell needs the panel** — it is a `location` block and one file, not a design change.
 
 **The raw price index is shown here and nowhere else.** An administrator is the reader who has been
 taught to read it; **this is not a licence to add it to `ShopResponse`.**
@@ -305,7 +331,7 @@ Panel-side: the strips live under Шаблоны (`drawStorage`, `storageStrip`)
 rather than a fact about the business.
 
 - **It does not load itself.** Every other panel rides on the timer; this one would mean walking the whole
-  store and reading every image path every 45 seconds — on R2, a paged listing over the network.
+  store and reading every image path every 45 seconds — every file in the market, on every tick.
   «Проверить» is a button.
 - **The result is rendered from `state.storage`, never written into the DOM by the click handler**, which
   is what lets opening Шаблоны again show the last scan rather than an empty strip.

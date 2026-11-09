@@ -1,0 +1,41 @@
+# The nightly backup, run by domix-backup.timer. Install both:
+#
+#   cp deploy/systemd/domix-backup.* /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now domix-backup.timer
+#   systemctl start domix-backup.service    # the first run, watched: journalctl -fu domix-backup
+#
+# Assumes the repo is at /srv/domix with .env beside it, and that the api's user owns the photo
+# directory. Paths and the user are the two things to change if yours differ.
+
+[Unit]
+Description=Domix nightly backup - database and product photos to Cloudflare R2
+Documentation=file:/srv/domix/deploy/backup.sh
+# the dump needs postgres up, and rclone needs real routing rather than just a configured interface
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# the same user as the api: it is the one that can read .env and the passphrase file and that owns
+# the photos. **not root** - a nightly job with the whole machine's rights, to read two paths.
+User=domix
+Group=domix
+WorkingDirectory=/srv/domix
+ExecStart=/srv/domix/deploy/backup.sh
+
+# a failed run reports itself through the heartbeat url inside the script, which is also what covers
+# this unit never starting at all (see the dead man's switch note in backup.sh). systemd's own
+# OnFailure= would not: it needs this service to have run.
+NoNewPrivileges=true
+# covers /tmp *and* /var/tmp, so the staged plaintext dump is private to this run and cannot outlive
+# it even if the process is killed
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+
+# the dump of a 36 MB database takes seconds and the photo sync minutes; an hour means something is
+# wedged, and a stuck run that never ends is a night with no backup and no alert
+TimeoutStartSec=1h
+
+[Install]
+WantedBy=multi-user.target

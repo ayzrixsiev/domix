@@ -18,6 +18,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"domix/backend/internal/ratelimit"
 )
 
 const (
@@ -50,6 +52,10 @@ var (
 	ErrNotFound    = errors.New("geo: nothing is there")
 	ErrUnavailable = errors.New("geo: yandex could not be asked")
 	ErrBudgetSpent = errors.New("geo: today's yandex budget is spent")
+
+	// the whole app is calling yandex faster than its pace allows. answered as the same 429 a caller's
+	// own bucket gives, since the app has one sentence for both
+	ErrBusy = errors.New("geo: yandex calls are arriving faster than the app's pace")
 )
 
 // Place is one geocoder answer. Name and Description are yandex's own split of Address, the most
@@ -137,6 +143,10 @@ type Service struct {
 	yandex *yandex
 	quota  Quota
 
+	// every copy of the app in one bucket, spent per yandex call and never per cached answer - see spend.
+	// nil is no pace, which is what the tests build.
+	pace *ratelimit.Limiter
+
 	search  *cache[[]Place]
 	suggest *cache[[]Suggestion]
 
@@ -147,7 +157,7 @@ type Service struct {
 
 // New refuses to build without both keys: an api that boots green and answers every address lookup
 // with an error is found out by the first owner creating a shop.
-func New(s Settings, quota Quota) (*Service, error) {
+func New(s Settings, quota Quota, pace *ratelimit.Limiter) (*Service, error) {
 	if s.GeocoderKey == "" {
 		return nil, fmt.Errorf("geo: %s is not set", EnvGeocoderKey)
 	}
@@ -161,13 +171,14 @@ func New(s Settings, quota Quota) (*Service, error) {
 		suggestURL:  suggestURL,
 		// one client, so every call reuses a warm tls connection
 		client: &http.Client{Timeout: 5 * time.Second},
-	}, quota), nil
+	}, quota, pace), nil
 }
 
-func newService(y *yandex, quota Quota) *Service {
+func newService(y *yandex, quota Quota, pace *ratelimit.Limiter) *Service {
 	return &Service{
 		yandex:  y,
 		quota:   quota,
+		pace:    pace,
 		search:  newCache[[]Place](cacheTTL, cacheStaleFor),
 		suggest: newCache[[]Suggestion](cacheTTL, cacheStaleFor),
 		place:   newCache[*Place](cacheTTL, cacheStaleFor),
@@ -242,9 +253,28 @@ func (s *Service) Reverse(ctx context.Context, latitude, longitude float64, lang
 	return found(place, err)
 }
 
+// RetryAfter is when a caller refused with ErrBusy may ask again.
+func (s *Service) RetryAfter() time.Duration {
+	if s.pace == nil {
+		return time.Second
+	}
+	return s.pace.RetryAfter()
+}
+
+// one key: the pace is a ceiling on the whole app, not on anybody in it
+const paceKey = "app"
+
 // a database that cannot count is a refusal too: the key is blocked for good if it goes over, and a
 // missing suggestion is the cheaper failure
 func (s *Service) spend(ctx context.Context, product string) error {
+	// **the pace is spent here, on a call, and never on a request**: a cached answer does not reach this
+	// line, so one free account looping can drain the pace without costing anybody else a lookup the
+	// cache could answer. checked before the count, which is a write to postgres.
+	if s.pace != nil && !s.pace.Allow(paceKey) {
+		log.Printf("WARNING: yandex calls are arriving faster than the app's pace - refusing a %s call", product)
+		return ErrBusy
+	}
+
 	ok, err := s.quota.Spend(ctx, product)
 	if err != nil {
 		return fmt.Errorf("%w: counting the %s call: %v", ErrUnavailable, product, err)

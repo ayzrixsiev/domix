@@ -41,6 +41,13 @@ func quotaUnderTest(t *testing.T, cap int32) (*DailyQuota, context.Context, pgx.
 	}
 	t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
 
+	// **the caps here are counted in tens, and a developer who ran the app has hundreds of real calls
+	// in this table**: without emptying it first the window is already over the cap before the test
+	// records anything. safe because the transaction is rolled back.
+	if _, err := tx.Exec(ctx, `DELETE FROM geo_calls`); err != nil {
+		t.Fatalf("clearing geo_calls (run the migrations?): %v", err)
+	}
+
 	return &DailyQuota{queries: db.New(tx), cap: cap}, ctx, tx
 }
 
@@ -76,19 +83,26 @@ func TestTheQuotaRefusesTheCallPastTheCap(t *testing.T) {
 
 // **a calendar day would hand out the whole budget again at midnight**, and nobody knows whose midnight
 // yandex counts from: only the last 24 hours bound every possible day
+// subtests rather than one body, so each transaction is rolled back before the next one opens: both
+// clear geo_calls, and two open at once would wait on each other until the context expires.
 func TestTheQuotaCountsTheLast24HoursNotACalendarDay(t *testing.T) {
-	quota, ctx, tx := quotaUnderTest(t, 10)
-	recordCalls(t, ctx, tx, productGeocoder, 23, 10)
+	t.Run("23 hours ago still counts", func(t *testing.T) {
+		quota, ctx, tx := quotaUnderTest(t, 10)
+		recordCalls(t, ctx, tx, productGeocoder, 23, 10)
 
-	if spend(t, ctx, quota, productGeocoder) {
-		t.Fatal("calls made 23 hours ago still count")
-	}
+		if spend(t, ctx, quota, productGeocoder) {
+			t.Fatal("calls made 23 hours ago still count")
+		}
+	})
 
-	quota, ctx, tx = quotaUnderTest(t, 10)
-	recordCalls(t, ctx, tx, productGeocoder, 24, 10)
-	if !spend(t, ctx, quota, productGeocoder) {
-		t.Fatal("calls a full day old no longer count")
-	}
+	t.Run("a full day old does not", func(t *testing.T) {
+		quota, ctx, tx := quotaUnderTest(t, 10)
+		recordCalls(t, ctx, tx, productGeocoder, 24, 10)
+
+		if !spend(t, ctx, quota, productGeocoder) {
+			t.Fatal("calls a full day old no longer count")
+		}
+	})
 }
 
 func TestEachKeyHasABudgetOfItsOwn(t *testing.T) {

@@ -8,12 +8,12 @@
   <section>
     <h2>1. Кто мы</h2>
     <p>Domix разрабатывает и поддерживает команда Domix (далее — «мы»), г. Ташкент, Республика Узбекистан. Мы отвечаем за данные, о которых говорится в этой политике.</p>
-    <p>Политика относится к мобильному приложению Domix для Android и к сайту domix-api.uz. Если у вас есть вопрос о ваших данных, пишите на <a href="mailto:{{.Email}}">{{.Email}}</a>.</p>
+    <p>Политика относится к мобильному приложению Domix для Android и к сайту domix-app.uz. Если у вас есть вопрос о ваших данных, пишите на <a href="mailto:{{.Email}}">{{.Email}}</a>.</p>
   </section>
   <section>
     <h2>2. Какие данные мы получаем</h2>
     <ul>
-      <li>Номер телефона. Без него нельзя войти: на номер приходит код подтверждения, и по номеру мы узнаём вас при следующем входе.</li>
+      <li>Номер телефона. Без него нельзя войти: вы подтверждаете его в Telegram кнопкой «Поделиться номером» в нашем боте, и по номеру мы узнаём вас при следующем входе.</li>
       <li>Имя. Вы указываете его сами, оно отображается в вашем профиле.</li>
       <li>Роль: покупатель или владелец магазина.</li>
       <li>Данные магазина, если вы его открываете: название, адрес, точку на карте, контактный телефон, категорию, цены и фотографии товаров. Это витрина, поэтому её видят все пользователи приложения.</li>
@@ -29,7 +29,7 @@
       <li>Место съёмки фотографий. Камера телефона записывает в снимок координаты. Когда вы загружаете фото, мы пересохраняем его, и эти сведения удаляются.</li>
       <li>Контакты, сообщения, файлы и рекламный идентификатор устройства.</li>
       <li>Ничего для рекламы и аналитики: в Domix нет систем аналитики, трекеров и рекламных библиотек.</li>
-      <li>Пароли. В Domix их нет: вход только по одноразовому коду.</li>
+      <li>Пароли. В Domix их нет: вход только через Telegram.</li>
     </ul>
     <p>Разрешение на геолокацию в карточке приложения в Google Play — от этой кнопки. Android спрашивает его в момент первого нажатия, отказаться можно, и всё остальное в приложении продолжит работать как прежде. Доступ к местоположению в фоне мы не запрашиваем.</p>
   </section>
@@ -48,25 +48,26 @@
     <h2>5. Кто ещё получает данные</h2>
     <p>Мы не продаём данные и не передаём их другим компаниям для их собственных целей. Часть работы за нас делают сервисы-подрядчики, и каждый получает только то, что нужно для его задачи:</p>
     <ul>
-      <li>Telegram Gateway — номер телефона и код, чтобы доставить код подтверждения в Telegram.</li>
+      <li>Telegram — бот Domix (@domix_manager_bot) получает от Telegram ваш номер телефона, когда вы им делитесь, и отвечает вам сообщениями о входе. Telegram знает, что вы написали нашему боту. Имя и идентификатор Telegram, которые приходят вместе с номером, мы не сохраняем.</li>
       <li>Яндекс Карты (MapKit) — запросы карты, пока она открыта.</li>
       <li>Геокодер и Геосаджест Яндекс Карт — текст, который вы вводите в поиске адреса, и координаты точки, которую вы поставили на карте, чтобы найти адрес. Запрос отправляет наш сервер, поэтому Яндекс не получает ни ваш IP-адрес, ни ваш аккаунт; ответы сервер помнит до недели, не связывая их с вами.</li>
-      <li>Cloudflare R2 — хранение фотографий товаров.</li>
+      <li>Cloudflare R2 — ночные резервные копии: фотографии товаров и зашифрованная копия базы данных.</li>
       <li>Хостинг-провайдер в Узбекистане — сервер и база данных.</li>
     </ul>
     <p>Государственным органам мы раскрываем данные только тогда, когда этого требует закон Республики Узбекистан.</p>
   </section>
   <section>
     <h2>6. Где хранятся данные</h2>
-    <p>Аккаунты, номера телефонов, магазины и списки покупок вместе с их фотографиями хранятся в базе данных на сервере в Республике Узбекистан.</p>
-    <p>Telegram, Яндекс и Cloudflare работают за пределами Узбекистана. Поэтому то, что получает каждый из них (см. раздел 5), передаётся за рубеж: номер телефона — для доставки кода, адресные запросы и координаты точки — для поиска адреса, фотографии товаров — для хранения.</p>
+    <p>Аккаунты, номера телефонов, магазины и списки покупок вместе с их фотографиями хранятся в базе данных на сервере в Республике Узбекистан. Фотографии товаров лежат на том же сервере, и приложение загружает их оттуда.</p>
+    <p>Telegram, Яндекс и Cloudflare работают за пределами Узбекистана. Поэтому то, что получает каждый из них (см. раздел 5), передаётся за рубеж: переписка с ботом Domix — для входа, адресные запросы и координаты точки — для поиска адреса, фотографии товаров и копия базы данных — для резервного хранения. Копия базы данных шифруется до того, как покидает сервер, а ключ остаётся в Узбекистане, поэтому читаемых персональных данных за рубежом нет.</p>
   </section>
   <section>
     <h2>7. Сколько мы храним данные</h2>
     <ul>
       <li>Аккаунт, магазины, товары, списки покупок и избранное — пока вы пользуетесь Domix.</li>
-      <li>Код подтверждения — 5 минут. Он хранится только в оперативной памяти сервера и только в виде хэша, поэтому от начатой и брошенной регистрации ничего не остаётся.</li>
+      <li>Незавершённый вход — 10 минут. Он хранится только в оперативной памяти сервера, поэтому от начатой и брошенной регистрации ничего не остаётся.</li>
       <li>Журналы сервера — до 90 дней.</li>
+      <li>Резервные копии базы данных и фотографий — 30 дней.</li>
     </ul>
   </section>
   <section>
@@ -75,13 +76,13 @@
     <p>Удалить аккаунт можно двумя способами:</p>
     <ul>
       <li>в приложении: «Профиль» → «Удалить аккаунт»;</li>
-      <li>без приложения: на странице <a href="/delete-account">domix-api.uz/delete-account</a>.</li>
+      <li>без приложения: на странице <a href="/delete-account">domix-app.uz/delete-account</a>.</li>
     </ul>
-    <p>Аккаунт удаляется сразу, а не по заявке. Вместе с ним удаляются ваши магазины, товары, списки покупок, загруженные фотографии и избранное. Восстановить их нельзя. В журналах сервера до 90 дней может остаться числовой номер удалённого аккаунта — без имени и телефона.</p>
+    <p>Аккаунт удаляется сразу, а не по заявке. Вместе с ним удаляются ваши магазины, товары, списки покупок, загруженные фотографии и избранное. Восстановить их нельзя. В журналах сервера до 90 дней может остаться числовой номер удалённого аккаунта — без имени и телефона. Из ночных резервных копий данные исчезают в течение 30 дней.</p>
   </section>
   <section>
     <h2>9. Безопасность</h2>
-    <p>Соединение с сервером зашифровано (TLS). Ключ сессии хранится в защищённом хранилище Android. Коды подтверждения хранятся только в виде хэша, а число попыток ввода ограничено.</p>
+    <p>Соединение с сервером зашифровано (TLS). Ключ сессии хранится в защищённом хранилище Android. Принимается только номер, принадлежащий вашему собственному аккаунту Telegram: пересланный чужой контакт не подходит.</p>
     <p>Полностью защищённых систем не бывает. Если заметили в своём аккаунте что-то подозрительное, напишите нам.</p>
   </section>
   <section>
@@ -106,12 +107,12 @@
   <section>
     <h2>1. Biz kimmiz</h2>
     <p>Domix’ni Domix jamoasi («biz») ishlab chiqadi va qo‘llab-quvvatlaydi, Toshkent shahri, O‘zbekiston Respublikasi. Ushbu siyosatda so‘z yuritilgan ma’lumotlar uchun biz javob beramiz.</p>
-    <p>Siyosat Android uchun Domix mobil ilovasiga va domix-api.uz saytiga tegishli. Ma’lumotlaringiz bo‘yicha savolingiz bo‘lsa, <a href="mailto:{{.Email}}">{{.Email}}</a> manziliga yozing.</p>
+    <p>Siyosat Android uchun Domix mobil ilovasiga va domix-app.uz saytiga tegishli. Ma’lumotlaringiz bo‘yicha savolingiz bo‘lsa, <a href="mailto:{{.Email}}">{{.Email}}</a> manziliga yozing.</p>
   </section>
   <section>
     <h2>2. Qanday ma’lumotlarni olamiz</h2>
     <ul>
-      <li>Telefon raqami. Usiz kirib bo‘lmaydi: raqamga tasdiqlash kodi keladi, keyingi safar esa sizni shu raqam orqali taniymiz.</li>
+      <li>Telefon raqami. Usiz kirib bo‘lmaydi: uni Telegram’da botimizdagi «Raqamni ulashish» tugmasi bilan tasdiqlaysiz, keyingi safar esa sizni shu raqam orqali taniymiz.</li>
       <li>Ism. Uni o‘zingiz kiritasiz, u profilingizda ko‘rinadi.</li>
       <li>Rol: xaridor yoki do‘kon egasi.</li>
       <li>Do‘kon ma’lumotlari, agar do‘kon ochsangiz: nomi, manzili, xaritadagi nuqtasi, aloqa telefoni, toifasi, mahsulotlar narxi va suratlari. Bu vitrina, shuning uchun uni ilovaning barcha foydalanuvchilari ko‘radi.</li>
@@ -127,7 +128,7 @@
       <li>Suratga olingan joy. Telefon kamerasi suratga koordinatalarni yozib qo‘yadi. Suratni yuklaganingizda biz uni qayta saqlaymiz va bu ma’lumotlar o‘chib ketadi.</li>
       <li>Kontaktlar, xabarlar, fayllar va qurilmaning reklama identifikatori.</li>
       <li>Reklama va tahlil uchun hech narsa: Domix’da tahlil tizimlari, kuzatuvchilar va reklama kutubxonalari yo‘q.</li>
-      <li>Parollar. Domix’da ular yo‘q: kirish faqat bir martalik kod orqali.</li>
+      <li>Parollar. Domix’da ular yo‘q: kirish faqat Telegram orqali.</li>
     </ul>
     <p>Google Play’dagi ilova sahifasidagi geolokatsiya ruxsati — ana shu tugma uchun. Android uni birinchi marta bosganingizda so‘raydi, rad etishingiz mumkin, qolgan hamma narsa avvalgidek ishlaydi. Fon rejimida joylashuvga ruxsat so‘ramaymiz.</p>
   </section>
@@ -146,25 +147,26 @@
     <h2>5. Ma’lumotlarni yana kim oladi</h2>
     <p>Biz ma’lumotlarni sotmaymiz va boshqa kompaniyalarga ularning o‘z maqsadlari uchun bermaymiz. Ishning bir qismini biz uchun pudratchi xizmatlar bajaradi va ularning har biri faqat o‘z vazifasi uchun keraklisini oladi:</p>
     <ul>
-      <li>Telegram Gateway — tasdiqlash kodini Telegram’ga yetkazish uchun telefon raqami va kod.</li>
+      <li>Telegram — Domix boti (@domix_manager_bot) raqamingizni ulashganingizda uni Telegram’dan oladi va sizga kirish haqidagi xabarlar bilan javob beradi. Telegram botimizga yozganingizni biladi. Raqam bilan birga keladigan Telegram ismi va identifikatorini saqlamaymiz.</li>
       <li>Yandex Xaritalar (MapKit) — xarita ochiq turganda uning so‘rovlari.</li>
       <li>Yandex Xaritalar geokoderi va geosadjesti — manzilni topish uchun manzil qidiruvida yozgan matningiz va xaritada qo‘ygan nuqtangiz koordinatalari. So‘rovni bizning serverimiz yuboradi, shuning uchun Yandex IP-manzilingizni ham, akkauntingizni ham olmaydi; server javoblarni siz bilan bog‘lamasdan bir haftagacha eslab qoladi.</li>
-      <li>Cloudflare R2 — mahsulot suratlarini saqlash.</li>
+      <li>Cloudflare R2 — tungi zaxira nusxalari: mahsulot suratlari va ma’lumotlar bazasining shifrlangan nusxasi.</li>
       <li>O‘zbekistondagi hosting-provayder — server va ma’lumotlar bazasi.</li>
     </ul>
     <p>Davlat organlariga ma’lumotlarni faqat O‘zbekiston Respublikasi qonunchiligi talab qilgandagina oshkor qilamiz.</p>
   </section>
   <section>
     <h2>6. Ma’lumotlar qayerda saqlanadi</h2>
-    <p>Akkauntlar, telefon raqamlari, do‘konlar va suratlari bilan birga xaridlar ro‘yxatlari O‘zbekiston Respublikasidagi serverda joylashgan ma’lumotlar bazasida saqlanadi.</p>
-    <p>Telegram, Yandex va Cloudflare O‘zbekistondan tashqarida ishlaydi. Shuning uchun ularning har biri oladigan narsa (5-bo‘limga qarang) chet elga uzatiladi: telefon raqami — kodni yetkazish uchun, manzil so‘rovlari va nuqta koordinatalari — manzilni qidirish uchun, mahsulot suratlari — saqlash uchun.</p>
+    <p>Akkauntlar, telefon raqamlari, do‘konlar va suratlari bilan birga xaridlar ro‘yxatlari O‘zbekiston Respublikasidagi serverda joylashgan ma’lumotlar bazasida saqlanadi. Mahsulot suratlari ham shu serverda turadi, ilova ularni shu yerdan yuklaydi.</p>
+    <p>Telegram, Yandex va Cloudflare O‘zbekistondan tashqarida ishlaydi. Shuning uchun ularning har biri oladigan narsa (5-bo‘limga qarang) chet elga uzatiladi: Domix boti bilan yozishma — kirish uchun, manzil so‘rovlari va nuqta koordinatalari — manzilni qidirish uchun, mahsulot suratlari va ma’lumotlar bazasining nusxasi — zaxira saqlash uchun. Ma’lumotlar bazasining nusxasi serverdan chiqishidan oldin shifrlanadi, kalit esa O‘zbekistonda qoladi, shuning uchun chet elda o‘qiladigan shaxsiy ma’lumotlar yo‘q.</p>
   </section>
   <section>
     <h2>7. Ma’lumotlarni qancha saqlaymiz</h2>
     <ul>
       <li>Akkaunt, do‘konlar, mahsulotlar, xaridlar ro‘yxatlari va tanlanganlar — Domix’dan foydalanar ekansiz.</li>
-      <li>Tasdiqlash kodi — 5 daqiqa. U faqat server tezkor xotirasida va faqat xesh ko‘rinishida saqlanadi, shuning uchun boshlangan va tashlab ketilgan ro‘yxatdan o‘tishdan hech narsa qolmaydi.</li>
+      <li>Tugallanmagan kirish — 10 daqiqa. U faqat server tezkor xotirasida saqlanadi, shuning uchun boshlangan va tashlab ketilgan ro‘yxatdan o‘tishdan hech narsa qolmaydi.</li>
       <li>Server jurnallari — 90 kungacha.</li>
+      <li>Ma’lumotlar bazasi va suratlarning zaxira nusxalari — 30 kun.</li>
     </ul>
   </section>
   <section>
@@ -173,13 +175,13 @@
     <p>Akkauntni ikki yo‘l bilan o‘chirish mumkin:</p>
     <ul>
       <li>ilovada: «Profil» → «Akkauntni o‘chirish»;</li>
-      <li>ilovasiz: <a href="/delete-account">domix-api.uz/delete-account</a> sahifasida.</li>
+      <li>ilovasiz: <a href="/delete-account">domix-app.uz/delete-account</a> sahifasida.</li>
     </ul>
-    <p>Akkaunt ariza bo‘yicha emas, darhol o‘chiriladi. U bilan birga do‘konlaringiz, mahsulotlaringiz, xaridlar ro‘yxatlari, yuklangan suratlar va tanlanganlar ham o‘chiriladi. Ularni tiklab bo‘lmaydi. Server jurnallarida 90 kungacha o‘chirilgan akkauntning raqamli identifikatori qolishi mumkin — ismsiz va telefonsiz.</p>
+    <p>Akkaunt ariza bo‘yicha emas, darhol o‘chiriladi. U bilan birga do‘konlaringiz, mahsulotlaringiz, xaridlar ro‘yxatlari, yuklangan suratlar va tanlanganlar ham o‘chiriladi. Ularni tiklab bo‘lmaydi. Server jurnallarida 90 kungacha o‘chirilgan akkauntning raqamli identifikatori qolishi mumkin — ismsiz va telefonsiz. Tungi zaxira nusxalaridan ma’lumotlar 30 kun ichida yo‘qoladi.</p>
   </section>
   <section>
     <h2>9. Xavfsizlik</h2>
-    <p>Server bilan aloqa shifrlangan (TLS). Sessiya kaliti Android’ning himoyalangan xotirasida saqlanadi. Tasdiqlash kodlari faqat xesh ko‘rinishida saqlanadi, kiritish urinishlari soni esa cheklangan.</p>
+    <p>Server bilan aloqa shifrlangan (TLS). Sessiya kaliti Android’ning himoyalangan xotirasida saqlanadi. Faqat o‘z Telegram akkauntingizga tegishli raqam qabul qilinadi: birovning yuborilgan kontakti o‘tmaydi.</p>
     <p>To‘liq himoyalangan tizimlar bo‘lmaydi. Akkauntingizda shubhali narsani sezsangiz, bizga yozing.</p>
   </section>
   <section>
@@ -204,12 +206,12 @@
   <section>
     <h2>1. Who we are</h2>
     <p>Domix is built and run by the Domix team (“we”), based in Tashkent, Uzbekistan. We are responsible for the data described in this policy.</p>
-    <p>This policy covers the Domix app for Android and the website domix-api.uz. If you have a question about your data, write to <a href="mailto:{{.Email}}">{{.Email}}</a>.</p>
+    <p>This policy covers the Domix app for Android and the website domix-app.uz. If you have a question about your data, write to <a href="mailto:{{.Email}}">{{.Email}}</a>.</p>
   </section>
   <section>
     <h2>2. What we collect</h2>
     <ul>
-      <li>Your phone number. You cannot sign in without it: the verification code is sent to it, and it is how we recognise you next time.</li>
+      <li>Your phone number. You cannot sign in without it: you confirm it in Telegram with the «Share my number» button in our bot, and it is how we recognise you next time.</li>
       <li>Your name. You enter it yourself, and it is shown in your profile.</li>
       <li>Your role: buyer or store owner.</li>
       <li>Store details, if you open a store: its name, address, location on the map, contact phone, category, and the prices and photos of its products. This is the storefront, so every user of the app can see it.</li>
@@ -225,7 +227,7 @@
       <li>Where a photo was taken. Phone cameras write location data into each picture. When you upload a photo, we re-save it and that data is removed.</li>
       <li>Your contacts, messages, files or your device’s advertising ID.</li>
       <li>Anything for advertising or analytics: Domix contains no analytics systems, trackers or advertising libraries.</li>
-      <li>Passwords. Domix has none: you sign in with a one-time code.</li>
+      <li>Passwords. Domix has none: you sign in through Telegram.</li>
     </ul>
     <p>The location permission on the app’s Google Play listing is for that button. Android asks for it the first time you press it, you can decline, and everything else in the app keeps working. We never ask for background location access.</p>
   </section>
@@ -244,25 +246,26 @@
     <h2>5. Who else receives data</h2>
     <p>We do not sell data, and we do not give it to other companies for their own purposes. Some of the work is done for us by service providers, and each one receives only what its task requires:</p>
     <ul>
-      <li>Telegram Gateway: your phone number and the code, to deliver the verification code in Telegram.</li>
+      <li>Telegram: the Domix bot (@domix_manager_bot) receives your phone number from Telegram when you share it, and answers you with messages about signing in. Telegram knows that you wrote to our bot. We do not keep the Telegram name and ID that arrive with the number.</li>
       <li>Yandex Maps (MapKit): map requests while the map is open.</li>
       <li>Yandex Maps Geocoder and Geosuggest: what you type into the address search and the coordinates of the point you place on the map, to find the address. Our server sends the request, so Yandex receives neither your IP address nor your account; the server remembers the answers for up to a week without linking them to you.</li>
-      <li>Cloudflare R2: storage for product photos.</li>
+      <li>Cloudflare R2: nightly backups — product photos and an encrypted copy of the database.</li>
       <li>A hosting provider in Uzbekistan: the server and the database.</li>
     </ul>
     <p>We disclose data to government authorities only when the law of the Republic of Uzbekistan requires it.</p>
   </section>
   <section>
     <h2>6. Where data is stored</h2>
-    <p>Accounts, phone numbers, stores and shopping lists with their photos are kept in a database on a server in the Republic of Uzbekistan.</p>
-    <p>Telegram, Yandex and Cloudflare operate outside Uzbekistan, so what each of them receives (see section 5) is transferred abroad: your phone number to deliver the code, address queries and map coordinates to look up addresses, and product photos for storage.</p>
+    <p>Accounts, phone numbers, stores and shopping lists with their photos are kept in a database on a server in the Republic of Uzbekistan. Product photos are kept on that same server, and the app loads them from there.</p>
+    <p>Telegram, Yandex and Cloudflare operate outside Uzbekistan, so what each of them receives (see section 5) is transferred abroad: your conversation with the Domix bot to sign in, address queries and map coordinates to look up addresses, and product photos together with a copy of the database for backup storage. The copy of the database is encrypted before it leaves the server and the key stays in Uzbekistan, so no readable personal data is held abroad.</p>
   </section>
   <section>
     <h2>7. How long we keep it</h2>
     <ul>
       <li>Your account, stores, products, shopping lists and favourites: for as long as you use Domix.</li>
-      <li>Verification codes: 5 minutes. They are held only in the server’s memory and only as a hash, so a registration you start and abandon leaves nothing behind.</li>
+      <li>Unfinished sign-ins: 10 minutes. They are held only in the server’s memory, so a registration you start and abandon leaves nothing behind.</li>
       <li>Server logs: up to 90 days.</li>
+      <li>Backups of the database and the photos: 30 days.</li>
     </ul>
   </section>
   <section>
@@ -271,13 +274,13 @@
     <p>You can delete your account in two ways:</p>
     <ul>
       <li>in the app: «Профиль» → «Удалить аккаунт» (Profile → Delete account);</li>
-      <li>without the app: at <a href="/delete-account">domix-api.uz/delete-account</a>.</li>
+      <li>without the app: at <a href="/delete-account">domix-app.uz/delete-account</a>.</li>
     </ul>
-    <p>The account is deleted immediately, not queued as a request. Your stores, products, shopping lists, uploaded photos and favourites are deleted with it, and they cannot be restored. The server logs may keep the numeric ID of the deleted account for up to 90 days, without a name or phone number.</p>
+    <p>The account is deleted immediately, not queued as a request. Your stores, products, shopping lists, uploaded photos and favourites are deleted with it, and they cannot be restored. The server logs may keep the numeric ID of the deleted account for up to 90 days, without a name or phone number. Data disappears from the nightly backups within 30 days.</p>
   </section>
   <section>
     <h2>9. Security</h2>
-    <p>Connections to our server are encrypted (TLS). Your session key is kept in Android’s secure storage. Verification codes are stored only as a hash, and the number of attempts is limited.</p>
+    <p>Connections to our server are encrypted (TLS). Your session key is kept in Android’s secure storage. Only a number that belongs to your own Telegram account is accepted: a forwarded contact is refused.</p>
     <p>No system is perfectly secure. If you notice anything suspicious in your account, let us know.</p>
   </section>
   <section>

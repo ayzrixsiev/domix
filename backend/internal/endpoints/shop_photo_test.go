@@ -43,7 +43,7 @@ func callShopPhotoUpload(
 		t.Fatalf("multipart close: %v", err)
 	}
 
-	token, err := auth.GenerateJWT(asUserID, "+998900000000", testJWTSecret)
+	token, err := auth.GenerateJWT(asUserID, "+998900000000", 0, testJWTSecret)
 	if err != nil {
 		t.Fatalf("sign a token: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestAStorefrontPhotoReachesTheVipCardAsTwoReadyMadeURLs(t *testing.T) {
 	}
 
 	// ── and taking it off clears the column and the files with it
-	token, err := auth.GenerateJWT(adminID, "+998900000000", testJWTSecret)
+	token, err := auth.GenerateJWT(adminID, "+998900000000", 0, testJWTSecret)
 	if err != nil {
 		t.Fatalf("sign a token: %v", err)
 	}
@@ -239,7 +239,7 @@ func TestGrantingVIPAsksForThePhotoWhenTheShopHasNone(t *testing.T) {
 }
 
 // the panel decides whether to nag from the shop list, so the thumbnail has to be on that row -
-// built here, because only the server knows whether photos come from this api or img.domix-api.uz
+// built here, because only the server knows whether photos come from this api or another host
 func TestTheShopListCarriesTheStorefrontThumbnail(t *testing.T) {
 	admin, ctx, tx, q := adminUnderTest(t)
 

@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"domix/backend/internal/geo"
+	"domix/backend/internal/ratelimit"
 )
 
 // Geo is address search for the map and the location picker, answered by yandex through internal/geo.
@@ -32,7 +33,7 @@ func (g *Geo) Search(w http.ResponseWriter, r *http.Request) {
 
 	places, err := g.Service.Search(r.Context(), query, lang)
 	if err != nil {
-		writeGeoError(w, r, "address search", err)
+		g.writeError(w, r, "address search", err)
 		return
 	}
 
@@ -54,7 +55,7 @@ func (g *Geo) Suggest(w http.ResponseWriter, r *http.Request) {
 
 	suggestions, err := g.Service.Suggest(r.Context(), query, lang)
 	if err != nil {
-		writeGeoError(w, r, "address suggestions", err)
+		g.writeError(w, r, "address suggestions", err)
 		return
 	}
 
@@ -85,7 +86,7 @@ func (g *Geo) Place(w http.ResponseWriter, r *http.Request) {
 
 	place, err := g.Service.Place(r.Context(), uri, lang)
 	if err != nil {
-		writeGeoError(w, r, "a suggested place", err)
+		g.writeError(w, r, "a suggested place", err)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -116,7 +117,7 @@ func (g *Geo) Reverse(w http.ResponseWriter, r *http.Request) {
 
 	place, err := g.Service.Reverse(r.Context(), latitude, longitude, lang)
 	if err != nil {
-		writeGeoError(w, r, "a pin's address", err)
+		g.writeError(w, r, "a pin's address", err)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -149,10 +150,13 @@ func readGeoLang(w http.ResponseWriter, r *http.Request) (geo.Lang, bool) {
 	return lang, ok
 }
 
-func writeGeoError(w http.ResponseWriter, r *http.Request, what string, err error) {
+func (g *Geo) writeError(w http.ResponseWriter, r *http.Request, what string, err error) {
 	switch {
 	case errors.Is(err, geo.ErrNotFound):
 		writeAPIError(w, http.StatusNotFound, "address_not_found", "nothing is there")
+	case errors.Is(err, geo.ErrBusy):
+		// byte for byte what the caller's own bucket answers, so the app needs no second sentence
+		ratelimit.Refuse(w, g.Service.RetryAfter())
 	case errors.Is(err, geo.ErrBudgetSpent):
 		// geo.Service has already said so in the log, once per refused call
 		writeAPIError(w, http.StatusServiceUnavailable, "geocoder_budget_spent", "address search is resting until tomorrow")

@@ -36,7 +36,7 @@ func accountUnderTest(t *testing.T) (*Auth, context.Context, pgx.Tx, *db.Queries
 func requestMe(t *testing.T, ctx context.Context, a *Auth, method string, asUserID int64) *httptest.ResponseRecorder {
 	t.Helper()
 
-	token, err := auth.GenerateJWT(asUserID, "+998900000000", testJWTSecret)
+	token, err := auth.GenerateJWT(asUserID, "+998900000000", 0, testJWTSecret)
 	if err != nil {
 		t.Fatalf("sign a token: %v", err)
 	}

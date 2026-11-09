@@ -292,7 +292,7 @@ func callCatalogueUpload(
 		t.Fatalf("multipart close: %v", err)
 	}
 
-	token, err := auth.GenerateJWT(asUserID, "+998900000000", testJWTSecret)
+	token, err := auth.GenerateJWT(asUserID, "+998900000000", 0, testJWTSecret)
 	if err != nil {
 		t.Fatalf("sign a token: %v", err)
 	}

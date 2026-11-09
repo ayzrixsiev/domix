@@ -34,7 +34,16 @@ internet in one bucket. The caller's address is in `X-Forwarded-For`, but **only
 trusted**: ngrok and nginx (`$proxy_add_x_forwarded_for`) *append* what they saw to whatever the caller
 sent, so the first entry is attacker-chosen and reading it hands out a fresh bucket per request.
 `ratelimit.ClientIP` reads the last entry, and only with `TRUST_PROXY=true` — which also makes the api
-listen on `127.0.0.1`, so nothing can reach it around the proxy.
+listen on `127.0.0.1`, so nothing can reach it around the proxy. The api refuses to boot without the line,
+since an unset one behind a proxy looks exactly like a working server.
+
+## A cache that is single-flight only when it succeeds
+
+A per-key lock makes callers wait for one fetch instead of starting their own, and it is easy to stop
+there. **If the fetch fails, every caller queued behind it then runs its own fetch, one after another**:
+against a dependency that hangs for five seconds, the twentieth waits a hundred, long past the app's
+timeout. It never shows in testing, where nothing is slow and nobody queues. `publicCache` and `geo`'s
+cache both hand the failure to whoever was already waiting.
 
 ## Flutter network and lists
 

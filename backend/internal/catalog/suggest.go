@@ -19,7 +19,7 @@ type suggestion struct {
 
 // how a typed query is read everywhere: lowercase, ё written as е. the catalogue spells 19 names
 // with ё and nobody types it, so both sides fold it - the trigram index is built on the folded
-// expression too (migration 000007).
+// expression too.
 func QueryWords(query string) []string {
 	return strings.Fields(strings.ReplaceAll(strings.ToLower(query), "ё", "е"))
 }

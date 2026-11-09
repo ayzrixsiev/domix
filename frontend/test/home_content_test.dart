@@ -67,7 +67,7 @@ void main() {
       expect(card.productCount, 12);
     });
 
-    // and a url the server already made absolute - photos served from R2 - is left alone
+    // and a url the server already made absolute - photos served from another host - is left alone
     test('an absolute storefront url is passed through untouched', () {
       final card = HomeContent.fromJson({
         'vip_shops': [
@@ -81,14 +81,14 @@ void main() {
             'latitude': 41.3,
             'longitude': 69.2,
             'image_thumb_url':
-                'https://img.domix-api.uz/shops/uploads/cd/cde3_thumb.jpg',
+                'https://photos.example/shops/uploads/cd/cde3_thumb.jpg',
           },
         ],
       }).vipShops.single;
 
       expect(
         card.imageThumbUrl,
-        'https://img.domix-api.uz/shops/uploads/cd/cde3_thumb.jpg',
+        'https://photos.example/shops/uploads/cd/cde3_thumb.jpg',
       );
     });
 

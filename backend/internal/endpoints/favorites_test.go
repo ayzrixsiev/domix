@@ -33,7 +33,7 @@ func favoritesUnderTest(t *testing.T) (*Favorites, context.Context, pgx.Tx, *db.
 func requestFavorite(t *testing.T, ctx context.Context, f *Favorites, method, target string, asUserID int64, handler http.HandlerFunc) *httptest.ResponseRecorder {
 	t.Helper()
 
-	token, err := auth.GenerateJWT(asUserID, "998900000000", testJWTSecret)
+	token, err := auth.GenerateJWT(asUserID, "998900000000", 0, testJWTSecret)
 	if err != nil {
 		t.Fatalf("sign a token: %v", err)
 	}

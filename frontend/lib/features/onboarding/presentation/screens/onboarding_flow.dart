@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
@@ -14,29 +14,30 @@ import 'package:frontend/core/widgets/app_form.dart';
 import 'package:frontend/core/widgets/app_page_header.dart';
 import 'package:frontend/core/widgets/circle_icon_button.dart';
 import 'package:frontend/features/onboarding/data/privacy_policy.dart';
-import 'package:frontend/core/widgets/code_input_field.dart';
 import 'package:frontend/features/onboarding/presentation/widgets/step_progress_bar.dart';
 import 'package:frontend/features/profile/data/auth_service.dart';
 import 'package:frontend/features/profile/presentation/controllers/auth_controller.dart';
 import 'package:frontend/features/profile/data/account_role.dart';
 
-/// The five screens between opening Domix for the first time and having an account.
+/// The four screens between opening Domix for the first time and having an account.
 ///
-/// **One widget rather than five routes**: every step reads or writes the same four values, and no
-/// step is independently reachable - a code only exists as the tail of a request made on the
-/// previous screen.
+/// **One widget rather than four routes**: every step reads or writes the same values, and no step is
+/// independently reachable - the last one only exists as the tail of the name and role before it.
 ///
-/// **Nothing is persisted until the code verifies** - the account does not exist until then, and the
-/// server keeps the pending code in RAM for the same reason - so abandoning the flow leaves nothing
-/// behind but the language, which is a device preference.
+/// **Nothing is persisted until telegram hands the number over** - the account does not exist until
+/// then, and the server keeps the session in RAM for the same reason - so abandoning the flow leaves
+/// nothing behind but the language, which is a device preference.
 ///
 /// **A route over the shell, not a tab inside it**: registering with the nav bar still on screen
 /// offers four other places to be while asking for a phone number. The X in the header is the one
 /// way out that does not walk back through every step.
-/// **One flow for both, because the server has one path.** `/verify` finds the account or creates
-/// it - see `upsertUser` - so signing in and registering are the same five steps and the same two
-/// requests. There is no shorter door to offer.
-enum _Step { language, policy, profile, phone, code }
+///
+/// **One flow for both, because the server has one path.** The bot's number is found or created -
+/// see `upsertUser` - so signing in and registering are the same four steps and the same button.
+enum _Step { language, policy, profile, telegram }
+
+/// How often the session is asked whether telegram has answered.
+const Duration _pollEvery = Duration(seconds: 2);
 
 /// Clear air under the footer's lowest control, over the system inset.
 const double _footerGap = 24;
@@ -59,36 +60,45 @@ class OnboardingFlow extends StatefulWidget {
   State<OnboardingFlow> createState() => _OnboardingFlowState();
 }
 
-class _OnboardingFlowState extends State<OnboardingFlow> {
+class _OnboardingFlowState extends State<OnboardingFlow>
+    with WidgetsBindingObserver {
   _Step _step = _Step.language;
 
   final _nameController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _codeController = TextEditingController();
 
   AccountRole _role = AccountRole.client;
 
   bool _policyAccepted = false;
 
-  /// The server's canonical spelling of the number, from `/request-code`. **`/verify` is called
-  /// with this and never with what was typed** - the two only agree by luck.
-  String _canonicalPhone = '';
-
-  /// Seconds left before another code may be requested; 0 means the control is live.
-  int _resendIn = 0;
-  Timer? _resendTimer;
+  /// The session being waited on, null until «Зарегистрироваться через Telegram» is pressed.
+  TelegramHandshake? _handshake;
+  DateTime _deadline = DateTime.now();
+  Timer? _pollTimer;
+  bool _polling = false;
 
   /// Already localized, because the thing that produced it knew the error code and this does not.
   String? _error;
   bool _busy = false;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
   void dispose() {
-    _resendTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _pollTimer?.cancel();
     _nameController.dispose();
-    _phoneController.dispose();
-    _codeController.dispose();
     super.dispose();
+  }
+
+  /// **The reader is in telegram while this waits, so the app is in the background**, where Android
+  /// may hold its timers back. Coming to the front asks at once instead of on the next tick.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_poll());
   }
 
   AppLocalizations get _strings => context.read<LanguageProvider>().strings;
@@ -105,23 +115,15 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   }
 
   /// The back control: one step, never the whole flow - the X in the header is what abandons it.
-  /// Null on the first step, and on [_Step.code] it goes back to the number rather than one step in
-  /// the enum - "изменить номер" is the only sensible retreat from a code that went to the wrong
-  /// phone.
+  /// Null on the first step; while the bot is being waited on it cancels the wait instead, since the
+  /// name behind it is already riding in that session.
   VoidCallback? get _onBack => switch (_step) {
     _Step.language => null,
     _Step.policy => () => _goTo(_Step.language),
     _Step.profile => () => _goTo(_Step.policy),
-    _Step.phone => () => _goTo(_Step.profile),
-    _Step.code => _changePhone,
+    _Step.telegram when _handshake != null => _cancelHandshake,
+    _Step.telegram => () => _goTo(_Step.profile),
   };
-
-  void _changePhone() {
-    _resendTimer?.cancel();
-    _codeController.clear();
-    setState(() => _resendIn = 0);
-    _goTo(_Step.phone);
-  }
 
   void _onPrimaryAction() {
     switch (_step) {
@@ -138,140 +140,112 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           setState(() => _error = _strings.nameRequiredError);
           return;
         }
-        _goTo(_Step.phone);
-      case _Step.phone:
-        _requestCode();
-      case _Step.code:
-        _verifyCode();
+        _goTo(_Step.telegram);
+      case _Step.telegram:
+        if (_handshake == null) {
+          _startHandshake();
+        } else {
+          _openTelegram();
+        }
     }
   }
 
   // ------------------------------------------------------------------------------------------
-  // the two network steps
+  // the handshake: a session, the bot, and a poll until it answers
   // ------------------------------------------------------------------------------------------
 
-  Future<void> _requestCode() async {
-    final digits = _phoneController.text.replaceAll(RegExp(r'\D'), '');
-    // nine digits is the whole national number; the 998 is drawn as a prefix and never typed
-    if (digits.length != 9) {
-      setState(() => _error = _strings.phoneInvalidError);
-      return;
-    }
-
+  Future<void> _startHandshake() async {
     setState(() {
       _busy = true;
       _error = null;
     });
 
     try {
-      final result = await context.read<AuthController>().requestCode(
-        phone: '998$digits',
-        name: _nameController.text.trim(),
-        role: _role.code,
-      );
+      final handshake = await context
+          .read<AuthController>()
+          .startTelegramSignIn(
+            name: _nameController.text.trim(),
+            role: _role.code,
+            lang: context.read<LanguageProvider>().language.code,
+          );
       if (!mounted) return;
-      _canonicalPhone = result.phone;
-      _startResendCountdown(result.resendAfter);
-      setState(() => _busy = false);
-      _goTo(_Step.code);
+      setState(() {
+        _busy = false;
+        _handshake = handshake;
+        _deadline = DateTime.now().add(Duration(seconds: handshake.expiresIn));
+      });
+      _pollTimer = Timer.periodic(_pollEvery, (_) => _poll());
+      await _openTelegram();
     } catch (error) {
       if (!mounted) return;
-
-      // **a cooldown is not a refusal, and drawing it as one is what made this a dead end.** The
-      // server only answers it while the previous code for this number is still live, so the
-      // sms is already in the reader's hands - «Изменить номер» and back onto the same number was
-      // being told "слишком много запросов" about a code sitting in their messages. The answer is
-      // the code screen with the countdown running, and no second message paid for.
-      if (error is AuthApiException && error.code == 'code_cooldown') {
-        // the server echoes the canonical spelling only on success; for nine typed digits this is
-        // the same string auth.CanonicalPhone would have produced
-        _canonicalPhone = '998$digits';
-        setState(() => _busy = false);
-        _startResendCountdown(error.retryAfter ?? 0);
-        _goTo(_Step.code);
-        return;
-      }
-
       setState(() {
         _busy = false;
         _error = _messageFor(error);
-        // a refusal that is about waiting carries how long, and the countdown is more use than
-        // the sentence on its own
-        if (error is AuthApiException && error.retryAfter != null) {
-          _startResendCountdown(error.retryAfter!);
-        }
       });
     }
   }
 
-  Future<void> _verifyCode() async {
-    final code = _codeController.text.trim();
-    if (code.length != 6) {
-      setState(() => _error = _strings.authCodeWrong);
+  /// **The return value of launchUrl is the signal, not canLaunchUrl** - see the `<queries>` block
+  /// in the manifest for why the second one lies on Android 11+.
+  Future<void> _openTelegram() async {
+    final handshake = _handshake;
+    if (handshake == null) return;
+
+    var opened = false;
+    try {
+      opened = await launchUrl(
+        handshake.link,
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {
+      opened = false;
+    }
+    if (!opened && mounted) {
+      setState(() => _error = _strings.authTelegramNotOpened);
+    }
+  }
+
+  Future<void> _poll() async {
+    final handshake = _handshake;
+    if (handshake == null || _polling) return;
+    if (DateTime.now().isAfter(_deadline)) {
+      _endHandshake(_strings.authSessionExpired);
       return;
     }
 
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-
+    _polling = true;
     try {
-      await context.read<AuthController>().verifyCode(
-        phone: _canonicalPhone,
-        code: code,
+      final status = await context.read<AuthController>().pollTelegramSignIn(
+        handshake.session,
       );
+      if (!mounted) return;
 
-      if (!mounted) return;
-      // the flow is a route now, so it has to take itself off the screen - the profile it was opened
-      // from has already rebuilt into the signed-in one underneath
-      Navigator.of(context).pop(true);
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _error = _messageFor(error);
-        // the server threw the entry away on these three, so there is nothing left for the digits on
-        // screen to match. empty boxes are what «запросите новый код» looks like - leaving them
-        // filled invites another tap on «Подтвердить» against a code that no longer exists.
-        if (error is AuthApiException && _deadCodeErrors.contains(error.code)) {
-          _codeController.clear();
-        }
-      });
+      // **a success closes the flow even if the wait was cancelled meanwhile**: the account is already
+      // signed in on this phone by then, and a flow left open over it would be asking to sign in again
+      if (status == HandshakePoll.success) {
+        _pollTimer?.cancel();
+        Navigator.of(context).pop(true);
+        return;
+      }
+      if (status == HandshakePoll.pending || _handshake != handshake) return;
+      _endHandshake(_strings.authErrorFor(status));
+    } catch (_) {
+      // a dropped poll says nothing about the sign-in: the next tick asks again
+    } finally {
+      _polling = false;
     }
   }
 
-  /// The refusals that mean the pending code is gone rather than mistyped - see CodeManager.Verify.
-  static const _deadCodeErrors = {
-    'code_attempts_exhausted',
-    'code_expired',
-    'code_not_found',
-  };
-
-  Future<void> _resendCode() async {
-    if (_resendIn > 0 || _busy) return;
-    _codeController.clear();
-    await _requestCode();
-    // _requestCode moves to the code step, which is where we already are - harmless, and it keeps
-    // the countdown and error handling in exactly one place
-  }
-
-  void _startResendCountdown(int seconds) {
-    _resendTimer?.cancel();
-    if (seconds <= 0) return;
-
-    setState(() => _resendIn = seconds);
-    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      setState(() {
-        _resendIn--;
-        if (_resendIn <= 0) timer.cancel();
-      });
+  void _endHandshake(String? error) {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    setState(() {
+      _handshake = null;
+      _error = error;
     });
   }
+
+  void _cancelHandshake() => _endHandshake(null);
 
   /// **Written copy, never the exception.** A refusal carries a code the strings file turns into a
   /// sentence; anything else - a dead socket, a proxy's HTML - is the generic failure, because what
@@ -366,8 +340,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     _Step.language => _languageStep(strings),
     _Step.policy => _policyStep(strings),
     _Step.profile => _profileStep(strings),
-    _Step.phone => _phoneStep(strings),
-    _Step.code => _codeStep(strings),
+    _Step.telegram => _telegramStep(strings),
   };
 
   /// **The error is drawn here and not in the footer**: in the footer it changed the footer's height,
@@ -640,80 +613,62 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     );
   }
 
-  Widget _phoneStep(AppLocalizations strings) {
-    return _scrollableStep(
-      children: [
-        AppFieldLabel(strings.phoneInputLabel),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _phoneController,
-          keyboardType: TextInputType.phone,
-          textInputAction: TextInputAction.done,
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(9),
-          ],
-          style: appPhoneTextStyle,
-          decoration: appFieldDecoration(
-            hint: '90 123 45 67',
-            prefix: appPhonePrefix,
-          ),
-          onChanged: (_) {
-            if (_error != null) setState(() => _error = null);
-          },
-        ),
-      ],
-    );
-  }
+  /// What the button is about to do, and once pressed, what is being waited for.
+  Widget _telegramStep(AppLocalizations strings) {
+    if (_handshake == null) {
+      return _scrollableStep(
+        body: strings.telegramStepBody,
+        children: const [],
+      );
+    }
 
-  /// The code, and under it the one thing to do when it never arrives.
-  ///
-  /// **No label over the boxes.** The line above already says a six-digit code went to this number,
-  /// and six empty boxes are not something a reader needs told what they are.
-  Widget _codeStep(AppLocalizations strings) {
     return _scrollableStep(
-      body: strings.codeSentTo(formatUzPhone(_canonicalPhone)),
       children: [
-        CodeInputField(
-          controller: _codeController,
-          onChanged: (_) {
-            if (_error != null) setState(() => _error = null);
-          },
-        ),
-        const SizedBox(height: 18),
-        Center(
-          child: _resendIn > 0
-              ? Text(
-                  strings.resendCodeIn(_resendIn),
-                  style: const TextStyle(
-                    color: AppColors.textFaint,
-                    fontSize: 13,
-                  ),
-                )
-              : TextButton(
-                  onPressed: _busy ? null : _resendCode,
-                  child: Text(
-                    strings.resendCodeButton,
-                    style: const TextStyle(
-                      color: AppColors.primaryOrange,
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+        Row(
+          children: [
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.2,
+                color: AppColors.primaryOrange,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                strings.telegramWaitingTitle,
+                style: const TextStyle(
+                  color: AppColors.textDark,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
                 ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          strings.telegramWaitingBody,
+          style: const TextStyle(
+            color: AppColors.textMuted,
+            fontSize: 13.5,
+            height: 1.45,
+          ),
         ),
       ],
     );
   }
 
   /// **Both slots are always drawn**, the back one empty on the first step, and the error lives in the
-  /// scrolling content - otherwise the footer is three heights across five steps and «Далее» walks up
+  /// scrolling content - otherwise the footer is three heights across four steps and «Далее» walks up
   /// and down the screen. The bottom inset is the system's own plus [_footerGap], so the back button
   /// does not sit on the bar the phone draws over it.
   Widget _footer(AppLocalizations strings) {
+    final waiting = _handshake != null;
     final label = switch (_step) {
-      _Step.phone => strings.sendCodeButton,
-      _Step.code => strings.verifyCodeButton,
+      _Step.telegram when waiting => strings.telegramReopenButton,
+      _Step.telegram => strings.telegramSignInButton,
       _ => strings.nextButton,
     };
     final systemInset = MediaQuery.viewPaddingOf(context).bottom;
@@ -739,8 +694,8 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                 : TextButton(
                     onPressed: _busy ? null : _onBack,
                     child: Text(
-                      _step == _Step.code
-                          ? strings.changePhoneButton
+                      _step == _Step.telegram && waiting
+                          ? strings.cancelButton
                           : strings.stepBackButton,
                       style: const TextStyle(
                         color: AppColors.textMuted,

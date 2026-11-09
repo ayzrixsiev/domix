@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
+import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
 import 'package:frontend/core/widgets/primary_action_button.dart';
 import 'package:frontend/features/home/data/home_content.dart';
@@ -186,7 +187,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ];
     }
 
-    if (home.loadFailed) {
+    if (home.failure case final failure?) {
       return [
         SliverFillRemaining(
           hasScrollBody: false,
@@ -194,12 +195,14 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Padding(
               padding: _gutter,
               child: EmptyStateView(
-                icon: CupertinoIcons.wifi_exclamationmark,
+                icon: failure == LoadFailure.network
+                    ? CupertinoIcons.wifi_exclamationmark
+                    : CupertinoIcons.exclamationmark_circle,
                 iconColor: AppColors.danger,
                 iconBackground: AppColors.dangerSoft,
                 title: strings.homeLoadError,
-                // a written sentence, never the exception - see AppLocalizations.loadErrorHint
-                subtitle: strings.loadErrorHint,
+                // a written sentence, never the exception - see AppLocalizations.loadErrorHintFor
+                subtitle: strings.loadErrorHintFor(failure),
                 action: PrimaryActionButton(
                   label: strings.retryButtonShort,
                   onTap: () => home.loadHome(force: true),

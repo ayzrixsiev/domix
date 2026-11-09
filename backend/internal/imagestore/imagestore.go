@@ -10,7 +10,6 @@
 package imagestore
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -56,37 +55,6 @@ type Object struct {
 	Modified time.Time
 }
 
-// where product photos are kept. two implementations, both used every day: [Disk] on the laptop and in
-// every test, [R2] in production, picked in main.go by whether the R2 keys are set.
-type Storage interface {
-	// writes both files and returns the *master's* relative path, which is what goes into
-	// products.image_path - the thumbnail's is not stored anywhere, it is [ThumbPath] of this one
-	Save(ctx context.Context, photo Photo) (string, error)
-
-	// the same, into `shops/<category>/` instead. **a second write door rather than an argument on the one
-	// above**, mirroring the two deletion doors: a curated photo is drawn by every shop of a category and
-	// an upload by exactly one row. the returned path passes [IsCatalogue] or nothing is written.
-	SaveCatalogue(ctx context.Context, category string, photo Photo) (string, error)
-
-	// unlinks a master and its thumbnail. a file already gone is a success; anything outside
-	// [UploadDir] is [ErrOutsideUploads].
-	Remove(ctx context.Context, rel string) error
-
-	// every file under `prefix` - "shops/uploads" for one sweep, "shops" for the other. only they call it.
-	List(ctx context.Context, prefix string) ([]Object, error)
-
-	// exactly one file, assuming nothing about its partner - the sweep collects stray thumbnails
-	// whose master is already gone, which [Remove] would refuse to handle
-	RemoveFile(ctx context.Context, rel string) error
-
-	// exactly one *curated* file. **a second door with its own guard rather than relaxing the one above**:
-	// neither method accepts a path of the other kind, so a bug in one sweep cannot reach the other's files.
-	RemoveCatalogueFile(ctx context.Context, rel string) error
-
-	// where photos are going, for one line in the startup log
-	Describe() string
-}
-
 // "uploads/3f/3f9c.jpg" pairs with "uploads/3f/3f9c_thumb.jpg". **the app is never told this rule**:
 // a build that appended "_thumb" itself would freeze the convention inside every apk on a phone.
 const thumbSuffix = "_thumb"
@@ -122,8 +90,8 @@ const DefaultURLPrefix = "/images/"
 // turns a stored relative path into the addresses the app fetches it from.
 //
 // **the database stores a relative path and never a full url**: the host differs between the tunnel, a
-// laptop and img.domix-api.uz, and a production dump would otherwise point every local tile at
-// production. the zero value serves from this api's own /images/.
+// laptop and the server, and a production dump would otherwise point every local tile at production.
+// the zero value serves from this api's own /images/.
 type URLs struct {
 	// "" means DefaultURLPrefix; otherwise an absolute origin with no trailing slash
 	base string

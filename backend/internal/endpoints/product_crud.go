@@ -34,7 +34,7 @@ type Products struct {
 	JWTSecret string
 
 	// where uploaded photos are written: local disk or a Cloudflare R2 bucket, picked in main.go
-	Images imagestore.Storage
+	Images *imagestore.Disk
 
 	// how a stored path becomes a fetchable address. zero value = this api's own /images/
 	URLs imagestore.URLs
@@ -134,7 +134,7 @@ func productResponse(urls imagestore.URLs, row db.GetProductRow) ProductResponse
 
 // the three photo fields, derived together so a response cannot carry a url with the wrong answer
 // beside it. **the database stores only the relative path**, never a full url: the host differs
-// between a laptop, the tunnel and img.domix-api.uz, and a dump would carry the wrong one.
+// between a laptop, the tunnel and the server, and a dump would carry the wrong one.
 func productImage(urls imagestore.URLs, path pgtype.Text) (url, thumb *string, own bool) {
 	if !path.Valid || path.String == "" {
 		return nil, nil, false

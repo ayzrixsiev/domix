@@ -1,13 +1,12 @@
-// The profile editor at the three rules that are not visible from the outside:
+// The profile editor at the rules that are not visible from the outside:
 //
 //   * **a role goes one way**: going back would leave a shop owner holding shops they are no longer
 //     authorized to edit, a state no screen can get them out of. The server refuses it too
 //     (`role_locked`), so what is tested is that the app explains the rule rather than offering a
 //     control the server will reject.
-//   * **the number is not a field.** It is the account's identity, and moving it costs a paid sms
-//     and a code typed back. A «Сохранить» that sometimes sends a message is a button nobody can
-//     predict, so the change lives behind its own step.
-//   * **nothing auto-submits.** The X abandons whatever step is open; «Назад» walks one step.
+//   * **the number is not editable.** It is the one telegram proved; a different number is a
+//     different account.
+//   * **nothing auto-submits.** The X abandons the form.
 
 import 'dart:convert';
 
@@ -122,42 +121,21 @@ void main() {
     expect(find.text(_strings.roleCustomer), findsNothing);
   });
 
-  testWidgets('the number is behind its own step, not a field on the form', (
+  testWidgets('the form holds the name and the role, and no number', (
     tester,
   ) async {
     await _signIn(role: 'customer');
     await _pumpEditor(tester);
 
-    // the form commits the name and the role, and says so - nothing here sends a message
     expect(find.text(_strings.saveChangesButton), findsOneWidget);
-    expect(find.text(_strings.sendCodeButton), findsNothing);
-    // the number is shown, grouped, as a row that leads somewhere
-    expect(find.text('+998 90 123 45 67'), findsOneWidget);
-
-    await tester.tap(find.text('+998 90 123 45 67'));
-    await tester.pumpAndSettle();
-
-    // now, and only now, is there a button that spends money
-    expect(find.text(_strings.newPhoneLabel), findsOneWidget);
-    expect(find.text(_strings.sendCodeButton), findsOneWidget);
-    expect(find.text(_strings.phoneChangeExplainer), findsOneWidget);
+    expect(find.text('+998 90 123 45 67'), findsNothing);
+    // one text field, the name: nothing on this screen takes a phone number
+    expect(find.byType(TextField), findsOneWidget);
   });
 
-  testWidgets('«Назад» walks one step back, the X abandons the screen', (
-    tester,
-  ) async {
+  testWidgets('the X abandons the screen', (tester) async {
     await _signIn(role: 'customer');
     await _pumpEditor(tester);
-
-    await tester.tap(find.text('+998 90 123 45 67'));
-    await tester.pumpAndSettle();
-    expect(find.text(_strings.newPhoneLabel), findsOneWidget);
-
-    await tester.tap(find.text(_strings.stepBackButton));
-    await tester.pumpAndSettle();
-    // back on the form, with the screen still open
-    expect(find.text(_strings.saveChangesButton), findsOneWidget);
-    expect(find.text(_strings.newPhoneLabel), findsNothing);
 
     await tester.tap(find.byIcon(LucideIcons.x));
     await tester.pumpAndSettle();

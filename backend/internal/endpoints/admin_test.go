@@ -61,7 +61,7 @@ func makeUser(t *testing.T, ctx context.Context, q *db.Queries, name, role strin
 func requestAdmin(t *testing.T, ctx context.Context, a *Admin, method, target string, asUserID int64, handler http.HandlerFunc) *httptest.ResponseRecorder {
 	t.Helper()
 
-	token, err := auth.GenerateJWT(asUserID, "+998900000000", testJWTSecret)
+	token, err := auth.GenerateJWT(asUserID, "+998900000000", 0, testJWTSecret)
 	if err != nil {
 		t.Fatalf("sign a token: %v", err)
 	}
@@ -791,7 +791,7 @@ func TestAnomaliesIgnoreALineTooFewShopsHavePriced(t *testing.T) {
 func requestAdminBody(t *testing.T, ctx context.Context, a *Admin, method, target string, asUserID int64, body string, handler http.HandlerFunc) *httptest.ResponseRecorder {
 	t.Helper()
 
-	token, err := auth.GenerateJWT(asUserID, "+998900000000", testJWTSecret)
+	token, err := auth.GenerateJWT(asUserID, "+998900000000", 0, testJWTSecret)
 	if err != nil {
 		t.Fatalf("sign a token: %v", err)
 	}
@@ -1242,7 +1242,7 @@ func TestATemplatePhotoIsAFileOfItsOwnCategoryOrNothing(t *testing.T) {
 		{"another category", "universal", "shops/plumbing/001.jpg", "invalid_image_path"},
 		{"an owner's upload", "universal", "shops/uploads/ab/abcd.jpg", "invalid_image_path"},
 		{"the old two-segment spelling", "universal", "universal/001.jpg", "invalid_image_path"},
-		{"a full url", "universal", "https://img.domix-api.uz/shops/universal/001.jpg", "invalid_image_path"},
+		{"a full url", "universal", "https://photos.example/shops/universal/001.jpg", "invalid_image_path"},
 		{"a traversal", "universal", "shops/universal/../../etc/passwd", "invalid_image_path"},
 		{"a folder", "universal", "shops/universal", "invalid_image_path"},
 		// the right to photograph a slot is granted by the template having no photo, so the template

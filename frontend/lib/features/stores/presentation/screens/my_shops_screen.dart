@@ -5,6 +5,7 @@ import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
+import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/core/widgets/app_page_header.dart';
 import 'package:frontend/core/widgets/circle_icon_button.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
@@ -90,14 +91,18 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
       );
     }
 
-    if (controller.myShopsFailed && controller.myShops.isEmpty) {
+    if (controller.myShopsFailure case final failure?
+        when controller.myShops.isEmpty) {
       return EmptyStateView(
-        icon: CupertinoIcons.wifi_exclamationmark,
+        icon: failure == LoadFailure.network
+            ? CupertinoIcons.wifi_exclamationmark
+            : CupertinoIcons.exclamationmark_circle,
         // the only place this state is coloured differently: same layout as the designed empty state, but
         // a failure should not look like a friendly "nothing here yet"
         iconColor: AppColors.danger,
         iconBackground: AppColors.dangerSoft,
         title: strings.myShopsLoadError,
+        subtitle: strings.loadErrorHintFor(failure),
         action: PrimaryActionButton(
           label: strings.retryButtonShort,
           onTap: () => controller.loadMyShops(),

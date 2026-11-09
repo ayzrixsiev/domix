@@ -313,13 +313,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 22),
               _ProfileButton(
                 label: _strings.okButton,
-                onTap: () {
-                  Navigator.of(dialogCtx).pop();
-                  Provider.of<AuthController>(
-                    context,
-                    listen: false,
-                  ).clearError();
-                },
+                onTap: () => Navigator.of(dialogCtx).pop(),
               ),
             ],
           ),
@@ -328,21 +322,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  /// **A route rather than a sheet**, like the registration flow it shares its steps with: editing the
-  /// number is a two-step code flow, and half of it under the nav bar reads as a half-open door.
-  /// nothing here reloads the profile - both writes go through [AuthController], which has notified
-  /// this screen by the time the route pops.
+  /// **A route rather than a sheet**, like the registration flow: a form under the nav bar reads as a
+  /// half-open door. nothing here reloads the profile - the write goes through [AuthController], which
+  /// has notified this screen by the time the route pops.
   Future<void> _openEditor() async {
-    final outcome = await ProfileEditScreen.open(context);
-    if (outcome == null || !mounted) return;
+    final saved = await ProfileEditScreen.open(context);
+    if (!saved || !mounted) return;
 
-    final strings = _strings;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(switch (outcome) {
-          ProfileEditOutcome.profileSaved => strings.accountSavedMessage,
-          ProfileEditOutcome.phoneChanged => strings.phoneChangedMessage,
-        }),
+        content: Text(_strings.accountSavedMessage),
         behavior: SnackBarBehavior.floating,
       ),
     );
