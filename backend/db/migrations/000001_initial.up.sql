@@ -911,3 +911,8 @@ SELECT pg_catalog.setval('public.product_templates_id_seq', 350, true);
 
 --
 --
+
+-- **every migration after this one runs on the same connection**, and the pg_dump header above
+-- emptied search_path for the length of the session. without this line an unqualified `users` in a
+-- later migration fails with "relation does not exist" on a database where it plainly exists.
+SET search_path = public;
