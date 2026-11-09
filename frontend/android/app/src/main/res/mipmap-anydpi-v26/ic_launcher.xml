@@ -11,11 +11,15 @@
   background: the brand orange as a colour rather than a bitmap - it is one value, and a bitmap
   would be five files that can disagree.
 
-  foreground: the cube mark alone, on transparency, 60% of the canvas wide. The size is the
-  load-bearing part. The layer is 108dp but only the central 66dp is guaranteed to survive the mask,
-  and launchers pan the rest during animations, so a glyph drawn to fill the canvas gets its edges
-  cut off on exactly the devices nobody tests on. At this scale the mark's furthest point sits 32.4dp
-  from centre against the 33dp the safe circle allows.
+  foreground: the cube mark alone, on transparency, **43% of the canvas wide**. The size is the
+  load-bearing part, and the number is smaller than it looks it should be: the layer is 108dp but a
+  launcher only ever shows the central 72dp, so whatever is drawn here is seen magnified by half.
+  43% of 108dp is 46dp inside that 72dp window - the same proportion the mark has on the legacy
+  square, which is the whole of what the brand file looks like.
+
+  **It was 60% and that was too big.** 60% of 108dp is 65dp in a 72dp window: not clipped, because
+  the 66dp safe circle still contained it, but filling the tile edge to edge while every other icon
+  on the homescreen sat inside its own. Fitting the safe zone is the floor, not the target.
 
   monochrome: the same layer; Android 13's themed icons tint its alpha to match the user's wallpaper,
   so the notch between the cubes comes through as a notch in the tinted mark.
