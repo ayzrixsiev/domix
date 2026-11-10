@@ -384,9 +384,13 @@ either; nginx, the units and the migrations are in this repo.
   an armed-looking, unarmed deployment is discovered by a rejection weeks later. **Unset both once the review
   is over**: it is a fixed code on a known number. Fill the Console's **App access** section with that
   number, that code and a screen recording.
-- **The Data Safety form.** Declare name, phone number, the store's address, product photos, shopping lists and their photos, and favourites —
-  **not device location**: the app never requests it. `docs-privacy.md` has the row-by-row answers. A
-  mismatch found later is a policy strike, not a correction.
+- **The Data Safety form.** Declare name, phone number, the store's address, product photos, shopping
+  lists and their photos, and favourites. **Location is answered "no", and not because the app never
+  asks for it — it does**: «Рядом со мной» calls `Geolocator.requestPermission()` and the manifest
+  carries `ACCESS_FINE_LOCATION`. Google's form asks what is *collected*, which it defines as sent off
+  the device, and that one coordinate moves the map and draws the blue dot and goes nowhere else.
+  Answering "no" for the wrong reason is how the follow-up question gets failed. `docs-privacy.md` has
+  the row-by-row answers. A mismatch found later is a policy strike, not a correction.
 - **Justify `ACCESS_FINE_LOCATION`** — see the MapKit permissions note.
 - **The policy exists twice**, `/privacy` and `privacy_policy.dart`, and
   `TestTheAppCarriesThePublishedPolicy` compares them line by line. `deploy/logrotate.conf` is what makes the
