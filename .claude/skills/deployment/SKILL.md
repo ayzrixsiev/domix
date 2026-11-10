@@ -75,9 +75,13 @@ spends **Geosuggest** while the address is typed (its own 1000 a day), five to e
    already points at `https://domix-app.uz/api/auth`. The wrapper is inert in a release build
    (`enabled: !kReleaseMode`), so this is about not shipping a development dependency, not a bug.
 
-**The Play reviewer cannot sign in.** Codes are gone and the Telegram handshake needs a real Telegram
-account. The founder decided on 2026-11-09 to declare it in the App access form and deal with a
-rejection if one comes. The fallback, if asked for credentials: `PLAY_REVIEW_PHONE` and
+**The Play reviewer cannot sign in, and it matters less than it looks.** Checked route by route on
+2026-11-10: the map, every shop, product search, price comparison, the categories and the home feed
+are all public. Only creating or editing a shop and saving favourites go through `RequireAuth`, so a
+reviewer can evaluate the whole customer experience without an account. **App access is still
+answered "restricted"** - a login wall that is undeclared and then met is the commonest rejection for
+a phone-verified app - with instructions that say browsing needs nothing, that the wall guards shop
+ownership alone, and that the Telegram handshake has no credentials to hand over. The fallback, if asked for credentials: `PLAY_REVIEW_PHONE` and
 `PLAY_REVIEW_CODE` still arm the code flow on the server - what is missing is a screen to type them
 into, so re-add the phone+code screen behind a long-press on the onboarding logo and hand Google the
 pair plus the gesture.
