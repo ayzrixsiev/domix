@@ -101,6 +101,9 @@ wrong again:
   push.
 - **The timezone is `Asia/Tashkent`**, because `domix-backup.timer` fires on local time and names
   each night's objects after the local date.
+- **Log retention is installed and `/etc/logrotate.d/nginx` was deleted** - two rules over one path
+  rotate twice and the policy's ninety days become neither file's number. `journald.conf` carries
+  `MaxRetentionSec=90day` for the api's own output, which logrotate never sees.
 - **ufw allows 22, 80 and 443 and nothing else.** Postgres and the api listen on loopback only, so
   this is a second lock rather than the first.
 
