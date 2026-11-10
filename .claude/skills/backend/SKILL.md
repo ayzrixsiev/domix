@@ -13,7 +13,7 @@ description: >
 ## Auth — the telegram bot handshake
 
 Every sign-in (the app, the `/admin` panel) and the public `/delete-account` page go through
-`@domix_manager_bot`: the caller starts a session, opens `https://t.me/domix_manager_bot?start=<id>`,
+`@domix_manager_bot`, except the Play reviewer's, which takes the code flow below: the caller starts a session, opens `https://t.me/domix_manager_bot?start=<id>`,
 taps the bot's one request-contact button, and polls until the session holds the outcome. Telegram
 hands over a number it verified itself, so nothing is sent and nothing is paid for. `docs.md` walks it
 step by step.
@@ -68,26 +68,35 @@ step by step.
 - **The number cannot be changed.** It is the one telegram proved; a different number is a different
   account. The phone-change endpoints and `UpdateUserPhone` were removed.
 
-### The code flow — kept, routed, called by nobody
+### The code flow — the second sign-in, armed for the Play reviewer
 
-`POST /api/auth/request-code` + `/api/auth/verify`, and `/api/account-deletion/request-code` +
-`/confirm`, over `auth.CodeManager` and `internal/verify` (Telegram Gateway). **No screen calls them,
-and they stay: a founder decision against CLAUDE.md's delete-dead-code rule.** Gateway wants a $100
-minimum balance; the day it is paid, these are how the project switches back. The comments on
-`PhoneAuth` and `AccountDeletion` say so — do not tidy them away. What they rely on, for that day:
+`POST /api/auth/request-code` + `/api/auth/verify`, over `auth.CodeManager` and `internal/verify`
+(Telegram Gateway). The app calls them from «Войти по номеру телефона», a route off the onboarding's
+last step. Gateway wants a $100 minimum balance, and until it is paid **only the Play review account
+gets a code**: `CodeManager.CanDeliver` is false for every other number while the sender is unpaid, and
+`request-code` answers it with a 403 `sms_unavailable` before anything is minted, which the app draws
+as a note pointing at Telegram. **Without that refusal the console sender would answer `sent` for any
+number and print its code into the production journal.** `code_not_sent` keeps meaning a paid provider
+tried and failed. Paying for Gateway is the whole switch-over: neither the handler nor the screen changes.
+
+`/api/account-deletion/request-code` + `/confirm` are the deletion half, which no page calls since
+`/delete-account` uses the bot; they stay, a founder decision against CLAUDE.md's delete-dead-code rule,
+and refuse undeliverable numbers the same way, ahead of the account lookup so the refusal says nothing
+about who is registered. What the flow relies on:
 
 - `VERIFY_SENDER` overrides the sender; empty means telegram if `TELEGRAM_GATEWAY_TOKEN` is set,
   otherwise console. **Naming a provider without its credentials is a boot error, never a quiet fall
-  back to console.** The console sender logs the code.
+  back to console.** The console sender logs the code, which is why nothing unpaid reaches it but the
+  review account, whose code `NeedsDelivery` skips sending at all.
 - **Pending codes live in RAM, never in Postgres**, behind a mutex and a plain map rather than
   `sync.Map`, because every wrong guess is a read-modify-write. A code dies after `CodeTTL` or
   `MaxCodeAttempts` wrong guesses; `CodePurpose` keeps a login code off the deletion endpoint.
 - Three send budgets — **per phone**, **per address**, and **`dailySendBudget` across every caller** —
   because every send costs money. The daily one lives in RAM and anyone can drain it; accepted while
-  nothing uses the flow. **ROADMAP: the counter moves to Postgres** before it carries real traffic again.
-- `PLAY_REVIEW_PHONE` / `PLAY_REVIEW_CODE` arm a fixed code for one number on this flow. **The app no
-  longer has a code screen, so a reviewer cannot reach it**; the founder has deferred the question, so
-  it stays as it is.
+  nothing is paid for. **ROADMAP: the counter moves to Postgres** before Gateway is paid for.
+- `PLAY_REVIEW_PHONE` / `PLAY_REVIEW_CODE` arm a fixed code for one number (`WithReviewAccount`): it is
+  never delivered and never budgeted, and the account it opens is an ordinary signup. On a laptop with
+  the console sender the review number is the only one that signs in by code.
 
 ## Rate limits — the unit is an account, not an address
 

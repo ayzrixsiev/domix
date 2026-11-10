@@ -126,12 +126,50 @@ class AppLocalizations {
   String get telegramReopenButton =>
       isRu ? 'Открыть Telegram снова' : "Telegram'ni qayta ochish";
 
+  // the other door from step 4, a route of its own: a number, then a code
+  String get phoneSignInButton =>
+      isRu ? 'Войти по номеру телефона' : 'Telefon raqami bilan kirish';
+  String get phoneSignInTitle => isRu ? 'Вход по номеру' : 'Raqam bilan kirish';
+  String get phoneInputLabel => isRu ? 'Номер телефона' : 'Telefon raqami';
+  String get phoneInvalidError => isRu
+      ? 'Введите номер из 9 цифр, например 90 123 45 67'
+      : "9 xonali raqam kiriting, masalan 90 123 45 67";
+  String get sendCodeButton => isRu ? 'Получить код' : 'Kodni olish';
+
+  /// **Not an error**: every number but the Play review account hears this until Gateway is paid.
+  String get smsUnavailable => isRu
+      ? 'Вход по номеру телефона скоро будет доступен. Пока войдите через Telegram.'
+      : 'Telefon raqami bilan kirish tez orada ishga tushadi. Hozircha Telegram orqali kiring.';
+
+  String codeSentTo(String phone) => isRu
+      ? 'Мы отправили шестизначный код на $phone'
+      : "Biz $phone raqamiga olti xonali kod yubordik";
+  String get verifyCodeButton => isRu ? 'Подтвердить' : 'Tasdiqlash';
+  String get resendCodeButton =>
+      isRu ? 'Отправить код ещё раз' : 'Kodni qayta yuborish';
+
+  /// The countdown on the resend control. Seconds, because a minute is the whole wait.
+  String resendCodeIn(int seconds) => isRu
+      ? 'Отправить повторно можно через $seconds с'
+      : "Qayta yuborish $seconds soniyadan keyin";
+  String get changePhoneButton =>
+      isRu ? 'Изменить номер' : "Raqamni o'zgartirish";
+
   /// Every refusal the sign-in can end in, as written copy: the api's error `code` on a refused
   /// request, or the poll's `status` on a finished one. **A code, not the server's sentence**: the
   /// server speaks one language and the app the reader's, and an unknown one has to land somewhere.
   String authErrorFor(String? code) => switch (code) {
     'name_too_long' => nameTooLongError,
-    'rate_limited' || 'busy' => authTooManyRequests,
+    'invalid_phone' => phoneInvalidError,
+    'rate_limited' ||
+    'busy' ||
+    'code_cooldown' ||
+    'code_quota' => authTooManyRequests,
+    'code_not_sent' => authCodeNotSent,
+    'code_invalid' => authCodeWrong,
+    'code_expired' => authCodeExpired,
+    'code_not_found' => authCodeNotFound,
+    'code_attempts_exhausted' => authAttemptsExhausted,
     'expired' => authSessionExpired,
     'not_uzbek' => authNotUzbek,
     'telegram_not_opened' => authTelegramNotOpened,
@@ -151,6 +189,21 @@ class AppLocalizations {
   String get authTelegramNotOpened => isRu
       ? 'Не удалось открыть Telegram. Попробуйте ещё раз.'
       : "Telegram'ni ochib bo'lmadi. Qayta urinib ko'ring.";
+  String get authCodeWrong => isRu
+      ? 'Неверный код. Проверьте и введите снова.'
+      : "Kod noto'g'ri. Tekshirib qayta kiriting.";
+  String get authCodeExpired => isRu
+      ? 'Срок действия кода истёк. Запросите новый.'
+      : "Kod muddati tugadi. Yangisini so'rang.";
+  String get authCodeNotFound => isRu
+      ? 'Код не найден. Запросите новый.'
+      : "Kod topilmadi. Yangisini so'rang.";
+  String get authAttemptsExhausted => isRu
+      ? 'Слишком много попыток. Запросите новый код.'
+      : "Urinishlar juda ko'p. Yangi kod so'rang.";
+  String get authCodeNotSent => isRu
+      ? 'Не удалось отправить код. Попробуйте ещё раз.'
+      : "Kodni yuborib bo'lmadi. Qayta urinib ko'ring.";
   String get authGenericError => isRu
       ? 'Что-то пошло не так. Попробуйте ещё раз.'
       : "Nimadir xato ketdi. Qayta urinib ko'ring.";

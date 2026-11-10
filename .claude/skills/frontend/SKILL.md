@@ -51,6 +51,14 @@ asked first and ride in the session (`AuthService.startTelegramSignIn`).
 - **A `success` closes the flow even after «Отменить»**: the account is signed in on the phone by then.
 - Telegram being absent needs no handling — everyone in Uzbekistan has it; a link that does not open
   says «Не удалось открыть Telegram» and the button opens it again.
+- **«Войти по номеру телефона» is a door off the last step, never a step** (`PhoneSignInFlow`): two
+  more steps in `_Step` would tell every telegram user they are on step four of six. It sits on the
+  footer's back row (`FlowFooter.aside`) so the footer keeps one height, and is its own full-screen
+  route: the number, then the code, with «Изменить номер» as the step back. The name and role ride
+  into `requestCode` as they ride into the telegram session, and `verifyCode` lands through the same
+  `_saveSignIn` and `_applyAccount` as a telegram `success`. Until Gateway is paid only the Play
+  review account gets a code; **`sms_unavailable` is drawn as an `AppNoteLine`, never as an error**,
+  because nothing the reader typed is wrong.
 - **The number cannot be edited.** `ProfileEditScreen` is the name and the role; the number is the one
   Telegram proved, and a different number is a different account.
 

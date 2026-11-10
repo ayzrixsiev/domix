@@ -118,9 +118,10 @@ Parent context in this function means that we need to pass it an existing ctx wh
 which Telegram itself has verified, so there is no code, no sms and nothing to pay for.
 
 The six-digit Telegram Gateway code flow (`POST /api/auth/request-code`, `/api/auth/verify`,
-`internal/verify`, `auth.CodeManager`) is **still in the code and still routed, but no screen calls it**.
-Gateway needs a $100 balance; the day that is paid, those are how the project switches back. Keeping
-them is a founder decision against the delete-dead-code rule - do not tidy them away.
+`internal/verify`, `auth.CodeManager`) is the second door, «Войти по номеру телефона» under the
+Telegram button. Gateway needs a $100 balance, and until that is paid **only the Play review account
+gets a code**: every other number is answered `sms_unavailable` and the app points it back to
+Telegram. Paying for Gateway is the whole switch-over.
 
 ## SessionManager
 

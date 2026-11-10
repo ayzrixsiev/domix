@@ -74,17 +74,23 @@ spends **Geosuggest** while the address is typed (its own 1000 a day), five to e
 2. **Delete `DevicePreview` from `frontend/lib/main.dart`, then `make release`.** `env.prod.json`
    already points at `https://domix-app.uz/api/auth`. The wrapper is inert in a release build
    (`enabled: !kReleaseMode`), so this is about not shipping a development dependency, not a bug.
+3. **Rebuild the api and arm the review account before any build with the phone route ships.** **The
+   order matters**: an api older than the `sms_unavailable` refusal answers `sent` to every number
+   and prints its code into the journal. Pull into `/srv/domix`, `cd backend && go build -o api
+   ./cmd/api`, put `PLAY_REVIEW_PHONE` and `PLAY_REVIEW_CODE` into `/srv/domix/.env` (table below),
+   `sudo systemctl restart domix-api`, and `journalctl -u domix-api` shows `Play review account is
+   ARMED`. Then sign in with the pair once on the release build, by number, before handing it to Google.
 
-**The Play reviewer cannot sign in, and it matters less than it looks.** Checked route by route on
-2026-11-10: the map, every shop, product search, price comparison, the categories and the home feed
-are all public. Only creating or editing a shop and saving favourites go through `RequireAuth`, so a
-reviewer can evaluate the whole customer experience without an account. **App access is still
-answered "restricted"** - a login wall that is undeclared and then met is the commonest rejection for
-a phone-verified app - with instructions that say browsing needs nothing, that the wall guards shop
-ownership alone, and that the Telegram handshake has no credentials to hand over. The fallback, if asked for credentials: `PLAY_REVIEW_PHONE` and
-`PLAY_REVIEW_CODE` still arm the code flow on the server - what is missing is a screen to type them
-into, so re-add the phone+code screen behind a long-press on the onboarding logo and hand Google the
-pair plus the gesture.
+**The Play reviewer signs in with a code, through «Войти по номеру телефона».** Browsing needs no
+account at all - checked route by route on 2026-11-10: the map, every shop, product search, price
+comparison, the categories and the home feed are public; only creating or editing a shop and saving
+favourites go through `RequireAuth`. **App access is still answered "restricted"**, since a login wall
+that is undeclared and then met is the commonest rejection for a phone-verified app, and the **Sign in
+details** declaration only saves with working credentials: the Telegram handshake has none, so Google is
+given the review account instead - the `PLAY_REVIEW_PHONE` number and the `PLAY_REVIEW_CODE` code, typed
+on the phone route off the onboarding's last step. Every other number is told SMS sign-in is not on
+yet, because Gateway is unpaid (`backend` skill). **Both variables have to be on the server before the
+build is submitted**, or the reviewer meets the same refusal.
 
 ### How the server was actually built, 2026-11-09
 
@@ -244,8 +250,8 @@ What the api reads, and what happens without it. **Fatal** stops the boot with t
 | `YANDEX_GEOCODER_KEY`, `YANDEX_SUGGEST_KEY` | the two keys | fatal if empty; **a wrong key is silent** — every lookup 502s and the log says `http 403` |
 | `TELEGRAM_BOT_TOKEN` | `@domix_manager_bot`'s token from BotFather | fatal if empty or malformed; **a revoked token is silent** — every sign-in opens the bot and its replies fail with `sendMessage answered 401` in the journal. Never in the app, never in a log line |
 | `TELEGRAM_WEBHOOK_SECRET` | `openssl rand -hex 32` | fatal unless 32–256 of `A-Za-z0-9_-`; **disagreeing with the one given to `setWebhook` is silent** — every update is a 401 and `getWebhookInfo` shows it |
-| `VERIFY_SENDER`, `TELEGRAM_GATEWAY_TOKEN` | empty | only the kept code flow reads them, and no screen calls it: empty picks the console sender with one WARNING at boot. Naming `telegram` without the token is fatal |
-| `PLAY_REVIEW_PHONE`, `PLAY_REVIEW_CODE` | the founder has deferred this | fatal if one is set alone. They arm the code flow only, which the app no longer shows |
+| `VERIFY_SENDER`, `TELEGRAM_GATEWAY_TOKEN` | empty, until Gateway's $100 is paid | the code flow's sender: empty picks the console sender with one WARNING at boot, and then `request-code` refuses every number but the review account with `sms_unavailable`. Naming `telegram` without the token is fatal |
+| `PLAY_REVIEW_PHONE`, `PLAY_REVIEW_CODE` | `998901110000`, `424242` | fatal if one is set alone, or if the number is not a canonical UZ one or the code not six digits. **Unset is silent**: the reviewer's number is refused like everybody's and the review stops on the phone screen. The boot log says `Play review account is ARMED` |
 | `IMAGES_DIR` | `/srv/domix/images` | defaults to `../images`, which from the unit's working directory is the same path. Unwritable is fatal; **disagreeing with nginx's `alias` is silent** — green `/health`, blank tiles |
 | `IMAGE_BASE_URL` | empty | wrong is silent: every photo url points elsewhere. The boot log prints the prefix |
 | `PORT` | empty (8080) | anything else is a 502 on every request through nginx |
@@ -378,16 +384,15 @@ either; nginx, the units and the migrations are in this repo.
 - **The public site is built**: `/`, `/privacy`, `/terms`, `/delete-account`, in ru, uz and en, served by the
   API (see the `admin-panel` skill). The Console takes `https://domix-app.uz/privacy` and
   `https://domix-app.uz/delete-account`.
-- **App access instructions — open again, deferred by the founder.** Sign-in is now the Telegram bot only,
-  and the app has no code screen, so the mechanism below cannot be reached from the app. It is kept as it
-  is. What it was: `PLAY_REVIEW_PHONE` and `PLAY_REVIEW_CODE` arm one
-  number whose six digits are fixed and never delivered, so a reviewer with no Telegram account can get past
-  the login wall; otherwise the submission is refused as broken, one of the most common rejections for
-  phone-verified apps. `auth.CodeManager.WithReviewAccount` is the whole of it, and the account it opens is
-  an ordinary `customer`. **Set both or neither** — the api refuses to boot on half a configuration, because
-  an armed-looking, unarmed deployment is discovered by a rejection weeks later. **Unset both once the review
-  is over**: it is a fixed code on a known number. Fill the Console's **App access** section with that
-  number, that code and a screen recording.
+- **App access instructions.** `PLAY_REVIEW_PHONE` and `PLAY_REVIEW_CODE` arm one number whose six
+  digits are fixed and never delivered, so a reviewer with no Telegram account gets past the login wall
+  through «Войти по номеру телефона»; otherwise the submission is refused as broken, one of the most common
+  rejections for phone-verified apps. `auth.CodeManager.WithReviewAccount` is the whole of it, and the
+  account it opens is an ordinary signup. **Set both or neither** — the api refuses to boot on half a
+  configuration, because an armed-looking, unarmed deployment is discovered by a rejection weeks later.
+  Fill **App access** / **Sign in details** with that number, that code, the line «Профиль → Войти →
+  … → Войти по номеру телефона, введите номер, затем код; SMS и Telegram не нужны», and a screen
+  recording.
 - **The Data Safety form.** Declare name, phone number, the store's address, product photos, shopping
   lists and their photos, and favourites. **Location is answered "no", and not because the app never
   asks for it — it does**: «Рядом со мной» calls `Geolocator.requestPermission()` and the manifest

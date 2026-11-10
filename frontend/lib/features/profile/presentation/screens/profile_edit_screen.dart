@@ -5,7 +5,6 @@ import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:provider/provider.dart';
 
 import 'package:frontend/core/constants/app_colors.dart';
-import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/widgets/app_form.dart';
@@ -240,7 +239,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           onTap: () {},
         ),
         const SizedBox(height: 10),
-        _Note(strings.roleLockedNote, icon: LucideIcons.lock),
+        AppNoteLine(strings.roleLockedNote, icon: LucideIcons.lock),
       ];
     }
 
@@ -255,7 +254,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         ),
         const SizedBox(height: 10),
       ],
-      _Note(strings.roleChangeWarning, icon: LucideIcons.triangle_alert),
+      AppNoteLine(strings.roleChangeWarning, icon: LucideIcons.triangle_alert),
     ];
   }
 
@@ -268,48 +267,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         label: strings.saveChangesButton,
         busy: _busy,
         onTap: _busy ? null : _save,
-      ),
-    );
-  }
-}
-
-/// A quiet line of consequence under a control - what the choice above costs, or why it is fixed.
-/// Deliberately not [AppErrorLine]: nothing has gone wrong, and danger colours here would read as a
-/// refusal of a form nobody has submitted yet.
-class _Note extends StatelessWidget {
-  const _Note(this.text, {required this.icon});
-
-  final String text;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
-        borderRadius: BorderRadius.circular(AppRadius.xs),
-        border: Border.all(color: AppColors.hairline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 15, color: AppColors.textMuted),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                text,
-                style: const TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 12.5,
-                  height: 1.35,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

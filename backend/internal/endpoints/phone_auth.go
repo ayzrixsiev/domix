@@ -25,10 +25,10 @@ import (
 //	POST /api/auth/request-code  {phone, name, role} -> a code is delivered to that number
 //	POST /api/auth/verify        {phone, code}       -> the account is created or found, jwt back
 //
-// **no screen calls this any more, and it stays: a founder decision, against CLAUDE.md's dead-code
-// rule.** every sign-in goes through the telegram bot (TelegramAuth) because Gateway wants a $100
-// balance; this flow, internal/verify and auth.CodeManager are how the project switches back the day
-// that is paid. it works and it is tested - do not tidy it away.
+// the app's second sign-in, «Войти по номеру телефона», under the telegram button. **until Gateway's
+// $100 balance is paid only the Play review account gets a code** (auth.CodeManager.CanDeliver); every
+// other number is refused with sms_unavailable and the app sends it to telegram. paying for it is the
+// whole switch-over: neither this nor the screen changes.
 type PhoneAuth struct {
 	Queries   *db.Queries
 	Codes     *auth.CodeManager
@@ -64,6 +64,12 @@ func (p *PhoneAuth) RequestCode(w http.ResponseWriter, r *http.Request) {
 	phone, ok := auth.CanonicalPhone(req.Phone)
 	if !ok {
 		writeAPIError(w, http.StatusBadRequest, "invalid_phone", "that is not an uzbek phone number")
+		return
+	}
+
+	// before anything is minted: an unpaid sender would answer "sent" and print the code into the log
+	if !p.Codes.CanDeliver(phone) {
+		writeAPIError(w, http.StatusForbidden, "sms_unavailable", "sms sign-in is not available yet, use telegram")
 		return
 	}
 

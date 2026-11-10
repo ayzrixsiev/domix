@@ -539,3 +539,48 @@ func TestWithNoReviewAccountEveryLoginStillGoesThroughTheProvider(t *testing.T) 
 		t.Fatalf("the provider was called %d times, want once", calls)
 	}
 }
+
+// **What stands between an unpaid sender and production.** The console sender succeeds by printing the
+// code into the server log, so without this every number would be told "sent" and wait for a code that
+// goes nowhere. The review account needs no delivery and goes through either way; with a paid provider,
+// so does everybody.
+func TestOnlyTheReviewAccountGetsACodeWhileDeliveryIsUnpaid(t *testing.T) {
+	const reviewPhone, reviewCode = "998901110000", "424242"
+
+	for _, tc := range []struct {
+		name  string
+		paid  bool
+		phone string
+		want  int
+	}{
+		{"unpaid, the review account", false, reviewPhone, http.StatusOK},
+		{"unpaid, anybody else", false, "998901234567", http.StatusForbidden},
+		{"paid, the review account", true, reviewPhone, http.StatusOK},
+		{"paid, anybody else", true, "998901234567", http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			phoneAuth, sender := codeUnderTest()
+			phoneAuth.Codes = auth.NewCodeManager(tc.paid).WithReviewAccount(reviewPhone, reviewCode)
+
+			rec := postAuth(t, phoneAuth.RequestCode, "/api/auth/request-code",
+				map[string]string{"phone": tc.phone, "name": "Аброр", "role": "customer"})
+			if rec.Code != tc.want {
+				t.Fatalf("request-code answered %d, want %d: %s", rec.Code, tc.want, rec.Body.String())
+			}
+			if tc.want != http.StatusOK {
+				if got := errorCode(t, rec); got != "sms_unavailable" {
+					t.Fatalf("the refusal was %q, want sms_unavailable", got)
+				}
+				if _, _, calls := sender.delivered(); calls != 0 {
+					t.Fatalf("a refused number reached the provider %d times", calls)
+				}
+				// nothing was minted, so the verify half has nothing to find either
+				verified := postAuth(t, phoneAuth.Verify, "/api/auth/verify",
+					map[string]string{"phone": tc.phone, "code": "000000"})
+				if got := errorCode(t, verified); got != "code_not_found" {
+					t.Fatalf("verifying a refused number answered %q, want code_not_found", got)
+				}
+			}
+		})
+	}
+}

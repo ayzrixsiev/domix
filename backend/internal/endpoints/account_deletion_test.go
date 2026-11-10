@@ -182,3 +182,21 @@ func TestTheDeletionPageRefusesSomethingThatIsNotAPhoneNumber(t *testing.T) {
 		t.Fatalf("a code was paid for on a string that is not a number")
 	}
 }
+
+// The deletion half of the same rule: an unpaid sender would print the code into the log and answer
+// "sent". Refused before the account lookup, so the answer is the same for a registered number and a stranger.
+func TestTheDeletionCodeIsRefusedWhileDeliveryIsUnpaid(t *testing.T) {
+	sender := &fakeSender{}
+	d := &AccountDeletion{Codes: auth.NewCodeManager(false), Sender: sender}
+
+	rec := postDeletion(t, d.RequestCode, `{"phone":"998901110011"}`)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("request-code answered %d, want 403: %s", rec.Code, rec.Body.String())
+	}
+	if got := errorCode(t, rec); got != "sms_unavailable" {
+		t.Fatalf("the refusal was %q, want sms_unavailable", got)
+	}
+	if _, _, calls := sender.delivered(); calls != 0 {
+		t.Fatalf("a refused number reached the provider %d times", calls)
+	}
+}

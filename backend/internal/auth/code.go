@@ -88,6 +88,7 @@ type CodeManager struct {
 	// both nil when sends are free - see NewCodeManager
 	budget *ratelimit.Limiter // per phone
 	daily  *ratelimit.Limiter // every caller together
+	paid   bool
 
 	// zero unless WithReviewAccount armed it
 	review reviewAccount
@@ -118,7 +119,7 @@ type pendingCode struct {
 // NewCodeManager builds the store for the codes in flight. **paidDelivery is the only thing the per-phone
 // budget is for**: with the console sender there is no bill to protect. the cooldown applies either way.
 func NewCodeManager(paidDelivery bool) *CodeManager {
-	m := &CodeManager{pending: make(map[string]*pendingCode)}
+	m := &CodeManager{pending: make(map[string]*pendingCode), paid: paidDelivery}
 	if paidDelivery {
 		m.budget = ratelimit.New(phoneSendRate, phoneSendBurst, phoneSendMemory)
 		m.daily = ratelimit.New(dailySendRate, dailySendBudget, 48*time.Hour)
@@ -135,9 +136,11 @@ func NewCodeManager(paidDelivery bool) *CodeManager {
 // Issue instead of a fresh one, and [NeedsDelivery] answers false for it. Without it the review stops on
 // the login screen, since the code goes to a Telegram account the reviewer does not have.
 //
-// **it is a login bypass on a known number, so unset the two variables once the review is over.** what
-// it can reach is bounded by what a signup can: never admin. Call it at startup only, before the server
-// accepts a request.
+// **it stays armed for as long as the Play listing names it, which is not only the first review**: every
+// update is reviewed against the stored sign-in details, so unsetting it after the first one fails the
+// next. It goes once the declaration does, and that is when Gateway is paid and every number can sign in.
+// It is a login bypass on a known number, bounded by what a signup can reach: never admin. Call it at
+// startup only, before the server accepts a request.
 func (m *CodeManager) WithReviewAccount(phone, code string) *CodeManager {
 	if phone == "" || code == "" {
 		return m
@@ -152,6 +155,15 @@ func (m *CodeManager) NeedsDelivery(phone string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return !m.isReview(phone)
+}
+
+// CanDeliver reports whether a code minted for this number can reach whoever asked for it. **Without a
+// paid provider only the review account can**: the console sender succeeds by printing the code into the
+// server log, so every other number would be told "sent" and wait for a code that never comes.
+func (m *CodeManager) CanDeliver(phone string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.paid || m.isReview(phone)
 }
 
 // call under the lock. the empty check keeps an unarmed manager from matching the empty string

@@ -25,8 +25,8 @@ import (
 //	POST /api/account-deletion/confirm       {phone, code}  -> the account, its shops and products
 //
 // **the page no longer calls it - it uses the telegram handshake (TelegramAuth.StartDeletion) - and
-// it stays with PhoneAuth, by the same founder decision**: it is the deletion half of switching back
-// to Gateway. do not tidy it away.
+// it stays with PhoneAuth, by the founder's decision**: it is the deletion half of switching back to
+// Gateway. do not tidy it away. like PhoneAuth it refuses every number it cannot deliver to.
 //
 // **the answer is identical whether or not an account exists, and a code is only sent when one does.**
 // anything else turns a public page into a way to ask whether a number is registered with Domix, and
@@ -58,6 +58,12 @@ func (d *AccountDeletion) RequestCode(w http.ResponseWriter, r *http.Request) {
 	phone, ok := auth.CanonicalPhone(req.Phone)
 	if !ok {
 		writeAPIError(w, http.StatusBadRequest, "invalid_phone", "that is not an uzbek phone number")
+		return
+	}
+
+	// ahead of the account lookup, so the refusal is the same for every number and tells nobody who is registered
+	if !d.Codes.CanDeliver(phone) {
+		writeAPIError(w, http.StatusForbidden, "sms_unavailable", "sms is not available yet, use telegram")
 		return
 	}
 

@@ -37,16 +37,35 @@ class HandshakePoll {
   bool get isPending => status == pending;
 }
 
+/// What `/api/auth/request-code` answered.
+class CodeRequestResult {
+  const CodeRequestResult({required this.phone, required this.resendAfter});
+
+  /// `998XXXXXXXXX` - the server's spelling, which is what `/verify` has to be called with.
+  final String phone;
+
+  /// Seconds before another code may be asked for.
+  final int resendAfter;
+}
+
 /// A refusal from the auth endpoints, carrying **the server's machine-readable code** rather than
 /// its sentence: the server answers in one language and the app draws the reader's, so the mapping
 /// to written copy belongs in AppLocalizations.authErrorFor.
 class AuthApiException implements Exception {
-  const AuthApiException(this.code);
+  const AuthApiException(this.code, {this.retryAfter});
 
-  factory AuthApiException.from(Map<String, dynamic> body) =>
-      AuthApiException(body['code'] as String? ?? 'server_error');
+  factory AuthApiException.from(Map<String, dynamic> body) {
+    final retryAfter = body['retry_after'];
+    return AuthApiException(
+      body['code'] as String? ?? 'server_error',
+      retryAfter: retryAfter is int ? retryAfter : null,
+    );
+  }
 
   final String code;
+
+  /// Seconds to wait, on `code_cooldown`: the code already sent is still live.
+  final int? retryAfter;
 
   @override
   String toString() => 'AuthApiException($code)';
@@ -294,6 +313,63 @@ class AuthService {
     final status = body['status'] as String? ?? 'server_error';
     if (status != HandshakePoll.success) return HandshakePoll(status);
 
+    return HandshakePoll(status, me: await _saveSignIn(body));
+  }
+
+  // -----------------------------------------------------------------------------------------------
+  // Signing in with a code: POST /api/auth/request-code, then POST /api/auth/verify. Until Gateway
+  // is paid for the server answers `sms_unavailable` to every number but the Play review account.
+  // -----------------------------------------------------------------------------------------------
+
+  /// `/api/auth/request-code`. The name and role ride with the number, as they ride in a telegram
+  /// session, because `/verify` carries the code alone.
+  ///
+  /// **Never retried on a timeout**: every send is a paid message, and a blind retry bills twice and
+  /// delivers two codes of which only the second works.
+  Future<CodeRequestResult> requestCode({
+    required String phone,
+    required String name,
+    required String role,
+  }) async {
+    final response = await appHttpClient
+        .post(
+          Uri.parse('${ApiConfig.serverRoot}/api/auth/request-code'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'phone': phone, 'name': name, 'role': role}),
+        )
+        .timeout(const Duration(seconds: 20));
+
+    final body = _decodeBody(response);
+    if (response.statusCode != 200) throw AuthApiException.from(body);
+
+    return CodeRequestResult(
+      phone: body['phone'] as String? ?? phone,
+      resendAfter: body['resend_after'] as int? ?? 60,
+    );
+  }
+
+  /// `/api/auth/verify`. Saved before this returns, like a telegram `success`.
+  Future<MeResult> verifyCode({
+    required String phone,
+    required String code,
+  }) async {
+    final response = await appHttpClient
+        .post(
+          Uri.parse('${ApiConfig.serverRoot}/api/auth/verify'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'phone': phone, 'code': code}),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    final body = _decodeBody(response);
+    if (response.statusCode != 200) throw AuthApiException.from(body);
+
+    return _saveSignIn(body);
+  }
+
+  /// The `{token, user}` both sign-ins end in, saved. **One reader for both**, so a code and the bot
+  /// cannot land in two different notions of signed in.
+  Future<MeResult> _saveSignIn(Map<String, dynamic> body) async {
     final token = body['token'] as String?;
     final user = body['user'];
     if (token == null || token.isEmpty || user is! Map<String, dynamic>) {
@@ -312,7 +388,7 @@ class AuthService {
       name: me.name,
       phone: me.phone,
     );
-    return HandshakePoll(status, me: me);
+    return me;
   }
 
   /// A body that is not JSON is a proxy's error page rather than our API - ngrok answers an offline

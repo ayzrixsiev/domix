@@ -4,8 +4,8 @@ import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/constants/app_theme.dart';
 
-/// The four pieces every multi-step form in the app is built from: a field's decoration, the label
-/// over it, the refusal under it, and the full-width button at the foot.
+/// The pieces every multi-step form in the app is built from: a field's decoration, the label over
+/// it, the refusal or the note under it, and the full-width button at the foot.
 ///
 /// **They live here because two flows wear them**: registration and the profile editor ask for the
 /// same name and number, and a second copy of an input's border colours is how two screens that must
@@ -36,6 +36,29 @@ InputDecoration appFieldDecoration({required String hint, Widget? prefix}) {
         : const BoxConstraints(minWidth: 0, minHeight: 0),
   );
 }
+
+/// The `+998` in front of a phone field. **Drawn, never typed**: the field takes the nine national
+/// digits alone, so there is one spelling to type and nothing to strip.
+const Widget appPhonePrefix = Padding(
+  padding: EdgeInsets.fromLTRB(14, 0, 8, 0),
+  child: Text(
+    '+998',
+    style: TextStyle(
+      color: AppColors.textDark,
+      fontSize: 16,
+      fontWeight: FontWeight.w700,
+    ),
+  ),
+);
+
+/// What a phone field's own text looks like - wider tracking, so nine digits can be checked against
+/// the number in somebody's head.
+const TextStyle appPhoneTextStyle = TextStyle(
+  color: AppColors.textDark,
+  fontSize: 16,
+  fontWeight: FontWeight.w600,
+  letterSpacing: 0.4,
+);
 
 /// `998901234567` as `+998 90 123 45 67`.
 ///
@@ -99,6 +122,48 @@ class AppErrorLine extends StatelessWidget {
                 message,
                 style: const TextStyle(
                   color: AppColors.danger,
+                  fontSize: 12.5,
+                  height: 1.35,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A quiet line under a control: what a choice costs, why something is fixed, or why a door is shut
+/// for now. Deliberately not [AppErrorLine]: nothing has gone wrong, and danger colours would read as
+/// a mistake the reader has to fix.
+class AppNoteLine extends StatelessWidget {
+  const AppNoteLine(this.text, {super.key, required this.icon});
+
+  final String text;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppRadius.xs),
+        border: Border.all(color: AppColors.hairline),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 15, color: AppColors.textMuted),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                text,
+                style: const TextStyle(
+                  color: AppColors.textMuted,
                   fontSize: 12.5,
                   height: 1.35,
                   fontWeight: FontWeight.w500,

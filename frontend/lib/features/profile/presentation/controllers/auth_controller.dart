@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../../data/auth_service.dart';
 import '../screens/profile_screen.dart';
 
-// the signed-in account: the telegram handshake that opens it, the checks that keep it honest, the
-// ways it ends
+// the signed-in account: the telegram handshake or the code that opens it, the checks that keep it
+// honest, the ways it ends
 class AuthController extends ChangeNotifier {
   // one controller for the app's life; the factory hands back the same instance every time
   static final AuthController _instance = AuthController._internal();
@@ -172,6 +172,23 @@ class AuthController extends ChangeNotifier {
       _applyAccount(role: me.role, name: me.name, phone: me.phone);
     }
     return poll.status;
+  }
+
+  /// The other door: a code to [phone], with the name and role the telegram session would carry.
+  /// Nothing is stored here either. Throws [AuthApiException]; `sms_unavailable` is every number but
+  /// the Play review account until Gateway is paid for.
+  Future<CodeRequestResult> requestCode({
+    required String phone,
+    required String name,
+    required String role,
+  }) {
+    return _authService.requestCode(phone: phone, name: name, role: role);
+  }
+
+  /// The code back for a session, landing exactly where a telegram `success` does.
+  Future<void> verifyCode({required String phone, required String code}) async {
+    final me = await _authService.verifyCode(phone: phone, code: code);
+    _applyAccount(role: me.role, name: me.name, phone: me.phone);
   }
 
   /// Saves an edited profile: the display name, and the one role change the server allows

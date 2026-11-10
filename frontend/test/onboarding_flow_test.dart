@@ -181,8 +181,9 @@ void main() {
     expect(find.text('open'), findsOneWidget);
   });
 
-  // The last step is one button, and the name and role typed before it are what it carries: a
-  // name left empty is refused on the profile step, never discovered after Telegram has opened.
+  // The last step is the telegram button, and the name and role typed before it are what it carries:
+  // a name left empty is refused on the profile step, never discovered after Telegram has opened.
+  // **The phone route is a door off it, not a step**, so the counter still ends at four.
   testWidgets('the last step is the telegram button, behind a name', (
     tester,
   ) async {
@@ -205,7 +206,8 @@ void main() {
     expect(find.text(_strings.telegramSignInButton), findsOneWidget);
     expect(find.text(_strings.telegramStepBody), findsOneWidget);
     expect(find.text(_strings.stepCounter(4, 4)), findsOneWidget);
-    // and no field for a number anywhere in the flow
+    expect(find.text(_strings.phoneSignInButton), findsOneWidget);
+    // the number is asked on the phone route, never in this flow
     expect(find.byType(TextField), findsNothing);
   });
 

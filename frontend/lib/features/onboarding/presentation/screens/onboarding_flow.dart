@@ -14,6 +14,8 @@ import 'package:frontend/core/widgets/app_form.dart';
 import 'package:frontend/core/widgets/app_page_header.dart';
 import 'package:frontend/core/widgets/circle_icon_button.dart';
 import 'package:frontend/features/onboarding/data/privacy_policy.dart';
+import 'package:frontend/features/onboarding/presentation/screens/phone_sign_in_flow.dart';
+import 'package:frontend/features/onboarding/presentation/widgets/flow_layout.dart';
 import 'package:frontend/features/onboarding/presentation/widgets/step_progress_bar.dart';
 import 'package:frontend/features/profile/data/auth_service.dart';
 import 'package:frontend/features/profile/presentation/controllers/auth_controller.dart';
@@ -34,13 +36,13 @@ import 'package:frontend/features/profile/data/account_role.dart';
 ///
 /// **One flow for both, because the server has one path.** The bot's number is found or created -
 /// see `upsertUser` - so signing in and registering are the same four steps and the same button.
+///
+/// **The phone route is a door off the last step, never a step**: it would tell every telegram user
+/// they are on step four of six. It is what the Play reviewer signs in through.
 enum _Step { language, policy, profile, telegram }
 
 /// How often the session is asked whether telegram has answered.
 const Duration _pollEvery = Duration(seconds: 2);
-
-/// Clear air under the footer's lowest control, over the system inset.
-const double _footerGap = 24;
 
 class OnboardingFlow extends StatefulWidget {
   const OnboardingFlow({super.key});
@@ -247,6 +249,16 @@ class _OnboardingFlowState extends State<OnboardingFlow>
 
   void _cancelHandshake() => _endHandshake(null);
 
+  /// The name and role ride into the code request as they ride into a telegram session.
+  Future<void> _openPhoneSignIn() async {
+    final signedIn = await PhoneSignInFlow.open(
+      context,
+      name: _nameController.text.trim(),
+      role: _role.code,
+    );
+    if (signedIn && mounted) Navigator.of(context).pop(true);
+  }
+
   /// **Written copy, never the exception.** A refusal carries a code the strings file turns into a
   /// sentence; anything else - a dead socket, a proxy's HTML - is the generic failure, because what
   /// a reader can do about it is the same either way.
@@ -343,57 +355,11 @@ class _OnboardingFlowState extends State<OnboardingFlow>
     _Step.telegram => _telegramStep(strings),
   };
 
-  /// **The error is drawn here and not in the footer**: in the footer it changed the footer's height,
-  /// which moved «Далее» up and down between steps.
-  ///
-  /// [body] is for the two steps that have something to say. The others are the controls alone,
-  /// because "выберите язык" above a list of two languages explains nothing the list does not.
-  ///
-  /// **Centred when it fits, scrolled when it does not**: the minimum height is the viewport's, so
-  /// two controls centre themselves instead of hanging off the top edge, and the long step and a
-  /// raised keyboard fall back to an ordinary scroll.
-  Widget _scrollableStep({String? body, required List<Widget> children}) {
-    const padding = EdgeInsets.fromLTRB(20, 20, 20, 8);
-
-    return LayoutBuilder(
-      builder: (context, constraints) => SingleChildScrollView(
-        padding: padding,
-        physics: const BouncingScrollPhysics(),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            minHeight: constraints.maxHeight - padding.vertical,
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (_error != null) ...[
-                AppErrorLine(_error!),
-                const SizedBox(height: 16),
-              ],
-              if (body != null) ...[
-                Text(
-                  body,
-                  style: const TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 13.5,
-                    height: 1.45,
-                  ),
-                ),
-                const SizedBox(height: 18),
-              ],
-              ...children,
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _languageStep(AppLocalizations strings) {
     final current = context.watch<LanguageProvider>().language;
 
-    return _scrollableStep(
+    return FlowStepBody(
+      error: _error,
       // the one step that has to say what it is: somebody who opened Профиль expecting an account
       // is looking at two language tiles and no explanation of why
       body: strings.onboardingNoAccount,
@@ -426,7 +392,8 @@ class _OnboardingFlowState extends State<OnboardingFlow>
   Widget _policyStep(AppLocalizations strings) {
     final language = context.watch<LanguageProvider>().language;
 
-    return _scrollableStep(
+    return FlowStepBody(
+      error: _error,
       children: [
         Text(
           strings.onboardingPolicyTitle,
@@ -583,7 +550,8 @@ class _OnboardingFlowState extends State<OnboardingFlow>
   }
 
   Widget _profileStep(AppLocalizations strings) {
-    return _scrollableStep(
+    return FlowStepBody(
+      error: _error,
       children: [
         AppFieldLabel(strings.nameInputLabel),
         const SizedBox(height: 8),
@@ -616,13 +584,15 @@ class _OnboardingFlowState extends State<OnboardingFlow>
   /// What the button is about to do, and once pressed, what is being waited for.
   Widget _telegramStep(AppLocalizations strings) {
     if (_handshake == null) {
-      return _scrollableStep(
+      return FlowStepBody(
+        error: _error,
         body: strings.telegramStepBody,
         children: const [],
       );
     }
 
-    return _scrollableStep(
+    return FlowStepBody(
+      error: _error,
       children: [
         Row(
           children: [
@@ -660,10 +630,8 @@ class _OnboardingFlowState extends State<OnboardingFlow>
     );
   }
 
-  /// **Both slots are always drawn**, the back one empty on the first step, and the error lives in the
-  /// scrolling content - otherwise the footer is three heights across four steps and «Далее» walks up
-  /// and down the screen. The bottom inset is the system's own plus [_footerGap], so the back button
-  /// does not sit on the bar the phone draws over it.
+  /// The telegram step's footer carries the other door on the back row: the phone route, which
+  /// is no step of its own, so the counter stays at four for everybody who never opens it.
   Widget _footer(AppLocalizations strings) {
     final waiting = _handshake != null;
     final label = switch (_step) {
@@ -671,42 +639,26 @@ class _OnboardingFlowState extends State<OnboardingFlow>
       _Step.telegram => strings.telegramSignInButton,
       _ => strings.nextButton,
     };
-    final systemInset = MediaQuery.viewPaddingOf(context).bottom;
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 10, 20, systemInset + _footerGap),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AppWideButton(
-            label: label,
-            busy: _busy,
-            onTap: _busy ? null : _onPrimaryAction,
-          ),
-          // the two were touching: a TextButton's own padding is the only thing that was between
-          // them, which read as one control with a caption stuck under it
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 40,
-            child: _onBack == null
-                ? null
-                : TextButton(
-                    onPressed: _busy ? null : _onBack,
-                    child: Text(
-                      _step == _Step.telegram && waiting
-                          ? strings.cancelButton
-                          : strings.stepBackButton,
-                      style: const TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-          ),
-        ],
-      ),
+    return FlowFooter(
+      label: label,
+      busy: _busy,
+      onPrimary: _onPrimaryAction,
+      onBack: _onBack,
+      backLabel: _step == _Step.telegram && waiting
+          ? strings.cancelButton
+          : strings.stepBackButton,
+      aside: _step == _Step.telegram && !waiting
+          ? TextButton(
+              onPressed: _busy ? null : _openPhoneSignIn,
+              child: Text(
+                strings.phoneSignInButton,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: flowSecondaryStyle.copyWith(color: AppColors.textDark),
+              ),
+            )
+          : null,
     );
   }
 }

@@ -110,8 +110,8 @@ func main() {
 	// tighter, because every call here can spend money
 	codeLimiter := ratelimit.New(0.5, 10, 30*time.Minute)
 
-	// **the code flow is kept routed and called by no screen, a founder decision**: it is how the
-	// project goes back to Telegram Gateway once that is paid for. see endpoints.PhoneAuth.
+	// the app's sign-in by number, armed for the Play review account alone until Gateway is paid for.
+	// see endpoints.PhoneAuth.
 	phoneAuth := &endpoints.PhoneAuth{Queries: queries, Codes: codeMgr, Sender: codeSender, JWTSecret: jwtSecret}
 	http.HandleFunc("/api/auth/request-code", endpoints.WithJSON(codeLimiter.Wrap(phoneAuth.RequestCode)))
 	http.HandleFunc("/api/auth/verify", endpoints.WithJSON(loginLimiter.Wrap(phoneAuth.Verify)))
@@ -397,7 +397,8 @@ const (
 // opened is refused as broken.
 //
 // **a half-filled configuration is fatal rather than ignored**: one variable set reads as armed in the
-// deployment and behaves as unarmed on the phone. **unset both once the review is over.**
+// deployment and behaves as unarmed on the phone. **both stay set for as long as Play's sign-in
+// details name this number** - see auth.CodeManager.WithReviewAccount.
 func mustReadReviewAccount() (phone, code string) {
 	phone = strings.TrimSpace(os.Getenv("PLAY_REVIEW_PHONE"))
 	code = strings.TrimSpace(os.Getenv("PLAY_REVIEW_CODE"))
@@ -420,7 +421,8 @@ func mustReadReviewAccount() (phone, code string) {
 	}
 
 	log.Printf("Play review account is ARMED for %s - its code is fixed and never delivered. "+
-		"Unset PLAY_REVIEW_PHONE and PLAY_REVIEW_CODE once the review is over.", auth.MaskPhone(canonical))
+		"Unset PLAY_REVIEW_PHONE and PLAY_REVIEW_CODE once Play's sign-in details no longer name it.",
+		auth.MaskPhone(canonical))
 	return canonical, code
 }
 
