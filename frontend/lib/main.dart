@@ -1,8 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:device_preview/device_preview.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
@@ -64,30 +62,26 @@ void main() async {
   };
 
   runApp(
-    DevicePreview(
-      // desktop only: on a phone or the emulator the device *is* the frame
-      enabled: !kReleaseMode && !MapConfig.isSupportedPlatform,
-      builder: (context) => MultiProvider(
-        providers: [
-          ChangeNotifierProvider(create: (_) => LanguageProvider()),
-          // built lazily - nothing here needs loading before first paint
-          ChangeNotifierProvider(create: (_) => CityController()),
-          // same: the home screen fetches from initState, so building it lazily keeps a cold start off
-          // the network until the first frame is already on screen
-          ChangeNotifierProvider(create: (_) => HomeController()),
-          ChangeNotifierProvider.value(value: authController), // make all
-          ChangeNotifierProvider.value(value: storesController),
-          ChangeNotifierProvider.value(
-            value: favoritesController,
-          ), // UI components
-          ChangeNotifierProvider(create: (_) => MapFocusController()),
-          ChangeNotifierProvider.value(
-            value: productsController,
-          ), // to listen to these controllers using notifyListener()
-          ChangeNotifierProvider.value(value: waybillsController),
-        ],
-        child: const DomixApp(),
-      ),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => LanguageProvider()),
+        // built lazily - nothing here needs loading before first paint
+        ChangeNotifierProvider(create: (_) => CityController()),
+        // same: the home screen fetches from initState, so building it lazily keeps a cold start off
+        // the network until the first frame is already on screen
+        ChangeNotifierProvider(create: (_) => HomeController()),
+        ChangeNotifierProvider.value(value: authController), // make all
+        ChangeNotifierProvider.value(value: storesController),
+        ChangeNotifierProvider.value(
+          value: favoritesController,
+        ), // UI components
+        ChangeNotifierProvider(create: (_) => MapFocusController()),
+        ChangeNotifierProvider.value(
+          value: productsController,
+        ), // to listen to these controllers using notifyListener()
+        ChangeNotifierProvider.value(value: waybillsController),
+      ],
+      child: const DomixApp(),
     ),
   );
 }
@@ -106,12 +100,7 @@ class DomixApp extends StatelessWidget {
       // cards that grow with their content - if that ever lands, delete this wrapper rather than raising a
       // fixed number.
       //
-      // the order is load-bearing: DevicePreview.appBuilder supplies the simulated phone's MediaQuery, and
-      // withNoTextScaling sits inside it so ours wins. delete the DevicePreview half before release.
-      builder: (context, child) => DevicePreview.appBuilder(
-        context,
-        MediaQuery.withNoTextScaling(child: child!),
-      ),
+      builder: (context, child) => MediaQuery.withNoTextScaling(child: child!),
       locale: Provider.of<LanguageProvider>(context).locale,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
