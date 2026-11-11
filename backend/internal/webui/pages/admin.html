@@ -926,7 +926,7 @@
         <thead><tr>
           <th class="s" data-key="id">Номер<span class="ar">▼</span></th>
           <th class="s" data-key="created_at">Получена<span class="ar">▼</span></th>
-          <th class="s" data-key="customer_name">Покупатель<span class="ar">▼</span></th>
+          <th class="s" data-key="sender_name">Отправитель<span class="ar">▼</span></th>
           <th class="s" data-key="shop_category">Магазины<span class="ar">▼</span></th>
           <th class="s" data-key="item_count">Список<span class="ar">▼</span></th>
           <th></th>
@@ -1294,7 +1294,7 @@ var NAV = [
   { v:"dash",      label:"Главная",       icon:ICONS.dash,  title:"Главная",       sub:"Всё, что происходит в Domix" },
   // second, above everything else: a person is waiting on the other end of these and nothing
   // else on this panel has somebody's attention held while it goes unread.
-  { v:"waybills",  label:"Накладные",     icon:ICONS.doc,   title:"Накладные",     sub:"Списки покупателей из вкладки «Корзина»" },
+  { v:"waybills",  label:"Накладные",     icon:ICONS.doc,   title:"Накладные",     sub:"Списки из вкладки «Корзина»" },
   { v:"anomalies", label:"Аномалии",      icon:ICONS.anom,  title:"Аномалии цен",  sub:"Цены, которые расходятся с рынком" },
   { v:"users",     label:"Пользователи",  icon:ICONS.users, title:"Пользователи",  sub:"Аккаунты и их магазины" },
   { v:"shops",     label:"Магазины",      icon:ICONS.shops, title:"Магазины",      sub:"Каталоги, индексы и размещения" },
@@ -2583,14 +2583,14 @@ function renderWaybills() {
   var rows = (state.waybills||[]).filter(function (w) {
     if (cat && w.shop_category !== cat) return false;
     if (!q) return true;
-    return String(w.id).indexOf(q)>=0 || (w.customer_name||"").toLowerCase().indexOf(q)>=0 || (w.customer_phone||"").indexOf(q)>=0;
+    return String(w.id).indexOf(q)>=0 || (w.sender_name||"").toLowerCase().indexOf(q)>=0 || (w.sender_phone||"").indexOf(q)>=0;
   });
   rows = sortRows(rows, state.sort.waybills);
   $("#c-waybills").textContent = countLabel(q||cat, rows.length, (state.waybills||[]).length);
   markSort("#t-waybills", state.sort.waybills);
 
   if (!rows.length) { box.appendChild(emptyBox((q||cat)?"Ничего не найдено":"Накладных пока нет",
-    cat&&!q?"В эту категорию пока ничего не присылали.":q?"Попробуйте другой запрос.":"Здесь появятся списки, которые покупатели отправят из вкладки «Корзина».")); return; }
+    cat&&!q?"В эту категорию пока ничего не присылали.":q?"Попробуйте другой запрос.":"Здесь появятся списки, отправленные из вкладки «Корзина».")); return; }
 
   rows.forEach(function (w) {
     var tr = el("tr");
@@ -2598,8 +2598,12 @@ function renderWaybills() {
     tr.appendChild(el("td","num", stamp(w.created_at)));
 
     var who = el("td");
-    who.appendChild(el("div",null, w.customer_name || "Без имени"));
-    who.appendChild(waybillPhone(w.customer_phone));
+    who.appendChild(el("div",null, w.sender_name || "Без имени"));
+    who.appendChild(waybillPhone(w.sender_phone));
+    if (w.sender_role !== "customer") {
+      var role = el("span","tag bl", roleName(w.sender_role)); role.style.marginLeft = "8px";
+      who.appendChild(role);
+    }
     tr.appendChild(who);
 
     var ct = el("td"); ct.appendChild(el("span","tag g", catName(w.shop_category))); tr.appendChild(ct);
@@ -2643,7 +2647,7 @@ function openWaybill(w) {
   var photoUrl = null;
   var s = shell({
     title:"Накладная № "+w.id,
-    sub:catName(w.shop_category)+" · "+stamp(w.created_at)+" · "+(w.customer_name ? w.customer_name+", " : "")+w.customer_phone,
+    sub:catName(w.shop_category)+" · "+stamp(w.created_at)+" · "+(w.sender_name ? w.sender_name+", " : "")+w.sender_phone+(w.sender_role !== "customer" ? " · "+roleName(w.sender_role) : ""),
     icon:ICONS.doc, iconClass:"o", size:"lg",
     onClose:function(){ if (photoUrl) URL.revokeObjectURL(photoUrl); }
   });
@@ -2697,7 +2701,7 @@ function openWaybill(w) {
 function confirmDeleteWaybill(w) {
   confirmDialog({
     title:"Удалить накладную № "+w.id+"?",
-    body:"Покупатель "+(w.customer_name||w.customer_phone)+" больше не увидит этот список в приложении. Восстановить его нельзя.",
+    body:(w.sender_name||w.sender_phone)+" больше не увидит этот список в приложении. Восстановить его нельзя.",
     onConfirm:function () {
       return api("/api/admin/waybills/"+w.id, { method:"DELETE" }).then(function () {
         state.waybills = state.waybills.filter(function(x){ return x.id!==w.id; });

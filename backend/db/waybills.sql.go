@@ -25,20 +25,21 @@ func (q *Queries) AdminDeleteWaybill(ctx context.Context, id int64) (int64, erro
 
 const adminGetWaybill = `-- name: AdminGetWaybill :one
 SELECT w.id, w.shop_category, w.items, (w.photo IS NOT NULL)::bool AS has_photo, w.created_at,
-       u.name AS customer_name, u.phone AS customer_phone
+       u.name AS sender_name, u.phone AS sender_phone, u.role AS sender_role
 FROM waybills w
 JOIN users u ON u.id = w.user_id
 WHERE w.id = $1
 `
 
 type AdminGetWaybillRow struct {
-	ID            int64              `json:"id"`
-	ShopCategory  string             `json:"shop_category"`
-	Items         []byte             `json:"items"`
-	HasPhoto      bool               `json:"has_photo"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	CustomerName  pgtype.Text        `json:"customer_name"`
-	CustomerPhone string             `json:"customer_phone"`
+	ID           int64              `json:"id"`
+	ShopCategory string             `json:"shop_category"`
+	Items        []byte             `json:"items"`
+	HasPhoto     bool               `json:"has_photo"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	SenderName   pgtype.Text        `json:"sender_name"`
+	SenderPhone  string             `json:"sender_phone"`
+	SenderRole   string             `json:"sender_role"`
 }
 
 func (q *Queries) AdminGetWaybill(ctx context.Context, id int64) (AdminGetWaybillRow, error) {
@@ -50,8 +51,9 @@ func (q *Queries) AdminGetWaybill(ctx context.Context, id int64) (AdminGetWaybil
 		&i.Items,
 		&i.HasPhoto,
 		&i.CreatedAt,
-		&i.CustomerName,
-		&i.CustomerPhone,
+		&i.SenderName,
+		&i.SenderPhone,
+		&i.SenderRole,
 	)
 	return i, err
 }
@@ -70,7 +72,7 @@ func (q *Queries) AdminGetWaybillPhoto(ctx context.Context, id int64) ([]byte, e
 const adminListWaybills = `-- name: AdminListWaybills :many
 SELECT w.id, w.shop_category, jsonb_array_length(w.items)::int AS item_count,
        (w.photo IS NOT NULL)::bool AS has_photo, w.created_at,
-       u.name AS customer_name, u.phone AS customer_phone
+       u.name AS sender_name, u.phone AS sender_phone, u.role AS sender_role
 FROM waybills w
 JOIN users u ON u.id = w.user_id
 ORDER BY w.id DESC
@@ -83,13 +85,14 @@ type AdminListWaybillsParams struct {
 }
 
 type AdminListWaybillsRow struct {
-	ID            int64              `json:"id"`
-	ShopCategory  string             `json:"shop_category"`
-	ItemCount     int32              `json:"item_count"`
-	HasPhoto      bool               `json:"has_photo"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	CustomerName  pgtype.Text        `json:"customer_name"`
-	CustomerPhone string             `json:"customer_phone"`
+	ID           int64              `json:"id"`
+	ShopCategory string             `json:"shop_category"`
+	ItemCount    int32              `json:"item_count"`
+	HasPhoto     bool               `json:"has_photo"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	SenderName   pgtype.Text        `json:"sender_name"`
+	SenderPhone  string             `json:"sender_phone"`
+	SenderRole   string             `json:"sender_role"`
 }
 
 // no items and no photo: this is the whole inbox, and the rows are read when one is opened
@@ -108,8 +111,9 @@ func (q *Queries) AdminListWaybills(ctx context.Context, arg AdminListWaybillsPa
 			&i.ItemCount,
 			&i.HasPhoto,
 			&i.CreatedAt,
-			&i.CustomerName,
-			&i.CustomerPhone,
+			&i.SenderName,
+			&i.SenderPhone,
+			&i.SenderRole,
 		); err != nil {
 			return nil, err
 		}

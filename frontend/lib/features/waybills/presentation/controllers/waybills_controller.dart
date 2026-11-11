@@ -4,8 +4,8 @@ import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/features/waybills/data/waybill.dart';
 import 'package:frontend/features/waybills/data/waybills_repository.dart';
 
-/// What this customer has sent. Loaded when the tab comes into view rather than at sign-in: an owner's
-/// session must not spend a refused request on a tab it never shows.
+/// What this account has sent. Loaded when the tab comes into view rather than at sign-in: most
+/// sessions never open it, and a sign-in should not pay for a read nobody looks at.
 class WaybillsController extends ChangeNotifier {
   WaybillsController({WaybillsRepository? repository})
     : _repository = repository ?? WaybillsRepository();

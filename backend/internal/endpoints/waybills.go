@@ -23,10 +23,10 @@ import (
 	"domix/backend/internal/waybill"
 )
 
-// the Корзина tab: a customer's list, sent to Domix. staff read it in the panel (admin.go) and no shop
-// ever sees it.
+// the Корзина tab: a list anybody signed in sends to Domix, owners included. staff read it in the panel
+// (admin.go) and no shop ever sees it.
 //
-//	GET  /api/waybills            - what this customer has sent, newest first
+//	GET  /api/waybills            - what this account has sent, newest first
 //	POST /api/waybills            - send a typed list (json)
 //	POST /api/waybills/photo      - send a photographed one (multipart: image, shop_category, request_id)
 //	GET  /api/waybills/{id}/photo - the photo of one of their own lists
@@ -47,37 +47,6 @@ const (
 )
 
 var waybillRequestID = regexp.MustCompile(`^[0-9a-f]{32}$`)
-
-// RequireCustomer lets staff through too, so an admin can try the tab on a phone. it sits inside auth.RequireAuth, which is what puts the caller on the context.
-//
-// **the app hiding the tab is a courtesy and this is the rule**: an owner holds a perfectly valid token,
-// and an old build or a curl walks straight past a missing button. read from the database every time,
-// because a customer who opens a shop is an owner from that moment.
-func (wb *Waybills) RequireCustomer(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := auth.UserIDFromContext(r.Context())
-		if !ok {
-			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "not signed in")
-			return
-		}
-
-		ctx, cancel := dbctx.WithTimeout(r.Context())
-		defer cancel()
-
-		role, err := wb.Queries.GetUserRole(ctx, userID)
-		if err != nil {
-			log.Printf("CRITICAL: cannot verify the role of user %d: %v", userID, err)
-			writeAPIError(w, http.StatusServiceUnavailable, "service_unavailable", "could not verify permissions")
-			return
-		}
-		if role != "customer" && role != "admin" {
-			writeAPIError(w, http.StatusForbidden, "customers_only", "only customers can send a list")
-			return
-		}
-
-		next(w, r)
-	}
-}
 
 func (wb *Waybills) Route(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -163,8 +132,8 @@ func (wb *Waybills) Create(w http.ResponseWriter, r *http.Request) {
 	wb.store(w, r, req.RequestID, req.ShopCategory, encoded, nil)
 }
 
-// CreateFromPhoto takes a photographed paper list. the role and the limiter have both spoken before the
-// bytes are read, so refusing an owner costs no upload and flooding costs no decode.
+// CreateFromPhoto takes a photographed paper list. the limiter speaks before the bytes are read, so
+// flooding costs no decode.
 func (wb *Waybills) CreateFromPhoto(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -310,7 +279,7 @@ func cleanWaybillItems(raw []waybill.Item) ([]waybill.Item, *accessError) {
 }
 
 // one line of plain text. **the control characters are not cosmetic**: postgres refuses a \u0000 inside
-// jsonb, so one pasted NUL would answer this customer with a 500 on every retry.
+// jsonb, so one pasted NUL would answer the sender with a 500 on every retry.
 func cleanWaybillText(raw string) string {
 	spaced := strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) {

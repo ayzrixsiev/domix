@@ -20,7 +20,7 @@ SELECT photo FROM waybills WHERE id = $1 AND user_id = $2;
 -- no items and no photo: this is the whole inbox, and the rows are read when one is opened
 SELECT w.id, w.shop_category, jsonb_array_length(w.items)::int AS item_count,
        (w.photo IS NOT NULL)::bool AS has_photo, w.created_at,
-       u.name AS customer_name, u.phone AS customer_phone
+       u.name AS sender_name, u.phone AS sender_phone, u.role AS sender_role
 FROM waybills w
 JOIN users u ON u.id = w.user_id
 ORDER BY w.id DESC
@@ -28,7 +28,7 @@ LIMIT $1 OFFSET $2;
 
 -- name: AdminGetWaybill :one
 SELECT w.id, w.shop_category, w.items, (w.photo IS NOT NULL)::bool AS has_photo, w.created_at,
-       u.name AS customer_name, u.phone AS customer_phone
+       u.name AS sender_name, u.phone AS sender_phone, u.role AS sender_role
 FROM waybills w
 JOIN users u ON u.id = w.user_id
 WHERE w.id = $1;

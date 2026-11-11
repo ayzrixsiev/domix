@@ -15,7 +15,7 @@ class WaybillItem {
   Map<String, String> toJson() => {'name': name, 'quantity': quantity};
 }
 
-/// A list this customer sent from Корзина. Its [id] is the number on the накладная staff print. Exactly
+/// A list this account sent from Корзина. Its [id] is the number on the накладная staff print. Exactly
 /// one of [items] and [hasPhoto] is set, and the database holds that to be true.
 class Waybill {
   const Waybill({

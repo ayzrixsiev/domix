@@ -53,7 +53,7 @@ Build the current phase only; never scaffold a later one.
 
 Removed down to their tables, to be rebuilt from scratch. Do not restore the old code: **support** and the **job marketplace**.
 
-**Корзина** (the tab that was Заявки) is live: a customer sends a list to Domix and staff read it in the panel. It is not phase 2: no shop sees a list and nothing is offered back.
+**Корзина** (the tab that was Заявки) is live: anybody signed in, customer or shop owner, sends a list to Domix and staff read it in the panel. It is not phase 2: no shop sees a list and nothing is offered back.
 
 ## Invariants that fail silently
 Detail and reasoning live in the `backend` skill.
@@ -64,9 +64,9 @@ Detail and reasoning live in the `backend` skill.
 - `products.image_path` is a relative path, never a url. Write files, then point the row, then unlink the old ones.
 - One size is one product row and one card. Never fold sizes.
 - `products.in_basket` defaults TRUE on purpose; `product_templates.in_basket` defaults FALSE.
-- "Basket" means the price index. A customer's list is a `waybill`, whatever the tab says.
+- "Basket" means the price index. A list sent from Корзина is a `waybill`, whatever the tab says.
 - A waybill's photo lives in its Postgres row, never in `imagestore`, which is public and abroad.
-- Waybills are customers-only on the server. Hiding the tab from owners is not the rule.
+- Корзина is for every signed-in account, shop owners included; no route checks the role. A waybill reads back only to the account that sent it, and to staff.
 - Yandex address lookups go through `internal/geo` only, which counts each call in `geo_calls` before making it. The keys never ship to the app.
 
 ## Commands

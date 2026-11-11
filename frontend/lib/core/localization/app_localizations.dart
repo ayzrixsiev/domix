@@ -514,7 +514,7 @@ class AppLocalizations {
 
   // anything older than yesterday gets its date, which is where "вчера" stops being information
 
-  // ── Корзина: the list a customer sends to Domix, printed for staff as a накладная ──
+  // ── Корзина: the list anybody signed in sends to Domix, printed for staff as a накладная ──
 
   String get cartEmptyTitle =>
       isRu ? 'Соберите список покупок' : "Xaridlar ro'yxatini tuzing";
@@ -595,10 +595,6 @@ class AppLocalizations {
   /// A send the server refused, by its stable code. Anything unrecognised reads as the connection,
   /// which is what nearly every failure on a phone is.
   String waybillSendError(String code) => switch (code) {
-    'customers_only' =>
-      isRu
-          ? 'Корзина доступна только покупателям.'
-          : 'Savat faqat xaridorlar uchun.',
     'too_many_waybills' =>
       isRu
           ? 'Слишком много накладных подряд. Подождите немного.'

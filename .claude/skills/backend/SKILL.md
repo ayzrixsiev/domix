@@ -2,7 +2,7 @@
 name: backend
 description: >
   Domix's Go API — handlers in internal/endpoints, the telegram bot sign-in, rate limiting and the
-  public cache, image storage and its sweeps, product search, the basket price index, customers' waybills and their PDF, sqlc
+  public cache, image storage and its sweeps, product search, the basket price index, the waybills sent from Корзина and their PDF, sqlc
   queries in db/queries and migrations in db/migrations. Use when writing or changing a handler,
   a query, a migration or a schema rule. Not the /admin page itself (admin-panel skill), not
   Flutter (frontend skill).
@@ -217,15 +217,15 @@ byte-identical to these paths, which is what lets a restored dump and a restored
 - The sweeps themselves, and the three rules that keep them off a live photo, are in the `admin-panel`
   skill: they are driven from that page.
 
-## Waybills — the list a customer sends
+## Waybills — the list anybody signed in sends
 
 The Корзина tab, `internal/endpoints/waybills.go`. **Named waybill because "basket"
 already means the price index below.** A row is an immutable document, printed for staff as a накладная;
 **its id is the number**, restarted at 1001 so no first customer holds «№ 1».
 
-- **Customers only, and the server is the rule.** `Waybills.RequireCustomer` reads the role from the database
-  on every request and refuses owners and admins with `customers_only`; `customerRoute` in `main.go` is the
-  one chain. The app hiding the tab is a courtesy. `TestOnlyACustomerCanUseTheCart` is the pin.
+- **Every signed-in role sends, shop owners included**: `waybillRoute` in `main.go` is `RequireAuth` and no role
+  check, and a row reads back only to its own account. `TestEveryRoleCanUseTheCart` is the pin. The panel's
+  inbox carries `sender_role` (the role today, not at sending) so staff can see a list came from a shop.
 - **The photo is a `bytea` in the row, not a file in `imagestore`, and that is a privacy decision.** The image
   store is a directory served to anybody who has the url, and whose nightly backup goes to a bucket abroad
   unencrypted, because `docs-privacy.md` promises it holds only shop windows; a handwritten list can carry a

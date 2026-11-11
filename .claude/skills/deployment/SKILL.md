@@ -301,12 +301,12 @@ barely moves; the delta folder is empty on a night when nothing was deleted, whi
 asymmetry is the whole design.
 
 **Why the dump is encrypted and the mirror is not.** The dump carries names, phone numbers, every
-shop's address and every shopping list a customer has sent; R2 is abroad. So it is AES-256 before it
+shop's address and every shopping list sent from Корзина; R2 is abroad. So it is AES-256 before it
 leaves the server, the same cipher `scripts/secrets.sh` uses, and the passphrase stays in the country.
 The mirror holds shop-window photos of taps and plywood that the app shows to anybody, so encrypting it
 would buy nothing and cost the ability to restore it with one `rclone copy`. **This only holds because
 a waybill's photo is a `bytea` in its row and never a file in `imagestore`** — that invariant is what
-keeps a customer's handwritten list, which can carry their name, inside the encrypted half. Breaking it
+keeps a handwritten list, which can carry their name, inside the encrypted half. Breaking it
 puts personal photos in a plaintext foreign bucket.
 
 **The passphrase must not live only on the server.** It is what makes the dumps worthless to a

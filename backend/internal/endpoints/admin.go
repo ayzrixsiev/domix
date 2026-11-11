@@ -2489,17 +2489,18 @@ func (a *Admin) findOrphans(w http.ResponseWriter, r *http.Request, scope sweepS
 
 // ─────────────────────────── накладные ───────────────────────────
 
-// the lists customers send from the Корзина tab, and the one place outside the customer's own phone
-// that can read them.
+// the lists sent from the Корзина tab, and the one place outside the sender's own phone that can read
+// them. the role is the sender's today, not at sending: a customer who opened a shop since reads as an owner.
 type adminWaybillResponse struct {
-	ID            int64           `json:"id"`
-	ShopCategory  string          `json:"shop_category"`
-	ItemCount     int32           `json:"item_count"`
-	HasPhoto      bool            `json:"has_photo"`
-	CreatedAt     string          `json:"created_at"`
-	CustomerName  string          `json:"customer_name"`
-	CustomerPhone string          `json:"customer_phone"`
-	Items         json.RawMessage `json:"items,omitempty"`
+	ID           int64           `json:"id"`
+	ShopCategory string          `json:"shop_category"`
+	ItemCount    int32           `json:"item_count"`
+	HasPhoto     bool            `json:"has_photo"`
+	CreatedAt    string          `json:"created_at"`
+	SenderName   string          `json:"sender_name"`
+	SenderPhone  string          `json:"sender_phone"`
+	SenderRole   string          `json:"sender_role"`
+	Items        json.RawMessage `json:"items,omitempty"`
 }
 
 func (a *Admin) ListWaybills(w http.ResponseWriter, r *http.Request) {
@@ -2518,13 +2519,14 @@ func (a *Admin) ListWaybills(w http.ResponseWriter, r *http.Request) {
 	waybills := make([]adminWaybillResponse, 0, len(rows))
 	for _, row := range rows {
 		waybills = append(waybills, adminWaybillResponse{
-			ID:            row.ID,
-			ShopCategory:  row.ShopCategory,
-			ItemCount:     row.ItemCount,
-			HasPhoto:      row.HasPhoto,
-			CreatedAt:     timestampString(row.CreatedAt),
-			CustomerName:  row.CustomerName.String,
-			CustomerPhone: row.CustomerPhone,
+			ID:           row.ID,
+			ShopCategory: row.ShopCategory,
+			ItemCount:    row.ItemCount,
+			HasPhoto:     row.HasPhoto,
+			CreatedAt:    timestampString(row.CreatedAt),
+			SenderName:   row.SenderName.String,
+			SenderPhone:  row.SenderPhone,
+			SenderRole:   row.SenderRole,
 		})
 	}
 
@@ -2551,13 +2553,14 @@ func (a *Admin) GetWaybill(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(adminWaybillResponse{
-		ID:            row.ID,
-		ShopCategory:  row.ShopCategory,
-		HasPhoto:      row.HasPhoto,
-		CreatedAt:     timestampString(row.CreatedAt),
-		CustomerName:  row.CustomerName.String,
-		CustomerPhone: row.CustomerPhone,
-		Items:         row.Items,
+		ID:           row.ID,
+		ShopCategory: row.ShopCategory,
+		HasPhoto:     row.HasPhoto,
+		CreatedAt:    timestampString(row.CreatedAt),
+		SenderName:   row.SenderName.String,
+		SenderPhone:  row.SenderPhone,
+		SenderRole:   row.SenderRole,
+		Items:        row.Items,
 	})
 }
 
@@ -2607,7 +2610,7 @@ func (a *Admin) WaybillPhoto(w http.ResponseWriter, r *http.Request) {
 }
 
 // WaybillPDF answers with the filled paper form. drawn on request rather than stored: the row is the
-// document, so a form redrawn tomorrow cannot disagree with what the customer sent.
+// document, so a form redrawn tomorrow cannot disagree with what was sent.
 func (a *Admin) WaybillPDF(w http.ResponseWriter, r *http.Request) {
 	row, ok := a.readWaybill(w, r)
 	if !ok {
@@ -2618,7 +2621,7 @@ func (a *Admin) WaybillPDF(w http.ResponseWriter, r *http.Request) {
 		Number: row.ID,
 		Date:   row.CreatedAt.Time,
 		To:     "Domix, магазины «" + catalog.ShopCategoryName(row.ShopCategory) + "»",
-		From:   waybillSender(row.CustomerName.String, row.CustomerPhone),
+		From:   waybillSender(row.SenderName.String, row.SenderPhone),
 	}
 
 	if row.HasPhoto {

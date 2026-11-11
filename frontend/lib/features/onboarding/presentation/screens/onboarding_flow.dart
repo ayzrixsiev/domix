@@ -144,11 +144,8 @@ class _OnboardingFlowState extends State<OnboardingFlow>
         }
         _goTo(_Step.telegram);
       case _Step.telegram:
-        if (_handshake == null) {
-          _startHandshake();
-        } else {
-          _openTelegram();
-        }
+        // no footer button here: the step draws its two ways in itself
+        break;
     }
   }
 
@@ -581,13 +578,28 @@ class _OnboardingFlowState extends State<OnboardingFlow>
     );
   }
 
-  /// What the button is about to do, and once pressed, what is being waited for.
+  /// What the buttons are about to do, and once one is pressed, what is being waited for.
+  ///
+  /// **The two ways in are one choice, so they are drawn as one**: the same button, the same width,
+  /// stacked in the middle of the step with Telegram first. The phone route is a door off this step
+  /// rather than a step, so the counter stays at four for everybody who never opens it.
   Widget _telegramStep(AppLocalizations strings) {
     if (_handshake == null) {
       return FlowStepBody(
         error: _error,
         body: strings.telegramStepBody,
-        children: const [],
+        children: [
+          AppWideButton(
+            label: strings.telegramSignInButton,
+            busy: _busy,
+            onTap: _busy ? null : _startHandshake,
+          ),
+          const SizedBox(height: 12),
+          AppWideButton(
+            label: strings.phoneSignInButton,
+            onTap: _busy ? null : _openPhoneSignIn,
+          ),
+        ],
       );
     }
 
@@ -626,39 +638,27 @@ class _OnboardingFlowState extends State<OnboardingFlow>
             height: 1.45,
           ),
         ),
+        const SizedBox(height: 18),
+        AppWideButton(
+          label: strings.telegramReopenButton,
+          onTap: _openTelegram,
+        ),
       ],
     );
   }
 
-  /// The telegram step's footer carries the other door on the back row: the phone route, which
-  /// is no step of its own, so the counter stays at four for everybody who never opens it.
+  /// The telegram step's actions are in its content, so its footer is the back row alone.
   Widget _footer(AppLocalizations strings) {
-    final waiting = _handshake != null;
-    final label = switch (_step) {
-      _Step.telegram when waiting => strings.telegramReopenButton,
-      _Step.telegram => strings.telegramSignInButton,
-      _ => strings.nextButton,
-    };
+    final onTelegram = _step == _Step.telegram;
 
     return FlowFooter(
-      label: label,
+      label: onTelegram ? null : strings.nextButton,
       busy: _busy,
       onPrimary: _onPrimaryAction,
       onBack: _onBack,
-      backLabel: _step == _Step.telegram && waiting
+      backLabel: onTelegram && _handshake != null
           ? strings.cancelButton
           : strings.stepBackButton,
-      aside: _step == _Step.telegram && !waiting
-          ? TextButton(
-              onPressed: _busy ? null : _openPhoneSignIn,
-              child: Text(
-                strings.phoneSignInButton,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: flowSecondaryStyle.copyWith(color: AppColors.textDark),
-              ),
-            )
-          : null,
     );
   }
 }

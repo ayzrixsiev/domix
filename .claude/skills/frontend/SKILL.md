@@ -30,9 +30,8 @@ singletons through `MultiProvider`.
   магазины», favourites, Корзина and the add-store and send errors all follow it, and
   `failure_copy_test` holds every one of those sentences to it. A new loader that throws a plain
   `Exception` lands in "server" whatever happened.
-- **The shell names its tabs (`_ShellTab`) and never numbers them**, because Корзина is missing from an
-  owner's bar and the same position means a different tab depending on who is signed in. The page list
-  stays fixed so the map is never rebuilt. A customer who becomes an owner while on Корзина lands on home.
+- **The shell's page list is fixed** (`_ShellTab`, one bar for every role) so the map is never rebuilt.
+  Корзина is on everybody's bar, owners included.
 
 ## Signing in
 
@@ -52,8 +51,10 @@ asked first and ride in the session (`AuthService.startTelegramSignIn`).
 - Telegram being absent needs no handling — everyone in Uzbekistan has it; a link that does not open
   says «Не удалось открыть Telegram» and the button opens it again.
 - **«Войти по номеру телефона» is a door off the last step, never a step** (`PhoneSignInFlow`): two
-  more steps in `_Step` would tell every telegram user they are on step four of six. It sits on the
-  footer's back row (`FlowFooter.aside`) so the footer keeps one height, and is its own full-screen
+  more steps in `_Step` would tell every telegram user they are on step four of six. **The two ways in
+  are one choice and are drawn as one**: two `AppWideButton`s of the same width stacked in the step's
+  content, Telegram first, and that step's `FlowFooter` has no primary button, only «Назад» in the place
+  it holds on every step (`onboarding_flow_test` measures both). The phone route is its own full-screen
   route: the number, then the code, with «Изменить номер» as the step back. The name and role ride
   into `requestCode` as they ride into the telegram session, and `verifyCode` lands through the same
   `_saveSignIn` and `_applyAccount` as a telegram `success`. Until Gateway is paid only the Play
@@ -119,13 +120,13 @@ search itself still runs only on the search key or on a tapped name.
 
 ## Корзина
 
-`features/waybills`. The tab lists what this customer has sent; `NewWaybillFlow` sends another. Everything
-says waybill in code because "basket" is the price index. **A guest fills the form like anybody else and signs
-in at «Отправить»**, with every row kept, then the send continues, because they already pressed the button.
-Signing in can land on an owner's account, so the role is checked after that step too.
+`features/waybills`. The tab lists what this account has sent; `NewWaybillFlow` sends another. Everything
+says waybill in code because "basket" is the price index. **Every role uses it**, shop owners included.
+**A guest fills the form like anybody else and signs in at «Отправить»**, with every row kept, then the send
+continues, because they already pressed the button.
 
-- **Loaded when the tab comes into view (`isActive`), never at sign-in**: an owner's session must not spend
-  a refused request on a tab it never shows. Post-frame, because the shell is mid-build at that moment.
+- **Loaded when the tab comes into view (`isActive`), never at sign-in**: most sessions never open it.
+  Post-frame, because the shell is mid-build at that moment.
 - **`WaybillSheet` is the paper form on a phone**: fixed columns and unbroken rules, the same object while it
   is filled in and when it is read back.
 - **A refusal clears on `onChanged`, never on a controller listener.** A listener also fires when a field takes
@@ -133,8 +134,9 @@ Signing in can land on an owner's account, so the role is checked after that ste
 - **`_requestId` goes back to null on any edit.** A retried id answers with the list already stored.
 - **The picker is called at 2000px**, not the product photo's 1440: somebody reads handwriting off this.
 - **`_recoverLostPhoto` answers `retrieveLostData`.** On a phone short of memory Android kills the app while
-  the camera is open, and the picture comes back on the next launch through that call or not at all. An owner's
-  session skips it, so a lost product photo cannot open a customer's flow.
+  the camera is open, and the picture comes back on the next launch through that call or not at all. **The
+  call answers for every picker**, and an owner photographs products too, so it opens the flow only when
+  `WaybillPhotoMarker` says the waybill picker was the one open.
 - The photo is private, so the detail screen fetches bytes through the repository and not `Image.network`.
 
 ## Favourites

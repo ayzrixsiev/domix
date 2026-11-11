@@ -19,12 +19,12 @@ import 'package:frontend/core/widgets/plain_page.dart';
 import 'package:frontend/core/widgets/primary_action_button.dart';
 import 'package:frontend/features/profile/presentation/controllers/auth_controller.dart';
 import 'package:frontend/features/waybills/data/waybill.dart';
+import 'package:frontend/features/waybills/data/waybill_photo_marker.dart';
 import 'package:frontend/features/waybills/presentation/controllers/waybills_controller.dart';
 import 'package:frontend/features/waybills/presentation/screens/new_waybill_flow.dart';
 import 'package:frontend/features/waybills/presentation/screens/waybill_detail_screen.dart';
 
-/// The Корзина tab: what this customer has sent, and the way to send another. The shell keeps it off an
-/// owner's bar, and the server refuses an owner whatever the bar shows.
+/// The Корзина tab: what this account has sent, and the way to send another.
 ///
 /// **It runs edge to edge like the map**, with no nav bar: the list ends in a pinned «Новая накладная»,
 /// and a floating bar over it was a second button's worth of chrome on top of the one that matters.
@@ -67,18 +67,18 @@ class _WaybillsScreenState extends State<WaybillsScreen> {
 
   void _reload() {
     final profile = context.read<AuthController>().profileState;
-    if (profile.isGuest || !profile.seesCart) return;
+    if (profile.isGuest) return;
     unawaited(context.read<WaybillsController>().load());
   }
 
   /// **On a phone short of memory Android kills this app while the camera is open**, and the photo comes
   /// back on the next launch through this call or not at all. Answering it is the difference between a
-  /// customer's picture of their list and the app silently restarting on the home screen.
+  /// picture of their list and the app silently restarting on the home screen.
   ///
-  /// An owner's lost product photo must not open a customer's flow, which is why the role is read first.
+  /// Read even when the mark is missing, so a lost product photo is spent here rather than kept.
   Future<void> _recoverLostPhoto() async {
     if (defaultTargetPlatform != TargetPlatform.android) return;
-    if (!context.read<AuthController>().profileState.seesCart) return;
+    final wasWaybill = await const WaybillPhotoMarker().take();
 
     final LostDataResponse lost;
     try {
@@ -88,7 +88,7 @@ class _WaybillsScreenState extends State<WaybillsScreen> {
       return;
     }
     final file = lost.file;
-    if (file == null || !mounted) return;
+    if (!wasWaybill || file == null || !mounted) return;
     await NewWaybillFlow.open(context, restoredPhoto: File(file.path));
   }
 

@@ -31,8 +31,7 @@ func waybillsUnderTest(t *testing.T) (*Waybills, *Admin, context.Context, pgx.Tx
 	return &Waybills{Queries: q}, admin, ctx, tx, q
 }
 
-// through the real chain, RequireAuth then RequireCustomer: a handler called directly would pass with
-// the role check removed
+// through RequireAuth, which is what puts the caller on the context
 func requestWaybill(t *testing.T, ctx context.Context, wb *Waybills, method, target string, asUserID int64,
 	contentType string, body []byte, handler http.HandlerFunc) *httptest.ResponseRecorder {
 	t.Helper()
@@ -52,7 +51,7 @@ func requestWaybill(t *testing.T, ctx context.Context, wb *Waybills, method, tar
 	}
 
 	rec := httptest.NewRecorder()
-	auth.RequireAuth(testJWTSecret, wb.Queries, wb.RequireCustomer(handler))(rec, req)
+	auth.RequireAuth(testJWTSecret, wb.Queries, handler)(rec, req)
 	return rec
 }
 
@@ -94,51 +93,25 @@ func decodeWaybill(t *testing.T, rec *httptest.ResponseRecorder) waybillResponse
 	return created
 }
 
-// the founder's rule. every route, because a shop owner holds a valid token and an old build or a curl
-// does not care that the tab is hidden.
-func TestOnlyACustomerCanUseTheCart(t *testing.T) {
+// every role sends and reads its own lists: Корзина is for anybody signed in, shop owners included
+func TestEveryRoleCanUseTheCart(t *testing.T) {
 	wb, _, ctx, _, q := waybillsUnderTest(t)
 
-	owner := makeUser(t, ctx, q, "Owner", "shop_owner")
+	for i, role := range []string{"customer", "shop_owner", "admin"} {
+		user := makeUser(t, ctx, q, role, role)
+		sent := decodeWaybill(t, sendPhoto(t, ctx, wb, user, strings.Repeat(strconv.Itoa(i), 32), testPhoto(t, 800, 800)))
 
-	for name, handler := range map[string]http.HandlerFunc{"route": wb.Route, "photo": wb.CreateFromPhoto, "read": wb.Photo} {
-		for _, caller := range []int64{owner} {
-			rec := requestWaybill(t, ctx, wb, http.MethodGet, "/api/waybills/1/photo", caller, "", nil, handler)
-			if rec.Code != http.StatusForbidden {
-				t.Errorf("%s as %d = %d, want 403", name, caller, rec.Code)
-			}
-			var body map[string]string
-			decodeBody(t, rec, &body)
-			if body["code"] != "customers_only" {
-				t.Errorf("%s as %d answered code %q", name, caller, body["code"])
-			}
+		rec := requestWaybill(t, ctx, wb, http.MethodGet, "/api/waybills", user, "", nil, wb.Route)
+		var listed []waybillResponse
+		decodeBody(t, rec, &listed)
+		if len(listed) != 1 || listed[0].ID != sent.ID {
+			t.Errorf("as %s listed %+v, want only %d", role, listed, sent.ID)
 		}
-	}
-}
 
-func TestAnAdminCanUseTheCart(t *testing.T) {
-	wb, _, ctx, _, q := waybillsUnderTest(t)
-	admin := makeUser(t, ctx, q, "Admin", "admin")
-
-	if rec := requestWaybill(t, ctx, wb, http.MethodGet, "/api/waybills", admin, "", nil, wb.Route); rec.Code != http.StatusOK {
-		t.Errorf("admin listing = %d, want 200", rec.Code)
-	}
-}
-
-// the same token proves the role is read from the database: a customer who opens a shop loses the tab
-// on their very next request.
-func TestACustomerWhoBecomesAnOwnerLosesTheCart(t *testing.T) {
-	wb, _, ctx, tx, q := waybillsUnderTest(t)
-
-	customer := makeUser(t, ctx, q, "Soon", "customer")
-	if rec := requestWaybill(t, ctx, wb, http.MethodGet, "/api/waybills", customer, "", nil, wb.Route); rec.Code != http.StatusOK {
-		t.Fatalf("as customer = %d", rec.Code)
-	}
-	if _, err := tx.Exec(ctx, "UPDATE users SET role = 'shop_owner' WHERE id = $1", customer); err != nil {
-		t.Fatal(err)
-	}
-	if rec := requestWaybill(t, ctx, wb, http.MethodGet, "/api/waybills", customer, "", nil, wb.Route); rec.Code != http.StatusForbidden {
-		t.Errorf("after the upgrade = %d, want 403", rec.Code)
+		target := "/api/waybills/" + strconv.FormatInt(sent.ID, 10) + "/photo"
+		if rec := requestWaybill(t, ctx, wb, http.MethodGet, target, user, "", nil, wb.Photo); rec.Code != http.StatusOK {
+			t.Errorf("as %s the photo = %d, want 200", role, rec.Code)
+		}
 	}
 }
 
@@ -315,8 +288,9 @@ func TestThePanelReadsAndPrintsAList(t *testing.T) {
 
 	adminID := makeUser(t, ctx, q, "Boss", "admin")
 	customer := makeUser(t, ctx, q, "Buyer", "customer")
+	owner := makeUser(t, ctx, q, "Seller", "shop_owner")
 	typed := decodeWaybill(t, sendList(t, ctx, wb, customer, firstRequestID, "plumbing", oneRow()))
-	photo := decodeWaybill(t, sendPhoto(t, ctx, wb, customer, secondRequestID, testPhoto(t, 800, 800)))
+	photo := decodeWaybill(t, sendPhoto(t, ctx, wb, owner, secondRequestID, testPhoto(t, 800, 800)))
 
 	rec := requestAdmin(t, ctx, admin, http.MethodGet, "/api/admin/waybills", adminID, admin.ListWaybills)
 	var inbox struct {
@@ -326,8 +300,12 @@ func TestThePanelReadsAndPrintsAList(t *testing.T) {
 	if len(inbox.Waybills) != 2 {
 		t.Fatalf("%d lists in the inbox, want 2", len(inbox.Waybills))
 	}
-	if inbox.Waybills[1].ItemCount != 1 || inbox.Waybills[1].CustomerName != "Buyer" || !inbox.Waybills[0].HasPhoto {
+	if inbox.Waybills[1].ItemCount != 1 || inbox.Waybills[1].SenderName != "Buyer" || !inbox.Waybills[0].HasPhoto {
 		t.Errorf("inbox rows: %+v", inbox.Waybills)
+	}
+	// the panel tags a list that came from a shop, and it can only do that from the role
+	if inbox.Waybills[1].SenderRole != "customer" || inbox.Waybills[0].SenderRole != "shop_owner" {
+		t.Errorf("sender roles: %q, %q", inbox.Waybills[1].SenderRole, inbox.Waybills[0].SenderRole)
 	}
 
 	for _, id := range []int64{typed.ID, photo.ID} {

@@ -24,6 +24,7 @@ import 'package:frontend/features/onboarding/presentation/screens/onboarding_flo
 import 'package:frontend/features/profile/presentation/controllers/auth_controller.dart';
 import 'package:frontend/features/stores/data/shop_category.dart';
 import 'package:frontend/features/waybills/data/waybill.dart';
+import 'package:frontend/features/waybills/data/waybill_photo_marker.dart';
 import 'package:frontend/features/waybills/data/waybills_repository.dart';
 import 'package:frontend/features/waybills/presentation/controllers/waybills_controller.dart';
 import 'package:frontend/features/waybills/presentation/widgets/waybill_sheet.dart';
@@ -212,6 +213,8 @@ class _NewWaybillFlowState extends State<NewWaybillFlow> {
   Future<void> _pickPhoto(ImageSource source) async {
     FocusScope.of(context).unfocus();
 
+    const marker = WaybillPhotoMarker();
+    await marker.set();
     final XFile? picked;
     try {
       picked = await _picker.pickImage(
@@ -233,6 +236,8 @@ class _NewWaybillFlowState extends State<NewWaybillFlow> {
         );
       }
       return;
+    } finally {
+      await marker.clear();
     }
     if (picked == null || !mounted) return;
 
@@ -291,12 +296,6 @@ class _NewWaybillFlowState extends State<NewWaybillFlow> {
     if (auth.profileState.isGuest) {
       final signedIn = await OnboardingFlow.open(context);
       if (!mounted || !signedIn) return;
-    }
-
-    // signing in can land on an owner's account, and the tab that would have said so has just gone
-    if (!auth.profileState.seesCart) {
-      setState(() => _error = strings.waybillSendError('customers_only'));
-      return;
     }
 
     FocusManager.instance.primaryFocus?.unfocus();

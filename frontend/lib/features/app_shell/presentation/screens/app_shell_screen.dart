@@ -18,8 +18,7 @@ import 'package:frontend/features/waybills/presentation/screens/waybills_screen.
 import 'package:frontend/features/stores/presentation/screens/add_store_screen.dart';
 import 'package:frontend/features/stores/presentation/screens/my_shops_screen.dart';
 
-/// In the order the pages stack. **A tab is named rather than numbered** because Корзина is missing from
-/// an owner's bar: the same position means a different tab depending on who is signed in.
+/// In the order the pages stack and the bar draws them.
 enum _ShellTab { home, cart, map, messages, profile }
 
 class AppShellScreen extends StatefulWidget {
@@ -64,12 +63,6 @@ class _AppShellScreenState extends State<AppShellScreen>
       context.read<ProductsController>().markAllStale();
     }
   }
-
-  /// Корзина is for customers and admins: the server refuses everybody else, so an owner is not offered it.
-  List<_ShellTab> _tabsFor(ProfileViewState profile) => [
-    for (final tab in _ShellTab.values)
-      if (tab != _ShellTab.cart || profile.seesCart) tab,
-  ];
 
   ShellNavItem _navItem(_ShellTab tab, AppLocalizations strings) =>
       switch (tab) {
@@ -160,11 +153,9 @@ class _AppShellScreenState extends State<AppShellScreen>
   @override
   Widget build(BuildContext context) {
     final strings = Provider.of<LanguageProvider>(context).strings;
-    final tabs = _tabsFor(context.watch<AuthController>().profileState);
-    // a customer who opens a shop from under the cart tab: it is gone, so they land on the home screen
-    final current = tabs.contains(_selected) ? _selected : _ShellTab.home;
     // the two tabs that run edge to edge and carry a way out of their own - see the nav bar below
-    final isFullScreen = current == _ShellTab.map || current == _ShellTab.cart;
+    final isFullScreen =
+        _selected == _ShellTab.map || _selected == _ShellTab.cart;
 
     return PopScope(
       // **only a full-screen tab takes the back button off the shell.** everywhere else the shell is
@@ -184,13 +175,15 @@ class _AppShellScreenState extends State<AppShellScreen>
         bottomNavigationBar: isFullScreen
             ? null
             : FloatingBottomNavBar(
-                items: [for (final tab in tabs) _navItem(tab, strings)],
-                currentIndex: tabs.indexOf(current),
-                onItemSelected: (index) => _selectTab(tabs[index]),
+                items: [
+                  for (final tab in _ShellTab.values) _navItem(tab, strings),
+                ],
+                currentIndex: _selected.index,
+                onItemSelected: (index) => _selectTab(_ShellTab.values[index]),
               ),
         body: IndexedStack(
-          index: current.index,
-          children: _buildPages(context, current),
+          index: _selected.index,
+          children: _buildPages(context, _selected),
         ),
       ),
     );

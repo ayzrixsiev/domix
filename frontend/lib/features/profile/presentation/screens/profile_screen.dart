@@ -56,9 +56,6 @@ class ProfileViewState {
 
   bool get isGuest => state == ProfileAccountState.guest;
   bool get isVendor => state == ProfileAccountState.vendor;
-
-  /// Корзина is a customer's tab, and staff may use it too: the server lets `admin` through.
-  bool get seesCart => !isVendor || isAdmin;
 }
 
 class ProfileScreen extends StatefulWidget {

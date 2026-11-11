@@ -206,15 +206,12 @@ func main() {
 	// a person sends a few lists a day, and a photo costs a decode and half a megabyte of database: ten
 	// at once, then one every ten minutes. forgotten after a day idle, or waiting would refill it early.
 	waybillEndpoints := &endpoints.Waybills{Queries: queries, Sends: ratelimit.New(1.0/600, 10, 24*time.Hour)}
-	// **one chain built once, like adminRoute below**: a route left off it answers any shop owner
-	customerRoute := func(handler http.HandlerFunc) http.HandlerFunc {
-		return endpoints.WithJSON(apiLimiter.Wrap(
-			auth.RequireAuth(jwtSecret, queries, waybillEndpoints.RequireCustomer(handler)),
-		))
+	waybillRoute := func(handler http.HandlerFunc) http.HandlerFunc {
+		return endpoints.WithJSON(apiLimiter.Wrap(auth.RequireAuth(jwtSecret, queries, handler)))
 	}
-	http.HandleFunc("/api/waybills", customerRoute(waybillEndpoints.Route))
-	http.HandleFunc("/api/waybills/photo", customerRoute(waybillEndpoints.CreateFromPhoto))
-	http.HandleFunc("/api/waybills/{id}/photo", customerRoute(waybillEndpoints.Photo))
+	http.HandleFunc("/api/waybills", waybillRoute(waybillEndpoints.Route))
+	http.HandleFunc("/api/waybills/photo", waybillRoute(waybillEndpoints.CreateFromPhoto))
+	http.HandleFunc("/api/waybills/{id}/photo", waybillRoute(waybillEndpoints.Photo))
 
 	// **one chain built once, so no route can quietly forget RequireAdmin.** the order is load-bearing:
 	// RequireAuth puts the caller's id on the context, RequireAdmin reads it.

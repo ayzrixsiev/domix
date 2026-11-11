@@ -81,27 +81,25 @@ class FlowStepBody extends StatelessWidget {
 /// button walks up and down the screen. The bottom inset is the system's own plus [_footerGap], so
 /// the back button does not sit on the bar the phone draws over it.
 ///
-/// [aside] shares the back row, on its right: a second way forward that must stay clearly below the
-/// primary button and must not grow the footer by a row.
+/// A null [label] leaves the back row alone, for a step whose ways forward are a choice drawn in
+/// its content. The back row stays where it is on every other step, since it is the lowest row.
 class FlowFooter extends StatelessWidget {
   const FlowFooter({
     super.key,
-    required this.label,
-    required this.onPrimary,
+    this.label,
+    this.onPrimary,
     this.busy = false,
     this.backLabel,
     this.onBack,
-    this.aside,
   });
 
-  final String label;
-  final VoidCallback onPrimary;
+  final String? label;
+  final VoidCallback? onPrimary;
   final bool busy;
   final String? backLabel;
 
   /// Null draws the row empty, which is what keeps the footer one height.
   final VoidCallback? onBack;
-  final Widget? aside;
 
   @override
   Widget build(BuildContext context) {
@@ -113,14 +111,16 @@ class FlowFooter extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          AppWideButton(
-            label: label,
-            busy: busy,
-            onTap: busy ? null : onPrimary,
-          ),
-          // the two were touching: a TextButton's own padding is the only thing that was between
-          // them, which read as one control with a caption stuck under it
-          const SizedBox(height: 12),
+          if (label != null) ...[
+            AppWideButton(
+              label: label!,
+              busy: busy,
+              onTap: busy ? null : onPrimary,
+            ),
+            // the two were touching: a TextButton's own padding is the only thing that was between
+            // them, which read as one control with a caption stuck under it
+            const SizedBox(height: 12),
+          ],
           SizedBox(
             height: 40,
             child: Row(
@@ -129,13 +129,6 @@ class FlowFooter extends StatelessWidget {
                   TextButton(
                     onPressed: busy ? null : onBack,
                     child: Text(backLabel!, style: flowSecondaryStyle),
-                  ),
-                if (aside != null)
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: aside,
-                    ),
                   ),
               ],
             ),

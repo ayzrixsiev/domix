@@ -1,8 +1,9 @@
 // The guest flow, at the things that only show up on a real phone.
 //
 // **The footer sits at one height on every step**: both slots are always drawn and the error lives in
-// the scrolling content, or the pair walks up and down the screen as you advance. The assertion is a
-// measurement, because nothing throws when a button is 40px lower than it was.
+// the scrolling content, or the pair walks up and down the screen as you advance. The last step draws
+// its two sign-in buttons in its content, so there only «Назад» is held to its place. The assertion is
+// a measurement, because nothing throws when a button is 40px lower than it was.
 //
 // **The footer clears the phone's own bar** - a gesture-navigation phone draws a home indicator over
 // the bottom of the screen.
@@ -17,6 +18,7 @@ import 'package:frontend/features/profile/data/account_role.dart';
 
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
+import 'package:frontend/core/widgets/app_form.dart';
 import 'package:frontend/core/widgets/role_option_tile.dart';
 import 'package:frontend/features/onboarding/data/privacy_policy.dart';
 import 'package:frontend/features/onboarding/presentation/screens/onboarding_flow.dart';
@@ -78,17 +80,18 @@ void main() {
   testWidgets('the footer sits at one height on every step', (tester) async {
     await _pumpFlow(tester);
 
-    // the primary button's caption changes with the step; its position must not
-    final positions = <String, double>{};
-    void record(String step, String label) {
-      positions[step] = tester.getCenter(find.text(label)).dy;
-    }
+    // «Далее» on the steps that have one, «Назад» on every step after the first: their captions and
+    // their company change, their positions must not
+    final primary = <String, double>{};
+    final back = <String, double>{};
+    double y(String label) => tester.getCenter(find.text(label)).dy;
 
-    record('language', _strings.nextButton);
+    primary['language'] = y(_strings.nextButton);
 
     await tester.tap(find.text(_strings.nextButton));
     await tester.pumpAndSettle();
-    record('policy', _strings.nextButton);
+    primary['policy'] = y(_strings.nextButton);
+    back['policy'] = y(_strings.stepBackButton);
 
     await _acceptPolicy(tester);
     await tester.tap(find.text(_strings.nextButton));
@@ -98,20 +101,82 @@ void main() {
       findsNWidgets(AccountRole.values.length),
       reason: 'we are on the profile step',
     );
-    record('profile', _strings.nextButton);
+    primary['profile'] = y(_strings.nextButton);
+    back['profile'] = y(_strings.stepBackButton);
 
     await tester.enterText(find.byType(TextField).first, 'Азиз');
     await tester.tap(find.text(_strings.nextButton));
     await tester.pumpAndSettle();
-    record('telegram', _strings.telegramSignInButton);
+    back['telegram'] = y(_strings.stepBackButton);
 
-    final heights = positions.values.toSet();
     expect(
-      heights,
+      primary.values.toSet(),
       hasLength(1),
-      reason: 'the primary button moved between steps: $positions',
+      reason: 'the primary button moved between steps: $primary',
+    );
+    expect(
+      back.values.toSet(),
+      hasLength(1),
+      reason: '«Назад» moved between steps: $back',
     );
   });
+
+  // **The two ways in are one choice**: the same button at the same width, Telegram over the number,
+  // in the middle of the step and clear of «Назад». Measured at the test device's width in both
+  // languages, whose labels differ in length.
+  for (final language in AppLanguage.values) {
+    testWidgets(
+      'the two sign-in buttons are one stacked pair (${language.code})',
+      (tester) async {
+        final strings = AppLocalizations(language);
+        tester.view.physicalSize = const Size(1080, 2400);
+        tester.view.devicePixelRatio = 1080 / 393;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(_providers(child: const OnboardingFlow()));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text(language.displayName));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(strings.nextButton));
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.text(strings.policyAcceptLabel),
+          120,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.tap(find.text(strings.policyAcceptLabel));
+        await tester.tap(find.text(strings.nextButton));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField).first, 'Азиз');
+        await tester.tap(find.text(strings.nextButton));
+        await tester.pumpAndSettle();
+
+        Rect button(String label) => tester.getRect(
+          find.ancestor(
+            of: find.text(label),
+            matching: find.byType(AppWideButton),
+          ),
+        );
+        final telegram = button(strings.telegramSignInButton);
+        final phone = button(strings.phoneSignInButton);
+        final screenWidth =
+            tester.view.physicalSize.width / tester.view.devicePixelRatio;
+
+        expect(find.byType(AppWideButton), findsNWidgets(2));
+        expect(phone.width, telegram.width);
+        expect(phone.left, telegram.left);
+        expect(telegram.center.dx, closeTo(screenWidth / 2, 0.5));
+        expect(telegram.bottom, lessThan(phone.top), reason: 'Telegram first');
+        expect(
+          phone.bottom,
+          lessThan(tester.getTopLeft(find.text(strings.stepBackButton)).dy),
+          reason: '«Назад» is on its own under the pair',
+        );
+        expect(find.text(strings.nextButton), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   testWidgets('an error does not move the footer', (tester) async {
     await _pumpFlow(tester);

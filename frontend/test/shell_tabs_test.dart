@@ -92,36 +92,30 @@ Finder _navLabel(String label) => find.descendant(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('a customer and a guest have the cart on the bar', (
-    tester,
-  ) async {
-    for (final role in ['customer', 'admin', null]) {
+  testWidgets('everybody has the cart on the bar', (tester) async {
+    for (final role in ['customer', 'shop_owner', 'admin', null]) {
       await _signInAs(role);
       await _pumpShell(tester);
       expect(_navLabel(_strings.cartTab), findsOneWidget, reason: 'as $role');
     }
   });
 
-  testWidgets(
-    'a shop owner does not, and every other tab still lands where it says',
-    (tester) async {
-      for (final role in ['shop_owner']) {
-        await _signInAs(role);
-        await _pumpShell(tester);
+  testWidgets('a shop owner\'s cart and profile land where they say', (
+    tester,
+  ) async {
+    await _signInAs('shop_owner');
+    await _pumpShell(tester);
 
-        expect(_navLabel(_strings.cartTab), findsNothing, reason: 'as $role');
+    await tester.tap(_navLabel(_strings.profileTab));
+    await tester.pump();
+    expect(find.text(_strings.manageShops), findsOneWidget);
 
-        await tester.tap(_navLabel(_strings.profileTab));
-        await tester.pump();
-        expect(
-          find.text(_strings.manageShops),
-          findsOneWidget,
-          reason: 'the bar is one tab shorter for $role',
-        );
-      }
-      await tester.pumpWidget(const SizedBox());
-    },
-  );
+    await tester.tap(_navLabel(_strings.cartTab));
+    await tester.pump();
+    final page = find.byType(WaybillsScreen, skipOffstage: false);
+    expect(tester.widget<WaybillsScreen>(page).isActive, isTrue);
+    await tester.pumpWidget(const SizedBox());
+  });
 
   // **the same trap the map guards against** (map_fullscreen_test): Корзина hides the nav bar too, so
   // a failure to bring it back strands the user on a tab with no way out, and nothing throws.
@@ -148,23 +142,5 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byType(FloatingBottomNavBar), findsOneWidget);
-  });
-
-  testWidgets('a customer who becomes an owner is moved off the cart', (
-    tester,
-  ) async {
-    await _signInAs('customer');
-    await _pumpShell(tester);
-
-    await tester.tap(_navLabel(_strings.cartTab));
-    await tester.pump();
-    final page = find.byType(WaybillsScreen, skipOffstage: false);
-    expect(tester.widget<WaybillsScreen>(page).isActive, isTrue);
-
-    await _signInAs('shop_owner');
-    await tester.pump();
-
-    expect(_navLabel(_strings.cartTab), findsNothing);
-    expect(tester.widget<WaybillsScreen>(page).isActive, isFalse);
   });
 }

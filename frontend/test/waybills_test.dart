@@ -364,40 +364,22 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('an owner is told, and nothing is sent', (tester) async {
-    await _signInAs('shop_owner');
-    final repository = _RecordingRepository();
-    await _pumpFlow(tester, repository: repository);
-    await _chooseFirstCategory(tester, strings);
+  for (final role in ['shop_owner', 'admin']) {
+    testWidgets('$role sends like a customer', (tester) async {
+      await _signInAs(role);
+      final repository = _RecordingRepository();
+      await _pumpFlow(tester, repository: repository);
+      await _chooseFirstCategory(tester, strings);
 
-    await tester.enterText(find.byType(TextField).at(0), 'Цемент');
-    await tester.enterText(find.byType(TextField).at(1), '1');
-    await tester.pump();
-    await tester.tap(find.text(strings.waybillSend));
-    await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).at(0), 'Цемент');
+      await tester.enterText(find.byType(TextField).at(1), '1');
+      await tester.pump();
+      await tester.tap(find.text(strings.waybillSend));
+      await tester.pumpAndSettle();
 
-    expect(
-      find.text(strings.waybillSendError('customers_only')),
-      findsOneWidget,
-    );
-    expect(repository.requestIds, isEmpty);
-  });
-
-  testWidgets('an admin sends like a customer', (tester) async {
-    await _signInAs('admin');
-    final repository = _RecordingRepository();
-    await _pumpFlow(tester, repository: repository);
-    await _chooseFirstCategory(tester, strings);
-
-    await tester.enterText(find.byType(TextField).at(0), 'Цемент');
-    await tester.enterText(find.byType(TextField).at(1), '1');
-    await tester.pump();
-    await tester.tap(find.text(strings.waybillSend));
-    await tester.pumpAndSettle();
-
-    expect(find.text(strings.waybillSendError('customers_only')), findsNothing);
-    expect(repository.requestIds, hasLength(1));
-  });
+      expect(repository.requestIds, hasLength(1));
+    });
+  }
 
   testWidgets(
     'the sheet holds the longest row on the narrowest phone, in both languages',

@@ -167,7 +167,7 @@ taught to read it; **this is not a licence to add it to `ShopResponse`.**
 | tab | holds |
 | --- | --- |
 | **Главная** | the dashboard — see `reference-dashboard.md` |
-| **Накладные** | the lists customers send from Корзина: open, download the PDF, delete; a category filter |
+| **Накладные** | the lists anybody signed in sends from Корзина, owners included, tagged by role: open, download the PDF, delete; a category filter |
 | **Аномалии** | prices that disagree with the market for the same basket line |
 | **Пользователи** | edit name and role, delete; a role filter in the header |
 | **Магазины** | edit the four editable fields, grant/revoke VIP and the storefront photo, exclude from the comparison, open the catalogue, delete; a category filter |
@@ -209,8 +209,8 @@ here is the point; the redraw restores `.scroll`'s `scrollTop`.
   photo and the PDF have no public url at all. The photo modal holds a blob url and revokes it in `onClose`.
 - The list carries `item_count` and no rows; `GET /api/admin/waybills/{id}` is read when one is opened. **The
   name «Накладные» is deliberate**: «В корзине» in Шаблоны already means the price index.
-- Customer names reach the page through `textContent` like everything else a stranger writes.
-- Deleting is the panel's only write. A list is otherwise immutable: it has a number and a customer holds it.
+- Sender names reach the page through `textContent` like everything else a stranger writes.
+- Deleting is the panel's only write. A list is otherwise immutable: it has a number and its sender holds it.
 
 ### The anomaly report
 
