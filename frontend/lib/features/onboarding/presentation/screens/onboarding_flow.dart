@@ -587,7 +587,6 @@ class _OnboardingFlowState extends State<OnboardingFlow>
     if (_handshake == null) {
       return FlowStepBody(
         error: _error,
-        body: strings.telegramStepBody,
         children: [
           AppWideButton(
             label: strings.telegramSignInButton,

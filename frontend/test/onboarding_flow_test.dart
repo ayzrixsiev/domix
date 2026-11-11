@@ -269,7 +269,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text(_strings.telegramSignInButton), findsOneWidget);
-    expect(find.text(_strings.telegramStepBody), findsOneWidget);
     expect(find.text(_strings.stepCounter(4, 4)), findsOneWidget);
     expect(find.text(_strings.phoneSignInButton), findsOneWidget);
     // the number is asked on the phone route, never in this flow

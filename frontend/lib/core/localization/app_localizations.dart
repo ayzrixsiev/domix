@@ -112,9 +112,6 @@ class AppLocalizations {
       : "Davom etish uchun maxfiylik siyosatini qabul qiling";
 
   // step 4 - telegram
-  String get telegramStepBody => isRu
-      ? 'Откроется наш бот в Telegram. Нажмите там «Поделиться номером» — и вы вернётесь в Domix уже со входом.'
-      : "Telegram'da botimiz ochiladi. U yerda «Raqamni ulashish» tugmasini bosing — Domix'ga kirgan holda qaytasiz.";
   String get telegramSignInButton => isRu
       ? 'Зарегистрироваться через Telegram'
       : "Telegram orqali ro'yxatdan o'tish";
