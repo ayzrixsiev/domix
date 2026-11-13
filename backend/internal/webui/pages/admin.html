@@ -548,12 +548,12 @@
      **the card is a preview, so it is `ProductTile` drawn again** - same size, frame, panel colour,
      type and badge - and stays light in the dark theme because the app has no dark one. Facts for
      the admin (basket, how many priced) sit under it, outside it, so the card itself is what a
-     shop's customer sees. A template row has no price: the slot shows what a new shop shows. */
+     shop's customer sees. A template row has no price, so the card carries no price line. */
   .tpl-grid{display:grid;grid-template-columns:repeat(auto-fill,174px);gap:16px 12px;justify-content:start}
   .tpl-scroll{max-height:64vh;overflow-y:auto;overflow-x:hidden;padding:6px 8px 22px}
   .tcard{display:flex;flex-direction:column;width:174px;padding:0;background:none;border:0;
          cursor:pointer;text-align:left;font:inherit;color:inherit}
-  .tcard .tc-app{height:230px;box-sizing:border-box;padding:6px 6px 0;background:#fff;border-radius:20px;
+  .tcard .tc-app{height:194px;box-sizing:border-box;padding:6px 6px 0;background:#fff;border-radius:20px;
                  box-shadow:0 6px 20px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.03);
                  display:flex;flex-direction:column;overflow:hidden;
                  transition:box-shadow .16s var(--ease),transform .16s var(--ease)}
@@ -568,10 +568,6 @@
                display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
   .tcard .tc-s{margin-top:2px;font-size:11.5px;font-weight:500;line-height:1.3;color:#8A8A93;
                display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-  .tcard .tc-p{margin-top:auto;display:flex;align-items:baseline;gap:4px;min-width:0;line-height:1.5}
-  .tcard .tc-p b{font-size:12px;font-weight:600;color:#FF6F00;white-space:nowrap;
-                 overflow:hidden;text-overflow:ellipsis}
-  .tcard .tc-p span{font-size:11px;font-weight:500;color:#AFAFB8;white-space:nowrap}
   .tcard .tc-meta{display:flex;flex-direction:column;gap:7px;padding:9px 4px 0}
   .tcard .tc-row{display:flex;align-items:center;gap:8px}
   .tcard .tc-row .tag{padding:3px 7px;font-size:10.5px}
@@ -728,6 +724,8 @@
   .wb-photo{display:block;background:var(--card);border-radius:var(--r-2);padding:10px}
   .wb-photo img{display:block;max-width:100%;max-height:52vh;margin:0 auto;border-radius:var(--r-1)}
   .modal.md{max-width:560px}
+  /* the shop editor: a 240px-wide map is a thumbnail, not something a point can be placed on */
+  .modal.wide{max-width:660px}
   @keyframes pp{to{transform:scale(1)}}
   .modal .m-ico{width:46px;height:46px;border-radius:15px;display:grid;place-items:center;margin-bottom:16px}
   .modal .m-ico svg{width:22px;height:22px}
@@ -739,8 +737,9 @@
   .modal ul.names li{position:relative;padding-left:17px;margin-bottom:6px}
   .modal ul.names li:last-child{margin-bottom:0}
   .modal ul.names li::before{content:"";position:absolute;left:4px;top:8px;width:5px;height:5px;border-radius:50%;background:var(--o)}
-  .modal .m-acts{display:flex;gap:10px;position:sticky;bottom:0;z-index:2;
-                 margin:22px -26px -26px;padding:16px 26px 26px;background:var(--shell)}
+  .modal .m-acts{display:flex;gap:10px;position:sticky;bottom:0;z-index:5;
+                 margin:22px -26px -26px;padding:16px 26px 26px;background:var(--shell);
+                 border-top:1px solid var(--line)}
   .modal .m-acts .btn{flex:1}
   .warn{display:flex;gap:10px;align-items:flex-start;background:var(--amber-bg);color:var(--amber);border-radius:var(--r-2);padding:12px 14px;font-size:13px;margin-top:14px}
   /* the same block saying what happens next rather than what might go wrong, so it is orange */
@@ -762,15 +761,13 @@
      on this page goes through textContent: the admin's JWT is in localStorage,
      and a third-party <script> tag would hand whoever controls that CDN the
      ability to read it. tiles are <img>s - an image cannot reach localStorage -
-     so the pictures come from OpenStreetMap and the code does not.
+     so the pictures come from a tile CDN and the code does not.
      ─────────────────────────────────────────────────────────────────────────── */
-  .mapx-find{display:flex;gap:8px;margin-bottom:8px}
-  .mapx-find input{flex:1;min-width:0}
-  .mapx-find button{flex:none;padding:0 15px;border:1px solid var(--line-2);background:var(--card);border-radius:var(--r-1);font-size:13px;font-weight:650;cursor:pointer;white-space:nowrap}
-  .mapx-find button:hover{background:var(--line)}
-  .mapx-find button:disabled{opacity:.5;cursor:default}
-  .mapx-frame{position:relative;height:240px;border-radius:var(--r-2);overflow:hidden;border:1px solid var(--line-2);
-              background:#E8E4DC;cursor:grab;touch-action:none;user-select:none}
+  /* **`isolation` keeps the pin and the zoom buttons inside the frame's own stacking context.**
+     Without it their z-index competes with the sticky action bar, and «Сохранить» is drawn under a
+     map control that is nowhere near it in the markup. */
+  .mapx-frame{position:relative;height:320px;border-radius:var(--r-2);overflow:hidden;border:1px solid var(--line-2);
+              background:#E8E4DC;cursor:grab;touch-action:none;user-select:none;isolation:isolate}
   .mapx-frame.drag{cursor:grabbing}
   .mapx-layer{position:absolute;inset:0}
   .mapx-tile{position:absolute;top:0;left:0;width:256px;height:256px;pointer-events:none;opacity:0;transition:opacity .2s}
@@ -784,7 +781,7 @@
   .mapx-zoom{position:absolute;right:10px;bottom:10px;z-index:4;display:flex;flex-direction:column;gap:1px;
              border-radius:9px;overflow:hidden;box-shadow:0 2px 8px rgba(60,40,20,.28)}
   /* **the map's controls are the one place a literal colour is right.** They stand on an
-     OpenStreetMap raster tile, which is light whatever theme the panel is in, so `--ink` here would
+     raster tile, which is light whatever theme the panel is in, so `--ink` here would
      paint near-white text onto a near-white tile the moment the panel went dark. */
   .mapx-zoom button{width:30px;height:30px;border:0;background:#fff;color:#1A1A1A;font-size:17px;font-weight:700;
                     line-height:1;cursor:pointer;display:grid;place-items:center}
@@ -2813,7 +2810,7 @@ function editShop(s) {
   modal({
     title:"Редактировать магазин",
     sub:"#" + s.id + " · " + catName(s.category),
-    iconClass:"o", icon:ICONS.edit, size:"md",
+    iconClass:"o", icon:ICONS.edit, size:"wide",
     fields:[
       { name:"name", label:"Название", value:s.name },
       { name:"address", label:"Адрес", value:s.address },
@@ -3472,10 +3469,6 @@ function templateCard(t, it) {
   body.appendChild(el("span","tc-n", it.name));
   // one size is one row, so this line is what tells five alike cards apart
   if (it.specs) body.appendChild(el("span","tc-s", it.specs));
-  var price = el("div","tc-p");
-  price.appendChild(el("b",null,"Цена не указана"));
-  price.appendChild(el("span",null,"/ " + it.unit));
-  body.appendChild(price);
   card.appendChild(body);
   b.appendChild(card);
 
@@ -4072,7 +4065,12 @@ function shell(opts) {
 // is deliberate rather than lazy - the API validates lat/lng, `ST_MakePoint` stores exactly those
 // two numbers, and a picker that hid them would make a wrong point unfixable by hand.
 
-var TILE_URL = "https://tile.openstreetmap.org/";
+// **not `tile.openstreetmap.org`.** Their volunteer servers answer a panel served from localhost
+// with the "App is not following the tile usage policy" tile, which is what the map used to draw.
+// CARTO's basemaps are the same OpenStreetMap data off a CDN, keyless and without that policy, and
+// swapping provider is this one line plus the attribution below.
+var TILE_HOSTS = ["a", "b", "c"];
+var TILE_PATH = ".basemaps.cartocdn.com/rastertiles/voyager/";
 // Tashkent. only used when a shop somehow has no coordinates at all; every shop made through the
 // app has them, because the add-store form will not submit without a point.
 var HOME = { lat: 41.311081, lng: 69.240562 };
@@ -4102,13 +4100,6 @@ function mapPicker(startLat, startLng, latInput, lngInput) {
 
   var box = el("div");
 
-  // ── find a place by name ──
-  var find = el("div","mapx-find");
-  var fq = el("input"); fq.type = "text"; fq.placeholder = "Найти по названию или адресу";
-  var fb = el("button","", "Найти"); fb.type = "button";
-  find.appendChild(fq); find.appendChild(fb);
-  box.appendChild(find);
-
   // ── the map ──
   var frame = el("div","mapx-frame");
   var layer = el("div","mapx-layer");
@@ -4123,7 +4114,7 @@ function mapPicker(startLat, startLng, latInput, lngInput) {
   var attr = el("div","mapx-attr");
   var a = el("a", null, "© OpenStreetMap");
   a.href = "https://www.openstreetmap.org/copyright"; a.target = "_blank"; a.rel = "noopener";
-  attr.appendChild(a); frame.appendChild(attr);
+  attr.appendChild(a); attr.appendChild(el("span",null," © CARTO")); frame.appendChild(attr);
 
   box.appendChild(frame);
   box.appendChild(el("div","mapx-tip","Нажмите на карту, чтобы поставить точку. Перетаскивайте, чтобы сдвинуть; колесо или ± — масштаб."));
@@ -4159,7 +4150,8 @@ function mapPicker(startLat, startLng, latInput, lngInput) {
           img = new Image();
           img.className = "mapx-tile"; img.alt = ""; img.decoding = "async";
           img.addEventListener("load", function () { this.classList.add("on"); });
-          img.src = TILE_URL + zoom + "/" + wx + "/" + ty + ".png";
+          img.src = "https://" + TILE_HOSTS[(wx + ty) % TILE_HOSTS.length] + TILE_PATH
+                  + zoom + "/" + wx + "/" + ty + ".png";
           tiles[key] = img; layer.appendChild(img);
         }
         img.style.transform = "translate3d(" + (tx * 256 - ox) + "px," + (ty * 256 - oy) + "px,0)";
@@ -4243,32 +4235,6 @@ function mapPicker(startLat, startLng, latInput, lngInput) {
   }
   latInput.addEventListener("change", fromFields);
   lngInput.addEventListener("change", fromFields);
-
-  // ── geocoding, on submit only ──
-  //
-  // Nominatim is free and keyless, and its usage policy is the reason this fires on a button press
-  // rather than as-you-type: it asks for at most one request a second and no bulk use. Biased to
-  // Uzbekistan because that is the whole market - unbiased, "Чиланзар" lands wherever the planet
-  // happens to have the better-known match.
-  function search() {
-    var q = fq.value.trim();
-    if (q.length < 3) { toast("Введите хотя бы три символа", true); return; }
-    fb.disabled = true; var was = fb.textContent; fb.textContent = "…";
-    fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=uz&accept-language=ru&q="
-          + encodeURIComponent(q))
-      .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error(String(r.status))); })
-      .then(function (hits) {
-        if (!hits || !hits.length) { toast("Ничего не найдено", true); return; }
-        zoom = 16;
-        setPoint(parseFloat(hits[0].lat), parseFloat(hits[0].lon), true);
-      })
-      .catch(function () { toast("Поиск недоступен — поставьте точку вручную", true); })
-      .then(function () { fb.disabled = false; fb.textContent = was; });
-  }
-  fb.addEventListener("click", search);
-  // the picker lives inside a form-shaped modal whose primary button is «Сохранить»; without this,
-  // Enter in the search box would save the shop rather than search for the place.
-  fq.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); search(); } });
 
   publish(); draw();
   return box;
