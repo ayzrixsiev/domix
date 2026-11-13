@@ -405,8 +405,8 @@ shovel share the right picture meant reading a column of postage stamps.
 **The grid is the app's `ProductTile` drawn again** — same geometry, the `#EFF0F5` photo panel, the «В
 наличии» badge, name, `specs`, price slot — so the founder sees what a customer will see. **It carries the
 app's literals, not the panel's tokens, and stays light in the dark theme** (the app has none): change
-`product_tile.dart` and this moves with it. A template row has no price, so the slot reads «Цена не
-указана» with the unit beside it, which the app would not print there but the panel cannot do without.
+`product_tile.dart` and this moves with it. **A template row has no price, so the card has no price line**:
+«Цена не указана / шт» was the panel inventing a line the app never draws, on every card in the grid.
 
 **Admin facts sit under the card, outside it** — the basket chip, «N / M» priced, the coverage line — so
 the card itself stays what a customer sees. The key and the section ride on the button's `title`, because a

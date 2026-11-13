@@ -69,7 +69,7 @@ bottom of the file would start every load of a dark panel with a white flash.
   its own: svg `url(#…)` resolves by document id, so two charts sharing a literal would both paint with
   whichever `<defs>` was written last.
 - The only literals left are white *on brand orange* (`--o` is `#FF6F00` in both themes) and the map's own
-  controls, which stand on an OpenStreetMap raster tile and are light whatever the panel is.
+  controls, which stand on a raster tile and are light whatever the panel is.
 
 ## The section highlight is one object that moves
 
@@ -122,29 +122,42 @@ debounced `resize` listener, and no charting library.
   420ms floor on the spinner, and a toast, because an answer identical to the last one still has to look
   like an answer. The first load passes `{silent:true}`.
 
-## The map picker
+## The shop editor and its map
 
-**The shop editor picks a location on a map, and the map is hand-rolled** — about 120 lines of web-mercator
-arithmetic, a grid of 256px `<img>` tiles positioned by `transform`, drag to pan, wheel or ± to zoom, click
-to drop the pin.
+**It is its own modal, not a `modal()` form** (`editShop`, `.modal.shop`): two columns — the fields on the
+left, a map filling the height of them on the right — a header with the shop's id and an ×, and the action
+row in a footer of its own. Holding a map in the generic builder had cost it a `map` field type, a
+half-width pair and a cleanup hook, all for one caller.
 
-- **The alternative was Leaflet from a CDN, rejected for the reason every string here goes through
-  `textContent`**: a `<script src="//cdn…">` hands whoever controls that host the ability to read the JWT in
-  `localStorage`. Raster tiles are `<img>` elements and an image cannot reach `localStorage`, so the pictures
-  come from OpenStreetMap and the code does not.
-- **The coordinates stay the authoritative input and stay visible**, wired both ways: clicking the map writes
-  the number fields, editing a number recentres the map. `ST_MakePoint` stores exactly those two numbers, so
-  a picker that hid them would make a wrong point unfixable by hand.
-- **A drag is not a click** — classified on pointerup by whether it moved more than 4px, or every pan would
-  drop the pin wherever the finger came up.
-- **Search is Nominatim, on submit only** — free and keyless, but its policy asks for at most a request a
-  second. Biased with `countrycodes=uz`, because unbiased «Чиланзар» lands wherever the planet has the
-  better-known match. A failure toasts and leaves the map alone.
-- **The first draw has to wait for layout.** The picker is built before its form is attached, so the frame is
+**The map shows the point; it does not set it.** Широта and Долгота are the two numbers `ST_MakePoint`
+stores and the api validates, so they are the only way a shop moves — drawn as two cards with the figure in
+19px rather than as ordinary fields. Clicking the map does nothing. That is what killed the old
+"a drag is not a click" classifier: one gesture deciding between *look around* and *move this shop by a
+street* is a misfire waiting for a slow hand, and panning is the gesture people actually use.
+
+- **The tiles come through the api** — `GET /api/admin/map/{z}/{x}/{y}`, `endpoints.MapTile`. A browser
+  cannot send the User-Agent OpenStreetMap's tile policy asks for, and every request from this panel carries
+  no `Referer` either (`Referrer-Policy: same-origin`), so direct tiles came back as their "not following
+  the tile usage policy" image. The keyless CDNs were weighed and lost: CARTO's basemaps now want an API
+  key, and Esri's Tashkent is blank. **Because a tile is authenticated it is fetched, not pointed at**:
+  `apiBlob` per tile, a blob url handed to the `<img>`, revoked when the tile is panned off or the modal
+  closes (`box.cleanup`, registered through `shell`'s `onClose`).
+- **The map is still hand-rolled** — about 120 lines of web-mercator arithmetic, 256px `<img>`s positioned
+  by `transform`. The alternative was Leaflet from a CDN, rejected for the reason every string here goes
+  through `textContent`: a `<script src="//cdn…">` hands whoever controls that host the JWT in
+  `localStorage`. An image cannot read `localStorage`; a script can.
+- **A pointerdown on a control is left alone.** `frame.setPointerCapture` retargets the following
+  `pointerup`, so capturing one that began on ± or «вернуться к точке» meant those buttons never saw a
+  `pointerup` and never fired a `click` — the zoom buttons looked dead while dragging worked.
+- **One wheel event is not one zoom level.** A touchpad sends a stream of small pixel deltas, so a level per
+  event crossed half the range on one flick. A step is always one level: lines, pages or a pixel delta of
+  100+ are a wheel notch and zoom at once, anything smaller accumulates to 100 first, and a reversal
+  restarts the accumulator.
+- **The first draw has to wait for layout.** The map is built before its modal is attached, so the frame is
   0×0 on the first pass and centring against that width drops the point in the top-left corner. `draw()`
   reschedules on rAF with a bail-out, so a modal closed before layout does not leave it rescheduling forever.
-- **The modal's action row is `position: sticky`** — the map makes this the one form tall enough to scroll,
-  and a Save button that scrolls off the bottom is one people cannot find.
+- **The attribution sits top-right** because the bottom row of the frame belongs to ± and the recentre
+  button. It is not decoration: the tiles are OpenStreetMap's.
 
 ## How the panel is checked
 
