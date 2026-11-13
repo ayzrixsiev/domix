@@ -1392,16 +1392,14 @@ function guard(e){ if(e.status===401){signOut("expired");return true;} if(e.stat
 
 var NAV = [
   { v:"dash",      label:"Главная",       icon:ICONS.dash,  title:"Главная",       sub:"Всё, что происходит в Domix" },
-  // second, above everything else: a person is waiting on the other end of these and nothing
-  // else on this panel has somebody's attention held while it goes unread.
-  { v:"waybills",  label:"Накладные",     icon:ICONS.doc,   title:"Накладные",     sub:"Списки из вкладки «Корзина»" },
-  { v:"anomalies", label:"Аномалии",      icon:ICONS.anom,  title:"Аномалии цен",  sub:"Цены, которые расходятся с рынком" },
-  { v:"users",     label:"Пользователи",  icon:ICONS.users, title:"Пользователи",  sub:"Аккаунты и их магазины" },
-  { v:"shops",     label:"Магазины",      icon:ICONS.shops, title:"Магазины",      sub:"Каталоги, индексы и размещения" },
-  { v:"templates", label:"Шаблоны",       icon:ICONS.tpl,   title:"Шаблоны",       sub:"Списки, которыми заполняется новый магазин" },
   // a section and not a card on Главная: that screen is about the business, and whether the server
   // is about to break is a different subject
-  { v:"system",    label:"Система",       icon:ICONS.server, title:"Система",      sub:"Насколько сервер близок к своим пределам" }
+  { v:"system",    label:"Система",       icon:ICONS.server, title:"Система",      sub:"Насколько сервер близок к своим пределам" },
+  { v:"anomalies", label:"Аномалии",      icon:ICONS.anom,  title:"Аномалии цен",  sub:"Цены, которые расходятся с рынком" },
+  { v:"waybills",  label:"Накладные",     icon:ICONS.doc,   title:"Накладные",     sub:"Списки из вкладки «Корзина»" },
+  { v:"users",     label:"Пользователи",  icon:ICONS.users, title:"Пользователи",  sub:"Аккаунты и их магазины" },
+  { v:"shops",     label:"Магазины",      icon:ICONS.shops, title:"Магазины",      sub:"Каталоги, индексы и размещения" },
+  { v:"templates", label:"Шаблоны",       icon:ICONS.tpl,   title:"Шаблоны",       sub:"Списки, которыми заполняется новый магазин" }
 ];
 
 // which list the header's field is standing over, per section. `q` is its key in state.q and

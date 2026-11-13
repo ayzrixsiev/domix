@@ -202,7 +202,7 @@ and the two tabs would otherwise disagree until a reload.
 
 ### Накладные
 
-A person is waiting on the other end of these, so the section sits second. **It reloads whenever it is opened
+A person is waiting on the other end of these. **It reloads whenever it is opened
 and every `LIVE.waybills` (30s) while it is the section on screen**, unlike the other lists, because a new row
 here is the point; the redraw restores `.scroll`'s `scrollTop`.
 
