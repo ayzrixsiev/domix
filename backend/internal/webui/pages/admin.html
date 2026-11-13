@@ -4065,12 +4065,11 @@ function shell(opts) {
 // is deliberate rather than lazy - the API validates lat/lng, `ST_MakePoint` stores exactly those
 // two numbers, and a picker that hid them would make a wrong point unfixable by hand.
 
-// **not `tile.openstreetmap.org`.** Their volunteer servers answer a panel served from localhost
-// with the "App is not following the tile usage policy" tile, which is what the map used to draw.
-// CARTO's basemaps are the same OpenStreetMap data off a CDN, keyless and without that policy, and
-// swapping provider is this one line plus the attribution below.
-var TILE_HOSTS = ["a", "b", "c"];
-var TILE_PATH = ".basemaps.cartocdn.com/rastertiles/voyager/";
+// **the tiles come through our own api**, which is the only way to send the User-Agent
+// OpenStreetMap asks for — see `endpoints.MapTile`. That makes a tile an authenticated request, so
+// it is fetched rather than pointed at: an <img src> carries no bearer token, exactly as the
+// waybill photos do not.
+var TILE_PATH = "/api/admin/map/";
 // Tashkent. only used when a shop somehow has no coordinates at all; every shop made through the
 // app has them, because the add-store form will not submit without a point.
 var HOME = { lat: 41.311081, lng: 69.240562 };
@@ -4114,10 +4113,23 @@ function mapPicker(startLat, startLng, latInput, lngInput) {
   var attr = el("div","mapx-attr");
   var a = el("a", null, "© OpenStreetMap");
   a.href = "https://www.openstreetmap.org/copyright"; a.target = "_blank"; a.rel = "noopener";
-  attr.appendChild(a); attr.appendChild(el("span",null," © CARTO")); frame.appendChild(attr);
+  attr.appendChild(a); frame.appendChild(attr);
 
   box.appendChild(frame);
   box.appendChild(el("div","mapx-tip","Нажмите на карту, чтобы поставить точку. Перетаскивайте, чтобы сдвинуть; колесо или ± — масштаб."));
+
+  // one tile, through the token. the blob url is the <img>'s to own: `drop` revokes it when the
+  // tile is panned off, or a long session leaks every tile it has ever drawn.
+  function load(img, z, x, y) {
+    apiBlob(TILE_PATH + z + "/" + x + "/" + y).then(function (blob) {
+      if (!img.isConnected) return;
+      img.dataset.blob = img.src = URL.createObjectURL(blob);
+    }).catch(function () {});   // a missing tile is a gap in the picture, not a thing to say
+  }
+  function drop(img) {
+    if (img.dataset.blob) URL.revokeObjectURL(img.dataset.blob);
+    img.remove();
+  }
 
   function centre() {
     var W = frame.clientWidth, H = frame.clientHeight;
@@ -4150,15 +4162,14 @@ function mapPicker(startLat, startLng, latInput, lngInput) {
           img = new Image();
           img.className = "mapx-tile"; img.alt = ""; img.decoding = "async";
           img.addEventListener("load", function () { this.classList.add("on"); });
-          img.src = "https://" + TILE_HOSTS[(wx + ty) % TILE_HOSTS.length] + TILE_PATH
-                  + zoom + "/" + wx + "/" + ty + ".png";
+          load(img, zoom, wx, ty);
           tiles[key] = img; layer.appendChild(img);
         }
         img.style.transform = "translate3d(" + (tx * 256 - ox) + "px," + (ty * 256 - oy) + "px,0)";
       }
     }
     Object.keys(tiles).forEach(function (k) {
-      if (!want[k]) { tiles[k].remove(); delete tiles[k]; }
+      if (!want[k]) { drop(tiles[k]); delete tiles[k]; }
     });
 
     pin.style.transform = "translate3d(" + (lngToX(lng, zoom) - ox) + "px," + (latToY(lat, zoom) - oy) + "px,0)";
@@ -4237,6 +4248,8 @@ function mapPicker(startLat, startLng, latInput, lngInput) {
   lngInput.addEventListener("change", fromFields);
 
   publish(); draw();
+  // the tiles still on screen when the modal goes hold blob urls nothing will revoke otherwise
+  box.cleanup = function () { Object.keys(tiles).forEach(function (k) { drop(tiles[k]); }); tiles = {}; };
   return box;
 }
 
@@ -4269,7 +4282,10 @@ function confirmDialog(o) {
 }
 
 function modal(o) {
-  var s = shell({ title:o.title, sub:o.sub, icon:o.icon, iconClass:o.iconClass||"o", size:o.size });
+  // the shell reads `onClose` when it closes, not when it is built, so the map pickers below can
+  // still register the cleanup that revokes their tiles
+  var shellOpts = { title:o.title, sub:o.sub, icon:o.icon, iconClass:o.iconClass||"o", size:o.size };
+  var s = shell(shellOpts);
 
   var form = el("div","form");
   var inputs = {};
@@ -4343,7 +4359,9 @@ function modal(o) {
     }
   });
   maps.forEach(function (m) {
-    m.slot.appendChild(mapPicker(m.f.lat, m.f.lng, inputs[m.f.latField], inputs[m.f.lngField]));
+    var picker = mapPicker(m.f.lat, m.f.lng, inputs[m.f.latField], inputs[m.f.lngField]);
+    m.slot.appendChild(picker);
+    shellOpts.onClose = picker.cleanup;
   });
   s.modal.appendChild(form);
 

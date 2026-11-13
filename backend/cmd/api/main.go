@@ -252,6 +252,9 @@ func main() {
 	http.HandleFunc("/api/admin/waybills/{id}/photo", adminRoute(adminEndpoints.WaybillPhoto))
 	http.HandleFunc("/api/admin/waybills/{id}/pdf", adminRoute(adminEndpoints.WaybillPDF))
 
+	// the shop editor's map, proxied because a browser cannot send the User-Agent OSM asks for
+	http.HandleFunc("/api/admin/map/{z}/{x}/{y}", adminRoute(adminEndpoints.MapTile))
+
 	// photos no row points at. uploads and the curated catalogue go through two doors, see sweepScope
 	http.HandleFunc("/api/admin/storage/orphans", adminRoute(adminEndpoints.RouteOrphans))
 	http.HandleFunc("/api/admin/storage/catalogue", adminRoute(adminEndpoints.RouteCatalogueFiles))
