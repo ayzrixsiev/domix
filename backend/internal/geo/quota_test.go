@@ -113,3 +113,30 @@ func TestEachKeyHasABudgetOfItsOwn(t *testing.T) {
 		t.Fatal("a spent geocoder budget must not stop suggestions")
 	}
 }
+
+// the panel's figure is the one the cap is read against: the same 24 hours, nothing older
+func TestUsageCountsTheWindowTheCapRefusesOn(t *testing.T) {
+	quota, ctx, tx := quotaUnderTest(t, 10)
+	recordCalls(t, ctx, tx, productGeocoder, 0, 2)
+	recordCalls(t, ctx, tx, productGeocoder, 23, 5)
+	recordCalls(t, ctx, tx, productGeocoder, 24, 7)
+
+	usage, err := quota.Usage(ctx)
+	if err != nil {
+		t.Fatalf("usage: %v", err)
+	}
+	want := []Usage{
+		{Product: productGeocoder, ThisHour: 2, LastDay: 7, DailyCap: 10},
+		{Product: productSuggest, DailyCap: 10},
+	}
+	if len(usage) != len(want) || usage[0] != want[0] || usage[1] != want[1] {
+		t.Fatalf("usage = %+v, want %+v", usage, want)
+	}
+
+	for range 3 {
+		spend(t, ctx, quota, productGeocoder)
+	}
+	if spend(t, ctx, quota, productGeocoder) {
+		t.Fatal("seven used of ten, three more spent: the eleventh must be refused")
+	}
+}

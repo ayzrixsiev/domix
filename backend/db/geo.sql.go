@@ -18,6 +18,42 @@ func (q *Queries) ForgetOldGeoCalls(ctx context.Context) error {
 	return err
 }
 
+const geoUsage = `-- name: GeoUsage :many
+SELECT product::text AS product,
+       coalesce(sum(used) FILTER (WHERE hour = date_trunc('hour', now())), 0)::int AS this_hour,
+       coalesce(sum(used), 0)::int AS last_day
+FROM geo_calls
+WHERE hour > now() - interval '24 hours'
+GROUP BY product
+`
+
+type GeoUsageRow struct {
+	Product  string `json:"product"`
+	ThisHour int32  `json:"this_hour"`
+	LastDay  int32  `json:"last_day"`
+}
+
+// the window SpendGeoCall refuses on, so the panel shows the number the cap is read against
+func (q *Queries) GeoUsage(ctx context.Context) ([]GeoUsageRow, error) {
+	rows, err := q.db.Query(ctx, geoUsage)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GeoUsageRow
+	for rows.Next() {
+		var i GeoUsageRow
+		if err := rows.Scan(&i.Product, &i.ThisHour, &i.LastDay); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const spendGeoCall = `-- name: SpendGeoCall :one
 WITH spent AS (
     SELECT coalesce(sum(used), 0)::int AS total

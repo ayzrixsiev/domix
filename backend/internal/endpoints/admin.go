@@ -22,7 +22,9 @@ import (
 	"domix/backend/internal/auth"
 	"domix/backend/internal/catalog"
 	"domix/backend/internal/dbctx"
+	"domix/backend/internal/geo"
 	"domix/backend/internal/imagestore"
+	"domix/backend/internal/sysstat"
 	"domix/backend/internal/waybill"
 )
 
@@ -42,6 +44,10 @@ type Admin struct {
 
 	// where uploaded photos live, for the orphan sweep at the bottom of this file
 	Images *imagestore.Disk
+
+	// «Система»: the readings sampled in memory, and the one figure that lives in postgres
+	Sampler  *sysstat.Sampler
+	GeoQuota *geo.DailyQuota
 }
 
 // how many rows one list request may return. the panel filters and sorts client-side so it wants
@@ -363,6 +369,148 @@ func (a *Admin) Stats(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
+}
+
+// ─────────────────────────────── system ───────────────────────────────
+
+type adminSystemResponse struct {
+	SampledAt       string `json:"sampled_at"`
+	StartedAt       string `json:"started_at"`
+	IntervalSeconds int    `json:"interval_seconds"`
+	HistorySeconds  int    `json:"history_seconds"`
+
+	// null where the host cannot be read; cpu is also null for the first interval after a boot
+	CPU    *adminSystemCPU    `json:"cpu"`
+	Memory *adminSystemMemory `json:"memory"`
+	Disk   *adminSystemDisk   `json:"disk"`
+	Load   *adminSystemLoad   `json:"load"`
+	Cores  int                `json:"cores"`
+
+	Pool   adminSystemPool   `json:"pool"`
+	Search adminSystemSearch `json:"search"`
+	// null when postgres could not count it, so the rest of the screen still answers
+	Geo     []adminSystemGeo   `json:"geo"`
+	Runtime adminSystemRuntime `json:"runtime"`
+}
+
+type adminSystemCPU struct {
+	Percent      float64   `json:"percent"`
+	StealPercent float64   `json:"steal_percent"`
+	History      []float64 `json:"history"`
+}
+
+type adminSystemMemory struct {
+	Total     uint64 `json:"total"`
+	Used      uint64 `json:"used"`
+	SwapTotal uint64 `json:"swap_total"`
+	SwapUsed  uint64 `json:"swap_used"`
+}
+
+type adminSystemDisk struct {
+	Total uint64 `json:"total"`
+	Free  uint64 `json:"free"`
+}
+
+type adminSystemLoad struct {
+	One     float64 `json:"one"`
+	Five    float64 `json:"five"`
+	Fifteen float64 `json:"fifteen"`
+}
+
+type adminSystemPool struct {
+	Acquired      int32   `json:"acquired"`
+	Max           int32   `json:"max"`
+	BusyWaits     int64   `json:"busy_waits"`
+	FirstBusyWait *string `json:"first_busy_wait"`
+	LastBusyWait  *string `json:"last_busy_wait"`
+	EmptyAcquires int64   `json:"empty_acquires"`
+}
+
+type adminSystemSearch struct {
+	InUse    int `json:"in_use"`
+	Capacity int `json:"capacity"`
+}
+
+type adminSystemGeo struct {
+	Product  string `json:"product"`
+	ThisHour int32  `json:"this_hour"`
+	LastDay  int32  `json:"last_day"`
+	DailyCap int32  `json:"daily_cap"`
+}
+
+type adminSystemRuntime struct {
+	Goroutines   int    `json:"goroutines"`
+	HeapBytes    uint64 `json:"heap_bytes"`
+	RuntimeBytes uint64 `json:"runtime_bytes"`
+}
+
+// System answers «Система»: how close this server is to its limits, polled every few seconds.
+//
+// **the geo count is the only database work here, and it must stay so**: everything else is the
+// sampler's last reading out of memory, so the screen costs nothing to leave open.
+func (a *Admin) System(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", "GET")
+		writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "use GET")
+		return
+	}
+
+	snap := a.Sampler.Snapshot()
+	response := adminSystemResponse{
+		SampledAt:       snap.At.UTC().Format(time.RFC3339),
+		StartedAt:       snap.StartedAt.UTC().Format(time.RFC3339),
+		IntervalSeconds: int(sysstat.Interval / time.Second),
+		HistorySeconds:  int(sysstat.History / time.Second),
+		Cores:           snap.Cores,
+		Pool: adminSystemPool{
+			Acquired: snap.Pool.Acquired, Max: snap.Pool.Max, BusyWaits: snap.Pool.BusyWaits,
+			FirstBusyWait: optionalTime(snap.Pool.FirstBusyWait), LastBusyWait: optionalTime(snap.Pool.LastBusyWait),
+			EmptyAcquires: snap.Pool.EmptyAcquires,
+		},
+		Search: adminSystemSearch{InUse: snap.SearchInUse, Capacity: snap.SearchCapacity},
+		Runtime: adminSystemRuntime{
+			Goroutines: snap.Goroutines, HeapBytes: snap.HeapBytes, RuntimeBytes: snap.RuntimeBytes,
+		},
+	}
+	if snap.CPU != nil {
+		response.CPU = &adminSystemCPU{Percent: snap.CPU.Percent, StealPercent: snap.CPU.StealPercent, History: snap.CPUHistory}
+	}
+	if m := snap.Memory; m != nil {
+		response.Memory = &adminSystemMemory{
+			Total: m.Total, Used: m.Total - m.Available, SwapTotal: m.SwapTotal, SwapUsed: m.SwapTotal - m.SwapFree,
+		}
+	}
+	if d := snap.Disk; d != nil {
+		response.Disk = &adminSystemDisk{Total: d.Total, Free: d.Free}
+	}
+	if l := snap.Load; l != nil {
+		response.Load = &adminSystemLoad{One: l.One, Five: l.Five, Fifteen: l.Fifteen}
+	}
+
+	ctx, cancel := dbctx.WithTimeout(r.Context())
+	defer cancel()
+	if usage, err := a.GeoQuota.Usage(ctx); err != nil {
+		log.Printf("WARNING: admin system: could not count geo calls: %v", err)
+	} else {
+		response.Geo = make([]adminSystemGeo, 0, len(usage))
+		for _, u := range usage {
+			response.Geo = append(response.Geo, adminSystemGeo{
+				Product: u.Product, ThisHour: u.ThisHour, LastDay: u.LastDay, DailyCap: u.DailyCap,
+			})
+		}
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
+// a moment that has not happened yet is null, not 0001-01-01
+func optionalTime(t time.Time) *string {
+	if t.IsZero() {
+		return nil
+	}
+	s := t.UTC().Format(time.RFC3339)
+	return &s
 }
 
 // ─────────────────────────────── users ───────────────────────────────

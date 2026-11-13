@@ -211,16 +211,21 @@ way and Uzbek Humo/UzCard do not work abroad. Running cost ~$6–8/mo including 
 | | |
 | --- | --- |
 | public address | **95.182.119.72** (what `domix-app.uz` resolves to) |
-| login | **`ubuntu`**, with sudo — there is no reason to log in as root |
+| login | **`ayzrixsiev`**, with sudo — there is no reason to log in as root |
 | os | Ubuntu 24.04 LTS, x86_64 |
 | size | 2 cores, 3.8 GB RAM, ~43 GB free disk |
 | network | behind NAT: the box sees `10.10.21.26/30` on its own interface, **not** its public address |
 | ports | 22, 80 and 443 reachable from outside — verified by listening on each and connecting in |
 
 ```bash
-ssh ubuntu@95.182.119.72                        # a shell on the server
-ssh -L 8081:127.0.0.1:8080 ubuntu@95.182.119.72 # the same, plus the admin panel on localhost:8081
+ssh ayzrixsiev@95.182.119.72                        # a shell on the server
+ssh -L 8081:127.0.0.1:8080 ayzrixsiev@95.182.119.72 # the same, plus the admin panel on localhost:8081
 ```
+
+**The image's own `ubuntu` account is locked** (`usermod -L`, shell `nologin`, 2026-11-13) and the home
+directory is left in place. It is the username every scanner on the internet already knows is probably
+there — it was being guessed ~300 times a day — so the account that exists is not the account they try.
+Do not unlock it to fix something; `ayzrixsiev` has the same sudo.
 
 **The password is not in this repo and must never be committed.** Ask the founder, or take it from
 `secrets.vault.enc`. `sudo` on the server takes that same password.
@@ -231,6 +236,17 @@ not from what the box reports about itself.
 
 **Password login is still on, decided deliberately for the first release**, and the box is therefore
 being guessed at continuously — every public port 22 is, by scanners, within minutes of going online.
+Measured on 2026-11-13: **20,287 failed attempts in 24 hours**, 15,239 of them against `root` and 321
+against `ubuntu`, from ~10 source addresses. That traffic is the baseline jitter on any CPU graph of
+this box — sshd forks and hashes a password per guess, and hashing is slow on purpose.
+
+**fail2ban answers it** (installed 2026-11-13, `/etc/fail2ban/jail.local`): 4 failures in 10 minutes
+bans the address for an hour. **`backend = systemd` is the line that makes it work** — Ubuntu 24.04
+sends sshd to the journal, not to `/var/log/auth.log`, and the stock jail reads the file, finds
+nothing, and reports no error while banning nobody. `fail2ban-client status sshd` is how you check it
+is really running; a ban of your own address clears with
+`fail2ban-client set sshd unbanip <addr>` from a session that is already open.
+
 **ROADMAP: switch to a key pair and `PasswordAuthentication no`** once there are real owners' phone
 numbers in that database. A key is a file on the laptop that never crosses the network and cannot be
 guessed, and turning passwords off refuses every one of those attempts outright instead of letting them

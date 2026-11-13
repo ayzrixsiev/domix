@@ -2,10 +2,10 @@
 name: admin-panel
 description: >
   The html the Go API serves itself — the `/admin` panel (dashboard, the «Накладные» inbox, anomaly report, users,
-  shops, VIP placements, template editing and sync, the storage sweeps) and the public site
+  shops, VIP placements, template editing and sync, the storage sweeps, the «Система» health screen) and the public site
   (`/`, `/privacy`, `/terms`, `/delete-account`). Use when working in
   `backend/internal/webui/`, `backend/internal/endpoints/admin.go`,
-  `backend/db/queries/admin.sql`, the `RequireAdmin` middleware, admin roles, or the panel's
+  `backend/db/queries/admin.sql`, `backend/internal/sysstat/`, the `RequireAdmin` middleware, admin roles, or the panel's
   HTML/CSS/JS. Layout and chart rationale: `reference-dashboard.md`; colours, theming and the
   hand-rolled widgets: `reference-ui.md`.
 ---
@@ -139,7 +139,7 @@ permanent compromise rather than one that ends when the token expires.**
 with
 
 ```bash
-ssh -L 8081:127.0.0.1:8080 ubuntu@<server>   # leave this terminal open
+ssh -L 8081:127.0.0.1:8080 ayzrixsiev@<server>   # leave this terminal open
 ```
 
 then `http://localhost:8081/admin` in a browser on that same laptop. The port is forwarded through the
@@ -172,6 +172,7 @@ taught to read it; **this is not a licence to add it to `ShopResponse`.**
 | **Пользователи** | edit name and role, delete; a role filter in the header |
 | **Магазины** | edit the four editable fields, grant/revoke VIP and the storefront photo, exclude from the comparison, open the catalogue, delete; a category filter |
 | **Шаблоны** | the two storage strips, a banner when a market is behind its template, then per category a grid of product cards |
+| **Система** | how close the server is to its limits: whether the pool ran out, cpu over the last hour, memory, disk, load, the pool, search slots, the Yandex budget, the Go heap |
 
 **One search field on the page, belonging to whichever list is open** (`SEARCH` maps a section to its
 `state.q` key and its render function; `setView` shows or hides it). Главная and Шаблоны hide it: they
@@ -257,6 +258,31 @@ shop, the same decode as every other upload.
 - Its own window rather than a field on «Редактировать магазин»: the file uploads the moment it is picked
   (multipart, where that form is json) and the server points the row at it, so there is nothing for a
   «Сохранить» to do.
+
+### «Система»
+
+`GET /api/admin/system` (`Admin.System`) over `internal/sysstat`, polled every tick while it is open
+(`LIVE.system`). **A section, not a card on Главная**: that screen is about the business and is full.
+
+- **One goroutine samples every 5 s** (`sysstat.Sampler.Run`) and the handler returns its last reading.
+  **The geo count (`DailyQuota.Usage`, the window `SpendGeoCall` refuses on) is the only database work,
+  and it must stay so** — everything else is in-memory, which is what lets the screen sit on the tick.
+  The host comes from `/proc` and one `statfs` on the photo volume, never a directory walk.
+- **CPU% is the difference between two `/proc/stat` readings**, five seconds apart. One reading is the
+  average since boot: a plausible number that says nothing about now. `TestCPUIsTheIntervalBetweenTwoReadingsNotTheAverageSinceBoot`.
+  Memory used is `MemTotal − MemAvailable`; `MemFree` would count the page cache as used.
+- **The headline is `busy_waits`, not pgx's `EmptyAcquireCount`.** pgx also counts an acquire that found
+  no idle connection and opened one while the pool had room — routine after `MaxConnIdleTime` shrinks the
+  pool to `MinConns`. `sysstat.busyWaits` subtracts every connection that could have finished opening in
+  the interval, so it errs towards silence; the raw count is printed beside it, named, with that caveat.
+  `TestOnlyAWaitForABusyConnectionCountsAsTheFullPool`.
+- **Nothing is persisted.** The cpu hour, the wait count and its first/last moment start again at each
+  restart, which is why the strip says when the server started.
+- **Only the processor has a chart**: a fixed 0–100% axis, points at their real age. Load average is
+  already a time average, the disk does not move in an hour, and the pool and search slots are instants
+  a 5 s sample would mostly read as zero. Bars turn amber at `NEAR` (80%) — a colour, not an alarm.
+- **It cannot answer while Postgres is down**: `RequireAdmin` reads the role first. A failed geo count
+  alone answers `geo: null` and the rest still renders.
 
 ### The panel refreshes itself — `liveTick`
 

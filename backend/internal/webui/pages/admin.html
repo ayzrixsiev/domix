@@ -543,6 +543,29 @@
   /* **side by side, because they are the smallest thing on this page and sat above the biggest.**
      Stacked, the two strips and the drift banner cost 210px before the first product. */
   #tpl-storage{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+
+  /* ── «Система» ──
+     its own grid, not `.dash`: that one is three rows sized to fill the window, and this one is as
+     tall as what it holds. The processor card spans the three tiles stacked beside it. */
+  .sys{display:grid;grid-template-columns:repeat(12,1fr);gap:12px;align-items:start}
+  .sys > .stor{grid-column:1/-1;align-items:center}
+  .sys-h{grid-column:1/-1;margin:8px 2px -2px;font-size:12px;font-weight:750;color:var(--muted);
+         letter-spacing:.06em;text-transform:uppercase}
+  .r3{grid-row:span 3}
+  .sys .cpu .chart{position:relative;min-height:220px}
+  /* the shared tile cuts its sub-line off at one line; these carry the second half of a reading */
+  .sys .kpi .k-sub{white-space:normal}
+  .sys > .skel{grid-column:1/-1}
+  .sys-now{text-align:right;flex:none}
+  .sys-now b{display:block;font-size:29px;font-weight:750;letter-spacing:-.04em;line-height:1}
+  .sys-now span{font-size:12px;font-weight:650;color:var(--muted)}
+  /* the one colour change on the screen: a bar past NEAR is the part worth looking at twice */
+  .kpi .k-bar i.near{background:var(--amber)}
+  .meter + .meter{margin-top:12px}
+  .meter .m-top{display:flex;justify-content:space-between;gap:10px;font-size:13px;font-weight:650;color:var(--ink-2)}
+  .meter .m-top b{color:var(--ink);font-weight:750}
+  .kpi .meter .k-bar{margin-top:7px}
+  .meter .m-sub{font-size:12px;font-weight:650;color:var(--muted);margin-top:5px}
   @media (max-width:1240px){ #tpl-storage{grid-template-columns:1fr} }
   .stor-act{display:flex;gap:10px;align-items:center;margin-left:auto;flex:none}
 
@@ -868,7 +891,7 @@
     /* the tall right-hand column only exists while there is a column to its left. **it takes the
        whole width rather than half of one**: beside a KPI it would be a 400px ring next to a tile
        stretched to match it, which is 300px of empty `--card` on a card that is simply short. */
-    .r2{grid-row:auto;grid-column:span 12}
+    .r2,.r3{grid-row:auto;grid-column:span 12}
   }
   @media (max-width:900px){
     .app{flex-direction:column}
@@ -963,6 +986,9 @@
         <span class="count" id="c-tpl"></span>
         <button class="ib sm" id="tpl-info" title="Как это работает"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button>
       </div>
+      <div class="sec" id="sec-system" hidden>
+        <span class="count" id="c-system"></span>
+      </div>
       <div class="search" id="top-search" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
         <input type="search" id="q-global" autocomplete="off">
@@ -1038,6 +1064,8 @@
       <div id="tpl-storage"></div>
       <div id="tpl-list"></div>
     </section>
+
+    <section id="v-system" hidden><div class="sys" id="sys"></div></section>
   </main>
 </div>
 
@@ -1107,6 +1135,8 @@ var AVAIL = { in_stock:"В наличии", on_order:"Под заказ", unavai
 
 var state = {
   token:null, me:null, stats:null, users:null, shops:null, anomalies:null, templates:null, waybills:null,
+  // the last «Система» answer, kept when a poll fails so the screen can say how old it is
+  system:null, systemErr:false,
   // the two orphaned-file scans, by sweep. null until somebody presses «Проверить» - unlike every
   // other field here they are never fetched on a timer, because answering means walking the store.
   storage:{ uploads:null, catalogue:null },
@@ -1196,6 +1226,11 @@ var ICONS = {
          "M9 21v-6h6v6"],
   phone:["M16.5 21a13.5 13.5 0 0 1-13.5-13.5A2.5 2.5 0 0 1 5.5 5h2a1 1 0 0 1 1 .8l.8 3a1 1 0 0 1-.4 1L7.4 11a11 11 0 0 0 5.6 5.6l1.2-1.5a1 1 0 0 1 1-.4l3 .8a1 1 0 0 1 .8 1v2a2.5 2.5 0 0 1-2.5 2.5Z"],
   locate:["m3 11 19-9-9 19-2-8-8-2Z"],
+  server:["M4 3h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z",
+          "M4 13h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1Z","M7 7h.01","M7 17h.01"],
+  chip:["M6 6h12v12H6z","M9 9h6v6H9z","M9 2v4","M15 2v4","M9 18v4","M15 18v4","M2 9h4","M2 15h4","M18 9h4","M18 15h4"],
+  disk:["M22 12H2","M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z","M6 16h.01","M10 16h.01"],
+  db:["M12 8c4.4 0 8-1.3 8-3s-3.6-3-8-3-8 1.3-8 3 3.6 3 8 3Z","M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5","M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"],
   broom:["m13 11 9-9","M14.6 12.6c.8.8.9 2 .2 2.7l-1.3 1.3c-.7.7-2 .6-2.7-.2L5.6 11.2c-.8-.8-.9-2-.2-2.7l1.3-1.3c.7-.7 2-.6 2.7.2Z","M6 15l-3 3","M9 18l-3 3","M3 21h6"]
 };
 
@@ -1339,7 +1374,7 @@ function signOut(reason) {
   live.thread = null;
   state.token=null; state.me=null; state.stats=null; state.users=null; state.shops=null;
   // the inbox goes with the rest: it holds phone numbers and what people wrote about their problems
-  state.anomalies=null; state.templates=null; state.waybills=null;
+  state.anomalies=null; state.templates=null; state.waybills=null; state.system=null; state.systemErr=false;
   try{ localStorage.removeItem(TOKEN_KEY); }catch(e){}
   $("#app").hidden = true; $("#login").hidden = false; resetLogin(); $("#l-err").hidden = true;
   if (reason==="expired") loginError("Сессия закончилась","Войдите снова.");
@@ -1363,7 +1398,10 @@ var NAV = [
   { v:"anomalies", label:"Аномалии",      icon:ICONS.anom,  title:"Аномалии цен",  sub:"Цены, которые расходятся с рынком" },
   { v:"users",     label:"Пользователи",  icon:ICONS.users, title:"Пользователи",  sub:"Аккаунты и их магазины" },
   { v:"shops",     label:"Магазины",      icon:ICONS.shops, title:"Магазины",      sub:"Каталоги, индексы и размещения" },
-  { v:"templates", label:"Шаблоны",       icon:ICONS.tpl,   title:"Шаблоны",       sub:"Списки, которыми заполняется новый магазин" }
+  { v:"templates", label:"Шаблоны",       icon:ICONS.tpl,   title:"Шаблоны",       sub:"Списки, которыми заполняется новый магазин" },
+  // a section and not a card on Главная: that screen is about the business, and whether the server
+  // is about to break is a different subject
+  { v:"system",    label:"Система",       icon:ICONS.server, title:"Система",      sub:"Насколько сервер близок к своим пределам" }
 ];
 
 // which list the header's field is standing over, per section. `q` is its key in state.q and
@@ -1457,6 +1495,7 @@ function applyTheme(next) {
   // the open section only: setView redraws the dashboard on the way back into it, and a chart drawn
   // inside a hidden section measures 0px wide
   if (state.stats && state.view === "dash") drawDash();
+  if (state.system && state.view === "system") renderSystem();
 }
 
 // the icon says where the press goes, not where it is: a moon on a light panel, a sun on a dark one
@@ -1511,6 +1550,7 @@ function setView(v) {
 
   // opening the inbox must show what is there now, not a list cached before the founder walked away
   if (v==="waybills") { live.waybillsAt = Date.now(); loadWaybills(); }
+  if (v==="system") { renderSystem(); live.systemAt = Date.now(); loadSystem(); }
 }
 
 // ═══════════════════════ live refresh ═══════════════════════
@@ -1547,10 +1587,13 @@ var LIVE = {
   thread: 8000,
   // the open «Накладные» list, so a new one appears without anybody pressing anything. only while
   // that section is the one on screen.
-  waybills: 30000
+  waybills: 30000,
+  // «Система» while it is on screen. the server samples every 5 s; a hair under the tick, or timer
+  // jitter makes every other tick skip it
+  system: 4500
 };
 
-var live = { timer:null, statsAt:0, threadAt:0, waybillsAt:0, busy:false, thread:null };
+var live = { timer:null, statsAt:0, threadAt:0, waybillsAt:0, systemAt:0, busy:false, thread:null };
 
 function liveTick() {
   // signed out, or the tab is in the background - a poll nobody can see is a request nobody asked
@@ -1570,6 +1613,9 @@ function liveTick() {
   if (state.view === "waybills" && now - live.waybillsAt > LIVE.waybills) {
     live.waybillsAt = now; jobs.push(loadWaybills());
   }
+  if (state.view === "system" && now - live.systemAt > LIVE.system) {
+    live.systemAt = now; jobs.push(loadSystem());
+  }
 
   if (!jobs.length) return;
   live.busy = true;
@@ -1579,7 +1625,7 @@ function liveTick() {
 // forces the next tick to do the work now - used when a section is opened, so arriving somewhere
 // shows current data rather than whatever was cached up to twelve seconds ago.
 function liveNow() {
-  live.statsAt = 0; live.threadAt = 0; live.waybillsAt = 0;
+  live.statsAt = 0; live.threadAt = 0; live.waybillsAt = 0; live.systemAt = 0;
   liveTick();
 }
 
@@ -1597,6 +1643,7 @@ function refresh(o) {
   if (state.anomalies) jobs.push(loadAnomalies());
   if (state.templates) jobs.push(loadTemplates());
   if (state.waybills) jobs.push(loadWaybills());
+  if (state.system) jobs.push(loadSystem());
 
   // a floor on how briefly the spinner can exist. against a local database every one of these
   // finishes inside a single frame, so the button flickered and the numbers - which on a market
@@ -1675,7 +1722,7 @@ function kpi(o) {
   if (o.sub) c.appendChild(el("div","k-sub",o.sub));
 
   if (o.bar !== undefined && o.bar !== null) {
-    var bar = el("div","k-bar"), fill = el("i");
+    var bar = el("div","k-bar"), fill = el("i", o.bar >= NEAR ? "near" : null);
     fill.style.width = Math.max(0, Math.min(100, o.bar)) + "%";
     bar.appendChild(fill); c.appendChild(bar);
   }
@@ -2433,6 +2480,206 @@ function drawSignups(days) {
   svg.addEventListener("mouseleave", function(){ tip.style.opacity=0; band.setAttribute("opacity",0); dot.setAttribute("opacity",0); });
 
   host.appendChild(svg);
+}
+
+// ═══════════════════════ «Система» ═══════════════════════
+//
+// how close this server is to its limits, read by the api off the machine it runs on. every figure
+// except the yandex count is the sampler's last reading out of memory, which is what lets this ride
+// on the 5-second tick. **the counters start again at every restart**, so the screen says when that was.
+
+// a bar this full turns amber. a colour, not an alarm: nothing here pages anybody
+var NEAR = 80;
+var GEO_NAMES = { geocoder:"Геокодер", suggest:"Подсказки" };
+
+function loadSystem() {
+  return api("/api/admin/system").then(function (d) {
+    state.system = d; state.systemErr = false;
+    if (state.view === "system") renderSystem();
+  }).catch(function (e) {
+    if (guard(e)) return;
+    state.systemErr = true;
+    if (state.view === "system") renderSystem();
+  });
+}
+
+// one decimal under 10, where it carries information: 0,4% against 0%
+function pctf(v) {
+  return Number(v || 0).toLocaleString("ru-RU", { maximumFractionDigits: v < 10 ? 1 : 0 }) + "%";
+}
+function dec2(v) { return Number(v || 0).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function clockSec(iso) {
+  var d = new Date(iso); if (isNaN(d)) return "";
+  return clock(iso) + ":" + String(d.getSeconds()).padStart(2, "0");
+}
+
+function renderSystem() {
+  var d = state.system, host = $("#sys"); if (!host) return;
+  var count = $("#c-system");
+  count.textContent = !d ? "" : state.systemErr
+    ? "Нет ответа от сервера, на экране замер " + clockSec(d.sampled_at)
+    : "Замер " + clockSec(d.sampled_at);
+
+  clear(host);
+  if (!d) {
+    host.appendChild(el("div", "skel", state.systemErr ? "Не удалось получить показания." : "Загрузка…"));
+    return;
+  }
+
+  host.appendChild(waitStrip(d));
+
+  host.appendChild(el("div", "sys-h", "Сервер"));
+  host.appendChild(cpuCard(d));
+
+  var m = d.memory;
+  host.appendChild(m ? kpi({ label:"Память", icon:ICONS.grid, value:bytes(m.used),
+      sub:"из " + bytes(m.total) + " · доступно " + bytes(m.total - m.used)
+        + (m.swap_total > 0 ? " · подкачка " + bytes(m.swap_used) : ""),
+      bar:pct(m.used, m.total) })
+    : kpi({ label:"Память", icon:ICONS.grid, value:"—", sub:"нет данных" }));
+
+  // the free space is the number, the bar is what is used: every bar on this screen fills up
+  var k = d.disk;
+  host.appendChild(k ? kpi({ label:"Диск с фотографиями", icon:ICONS.disk, value:bytes(k.free),
+      sub:"свободно из " + bytes(k.total), bar:pct(k.total - k.free, k.total) })
+    : kpi({ label:"Диск с фотографиями", icon:ICONS.disk, value:"—", sub:"нет данных" }));
+
+  // no bar: load has no ceiling. it means something only against the number of cores, which is why
+  // the cores are on the same line
+  var l = d.load, load = l
+    ? kpi({ label:"Нагрузка, 1 мин", icon:ICONS.scale, value:dec2(l.one),
+        sub:"5 мин " + dec2(l.five) + " · 15 мин " + dec2(l.fifteen) + " · ядер: " + nf(d.cores) })
+    : kpi({ label:"Нагрузка, 1 мин", icon:ICONS.scale, value:"—", sub:"нет данных" });
+  load.title = "Сколько задач в среднем выполняются или ждут процессора. Выше числа ядер — задачи стоят в очереди.";
+  host.appendChild(load);
+
+  host.appendChild(el("div", "sys-h", "Domix"));
+  var p = d.pool;
+  host.appendChild(kpi({ label:"Соединения с базой", icon:ICONS.db, value:nf(p.acquired) + " / " + nf(p.max),
+    sub:"заняты в момент замера", bar:pct(p.acquired, p.max) }));
+  host.appendChild(kpi({ label:"Поиск товаров", icon:ICONS.search,
+    value:nf(d.search.in_use) + " / " + nf(d.search.capacity),
+    sub:"поисков идёт одновременно", bar:pct(d.search.in_use, d.search.capacity) }));
+  host.appendChild(geoTile(d.geo));
+  host.appendChild(kpi({ label:"Память Go", icon:ICONS.box, value:bytes(d.runtime.heap_bytes),
+    sub:"куча · всего у рантайма " + bytes(d.runtime.runtime_bytes) + " · горутин: " + nf(d.runtime.goroutines) }));
+
+  if (d.cpu) drawCPU(d.cpu.history, d.history_seconds / d.interval_seconds);
+}
+
+// **the most important line on the screen, so it is first and full width.** it counts only the
+// acquires that waited because every connection was busy - not pgx's raw EmptyAcquireCount, which
+// also counts opening a connection while the pool had room (sysstat.busyWaits).
+function waitStrip(d) {
+  var p = d.pool, hit = p.busy_waits > 0;
+  var strip = el("div", "stor " + (hit ? "hit" : "ok"));
+  var glyph = el("div", "si"); glyph.appendChild(ico(hit ? ICONS.anom : ICONS.ok, 19));
+  strip.appendChild(glyph);
+
+  var text = el("div", "sb");
+  if (hit) {
+    text.appendChild(el("b", null, "Запросы ждали свободного соединения с базой: " + nf(p.busy_waits)));
+    text.appendChild(el("p", null, "Впервые " + stamp(p.first_busy_wait) + ", последний раз " + stamp(p.last_busy_wait)
+      + ": были заняты все соединения пула (" + nf(p.max) + "). С этого момента его перестало хватать."
+      + " Счёт идёт с запуска сервера " + stamp(d.started_at) + "."));
+  } else {
+    text.appendChild(el("b", null, "Ни один запрос не ждал свободного соединения с базой"));
+    text.appendChild(el("p", null, "С запуска сервера " + stamp(d.started_at) + ". Первое такое ожидание — момент, когда пула из "
+      + nf(p.max) + " соединений перестало хватать."
+      + (p.empty_acquires > 0 ? " EmptyAcquireCount в pgx — " + nf(p.empty_acquires)
+        + ": он считает и открытие нового соединения, пока в пуле есть место, поэтому сам по себе нехватки не значит." : "")));
+  }
+  strip.appendChild(text);
+  return strip;
+}
+
+function cpuCard(d) {
+  var cpu = d.cpu, now = null;
+  if (cpu) {
+    now = el("div", "sys-now");
+    now.appendChild(el("b", "num", pctf(cpu.percent)));
+    now.appendChild(el("span", null, "за последние " + nf(d.interval_seconds) + " с"));
+  }
+  var c = card("b9 r3 tall cpu", "Процессор", "Последний час, замер каждые " + nf(d.interval_seconds) + " с", now);
+
+  if (!cpu) {
+    // memory read but no cpu yet is the first interval after a boot; neither is a host with no /proc
+    c.appendChild(el("div", "skel", d.memory ? "Первый замер — через несколько секунд." : "Нет данных: показания берутся из /proc, а он есть только в Linux."));
+    return c;
+  }
+
+  var holder = el("div", "chart"); holder.id = "ch-cpu";
+  c.appendChild(holder);
+
+  var h = cpu.history, sum = 0, peak = 0;
+  h.forEach(function (v) { sum += v; peak = Math.max(peak, v); });
+  var foot = el("div", "foot", "В среднем за час " + pctf(h.length ? sum / h.length : 0) + " · пик " + pctf(peak)
+    + " · steal " + pctf(cpu.steal_percent));
+  foot.title = "Steal — время, которое гипервизор отдал другим машинам на том же хосте, пока этой нужен был процессор.";
+  c.appendChild(foot);
+  return c;
+}
+
+// **the axis is fixed at 0-100**: scaled to its own range, an hour of 2-4% would draw the same
+// mountain as an hour of 20-90%. Points sit at their real age, so a server up ten minutes fills
+// only the right sixth of the chart instead of stretching ten minutes across an hour.
+function drawCPU(values, slots) {
+  var host = $("#ch-cpu"); if (!host) return;
+  var W = Math.max(host.clientWidth, 320), H = Math.max(host.clientHeight, 220);
+  var padL = 38, padR = 12, padT = 10, padB = 26, pw = W - padL - padR, ph = H - padT - padB;
+  var step = pw / Math.max(slots - 1, 1), n = values.length;
+  var X = function (i) { return padL + pw - (n - 1 - i) * step; };
+  var Y = function (v) { return padT + ph - Math.max(0, Math.min(100, v)) / 100 * ph; };
+
+  var svg = sv("svg", { width:W, height:H, viewBox:"0 0 " + W + " " + H });
+  var defs = sv("defs"), grad = sv("linearGradient", { id:"gCPU", x1:"0", y1:"0", x2:"0", y2:"1" });
+  grad.appendChild(sv("stop", { offset:"0%", "stop-color":C.o, "stop-opacity":".20" }));
+  grad.appendChild(sv("stop", { offset:"100%", "stop-color":C.o, "stop-opacity":"0" }));
+  defs.appendChild(grad); svg.appendChild(defs);
+
+  [0, 50, 100].forEach(function (v) {
+    var y = Y(v);
+    svg.appendChild(sv("line", { x1:padL, y1:y, x2:W - padR, y2:y, stroke:C.line2, "stroke-width":1, "stroke-dasharray":"1 5", "stroke-linecap":"round" }));
+    var lab = sv("text", { x:padL - 9, y:y + 4, "text-anchor":"end", "font-size":11, fill:C.faint, "font-family":"inherit", "font-weight":"600" });
+    lab.textContent = v + "%"; svg.appendChild(lab);
+  });
+  [["−60 мин", padL, "start"], ["−30 мин", padL + pw / 2, "middle"], ["сейчас", padL + pw, "end"]].forEach(function (t) {
+    var lab = sv("text", { x:t[1], y:H - 7, "text-anchor":t[2], "font-size":11, fill:C.faint, "font-family":"inherit", "font-weight":"600" });
+    lab.textContent = t[0]; svg.appendChild(lab);
+  });
+
+  // straight segments: a curve through 720 points looks the same and can overshoot below zero
+  var line = values.map(function (v, i) { return (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1); }).join("");
+  if (n >= 2) {
+    svg.appendChild(sv("path", { d:line + "L" + X(n - 1) + " " + Y(0) + "L" + X(0) + " " + Y(0) + "Z", fill:"url(#gCPU)" }));
+    svg.appendChild(sv("path", { d:line, fill:"none", stroke:C.o, "stroke-width":1.8, "stroke-linejoin":"round" }));
+  }
+  if (n) svg.appendChild(sv("circle", { cx:X(n - 1), cy:Y(values[n - 1]), r:3, fill:C.o }));
+  host.appendChild(svg);
+}
+
+// one tile for both products, because they are one account's two budgets read the same way: what the
+// last 24 hours spent against the cap geo refuses at, which is the server's number, not a literal here
+function geoTile(geo) {
+  var c = el("div", "kpi");
+  var head = el("div", "k-head"), ic = el("div", "k-ico");
+  ic.appendChild(ico(ICONS.locate, 17));
+  head.appendChild(ic); head.appendChild(el("div", "k-lab", "Яндекс, за 24 часа"));
+  c.appendChild(head);
+
+  if (!geo) { c.appendChild(el("div", "k-sub", "база не ответила — счёт неизвестен")); return c; }
+  geo.forEach(function (g) {
+    var m = el("div", "meter"), top = el("div", "m-top");
+    top.appendChild(el("span", null, GEO_NAMES[g.product] || g.product));
+    top.appendChild(el("b", "num", nf(g.last_day) + " / " + nf(g.daily_cap)));
+    m.appendChild(top);
+    var share = pct(g.last_day, g.daily_cap), bar = el("div", "k-bar"), fill = el("i", share >= NEAR ? "near" : null);
+    fill.style.width = Math.min(100, share) + "%";
+    bar.appendChild(fill); m.appendChild(bar);
+    m.appendChild(el("div", "m-sub", "в этот час: " + nf(g.this_hour)));
+    c.appendChild(m);
+  });
+  return c;
 }
 
 // ═══════════════════════ shared table plumbing ═══════════════════════
@@ -4582,6 +4829,7 @@ window.addEventListener("resize", function () {
     // a slide that no click caused
     moveNavPill(true);
     if (state.view === "dash" && state.stats) drawSignups(state.stats.signups);
+    if (state.view === "system" && state.system) renderSystem();
   }, 180);
 });
 

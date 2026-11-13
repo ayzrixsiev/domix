@@ -52,3 +52,28 @@ func (q *DailyQuota) Spend(ctx context.Context, product string) (bool, error) {
 	}
 	return true, nil
 }
+
+// Usage is one product's calls this hour and over the window its cap is counted in.
+type Usage struct {
+	Product           string
+	ThisHour, LastDay int32
+	DailyCap          int32
+}
+
+// Usage answers every product, a quiet one with zeros, in a fixed order. it reads without the mutex:
+// it writes nothing, and a figure one call behind is still the right figure.
+func (q *DailyQuota) Usage(ctx context.Context) ([]Usage, error) {
+	rows, err := q.queries.GeoUsage(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := []Usage{{Product: productGeocoder, DailyCap: q.cap}, {Product: productSuggest, DailyCap: q.cap}}
+	for _, row := range rows {
+		for i := range out {
+			if out[i].Product == row.Product {
+				out[i].ThisHour, out[i].LastDay = row.ThisHour, row.LastDay
+			}
+		}
+	}
+	return out, nil
+}

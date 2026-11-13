@@ -34,8 +34,8 @@ One binary, one Postgres. No gRPC, message broker, Redis or separate search engi
 ## Production
 **The domain and the server are bought and live.** `domix-app.uz` (registered at Turn Cloud, DNS in
 Cloudflare) resolves to **95.182.119.72**, an Ubuntu 24.04 VPS at Airnet in Uzbekistan — 2 cores,
-3.8 GB RAM. `ssh ubuntu@95.182.119.72`, password login, the password is **not in this repo**: ask the
-founder. One box runs everything: nginx on 80/443, the Go api on 127.0.0.1:8080, Postgres, and the
+3.8 GB RAM. `ssh ayzrixsiev@95.182.119.72`, password login, the password is **not in this repo**: ask the
+founder. The `ubuntu` account the image shipped with is locked — bots guess it ~300 times a day. One box runs everything: nginx on 80/443, the Go api on 127.0.0.1:8080, Postgres, and the
 product photos on its own disk. Cloudflare R2 holds the nightly backup and serves nothing.
 **It is deployed and serving.** `https://domix-app.uz/health` answers `ok`, the api runs as the
 `domix` user under `domix-api.service`, Postgres 18.6 with PostGIS holds the 283-row catalogue, and

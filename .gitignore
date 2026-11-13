@@ -10,3 +10,6 @@ __pycache__/
 /images/shops/uploads/
 secrets.vault.enc
 budget.md
+
+# ethical-hacking capstone: stays local, never pushed (findings + server details)
+.claude/skills/security-capstone/

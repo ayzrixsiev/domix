@@ -22,6 +22,7 @@ import (
 	"domix/backend/internal/geo"
 	"domix/backend/internal/imagestore"
 	"domix/backend/internal/ratelimit"
+	"domix/backend/internal/sysstat"
 	"domix/backend/internal/telegram"
 	"domix/backend/internal/verify"
 	"domix/backend/internal/webui"
@@ -102,7 +103,8 @@ func main() {
 	// day's budget can go, never how much. kept two hours, its refill from empty, or a quiet spell would
 	// hand it back full early.
 	geoPace := ratelimit.New(300.0/3600, 600, 2*time.Hour)
-	addressSearch := mustOpenAddressSearch(queries, geoPace)
+	geoQuota := geo.NewDailyQuota(queries)
+	addressSearch := mustOpenAddressSearch(geoQuota, geoPace)
 
 	// held in memory for a minute, which is what makes publicLimiter affordable at those numbers
 	publicReads := endpoints.NewPublicCache(time.Minute)
@@ -178,12 +180,13 @@ func main() {
 	// its own pattern: a multipart body and a different limit
 	http.HandleFunc("/api/products/{id}/image", endpoints.WithJSON(apiLimiter.Wrap(productsEndpoints.RouteImage)))
 
+	// four in ten pool connections may be searching at once - see Home.SearchSlots
+	searchSlots := make(chan struct{}, max(1, int(dbPool.Config().MaxConns)*2/5))
 	homeEndpoints := &endpoints.Home{
-		Queries: queries,
-		URLs:    imageURLs,
-		Cache:   publicReads,
-		// four in ten pool connections may be searching at once - see Home.SearchSlots
-		SearchSlots: make(chan struct{}, max(1, int(dbPool.Config().MaxConns)*2/5)),
+		Queries:     queries,
+		URLs:        imageURLs,
+		Cache:       publicReads,
+		SearchSlots: searchSlots,
 	}
 	http.HandleFunc("/api/home", endpoints.WithJSON(publicLimiter.Wrap(homeEndpoints.Get)))
 	http.HandleFunc("/api/categories/{code}/products", endpoints.WithJSON(publicLimiter.Wrap(homeEndpoints.ProductsByCategory)))
@@ -213,9 +216,16 @@ func main() {
 	http.HandleFunc("/api/waybills/photo", waybillRoute(waybillEndpoints.CreateFromPhoto))
 	http.HandleFunc("/api/waybills/{id}/photo", waybillRoute(waybillEndpoints.Photo))
 
+	// «Система» reads the machine it runs on, so it needs no agent: one goroutine samples it
+	systemReadings := sysstat.New(sysstat.Config{Pool: dbPool, SearchSlots: searchSlots, DiskPath: productImagesDir()})
+	go systemReadings.Run()
+
 	// **one chain built once, so no route can quietly forget RequireAdmin.** the order is load-bearing:
 	// RequireAuth puts the caller's id on the context, RequireAdmin reads it.
-	adminEndpoints := &endpoints.Admin{Pool: dbPool, Queries: queries, URLs: imageURLs, Images: productImages}
+	adminEndpoints := &endpoints.Admin{
+		Pool: dbPool, Queries: queries, URLs: imageURLs, Images: productImages,
+		Sampler: systemReadings, GeoQuota: geoQuota,
+	}
 	adminRoute := func(handler http.HandlerFunc) http.HandlerFunc {
 		return endpoints.WithJSON(apiLimiter.Wrap(
 			auth.RequireAuth(jwtSecret, queries, adminEndpoints.RequireAdmin(handler)),
@@ -223,6 +233,7 @@ func main() {
 	}
 	http.HandleFunc("/api/admin/stats", adminRoute(adminEndpoints.Stats))
 	http.HandleFunc("/api/admin/anomalies", adminRoute(adminEndpoints.Anomalies))
+	http.HandleFunc("/api/admin/system", adminRoute(adminEndpoints.System))
 
 	http.HandleFunc("/api/admin/users", adminRoute(adminEndpoints.ListUsers))
 	http.HandleFunc("/api/admin/users/{id}", adminRoute(adminEndpoints.RouteUser))
@@ -427,8 +438,8 @@ func mustReadReviewAccount() (phone, code string) {
 }
 
 // both yandex keys or no boot: without them every shop created gets an error for an address.
-func mustOpenAddressSearch(queries *db.Queries, pace *ratelimit.Limiter) *geo.Service {
-	service, err := geo.New(geo.SettingsFromEnv(), geo.NewDailyQuota(queries), pace)
+func mustOpenAddressSearch(quota *geo.DailyQuota, pace *ratelimit.Limiter) *geo.Service {
+	service, err := geo.New(geo.SettingsFromEnv(), quota, pace)
 	if err != nil {
 		log.Fatalf("Cannot configure address search: %v - set %s and %s", err, geo.EnvGeocoderKey, geo.EnvSuggestKey)
 	}

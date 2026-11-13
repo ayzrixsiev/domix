@@ -20,6 +20,8 @@ import (
 	"domix/backend/db"
 	"domix/backend/internal/auth"
 	"domix/backend/internal/catalog"
+	"domix/backend/internal/geo"
+	"domix/backend/internal/sysstat"
 )
 
 // the statistics are counts over whole tables, so with the developer's own rows visible "two users"
@@ -38,7 +40,8 @@ func adminUnderTest(t *testing.T) (*Admin, context.Context, pgx.Tx, *db.Queries)
 	if _, err := tx.Exec(ctx, "DELETE FROM basket_history"); err != nil {
 		t.Fatalf("clearing basket history: %v", err)
 	}
-	return &Admin{Queries: q}, ctx, tx, q
+	readings := sysstat.New(sysstat.Config{DiskPath: t.TempDir()})
+	return &Admin{Queries: q, Sampler: readings, GeoQuota: geo.NewDailyQuota(q)}, ctx, tx, q
 }
 
 func makeUser(t *testing.T, ctx context.Context, q *db.Queries, name, role string) int64 {
@@ -124,6 +127,8 @@ func TestOnlyAnAdminReachesTheAdminAPI(t *testing.T) {
 		{"anomalies", http.MethodGet, "/api/admin/anomalies", adminEndpoints.Anomalies},
 		// a customer's own shopping list and their number: no shop owner may read these
 		{"waybills", http.MethodGet, "/api/admin/waybills", adminEndpoints.ListWaybills},
+		// the server's own figures: no secret in them, but nobody else's business either
+		{"system", http.MethodGet, "/api/admin/system", adminEndpoints.System},
 	}
 
 	for _, route := range routes {
