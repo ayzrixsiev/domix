@@ -274,10 +274,16 @@ shop, the same decode as every other upload.
 - **The headline is `busy_waits`, not pgx's `EmptyAcquireCount`.** pgx also counts an acquire that found
   no idle connection and opened one while the pool had room — routine after `MaxConnIdleTime` shrinks the
   pool to `MinConns`. `sysstat.busyWaits` subtracts every connection that could have finished opening in
-  the interval, so it errs towards silence; the raw count is printed beside it, named, with that caveat.
-  `TestOnlyAWaitForABusyConnectionCountsAsTheFullPool`.
+  the interval, so it errs towards silence. The raw count stays in the JSON and is not drawn: beside the
+  real one it read as a second alarm. `TestOnlyAWaitForABusyConnectionCountsAsTheFullPool`.
+- **The strip is one fixed-height skeleton for both states** (`waitStrip`): headline, then the count, the first
+  and the last moment. Clear is a neutral card with a green check; the first wait turns the whole band red. Only
+  fill and colour change, so the band never grows or pushes the cards down.
+- **Memory and disk are one tile, `capTile`**: the free amount is the headline with «свободно» beside it, the bar
+  is the used part, labelled «занято … / всего …» under it. «40 ГБ / свободно из 50 ГБ» was once read as
+  40 GB full. Swap is shown only when something is in it, as «вытеснено из памяти на диск», never as «подкачка».
 - **Nothing is persisted.** The cpu hour, the wait count and its first/last moment start again at each
-  restart, which is why the strip says when the server started.
+  restart, which is why the header line says when the server started.
 - **Only the processor has a chart**: a fixed 0–100% axis, points at their real age. Load average is
   already a time average, the disk does not move in an hour, and the pool and search slots are instants
   a 5 s sample would mostly read as zero. Bars turn amber at `NEAR` (80%) — a colour, not an alarm.

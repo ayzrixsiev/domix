@@ -548,9 +548,34 @@
      its own grid, not `.dash`: that one is three rows sized to fill the window, and this one is as
      tall as what it holds. The processor card spans the three tiles stacked beside it. */
   .sys{display:grid;grid-template-columns:repeat(12,1fr);gap:12px;align-items:start}
-  .sys > .stor{grid-column:1/-1;align-items:center}
-  .sys-h{grid-column:1/-1;margin:8px 2px -2px;font-size:12px;font-weight:750;color:var(--muted);
-         letter-spacing:.06em;text-transform:uppercase}
+  /* **one skeleton for both states, at a fixed height**: clear and tripped differ in fill and colour
+     only, so the first wait changes how the band looks without moving anything under it */
+  .wait{grid-column:1/-1;height:84px;display:flex;align-items:center;gap:16px;padding:0 22px 0 16px;
+        background:var(--card);border:1px solid var(--line-2);border-radius:var(--r-4);overflow:hidden}
+  .wait .w-ico{width:52px;height:52px;border-radius:var(--r-2);display:grid;place-items:center;flex:none;
+               background:var(--green-bg);color:var(--green)}
+  .wait .w-txt{flex:1;min-width:0}
+  .wait .w-txt b,.wait .w-txt p{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wait .w-txt b{font-size:16px;font-weight:750;letter-spacing:-.02em}
+  .wait .w-txt p{margin:3px 0 0;font-size:12.5px;font-weight:600;color:var(--muted)}
+  .wait .w-facts{display:flex;gap:28px;flex:none}
+  .wait .w-f span{display:block;font-size:11.5px;font-weight:650;color:var(--muted);margin-bottom:4px}
+  .wait .w-f b{display:block;height:24px;line-height:24px;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink-2)}
+  .wait .w-f.n b{font-size:24px;font-weight:750;letter-spacing:-.03em;color:var(--green)}
+  .wait.hit{background:var(--red-bg);border-color:var(--red-line)}
+  .wait.hit .w-ico{background:var(--red);color:#fff}
+  .wait.hit .w-txt b,.wait.hit .w-f b{color:var(--red-ink)}
+  .wait.hit .w-f.n b{color:var(--red-ink)}
+  @media (max-width:900px){ .wait .w-txt p{display:none} .wait .w-facts{gap:16px} }
+  /* on a phone the icon and its colour carry the state, and the three facts take the width */
+  @media (max-width:640px){ .wait{gap:12px;padding:0 14px 0 12px} .wait .w-ico{width:40px;height:40px}
+                            .wait .w-txt{display:none} .wait .w-facts{flex:1;justify-content:space-between;gap:10px} }
+  /* free is the number and says so in words; the bar and its left label are what is used */
+  .kpi .k-val small{font-size:13.5px;font-weight:650;letter-spacing:0;color:var(--muted);margin-left:6px}
+  .kpi .k-ends{display:flex;justify-content:space-between;gap:10px;margin-top:7px;font-size:12px;
+               font-weight:650;color:var(--muted)}
+  .kpi .k-ends i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--o);margin-right:6px;vertical-align:1px}
+  .kpi .k-ends i.near{background:var(--amber)}
   .r3{grid-row:span 3}
   .sys .cpu .chart{position:relative;min-height:220px}
   /* the shared tile cuts its sub-line off at one line; these carry the second half of a reading */
@@ -2516,7 +2541,7 @@ function renderSystem() {
   var count = $("#c-system");
   count.textContent = !d ? "" : state.systemErr
     ? "Нет ответа от сервера, на экране замер " + clockSec(d.sampled_at)
-    : "Замер " + clockSec(d.sampled_at);
+    : "Замер " + clockSec(d.sampled_at) + " · сервер запущен " + stamp(d.started_at);
 
   clear(host);
   if (!d) {
@@ -2526,20 +2551,16 @@ function renderSystem() {
 
   host.appendChild(waitStrip(d));
 
-  host.appendChild(el("div", "sys-h", "Сервер"));
   host.appendChild(cpuCard(d));
 
+  // swap is named only once something is in it, and then as what it means rather than as a term
   var m = d.memory;
-  host.appendChild(m ? kpi({ label:"Память", icon:ICONS.grid, value:bytes(m.used),
-      sub:"из " + bytes(m.total) + " · доступно " + bytes(m.total - m.used)
-        + (m.swap_total > 0 ? " · подкачка " + bytes(m.swap_used) : ""),
-      bar:pct(m.used, m.total) })
+  host.appendChild(m ? capTile("Память", ICONS.grid, m.total - m.used, m.used, m.total,
+      m.swap_used > 0 ? bytes(m.swap_used) + " вытеснено из памяти на диск" : null)
     : kpi({ label:"Память", icon:ICONS.grid, value:"—", sub:"нет данных" }));
 
-  // the free space is the number, the bar is what is used: every bar on this screen fills up
   var k = d.disk;
-  host.appendChild(k ? kpi({ label:"Диск с фотографиями", icon:ICONS.disk, value:bytes(k.free),
-      sub:"свободно из " + bytes(k.total), bar:pct(k.total - k.free, k.total) })
+  host.appendChild(k ? capTile("Диск с фотографиями", ICONS.disk, k.free, k.total - k.free, k.total, null)
     : kpi({ label:"Диск с фотографиями", icon:ICONS.disk, value:"—", sub:"нет данных" }));
 
   // no bar: load has no ceiling. it means something only against the number of cores, which is why
@@ -2551,7 +2572,6 @@ function renderSystem() {
   load.title = "Сколько задач в среднем выполняются или ждут процессора. Выше числа ядер — задачи стоят в очереди.";
   host.appendChild(load);
 
-  host.appendChild(el("div", "sys-h", "Domix"));
   var p = d.pool;
   host.appendChild(kpi({ label:"Соединения с базой", icon:ICONS.db, value:nf(p.acquired) + " / " + nf(p.max),
     sub:"заняты в момент замера", bar:pct(p.acquired, p.max) }));
@@ -2570,25 +2590,60 @@ function renderSystem() {
 // also counts opening a connection while the pool had room (sysstat.busyWaits).
 function waitStrip(d) {
   var p = d.pool, hit = p.busy_waits > 0;
-  var strip = el("div", "stor " + (hit ? "hit" : "ok"));
-  var glyph = el("div", "si"); glyph.appendChild(ico(hit ? ICONS.anom : ICONS.ok, 19));
+  var strip = el("div", "wait" + (hit ? " hit" : ""));
+  var glyph = el("div", "w-ico"); glyph.appendChild(ico(hit ? ICONS.anom : ICONS.ok, 24));
   strip.appendChild(glyph);
 
-  var text = el("div", "sb");
-  if (hit) {
-    text.appendChild(el("b", null, "Запросы ждали свободного соединения с базой: " + nf(p.busy_waits)));
-    text.appendChild(el("p", null, "Впервые " + stamp(p.first_busy_wait) + ", последний раз " + stamp(p.last_busy_wait)
-      + ": были заняты все соединения пула (" + nf(p.max) + "). С этого момента его перестало хватать."
-      + " Счёт идёт с запуска сервера " + stamp(d.started_at) + "."));
-  } else {
-    text.appendChild(el("b", null, "Ни один запрос не ждал свободного соединения с базой"));
-    text.appendChild(el("p", null, "С запуска сервера " + stamp(d.started_at) + ". Первое такое ожидание — момент, когда пула из "
-      + nf(p.max) + " соединений перестало хватать."
-      + (p.empty_acquires > 0 ? " EmptyAcquireCount в pgx — " + nf(p.empty_acquires)
-        + ": он считает и открытие нового соединения, пока в пуле есть место, поэтому сам по себе нехватки не значит." : "")));
-  }
+  var text = el("div", "w-txt");
+  text.appendChild(el("b", null, hit ? "Запросы ждали базу данных" : "Запросы не ждут базу данных"));
+  text.appendChild(el("p", null, hit
+    ? "Все соединения с базой (" + nf(p.max) + ") были заняты разом — нагрузка переросла сервер"
+    : "Каждому запросу нашлось свободное соединение из " + nf(p.max)));
   strip.appendChild(text);
+
+  var facts = el("div", "w-facts");
+  [["n", "Сколько раз", nf(p.busy_waits)], ["", "Впервые", shortStamp(p.first_busy_wait)],
+   ["", "Последний раз", shortStamp(p.last_busy_wait)]].forEach(function (f) {
+    var x = el("div", "w-f" + (f[0] ? " " + f[0] : ""));
+    x.appendChild(el("span", null, f[1])); x.appendChild(el("b", null, f[2]));
+    facts.appendChild(x);
+  });
+  strip.appendChild(facts);
   return strip;
+}
+
+// no year: the count starts again at every restart, so both moments are always recent
+function shortStamp(iso) {
+  if (!iso || isNaN(new Date(iso))) return "—";
+  return sdate(iso).slice(0, 5) + " " + clock(iso);
+}
+
+// memory and disk read the same way, so they are drawn the same way: the free amount is the headline
+// with the word beside it, and the bar is the used part with its own figure under the filled end
+function capTile(label, icon, free, used, total, note) {
+  var share = pct(used, total), c = el("div", "kpi");
+  var head = el("div", "k-head"), ic = el("div", "k-ico");
+  ic.appendChild(ico(icon, 17));
+  head.appendChild(ic); head.appendChild(el("div", "k-lab", label));
+  c.appendChild(head);
+
+  var val = el("div", "k-val num", bytes(free));
+  val.appendChild(el("small", null, "свободно"));
+  var body = el("div", "k-body"); body.appendChild(val);
+  c.appendChild(body);
+
+  var bar = el("div", "k-bar"), fill = el("i", share >= NEAR ? "near" : null);
+  fill.style.width = Math.min(100, share) + "%";
+  bar.appendChild(fill); c.appendChild(bar);
+
+  var ends = el("div", "k-ends"), left = el("span");
+  left.appendChild(el("i", share >= NEAR ? "near" : null));
+  left.appendChild(document.createTextNode("занято " + bytes(used)));
+  ends.appendChild(left); ends.appendChild(el("span", null, "всего " + bytes(total)));
+  c.appendChild(ends);
+
+  if (note) c.appendChild(el("div", "k-sub", note));
+  return c;
 }
 
 function cpuCard(d) {
