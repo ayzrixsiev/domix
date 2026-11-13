@@ -227,6 +227,21 @@ directory is left in place. It is the username every scanner on the internet alr
 there — it was being guessed ~300 times a day — so the account that exists is not the account they try.
 Do not unlock it to fix something; `ayzrixsiev` has the same sudo.
 
+**Three users own this box, and mixing them up takes the api down.** `ayzrixsiev` is the person,
+`domix` is what `domix-api.service` runs as, `www-data` is nginx. **`chown -R` over `/srv/domix` is
+the trap** — it did exactly this on 2026-11-13: `/srv/domix/.env` is mode 600, so handing it to the
+person makes it unreadable to `domix`, and the api dies on `DB_URL must be configured` and
+auto-restarts forever. The same sweep took `images/` away from the user that writes uploads into it.
+What each path must be:
+
+| path | owner | why |
+| --- | --- | --- |
+| `/srv/domix`, `backend/`, the `api` binary | `ayzrixsiev` | the checkout he pulls and builds; 755 is enough for `domix` to execute |
+| `/srv/domix/.env` | **`domix`**, 600 | the service reads it at boot and nothing else may |
+| `/srv/domix/images` | **`domix`**, 775 | the api writes uploads here and nginx needs other-read |
+
+`sudo -u domix test -r /srv/domix/.env` answers the question before a restart does.
+
 **The password is not in this repo and must never be committed.** Ask the founder, or take it from
 `secrets.vault.enc`. `sudo` on the server takes that same password.
 
