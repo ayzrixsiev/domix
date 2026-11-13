@@ -1350,3 +1350,32 @@ func TestTheSheetImportNamesTheLineWhosePhotoIsWrong(t *testing.T) {
 		t.Errorf("message = %q, want it to name row 2", refusal["error"])
 	}
 }
+
+// **the editor rewrites the point on every save**, so a list that leaves the coordinates out does
+// not just draw the map in the wrong place: the form has nothing to send back, and Сохранить moves
+// the shop to whatever it defaulted to. The panel's only source for them is this payload.
+func TestTheShopListCarriesEachShopsOwnPoint(t *testing.T) {
+	adminEndpoints, ctx, tx, q := adminUnderTest(t)
+
+	adminID := makeUser(t, ctx, q, "Boss9", "admin")
+	makeSeededShop(t, ctx, tx, q, "Placed", catalog.CategoryWood, false)
+
+	rec := requestAdmin(t, ctx, adminEndpoints, http.MethodGet, "/api/admin/shops", adminID, adminEndpoints.ListShops)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("shops = %d (%s)", rec.Code, rec.Body.String())
+	}
+
+	var body struct {
+		Shops []adminShopResponse `json:"shops"`
+	}
+	decodeBody(t, rec, &body)
+
+	if len(body.Shops) != 1 {
+		t.Fatalf("got %d shops, want 1", len(body.Shops))
+	}
+	// the point makeSeededShop puts every shop on
+	if body.Shops[0].Latitude != 41.2995 || body.Shops[0].Longitude != 69.2401 {
+		t.Errorf("shop is at %v,%v - want 41.2995,69.2401",
+			body.Shops[0].Latitude, body.Shops[0].Longitude)
+	}
+}

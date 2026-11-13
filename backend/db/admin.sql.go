@@ -300,6 +300,8 @@ const adminListShops = `-- name: AdminListShops :many
 SELECT
     s.id, s.name, s.category, s.address, s.contact_phone, s.created_at, s.vip_until,
     s.excluded_from_index, s.image_path,
+    -- the editor rewrites the point on every save, so the panel has to be holding the real one
+    ST_Y(s.location)::float8 AS latitude, ST_X(s.location)::float8 AS longitude,
     COALESCE(s.vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip,
     u.id    AS owner_id,
     u.name  AS owner_name,
@@ -333,6 +335,8 @@ type AdminListShopsRow struct {
 	VipUntil          pgtype.Timestamptz `json:"vip_until"`
 	ExcludedFromIndex bool               `json:"excluded_from_index"`
 	ImagePath         pgtype.Text        `json:"image_path"`
+	Latitude          float64            `json:"latitude"`
+	Longitude         float64            `json:"longitude"`
 	IsVip             bool               `json:"is_vip"`
 	OwnerID           int64              `json:"owner_id"`
 	OwnerName         pgtype.Text        `json:"owner_name"`
@@ -363,6 +367,8 @@ func (q *Queries) AdminListShops(ctx context.Context, arg AdminListShopsParams) 
 			&i.VipUntil,
 			&i.ExcludedFromIndex,
 			&i.ImagePath,
+			&i.Latitude,
+			&i.Longitude,
 			&i.IsVip,
 			&i.OwnerID,
 			&i.OwnerName,

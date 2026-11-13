@@ -65,6 +65,8 @@ LIMIT $1 OFFSET $2;
 SELECT
     s.id, s.name, s.category, s.address, s.contact_phone, s.created_at, s.vip_until,
     s.excluded_from_index, s.image_path,
+    -- the editor rewrites the point on every save, so the panel has to be holding the real one
+    ST_Y(s.location)::float8 AS latitude, ST_X(s.location)::float8 AS longitude,
     COALESCE(s.vip_until > CURRENT_TIMESTAMP, false)::boolean AS is_vip,
     u.id    AS owner_id,
     u.name  AS owner_name,

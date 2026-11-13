@@ -475,8 +475,15 @@ type adminShopResponse struct {
 	Category     string `json:"category"`
 	Address      string `json:"address"`
 	ContactPhone string `json:"contact_phone"`
-	IsVIP        bool   `json:"is_vip"`
-	VipUntil     string `json:"vip_until,omitempty"`
+
+	// **the editor sends these back on every save**, so the panel must be given the shop's own
+	// point. Without them the map in the editor had nothing to draw and `UpdateShop` was handed
+	// whatever the form had defaulted to.
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+
+	IsVIP    bool   `json:"is_vip"`
+	VipUntil string `json:"vip_until,omitempty"`
 	// suspended by an admin, independent of catalogue completeness - see AdminSetShopExcluded
 	ExcludedFromIndex bool `json:"excluded_from_index"`
 
@@ -525,6 +532,8 @@ func (a *Admin) ListShops(w http.ResponseWriter, r *http.Request) {
 			Category:          row.Category,
 			Address:           row.Address,
 			ContactPhone:      row.ContactPhone,
+			Latitude:          row.Latitude,
+			Longitude:         row.Longitude,
 			IsVIP:             row.IsVip,
 			VipUntil:          timestampString(row.VipUntil),
 			ExcludedFromIndex: row.ExcludedFromIndex,
