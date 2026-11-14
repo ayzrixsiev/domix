@@ -66,14 +66,15 @@ spends **Geosuggest** while the address is typed (its own 1000 a day), five to e
 
 ### Do these first
 
-1. **Create the app in Play Console and start the closed test.** The developer account is bought and
-   verified. A personal account created after 2023-11-13 needs **12 testers opted in for 14
-   continuous days** - accepted the invite *and* installed, under the matching Google account;
-   dropping to 11 restarts the 14 days. Production review then takes up to ~7 days. **The real
-   calendar is 3 weeks minimum**, and it runs independently of everything else.
-2. **Delete `DevicePreview` from `frontend/lib/main.dart`, then `make release`.** `env.prod.json`
-   already points at `https://domix-app.uz/api/auth`. The wrapper is inert in a release build
-   (`enabled: !kReleaseMode`), so this is about not shipping a development dependency, not a bug.
+1. **The closed test is running** (as of 2026-11-14) and the 14 days are being waited out; nothing
+   else here is on its critical path. A personal developer account created after 2023-11-13 needs
+   **12 testers opted in for 14 continuous days** - accepted the invite *and* installed, under the
+   matching Google account. **Dropping to 11 restarts the 14 days**, so the thing to watch while
+   waiting is that no tester uninstalls. Production review then takes up to ~7 days.
+2. **`DevicePreview` is out of `frontend/lib/main.dart`** and `env.prod.json` already points at
+   `https://domix-app.uz/api/auth`, so a release build is `make release` and nothing else. The
+   wrapper was inert in a release build anyway (`enabled: !kReleaseMode`) - it was about not
+   shipping a development dependency, never a bug.
 3. **Rebuild the api and arm the review account before any build with the phone route ships.** **The
    order matters**: an api older than the `sms_unavailable` refusal answers `sent` to every number
    and prints its code into the journal. Pull into `/srv/domix`, `cd backend && go build -o api
@@ -466,6 +467,15 @@ either; nginx, the units and the migrations are in this repo.
   `restore.sh db <date> <url>` rebuilt the 283-row catalogue into a throwaway database on
   2026-11-09. **The passphrase also lives off the server**, because the file that holds it dies with
   the machine the backups exist to replace.
+- **Uptime is watched from outside the box, at UptimeRobot** - one HTTP monitor on
+  `https://domix-app.uz/health`, every 5 minutes, alerting **domix.support@gmail.com**. Free tier,
+  one of its 50 monitors used. **The point is that it does not run here**: `domix-backup`'s
+  healthchecks.io switch only covers the nightly backup, and nothing on a dead, wedged or rebooting
+  server can raise an alarm about itself. Proven needed on 2026-11-13, when the api spent ~20 minutes
+  restart-looping on an unreadable `.env` and the first anyone knew was a browser refusing to connect.
+  A monitor that keeps alerting on a deploy's own 30-second restart gets muted and then ignored, so
+  the check is a plain GET on `/health` with the failure threshold left at its default rather than
+  tightened.
 - **No error reporting.** When the app breaks on an owner's phone, nobody finds out. Structured server logs
   plus a crash reporter would turn "it doesn't work" into a stack trace.
 - **Three Yandex budgets, not one**, each shown separately in the cabinet under «Подключенные
