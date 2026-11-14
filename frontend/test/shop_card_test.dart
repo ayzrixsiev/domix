@@ -34,6 +34,8 @@ import 'package:frontend/features/stores/data/shop_category.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 import 'package:frontend/features/stores/presentation/screens/shop_card_screen.dart';
 import 'package:frontend/features/stores/presentation/widgets/shop_category_avatar.dart';
+import 'package:url_launcher_platform_interface/link.dart';
+import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
 
 /// Stands in for the network. `implements` rather than a subclass, so the fake cannot accidentally
 /// inherit a real http call the day one is added to the repository.
@@ -93,6 +95,26 @@ class _FakeProductsRepository implements ProductsRepository {
   @override
   Future<Product> removeProductImage(int productId) async =>
       products.firstWhere((p) => p.id == productId);
+}
+
+/// Stands in for the phone's url handler. **`launchUrl` answers true or false and nothing else**,
+/// so this is the only way to see *which* link «Маршрут» handed over.
+class _FakeUrlLauncher extends UrlLauncherPlatform {
+  _FakeUrlLauncher({this.installed = const ['yandexmaps', 'https']});
+
+  /// The url schemes this phone pretends to have an app for.
+  final List<String> installed;
+  final launched = <String>[];
+
+  @override
+  LinkDelegate? get linkDelegate => null;
+
+  @override
+  Future<bool> launchUrl(String url, LaunchOptions options) async {
+    if (!installed.contains(Uri.parse(url).scheme)) return false;
+    launched.add(url);
+    return true;
+  }
 }
 
 Shop _shop({required int id, required String name, bool isVip = false}) {
@@ -622,6 +644,63 @@ void main() {
 
     expect(find.byType(ShopCardView), findsNothing);
   });
+
+  // **The coordinates go out in the order the receiving app reads them, and a swap fails silently:**
+  // Yandex's `rtext` is latitude,longitude while its `pt` is longitude,latitude, so a card that sent
+  // 69.2,41.3 would open a map of empty steppe in Kazakhstan with no error anywhere. 41.3 and 69.2
+  // are far enough apart to catch it.
+  testWidgets('«Маршрут» hands the shop to Yandex Maps as a route', (
+    tester,
+  ) async {
+    final launcher = _FakeUrlLauncher();
+    UrlLauncherPlatform.instance = launcher;
+
+    await _pumpCard(tester);
+    await tester.tap(find.text('Маршрут'));
+    await tester.pumpAndSettle();
+
+    expect(
+      launcher.launched.single,
+      'yandexmaps://maps.yandex.ru/?rtext=~41.3,69.2&rtt=auto',
+      reason: 'latitude first, and the empty point means "from where I am"',
+    );
+  });
+
+  testWidgets('without Yandex Maps the route falls to Google', (tester) async {
+    // a phone with a browser and no yandex app: the first link throws ActivityNotFoundException,
+    // which url_launcher reports as false
+    final launcher = _FakeUrlLauncher(installed: const ['https']);
+    UrlLauncherPlatform.instance = launcher;
+
+    await _pumpCard(tester);
+    await tester.tap(find.text('Маршрут'));
+    await tester.pumpAndSettle();
+
+    expect(
+      launcher.launched.single,
+      'https://www.google.com/maps/dir/'
+      '?api=1&destination=41.3,69.2&travelmode=driving',
+    );
+  });
+}
+
+Future<void> _pumpCard(WidgetTester tester) async {
+  await tester.pumpWidget(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => LanguageProvider()),
+        ChangeNotifierProvider(create: (_) => FavoritesController()),
+        ChangeNotifierProvider(
+          create: (_) =>
+              ProductsController(repository: _FakeProductsRepository()),
+        ),
+      ],
+      child: MaterialApp(
+        home: ShopCardScreen(shop: _shop(id: 1, name: 'Стройбаза')),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
 }
 
 /// The catalogue is the last thing on a card that now opens with a full-width cover, so every

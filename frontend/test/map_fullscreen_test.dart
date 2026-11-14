@@ -17,7 +17,6 @@ import 'package:frontend/features/app_shell/presentation/screens/app_shell_scree
 import 'package:frontend/features/app_shell/presentation/widgets/floating_bottom_nav_bar.dart';
 import 'package:frontend/features/favorites/presentation/controllers/favorites_controller.dart';
 import 'package:frontend/features/home/presentation/controllers/home_controller.dart';
-import 'package:frontend/features/map/presentation/controllers/map_focus_controller.dart';
 import 'package:frontend/features/map/presentation/widgets/map_search_panel.dart';
 import 'package:frontend/features/products/presentation/controllers/products_controller.dart';
 import 'package:frontend/features/profile/presentation/controllers/auth_controller.dart';
@@ -47,7 +46,6 @@ Future<void> _pumpShell(WidgetTester tester) async {
         ),
         ChangeNotifierProvider(create: (_) => FavoritesController()),
         ChangeNotifierProvider(create: (_) => ProductsController()),
-        ChangeNotifierProvider(create: (_) => MapFocusController()),
         ChangeNotifierProvider(create: (_) => WaybillsController()),
       ],
       child: const MaterialApp(home: AppShellScreen()),

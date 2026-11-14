@@ -16,7 +16,6 @@ import 'package:frontend/core/widgets/primary_action_button.dart';
 import 'package:frontend/features/favorites/presentation/controllers/favorites_controller.dart';
 import 'package:frontend/features/favorites/presentation/favorite_action.dart';
 import 'package:frontend/features/home/data/category_product.dart';
-import 'package:frontend/features/map/presentation/controllers/map_focus_controller.dart';
 import 'package:frontend/features/products/data/product_model.dart';
 import 'package:frontend/features/products/data/product_section.dart';
 import 'package:frontend/features/products/presentation/controllers/products_controller.dart';
@@ -313,9 +312,30 @@ class _ShopCardViewState extends State<ShopCardView> {
     );
   }
 
-  // our own map shows the shop rather than the phone's maps app: the shell closes this card and the
-  // map tab flies to the pin
-  void _route() => context.read<MapFocusController>().show(widget.shop);
+  // **the route is built by the phone's maps app, not by us**: routing is in MapKit's paid package,
+  // and the other app already has the user's position - so we hand over the destination only and
+  // never ask for the location permission ourselves. the empty point before `~` is what means
+  // "from where I am"; `rtext` is latitude,longitude, the opposite order to `pt` in _share.
+  Future<void> _route() async {
+    final shop = widget.shop;
+    final destination = '${shop.latitude},${shop.longitude}';
+
+    // yandex maps first - it is the maps app on most phones here, and its routes are the better ones
+    // in Tashkent. google's universal directions url is the fallback that needs nothing installed:
+    // it opens the google maps app when there is one and the web map when there is not.
+    final candidates = [
+      Uri.parse('yandexmaps://maps.yandex.ru/?rtext=~$destination&rtt=auto'),
+      Uri.parse(
+        'https://www.google.com/maps/dir/'
+        '?api=1&destination=$destination&travelmode=driving',
+      ),
+    ];
+
+    for (final uri in candidates) {
+      if (await _tryOpen(uri)) return;
+    }
+    _reportNothingToOpenWith();
+  }
 
   // **the return value of launchUrl is the signal, not canLaunchUrl**, which answers false for
   // launchable links unless every scheme is declared - and throws rather than returning false, so the

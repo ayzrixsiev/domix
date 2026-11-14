@@ -11,7 +11,6 @@ import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/features/map/data/user_location_service.dart';
-import 'package:frontend/features/map/presentation/controllers/map_focus_controller.dart';
 import 'package:frontend/features/stores/data/shop_category.dart';
 import 'package:frontend/features/stores/data/shop_model.dart';
 import 'package:frontend/features/stores/presentation/controllers/stores_controller.dart';
@@ -113,14 +112,9 @@ class _MapScreenState extends State<MapScreen> {
   UserLocationFailure? _locationFailure;
   Timer? _failureTimer;
 
-  late final MapFocusController _focus;
-
   @override
   void initState() {
     super.initState();
-
-    _focus = context.read<MapFocusController>()
-      ..addListener(_showRequestedShop);
 
     // the first sync. IndexedStack keeps this State alive across tab switches, so this runs once per
     // session and every later re-sync comes through didUpdateWidget. deliberately not gated on
@@ -130,7 +124,6 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   void dispose() {
-    _focus.removeListener(_showRequestedShop);
     _failureTimer?.cancel();
     super.dispose();
   }
@@ -159,20 +152,6 @@ class _MapScreenState extends State<MapScreen> {
   // glides the camera instead of teleporting - MapKit animates natively, so this is one call
   void _flyTo(double latitude, double longitude, {double zoom = _focusedZoom}) {
     _map?.flyTo(latitude, longitude, zoom: zoom);
-  }
-
-  // a shop card's «Маршрут» lands here. **the request stays pending until the native map exists**, and
-  // the filter is dropped when it would hide the very pin being shown
-  void _showRequestedShop() {
-    final map = _map;
-    final shop = _focus.request;
-    if (map == null || shop == null) return;
-
-    _focus.take();
-    if (_category != null && _category != shop.category) {
-      setState(() => _category = null);
-    }
-    map.flyTo(shop.latitude, shop.longitude);
   }
 
   // fires on every camera frame, so it has to be cheap and must not setState unless the answer
@@ -341,10 +320,7 @@ class _MapScreenState extends State<MapScreen> {
           initialLongitude: _defaultLongitude,
           initialZoom: _initialZoom,
           onZoomChanged: _onZoomChanged,
-          onControllerReady: (controller) {
-            _map = controller;
-            _showRequestedShop();
-          },
+          onControllerReady: (controller) => _map = controller,
           // tapping the map itself drops the keyboard and closes the search dropdown
           onMapTap: () => FocusScope.of(context).unfocus(),
           pins: [

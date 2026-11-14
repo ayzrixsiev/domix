@@ -24,7 +24,9 @@ code.** Phase three's job tickets are the likeliest thing to touch "tracking sta
 
 **Lite, not the full package.** `yandex_maps_mapkit_lite` gives map, map objects, camera, user
 location. Search, routing and panoramas are paid and unused — address search is the separate HTTP
-**Geocoder** and **Geosuggest**, called by the api with keys the app never holds (`internal/geo`).
+**Geocoder** and **Geosuggest**, called by the api with keys the app never holds (`internal/geo`),
+and a shop card's «Маршрут» hands the destination to whatever maps app the phone has (`rtext` with
+an empty origin), which draws the route from a position we never ask for.
 «О приложении» carries both links the terms name: `maps_api` and `maps_termsofuse`.
 
 **`domix_map.dart` is the entire boundary.** `DomixMap`, `DomixMapController` and `MapPin` are all

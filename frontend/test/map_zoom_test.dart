@@ -21,7 +21,6 @@ import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
 
 import 'package:frontend/core/localization/language_provider.dart';
-import 'package:frontend/features/map/presentation/controllers/map_focus_controller.dart';
 import 'package:frontend/features/map/presentation/screens/map_screen.dart';
 import 'package:frontend/features/map/presentation/widgets/domix_map.dart';
 import 'package:frontend/features/map/presentation/widgets/shop_marker.dart';
@@ -72,7 +71,6 @@ Future<StoresController> _pumpMap(WidgetTester tester) async {
         ChangeNotifierProvider(create: (_) => LanguageProvider()),
         ChangeNotifierProvider<StoresController>.value(value: stores),
         ChangeNotifierProvider(create: (_) => ProductsController()),
-        ChangeNotifierProvider(create: (_) => MapFocusController()),
       ],
       child: const MaterialApp(home: MapScreen()),
     ),
