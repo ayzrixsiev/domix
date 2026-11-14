@@ -164,6 +164,18 @@ reads `true` or `false`**, because the wrong guess is silent. nginx answers `den
 `/api/admin/` — see the `admin-panel` skill for the tunnel that replaces it. Run certbot as
 `certbot --nginx -d domix-app.uz --redirect`, so port 80 answers nothing but a redirect.
 
+**`img.domix-app.uz` exists and serves nothing yet** (`deploy/nginx-img.conf`, certificate issued
+2026-11-14). It is a second nginx vhost on the same box over the same `/srv/domix/images` — no api,
+no admin, no webhook — so the record in front of it can be orange-clouded at Cloudflare while the
+apex stays grey and HTTP-01 keeps renewing. **The api still answers relative `/images/…` until
+`IMAGE_BASE_URL=https://img.domix-app.uz` is in `.env`**; that one line is the switch and deleting it
+is the whole rollback, because the app already resolves both forms (`ApiConfig.absoluteImageUrl`), so
+no release is involved. **Do not set it before the colo is measured**: Cloudflare's Tashkent location
+is listed in some places and absent from the current network page, and a free-plan zone served from
+Almaty or Frankfurt would trade our 5–15 ms for a foreign round trip to save bandwidth we are not
+short of yet. The measurement is `https://img.domix-app.uz/cdn-cgi/trace` from an Uzbek mobile
+network, which only answers once the record is proxied.
+
 **Photos live on the server's disk, and R2 is backup storage only.** The earlier plan served them from
 a public bucket at `img.domix-app.uz`; that is reversed. Two reasons, in this order: a photo fetched
 from inside the country is faster for everyone using the app, since ~99% of all requests are these
