@@ -193,6 +193,13 @@ mark baked in above it and nothing below. That row is the coordinate, so the pla
 once, off-screen, with no second frame**, so an `Image` still decoding caches as blank for the session
 — which is why `MapPin.builder` is a `FutureOr` and awaits `ShopPinIcon.decoded`.
 
+**The map on screen is one frame behind the map MapKit drew.** A pin change on a still camera costs
+one frame, so it stayed unseen until a finger moved the map: a category filter, an empty category
+most of all. `DomixMap._flushFrame` steps the camera a centimetre aside and back once the pins settle,
+and again when a first-time raster lands. It is a workaround for the plugin's texture view, measured on
+one phone; **do not replace it with `map.move(map.cameraPosition)`, which draws nothing**, and delete it
+if a plugin upgrade makes a filter apply without it.
+
 ## Address search and «О приложении»
 
 **Every lookup goes to our `/api/geo/*`, never to Yandex** (`GeocodingService`): the keys stay on the

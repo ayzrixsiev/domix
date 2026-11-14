@@ -203,6 +203,12 @@ class _DomixMapState extends State<DomixMap> with WidgetsBindingObserver {
   /// Everything currently on the map, in the order it was added - see [_applyZoomScale].
   final List<_LivePin> _livePins = [];
 
+  static const _flushDelay = Duration(milliseconds: 80);
+
+  /// degrees of latitude: about a centimetre, far under a pixel at any zoom the map reaches
+  static const _flushStep = 1e-7;
+  Timer? _flushTimer;
+
   @override
   void initState() {
     super.initState();
@@ -213,6 +219,7 @@ class _DomixMapState extends State<DomixMap> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _flushTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _mountedMaps--;
     _syncMapkitLifecycle();
@@ -233,18 +240,37 @@ class _DomixMapState extends State<DomixMap> with WidgetsBindingObserver {
     super.didUpdateWidget(oldWidget);
     if (!_MapPinIdentity.sameList(oldWidget.pins, widget.pins)) {
       _renderPins();
-      _redrawInPlace();
+      _flushFrame();
     }
   }
 
-  /// **A still camera never redraws for a map-object change**: without this a category filter swaps
-  /// the placemarks and the screen keeps the old ones until a finger touches the map. Moving the
-  /// camera to where it already is asks MapKit for that frame. Not called from [_onMapCreated], where
-  /// the first frame is coming anyway and the picker would take it for a pan and geocode it.
-  void _redrawInPlace() {
-    final map = _window?.map;
-    if (map == null) return;
-    map.move(map.cameraPosition);
+  /// **The map on screen is one frame behind the map MapKit drew.** Under a moving camera nobody can
+  /// tell, but a change that costs exactly one frame - pins removed, a bitmap landing - stays unseen
+  /// until something draws the next one, which used to be the user's finger. So once the pins have
+  /// settled the camera steps a centimetre aside and back: two frames, and the second leaves it
+  /// exactly where it was. Delayed, because a step taken in the same frame as the change is that
+  /// same one frame. Never reached by the picker, which has no pins and would geocode the step.
+  void _flushFrame() {
+    _flushTimer?.cancel();
+    _flushTimer = Timer(_flushDelay, () {
+      final map = _window?.map;
+      if (map == null) return;
+      final rest = map.cameraPosition;
+      final aside = ymk.CameraPosition(
+        ymk.Point(
+          latitude: rest.target.latitude + _flushStep,
+          longitude: rest.target.longitude,
+        ),
+        zoom: rest.zoom,
+        azimuth: rest.azimuth,
+        tilt: rest.tilt,
+      );
+      map.move(aside);
+      _flushTimer = Timer(_flushDelay, () {
+        // a finger that took the camera in between owns it now, and is drawing frames anyway
+        if (map.cameraPosition == aside) map.move(rest);
+      });
+    });
   }
 
   void _onMapCreated(ymk.MapWindow window) {
@@ -305,8 +331,12 @@ class _DomixMapState extends State<DomixMap> with WidgetsBindingObserver {
     _livePins.clear();
 
     for (final pin in widget.pins) {
-      final placemark = window.map.mapObjects.addPlacemarkWithViewStyle(
+      final placemark = window.map.mapObjects.addEmptyPlacemark(
         ymk.Point(latitude: pin.latitude, longitude: pin.longitude),
+      );
+      final live = _LivePin(pin, placemark);
+      _livePins.add(live);
+      placemark.setViewWithStyleAndCallback(
         ymk.ViewProvider(
           builder: pin.builder,
           // `cacheable` without an `id` caches nothing useful, and an `id` that does not capture
@@ -315,8 +345,8 @@ class _DomixMapState extends State<DomixMap> with WidgetsBindingObserver {
           cacheable: true,
         ),
         ymk.IconStyle(anchor: pin.anchor),
+        ymk.Callback(onTaskFinished: () => _onRasterLanded(live)),
       );
-      _livePins.add(_LivePin(pin, placemark));
 
       if (pin.onTap case final onTap?) {
         final listener = _PinTapListener(onTap);
@@ -328,6 +358,12 @@ class _DomixMapState extends State<DomixMap> with WidgetsBindingObserver {
     // pins added mid-session arrive at scale 1 - the zoom they are *for* is whatever the camera is
     // sitting at, not the one it was at when the map opened
     _applyZoomScale(window.map.cameraPosition.zoom);
+  }
+
+  /// The first bitmap for a visual key is rasterized asynchronously and lands frames after the
+  /// placemark was added, so it needs a flush of its own.
+  void _onRasterLanded(_LivePin live) {
+    if (_livePins.contains(live)) _flushFrame();
   }
 
   /// Resizes the pins that follow the zoom. MapKit scales the bitmap it already holds, so this
