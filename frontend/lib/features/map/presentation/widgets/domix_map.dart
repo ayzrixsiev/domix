@@ -233,7 +233,18 @@ class _DomixMapState extends State<DomixMap> with WidgetsBindingObserver {
     super.didUpdateWidget(oldWidget);
     if (!_MapPinIdentity.sameList(oldWidget.pins, widget.pins)) {
       _renderPins();
+      _redrawInPlace();
     }
+  }
+
+  /// **A still camera never redraws for a map-object change**: without this a category filter swaps
+  /// the placemarks and the screen keeps the old ones until a finger touches the map. Moving the
+  /// camera to where it already is asks MapKit for that frame. Not called from [_onMapCreated], where
+  /// the first frame is coming anyway and the picker would take it for a pan and geocode it.
+  void _redrawInPlace() {
+    final map = _window?.map;
+    if (map == null) return;
+    map.move(map.cameraPosition);
   }
 
   void _onMapCreated(ymk.MapWindow window) {
