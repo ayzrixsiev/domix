@@ -164,17 +164,23 @@ reads `true` or `false`**, because the wrong guess is silent. nginx answers `den
 `/api/admin/` — see the `admin-panel` skill for the tunnel that replaces it. Run certbot as
 `certbot --nginx -d domix-app.uz --redirect`, so port 80 answers nothing but a redirect.
 
-**`img.domix-app.uz` exists and serves nothing yet** (`deploy/nginx-img.conf`, certificate issued
-2026-11-14). It is a second nginx vhost on the same box over the same `/srv/domix/images` — no api,
-no admin, no webhook — so the record in front of it can be orange-clouded at Cloudflare while the
-apex stays grey and HTTP-01 keeps renewing. **The api still answers relative `/images/…` until
-`IMAGE_BASE_URL=https://img.domix-app.uz` is in `.env`**; that one line is the switch and deleting it
-is the whole rollback, because the app already resolves both forms (`ApiConfig.absoluteImageUrl`), so
-no release is involved. **Do not set it before the colo is measured**: Cloudflare's Tashkent location
-is listed in some places and absent from the current network page, and a free-plan zone served from
-Almaty or Frankfurt would trade our 5–15 ms for a foreign round trip to save bandwidth we are not
-short of yet. The measurement is `https://img.domix-app.uz/cdn-cgi/trace` from an Uzbek mobile
-network, which only answers once the record is proxied.
+**`img.domix-app.uz` exists and is deliberately unused** (`deploy/nginx-img.conf`, certificate
+issued 2026-11-14). A second nginx vhost on the same box over the same `/srv/domix/images` — no api,
+no admin, no webhook — built so a Cloudflare CDN could be put in front of the photos while the apex
+stayed grey-clouded and HTTP-01 kept renewing. The api answers relative `/images/…` and
+**`IMAGE_BASE_URL` must stay unset**; setting it to this host is the entire switch, and the app
+already resolves both forms (`ApiConfig.absoluteImageUrl`), so no release is involved either way.
+
+**Measured 2026-11-14 and rejected: Cloudflare's free tier serves this zone from Warsaw.**
+`img.domix-app.uz/cdn-cgi/trace` answered `colo=WAW`, `loc=UZ`, repeatedly, from a laptop and a
+phone. The same photo, cache warm: **0.31 s through Cloudflare against 0.04 s straight from the
+box** — a cache HIT in Poland is eight times slower than the origin in the same city as the user.
+Tashkent (TAS) is listed as a Cloudflare location in some of their material and absent from the
+current network page, and free-plan zones are the first moved off a strained colo, so this is not a
+misconfiguration to fix. **The CDN is the wrong answer to the uplink ceiling while this is true**;
+the right one is sending fewer bytes from here — the thumbnail where a thumbnail is drawn, and WebP
+— which helps every user instead of trading them a foreign round trip. Re-measure before reopening
+it: it is one toggle on the record, which stays in place grey-clouded for exactly that reason.
 
 **Photos live on the server's disk, and R2 is backup storage only.** The earlier plan served them from
 a public bucket at `img.domix-app.uz`; that is reversed. Two reasons, in this order: a photo fetched
