@@ -467,15 +467,16 @@ either; nginx, the units and the migrations are in this repo.
   `restore.sh db <date> <url>` rebuilt the 283-row catalogue into a throwaway database on
   2026-11-09. **The passphrase also lives off the server**, because the file that holds it dies with
   the machine the backups exist to replace.
-- **Uptime is watched from outside the box, at UptimeRobot** - one HTTP monitor on
-  `https://domix-app.uz/health`, every 5 minutes, alerting **domix.support@gmail.com**. Free tier,
-  one of its 50 monitors used. **The point is that it does not run here**: `domix-backup`'s
-  healthchecks.io switch only covers the nightly backup, and nothing on a dead, wedged or rebooting
-  server can raise an alarm about itself. Proven needed on 2026-11-13, when the api spent ~20 minutes
-  restart-looping on an unreadable `.env` and the first anyone knew was a browser refusing to connect.
-  A monitor that keeps alerting on a deploy's own 30-second restart gets muted and then ignored, so
-  the check is a plain GET on `/health` with the failure threshold left at its default rather than
-  tightened.
+- **Uptime is watched from outside the box, at UptimeRobot** — created 2026-11-14 under
+  **domix.support@gmail.com**: one HTTP monitor on `https://domix-app.uz/health`, every 5 minutes,
+  alerting that address by email and the founder's phone by push. Free tier, 1 of 50 monitors.
+  **The point is that it does not run here**: `domix-backup`'s healthchecks.io switch covers the
+  nightly backup and nothing else, and a dead, wedged or rebooting server cannot raise an alarm about
+  itself. Proven needed on 2026-11-13, when the api spent ~20 minutes restart-looping on an unreadable
+  `.env` and the first anyone knew was a browser refusing to connect. **Leave the failure threshold at
+  its default**: a monitor that cries on a deploy's own 30-second restart gets muted and then ignored.
+  Its response-time graph is measured from a probe abroad and is **not** what a user in Tashkent
+  experiences; real latency is the percentiles on «Система».
 - **No error reporting.** When the app breaks on an owner's phone, nobody finds out. Structured server logs
   plus a crash reporter would turn "it doesn't work" into a stack trace.
 - **Three Yandex budgets, not one**, each shown separately in the cabinet under «Подключенные
