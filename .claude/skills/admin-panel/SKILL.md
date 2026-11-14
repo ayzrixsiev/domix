@@ -229,6 +229,16 @@ column of its own. **The number to ring is in the row**: `AdminPriceAnomalies` j
 number only when it differs. A report that makes the founder open Магазины and search for the shop is one
 that gets read and not acted on.
 
+### Пользователи
+
+**The `№` column is a position in the register, not the account id** (`renderUsers`, `u.seq`): the
+oldest account is 1 and the newest row reads the same total as Главная. It is numbered over the whole
+loaded list, not the filtered view, so a role filter does not renumber anybody. The id is still what
+the panel searches by, what the edit window shows as «ID N», and what the admin log records — **it
+just stopped being the thing that looks like a count**, because a deleted account leaves a gap in it
+forever and the founder counts accounts by reading the top row. Накладные are the opposite case and
+keep `№ = id`: the sender sees that number in the app and it is printed on the PDF.
+
 ### Products and shops
 
 - **An admin editing a product goes through the same three-way rule the owner does**, not a bypass:

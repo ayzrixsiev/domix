@@ -1060,7 +1060,7 @@
     <section id="v-users" hidden>
       <div class="tbl"><div class="scroll"><table id="t-users">
         <thead><tr>
-          <th class="s" data-key="id">ID<span class="ar">▼</span></th>
+          <th class="s" data-key="id">№<span class="ar">▼</span></th>
           <th class="s" data-key="name">Пользователь<span class="ar">▼</span></th>
           <th class="s" data-key="role">Роль<span class="ar">▼</span></th>
           <th class="s" data-key="shop_count">Магазины<span class="ar">▼</span></th>
@@ -2812,6 +2812,15 @@ function renderUsers() {
   var body = $("#t-users tbody"), box = $("#s-users");
   clear(body); clear(box); box.className = "";
 
+  // the leading number is a position in the register, not the account id: counted from the oldest,
+  // so the newest row reads the same total as Главная. an id keeps the gaps a deletion leaves behind,
+  // and the founder counts accounts by looking at the top row. it is numbered over the whole list
+  // rather than the filtered view, so a role filter does not renumber anybody.
+  // **it is derived from the 500 rows the panel loads**; the day that cap is reached this needs the
+  // real rank from the server, or #1 becomes the oldest row still on screen.
+  var register = (state.users||[]).slice().sort(function (a, b) { return a.id - b.id; });
+  register.forEach(function (u, i) { u.seq = i + 1; });
+
   var q = state.q.users.trim().toLowerCase(), role = state.filter.users;
   var rows = (state.users||[]).filter(function (u) {
     if (role && u.role !== role) return false;
@@ -2827,7 +2836,7 @@ function renderUsers() {
 
   rows.forEach(function (u) {
     var tr = el("tr");
-    tr.appendChild(el("td","idc","#"+u.id));
+    tr.appendChild(el("td","idc","#"+u.seq));
 
     var who = el("td");
     who.appendChild(el("div","b", u.name || "Без имени"));
@@ -2858,7 +2867,7 @@ function renderUsers() {
 function editUser(u) {
   modal({
     title:"Редактировать пользователя",
-    sub:u.phone + " · #" + u.id,
+    sub:u.phone + " · ID " + u.id,
     iconClass:"o", icon:ICONS.edit,
     fields:[
       { name:"name", label:"Имя", value:u.name || "" },
