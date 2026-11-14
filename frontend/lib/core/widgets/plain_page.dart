@@ -202,7 +202,7 @@ class _EmptyBand extends StatelessWidget {
   }
 }
 
-/// One row of a [PageBand]: a tinted glyph tile, a name, a line of what it is, whatever the caller
+/// One row of a [PageBand]: a drawing in a fixed square, a name, a line of what it is, whatever the caller
 /// puts on the right, and the chevron that says the row opens something.
 ///
 /// **Written with no idea what its rows mean**, because what must not differ between them is the
@@ -210,7 +210,7 @@ class _EmptyBand extends StatelessWidget {
 class BandRow extends StatelessWidget {
   const BandRow({
     super.key,
-    required this.icon,
+    required this.leading,
     required this.title,
     required this.subtitle,
     required this.onTap,
@@ -219,7 +219,8 @@ class BandRow extends StatelessWidget {
     this.trailing,
   });
 
-  final IconData icon;
+  /// Drawn as given, no tile behind it: the caller's artwork brings its own colour.
+  final Widget leading;
   final String title;
   final String subtitle;
 
@@ -252,15 +253,10 @@ class BandRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 13),
           child: Row(
             children: [
-              Container(
+              SizedBox(
                 width: tileSize,
                 height: tileSize,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.primarySoft,
-                  borderRadius: radius,
-                ),
-                child: Icon(icon, size: 20, color: AppColors.primaryOrange),
+                child: Center(child: leading),
               ),
               const SizedBox(width: tileGap),
               Expanded(

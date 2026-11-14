@@ -17,6 +17,7 @@ import 'package:frontend/core/widgets/app_page_header.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
 import 'package:frontend/core/widgets/plain_page.dart';
 import 'package:frontend/core/widgets/primary_action_button.dart';
+import 'package:frontend/features/map/presentation/widgets/shop_marker.dart';
 import 'package:frontend/features/profile/presentation/controllers/auth_controller.dart';
 import 'package:frontend/features/waybills/data/waybill.dart';
 import 'package:frontend/features/waybills/data/waybill_photo_marker.dart';
@@ -172,7 +173,11 @@ class _WaybillsScreenState extends State<WaybillsScreen> {
                   children: [
                     for (final waybill in waybills.items)
                       BandRow(
-                        icon: waybill.category.icon,
+                        // the pin the category step showed, so the list names the market the same way
+                        leading: ShopPinIcon(
+                          category: waybill.category,
+                          height: 42,
+                        ),
                         title: strings.waybillNumber(waybill.id),
                         subtitle: _summary(waybill, strings),
                         // its own slot, because at the end of the subtitle the date is what gets cut off

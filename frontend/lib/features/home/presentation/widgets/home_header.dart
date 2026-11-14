@@ -237,7 +237,8 @@ class _DomixBrandButtonState extends State<_DomixBrandButton> {
 
   @override
   Widget build(BuildContext context) {
-    final borderRadius = BorderRadius.circular(AppRadius.sm);
+    // half the height, so the ends are true semicircles and the chip matches the round icon chips beside it
+    final borderRadius = BorderRadius.circular(_chipHeight / 2);
 
     return Semantics(
       button: true,
