@@ -256,7 +256,6 @@ class _DomixBrandButtonState extends State<_DomixBrandButton> {
               // flat brand orange: at this size a gradient only muddied it, and the wordmark should be unambiguous
               color: AppColors.primaryOrange,
               borderRadius: borderRadius,
-              boxShadow: AppShadows.accent(AppColors.primaryOrange),
             ),
             child: InkWell(
               onTap: () {},
