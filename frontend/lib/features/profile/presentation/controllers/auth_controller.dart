@@ -28,6 +28,9 @@ class AuthController extends ChangeNotifier {
 
   bool _isDeletingAccount = false;
 
+  // the last restore could not read storage, so a token may still be there: tried again on resume
+  bool _restorePending = false;
+
   // a session died under a request the user made themselves, and nobody has told them yet.
   // SessionExpiryGuard watches this: it shows the dialog and then pops back to the shell.
   bool _sessionExpiredUnseen = false;
@@ -65,27 +68,28 @@ class AuthController extends ChangeNotifier {
 
   // cold boot: read hardware storage to restore user state with no network round trip
   Future<void> checkExistingLogin() async {
+    final StoredSession? stored;
     try {
-      final token = await _authService.getToken();
-      if (token == null || token.isEmpty) return;
-
-      // **expiry is checked before anything is drawn, and without asking the server.** the `exp` claim is
-      // readable offline, and a user whose token ran out must not see their own profile for the half
-      // second it takes a network call to fail.
-      if (AuthService.isTokenExpired(token)) {
-        await _endSession();
-        return;
-      }
-
-      final role = await _authService.getRole() ?? 'customer';
-      final name = await _authService.getName() ?? 'Domix User';
-      final phone = await _authService.getPhone() ?? '';
-
-      // hydrate profile state from the local cache
-      _applyAccount(role: role, name: name, phone: phone);
-    } catch (_) {
-      // storage read failed or is corrupted: stay in the guest state
+      stored = await _authService.readStoredSession();
+    } catch (e) {
+      // **an unreadable store is not an empty one**: nothing is cleared, and the next resume tries again
+      debugPrint('could not restore the session: $e');
+      _restorePending = true;
+      return;
     }
+    _restorePending = false;
+    if (stored == null) return;
+
+    // **expiry is checked before anything is drawn, and without asking the server.** the `exp` claim is
+    // readable offline, and a user whose token ran out must not see their own profile for the half
+    // second it takes a network call to fail.
+    if (AuthService.isTokenExpired(stored.token)) {
+      await _endSession();
+      return;
+    }
+
+    final account = stored.account;
+    _applyAccount(role: account.role, name: account.name, phone: account.phone);
   }
 
   /// Asks the server whether this session is still real, on launch and on every return to the
@@ -95,6 +99,7 @@ class AuthController extends ChangeNotifier {
   /// **Only [SessionExpiredException] signs anyone out** - a timeout or a 500 is not evidence about
   /// the token.
   Future<void> verifySession() async {
+    if (_restorePending && _profileState.isGuest) await checkExistingLogin();
     if (_profileState.isGuest) return;
 
     try {
@@ -102,13 +107,8 @@ class AuthController extends ChangeNotifier {
 
       // the server's answer wins over the cache. this is also how a role change made elsewhere - the
       // admin panel, another phone - reaches this one without a sign-out.
-      await _authService.saveSession(
-        token: (await _authService.getToken())!,
-        role: me.role,
-        name: me.name,
-        phone: me.phone,
-      );
       _applyAccount(role: me.role, name: me.name, phone: me.phone);
+      await _authService.saveProfile(me);
     } on SessionExpiredException {
       // fetchMe already fired onSessionInvalidated; ending it twice is harmless and keeps the guarantee
       // local to the caller that can see it
@@ -221,7 +221,13 @@ class AuthController extends ChangeNotifier {
 
   // wipe local storage and reset the interface back to guest
   Future<void> _endSession({bool accountDeleted = false}) async {
-    await _authService.clearSession();
+    _restorePending = false;
+    try {
+      await _authService.clearSession();
+    } catch (e) {
+      // the screen signs out regardless: a «Выйти» that does nothing is worse than a token left behind
+      debugPrint('could not clear the stored session: $e');
+    }
     _profileState = const ProfileViewState.guest();
     // fired before notifyListeners, so whatever rebuilds below already sees the cleared shop lists -
     // the other order paints one frame of the old owner's shops onto the guest screen

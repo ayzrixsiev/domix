@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:frontend/core/storage/secure_storage.dart';
 
 /// Says whose camera Android killed the app under. `retrieveLostData` hands back the last picture of
 /// any picker, and an owner photographing a product holds the same session as one photographing a list.
@@ -10,7 +10,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 class WaybillPhotoMarker {
   const WaybillPhotoMarker();
 
-  static const _storage = FlutterSecureStorage();
+  static const _storage = appSecureStorage;
   static const _key = 'domix_waybill_picker_open';
 
   Future<void> set() async {

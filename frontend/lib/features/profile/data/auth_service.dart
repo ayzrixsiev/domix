@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'package:frontend/core/constants/api_config.dart';
 import 'package:frontend/core/network/api_client.dart';
+import 'package:frontend/core/storage/secure_storage.dart';
 
 /// What `/api/auth/init` answered: the session to poll and the t.me link that opens our bot on it.
 class TelegramHandshake {
@@ -80,6 +80,14 @@ class MeResult {
   final String role;
 }
 
+/// The session this phone holds, as read back from secure storage on a cold start.
+class StoredSession {
+  const StoredSession({required this.token, required this.account});
+
+  final String token;
+  final MeResult account;
+}
+
 // the server refused our token. its own type so a caller can tell "signed out" from "network is
 // down" - the second must never sign anybody out.
 class SessionExpiredException implements Exception {
@@ -105,7 +113,7 @@ class AuthService {
 
   static final Uri _meUri = Uri.parse('${ApiConfig.serverRoot}/api/me');
 
-  final _storage = const FlutterSecureStorage();
+  final _storage = appSecureStorage;
 
   static const _jwtKey = 'domix_jwt_token';
   static const _roleKey = 'domix_user_role';
@@ -113,20 +121,45 @@ class AuthService {
   static const _phoneKey = 'domix_user_phone';
 
   // hardware-encrypted storage: a stolen phone must not yield a four-month token
-  Future<void> saveSession({
-    required String token,
-    required String role,
-    required String name,
-    required String phone,
-  }) async {
+  Future<void> _saveSession(String token, MeResult me) async {
     await _storage.write(key: _jwtKey, value: token);
-    await _storage.write(key: _roleKey, value: role);
-    await _storage.write(key: _nameKey, value: name);
-    await _storage.write(key: _phoneKey, value: phone);
+    await saveProfile(me);
   }
 
-  // cached profile data, read on cold boot
+  /// The account as the server last described it. The token is left alone: rewriting it on every
+  /// refresh only adds writes that can fail.
+  Future<void> saveProfile(MeResult me) async {
+    await _storage.write(key: _roleKey, value: me.role);
+    await _storage.write(key: _nameKey, value: me.name);
+    await _storage.write(key: _phoneKey, value: me.phone);
+  }
+
   Future<String?> getToken() async => await _storage.read(key: _jwtKey);
+
+  /// The stored session, or null when there is none. **Throws when storage cannot be read**, which is
+  /// not the same answer as null: an unreadable store still holds the token, and treating it as empty
+  /// signs the user out for nothing. Retried first, because the Keystore can fail for a moment at launch.
+  Future<StoredSession?> readStoredSession() async {
+    const backoff = [Duration(milliseconds: 250), Duration(milliseconds: 750)];
+    for (var attempt = 0; ; attempt++) {
+      try {
+        final token = await getToken();
+        if (token == null || token.isEmpty) return null;
+        return StoredSession(
+          token: token,
+          account: MeResult(
+            role: await getRole() ?? 'customer',
+            name: await getName() ?? 'Domix User',
+            phone: await getPhone() ?? '',
+          ),
+        );
+      } catch (e) {
+        if (attempt == backoff.length) rethrow;
+        debugPrint('secure storage read failed, retrying: $e');
+        await Future<void>.delayed(backoff[attempt]);
+      }
+    }
+  }
 
   /// Whether a stored token has already passed its own expiry, read **from the token itself**: a JWT's
   /// middle chunk is plain JSON carrying `exp`, so an app opened on a plane still knows its four
@@ -212,13 +245,13 @@ class AuthService {
         )
         .timeout(const Duration(seconds: 15));
 
-    final me = await _readMeAnswer(response, token);
+    final me = await _readMeAnswer(response);
     return me;
   }
 
   /// The tail of an authenticated write: refusals carry a code the screen localizes, a 401 ends the
   /// session, and a success is the account's new state - cached on the way past.
-  Future<MeResult> _readMeAnswer(http.Response response, String token) async {
+  Future<MeResult> _readMeAnswer(http.Response response) async {
     if (response.statusCode == 401) {
       // not silent: this answers something the user just did, so they get told why they are out
       onSessionInvalidated?.call(silent: false);
@@ -234,12 +267,7 @@ class AuthService {
       role: body['role'] as String? ?? 'customer',
     );
 
-    await saveSession(
-      token: token,
-      role: me.role,
-      name: me.name,
-      phone: me.phone,
-    );
+    await saveProfile(me);
     return me;
   }
 
@@ -382,12 +410,15 @@ class AuthService {
       phone: user['phone'] as String? ?? '',
       role: user['role'] as String? ?? 'customer',
     );
-    await saveSession(
-      token: token,
-      role: me.role,
-      name: me.name,
-      phone: me.phone,
-    );
+    try {
+      await _saveSession(token, me);
+    } catch (e) {
+      // the server hands this token out once, so a store that cannot be written is reset and written
+      // again rather than losing the sign-in; whatever it held was unreadable anyway
+      debugPrint('secure storage write failed, resetting it: $e');
+      await resetBrokenSecureStorage();
+      await _saveSession(token, me);
+    }
     return me;
   }
 

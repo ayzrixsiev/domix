@@ -16,7 +16,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.1+4
+version: 1.0.1+5
 
 environment:
   sdk: ^3.12.2
@@ -55,7 +55,7 @@ dependencies:
   # no way to ask from dart without a plugin. **the coordinate never leaves the device** - it moves
   # our camera and nothing else, which is what keeps the Play data-safety answer "not collected".
   geolocator: ^14.1.1
-  flutter_secure_storage: ^10.3.1
+  flutter_secure_storage: ^10.3.4
   provider: ^6.0.8
   yandex_maps_mapkit_lite: ^4.42.0
   # the android share sheet, behind the disc on a shop card's cover. ACTION_SEND needs an Intent,
