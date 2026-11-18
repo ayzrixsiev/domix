@@ -1,6 +1,6 @@
 # Build commands for the Domix app.
 
-.PHONY: help setup dev dev-skia desktop emulator gradle-stop guard-jdk analyze test check guard-prod apk-test apk release clean
+.PHONY: help setup dev dev-skia desktop emulator gradle-stop guard-jdk analyze test check guard-env guard-prod apk-test apk release guard-mac ipa clean
 
 help:
 	@echo "make setup     - first time: write a starter env.json and fetch packages"
@@ -13,6 +13,7 @@ help:
 	@echo "make apk-test  - RELEASE build against your own backend. what to sideload today."
 	@echo "make apk       - production APK. needs a real domain in env.prod.json first."
 	@echo "make release   - production app bundle (.aab), the file Google Play wants"
+	@echo "make ipa       - production iOS archive (.ipa), the file App Store Connect wants. macOS only"
 
 # Writes the starter env.json inline rather than copying a committed template. There is no
 # env.example.json: a two-key file is not worth a fourth copy of the same two keys, and a template
@@ -93,8 +94,9 @@ check: analyze test
 #
 # Without this the failure is silent and late: the app installs, opens, and every screen sits on a
 # spinner because it is calling https://REPLACE_ME. Android also blocks cleartext HTTP from API 28
-# onwards, so an http:// address fails the same silent way - hence the second check.
-guard-prod:
+# onwards, and iOS's App Transport Security likewise, so an http:// address fails the same silent
+# way - hence the second check.
+guard-env:
 	@test -f env.prod.json || { echo "ERROR: env.prod.json is missing"; exit 1; }
 	@grep -q 'REPLACE_ME' env.prod.json && { \
 		echo "ERROR: env.prod.json still contains REPLACE_ME - fill in the real values first."; \
@@ -107,6 +109,8 @@ guard-prod:
 		echo "ERROR: MAPKIT_API_KEY is empty - the map screens would ship showing a placeholder"; \
 		echo "       panel instead of a map. Get a key from Yandex's developer dashboard."; \
 		exit 1; } || true
+
+guard-prod: guard-env
 	@test -f android/key.properties || { \
 		echo "ERROR: android/key.properties is missing, so this would be signed with the debug key"; \
 		echo "       and Google Play would reject it. See android/key.properties.example."; \
@@ -136,6 +140,16 @@ release: guard-jdk guard-prod check
 	flutter build appbundle --release --dart-define-from-file=env.prod.json
 	@echo ""
 	@echo "Upload: build/app/outputs/bundle/release/app-release.aab"
+
+guard-mac:
+	@test "$$(uname)" = Darwin || { echo "ERROR: an iOS build needs macOS and Xcode."; exit 1; }
+
+# signing is xcode's automatic signing with the team picked once in Runner.xcworkspace, so nothing
+# for it lives in this repo, unlike android/key.properties
+ipa: guard-mac guard-env check
+	flutter build ipa --release --dart-define-from-file=env.prod.json
+	@echo ""
+	@echo "Upload: build/ios/ipa/*.ipa, with Transporter or Xcode's Organizer"
 
 clean:
 	flutter clean

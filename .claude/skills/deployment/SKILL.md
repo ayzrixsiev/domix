@@ -4,8 +4,9 @@ description: >
   Shipping Domix: the upload keystore and the encrypted secrets vault, the production stack
   (Ubuntu VPS in Uzbekistan, nginx, Postgres, domix-app.uz), the nightly backup of the database and
   the photos into Cloudflare R2 and how to restore from it, Google Play's policy requirements, and
-  the open list that still blocks a submission. Use when building a release artifact (`make apk`,
-  `make release`), editing `frontend/android/`, `env.prod.json`, `key.properties`,
+  the open list that still blocks a submission, and the App Store build on a Mac. Use when building a
+  release artifact (`make apk`, `make release`, `make ipa`), editing `frontend/android/`,
+  `frontend/ios/`, `env.prod.json`, `key.properties`,
   `proguard-rules.pro` or the manifest, handling the keystore or `secrets.vault.enc`, setting up the
   server, nginx or the backups, restoring one, or answering "what is left before we can ship".
 ---
@@ -14,7 +15,10 @@ description: >
 
 Release-specific. Day-to-day feature work does not need it.
 
-**Two reference files — read only when the task is actually about them:**
+**Three reference files — read only when the task is actually about them:**
+
+- `reference-ios.md` — the App Store build: what `frontend/ios/` already carries, and the steps
+  that only a Mac can do, in order. **Read it first on the Mac**: the Mac is borrowed and short.
 
 - `reference-android.md` — `applicationId`, the adaptive launcher icon, release signing, R8 /
   `proguard-rules.pro`, `env.json` vs `env.prod.json`, and the adb + MIUI setup for the test phone.

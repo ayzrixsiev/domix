@@ -87,6 +87,11 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # **ios plugins come from CocoaPods.** yandex_maps_mapkit_lite's Package.swift pulls YandexMapsMobile
+  # by a registry id with no version, which nothing resolves; its podspec is the one that builds.
+  config:
+    enable-swift-package-manager: false
+
   # the product shots behind the home screen's category tiles. one file per category that has one -
   # see ProductCategory.photo - cut to 384x296 webp, which is the tile's slot on a 3x screen and the
   # reason the whole set is under 80KB.
