@@ -9,6 +9,12 @@
          ACCESS_BACKGROUND_LOCATION here, and adding one would need its own Play declaration. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <!-- a permission implies its hardware is *required*, and Play then hides the app from devices
+         without it: wifi comes from MapKit's wifi-state permissions, location from the two above.
+         neither is needed - tiles load over mobile data and «Рядом со мной» says when there is no fix -->
+    <uses-feature android:name="android.hardware.wifi" android:required="false"/>
+    <uses-feature android:name="android.hardware.location" android:required="false"/>
+    <uses-feature android:name="android.hardware.location.gps" android:required="false"/>
     <!-- the name under the launcher icon. it was "frontend" - the flutter project's folder name -
          which is what every user would have seen on their home screen. -->
     <application

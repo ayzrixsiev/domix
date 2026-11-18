@@ -81,6 +81,11 @@ the Play listing. **Do not strip them blind with `tools:node="remove"`** — a n
 for a permission it declared can fail at runtime, and only on a device. `ACCESS_FINE_LOCATION` is the
 one Play makes you justify.
 
+**Each permission also implies its hardware as a required feature**, and Play refuses to send a
+release for review while `android.hardware.wifi` is required (it was, from the two wifi permissions,
+until 1.0.1+5). The app manifest declares wifi and location `required="false"`; check
+`aapt dump badging … | grep uses-implied-feature` after any SDK upgrade for a new one.
+
 ### What the move cost
 
 **`minSdk` 24 → 26** (MapKit's floor), **building needs JDK 21+**, and **the map no longer runs on
