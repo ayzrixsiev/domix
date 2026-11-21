@@ -61,7 +61,6 @@ class HomeContent {
     required this.vipShops,
     required this.bestOffers,
     this.templateSizes = const {},
-    this.indexHidden = false,
   });
 
   final List<HomeShopPreview> vipShops;
@@ -75,16 +74,11 @@ class HomeContent {
   /// than a guess.
   final Map<ShopCategory, int> templateSizes;
 
-  /// The seller's copy: no shop carries a comparison and [bestOffers] is empty on purpose, so the
-  /// section says why rather than drawing open slots that invite a price
-  final bool indexHidden;
-
   static HomeContent fromJson(Map<String, dynamic> json) {
     return HomeContent(
       vipShops: _shops(json['vip_shops']),
       bestOffers: _offerGroups(json['best_offers']),
       templateSizes: _templateSizes(json['template_sizes']),
-      indexHidden: json['index_hidden'] as bool? ?? false,
     );
   }
 

@@ -261,23 +261,19 @@ class _HomeScreenState extends State<HomeScreen> {
               child: PopularCategoriesGrid(onCategoryTap: _openCategory),
             ),
 
-            // a seller is sent no ranking, and the section is left out rather than explained: they are
-            // not to see that anything is withheld, and empty places would read as nobody being ranked
-            if (!home.indexHidden) ...[
-              const SizedBox(height: 26),
-              Padding(
-                padding: _gutter,
-                child: SectionHeader(title: strings.bestOffersTitle),
+            const SizedBox(height: 26),
+            Padding(
+              padding: _gutter,
+              child: SectionHeader(title: strings.bestOffersTitle),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: _gutter,
+              child: BestOffersList(
+                groups: home.bestOffers,
+                onShopTap: _openShop,
               ),
-              const SizedBox(height: 12),
-              Padding(
-                padding: _gutter,
-                child: BestOffersList(
-                  groups: home.bestOffers,
-                  onShopTap: _openShop,
-                ),
-              ),
-            ],
+            ),
 
             SizedBox(height: widget.bottomPadding),
 

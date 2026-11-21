@@ -20,7 +20,6 @@ class HomeController extends ChangeNotifier {
   List<HomeShopPreview> _vipShops = const [];
   List<CategoryOffers> _bestOffers = const [];
   Map<ShopCategory, int> _templateSizes = const {};
-  bool _indexHidden = false;
 
   // bumped when the account changes, so a load that left under the last one is followed by another
   int _viewer = 0;
@@ -39,9 +38,6 @@ class HomeController extends ChangeNotifier {
   /// read by the "add shop" form; kept across a failed reload, since a template size does not go stale
   /// the way a price does
   Map<ShopCategory, int> get templateSizes => _templateSizes;
-
-  /// whether the server answered as to a seller - see [HomeContent.indexHidden]
-  bool get indexHidden => _indexHidden;
 
   bool get isLoading => _isLoading;
 
@@ -65,7 +61,6 @@ class HomeController extends ChangeNotifier {
       _vipShops = content.vipShops;
       _bestOffers = content.bestOffers;
       _templateSizes = content.templateSizes;
-      _indexHidden = content.indexHidden;
       _failure = null;
     } catch (e) {
       // the sections are emptied as well: leaving the last successful load under a failure banner shows

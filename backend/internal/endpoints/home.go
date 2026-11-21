@@ -88,10 +88,6 @@ type HomeResponse struct {
 	// how many products a new shop of each category is seeded with. the same for everybody, so it
 	// rides in the cached read; the "add shop" form shows it before the shop exists.
 	TemplateSizes map[string]int `json:"template_sizes"`
-
-	// the seller's copy: no comparison on any shop and no ranking, whose order alone would be the
-	// index. the app says why the section is empty instead of drawing fifteen open slots
-	IndexHidden bool `json:"index_hidden"`
 }
 
 // one tab of "Лучшие предложения". only categories with ranked shops are sent: the app draws one
@@ -126,8 +122,12 @@ func withoutIndex(content HomeResponse) HomeResponse {
 	// ListVipShops orders on basket price, which would rank the placements without a single number
 	slices.SortFunc(content.VipShops, func(a, b ShopResponse) int { return cmp.Compare(a.ID, b.ID) })
 
-	content.BestOffers = []CategoryOffersResponse{}
-	content.IndexHidden = true
+	// the founders keep «Лучшие предложения» for sellers: the shops are listed, their numbers are not
+	for _, group := range content.BestOffers {
+		for i := range group.Shops {
+			group.Shops[i].hidePricing()
+		}
+	}
 	return content
 }
 

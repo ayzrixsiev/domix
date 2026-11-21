@@ -131,14 +131,15 @@ func TestTheCachedReadsKeepASellersCopyApartFromABuyers(t *testing.T) {
 
 			var content HomeResponse
 			getAs(t, ctx, home.Get, "/api/home", "", as, &content)
-			if content.IndexHidden != isSeller {
-				t.Fatalf("index_hidden = %v for seller=%v", content.IndexHidden, isSeller)
+			if len(content.BestOffers) == 0 {
+				t.Fatalf("«Лучшие предложения» is missing for seller=%v", isSeller)
 			}
-			if isSeller && len(content.BestOffers) != 0 {
-				t.Fatalf("a seller was sent the ranking: %+v", content.BestOffers)
-			}
-			if !isSeller && len(content.BestOffers) == 0 {
-				t.Fatal("a buyer lost the ranking")
+			for _, group := range content.BestOffers {
+				for _, offer := range group.Shops {
+					if (offer.PriceTier != nil || offer.BasketPrice != nil) == isSeller {
+						t.Fatalf("best offer %d priced = %v for seller=%v", offer.ID, offer.PriceTier != nil, isSeller)
+					}
+				}
 			}
 			vip := findShop(content.VipShops, shopID)
 			if vip == nil {

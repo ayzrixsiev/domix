@@ -226,8 +226,8 @@ the token's signature, then the role from the database, since a JWT is never tru
 customers and admins are `buyers`; a role read that fails answers as to a seller.
 
 - **The map and `/api/home` are cached one copy per audience** (`viewer.cacheKey`), never per account.
-  The seller's copy strips every shop's index, their own included (it is in `/api/shops/mine`), sends
-  `best_offers: []` with `index_hidden: true` (the ranking's order alone would be the index), and sorts
+  The seller's copy strips every shop's index, their own included (it is in `/api/shops/mine`),
+  keeps «Лучшие предложения» with every shop's numbers stripped (the founders' call), and sorts
   the VIP shops by id because `ListVipShops` orders them on basket price.
   `TestTheCachedReadsKeepASellersCopyApartFromABuyers` is the pin: one key for both is a silent leak.
 - **`/api/shops/{id}` and `/api/shops/{id}/products` check the shop's owner**: a seller's own shop comes

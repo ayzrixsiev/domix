@@ -202,23 +202,27 @@ void main() {
     expect(find.text(strings.noShopsYet), findsNothing);
   });
 
-  // a seller is sent no ranking and must not learn that anything is withheld: no section, no note,
-  // and no fifteen open places that would read as nobody being ranked
-  testWidgets('a seller gets no ranking section at all', (tester) async {
+  // a seller's copy lists the shops with every number stripped: the row still draws, with no badge,
+  // no basket total and no hint that anything was taken off
+  testWidgets('a seller sees the best offers without prices or badges', (
+    tester,
+  ) async {
     final strings = AppLocalizations(AppLanguage.ru);
     await _pumpHome(
       tester,
       _FakeHomeRepository(
-        content: const HomeContent(
-          vipShops: [],
-          bestOffers: [],
-          indexHidden: true,
+        content: _content(
+          offers: {
+            ShopCategory.universal: [_shop(id: 2, name: 'Стройбаза')],
+          },
         ),
       ),
     );
 
-    expect(find.text(strings.bestOffersTitle), findsNothing);
-    expect(find.byType(EmptyShopRow), findsNothing);
+    expect(find.text(strings.bestOffersTitle), findsOneWidget);
+    expect(find.text('Стройбаза'), findsOneWidget);
+    expect(find.text(strings.basketPriceShort), findsNothing);
+    expect(find.textContaining(RegExp(r'\d+%')), findsNothing);
   });
 
   // signing in as a shop owner changes what the server answers, and the home tab is kept alive by
