@@ -1,2 +1,8 @@
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
 #include "Generated.xcconfig"
+
+// **mapkit's dart side finds its native functions with dlsym on the app binary itself.** xcode's
+// default release strip deletes those symbols, and the app sits on a white screen before the first
+// frame: "Failed to lookup symbol 'yandex_maps_flutter_is_init'". debug never strips, so only an
+// archive shows it.
+STRIP_STYLE = non-global
