@@ -299,8 +299,9 @@ void main() {
   });
 
   // a shop owner opening another shop: the server sends its priced rows with no price. they are
-  // still the catalogue, so they draw - and a null price must not read as «Цена не указана»
-  testWidgets('a hidden price is a priced row, with no amount and a reason', (
+  // still the catalogue, so they draw, with the price's place blank - not «Цена не указана», and no
+  // word that anything is withheld
+  testWidgets('a hidden price is a priced row with a blank price', (
     tester,
   ) async {
     final strings = AppLocalizations(AppLanguage.ru);
@@ -328,9 +329,8 @@ void main() {
     await _scrollToCatalogue(tester);
 
     expect(find.text('Цемент М400'), findsOneWidget);
-    expect(find.text(strings.priceHidden), findsOneWidget);
     expect(find.text(strings.priceNotSet), findsNothing);
-    expect(find.text(strings.pricesHiddenForSellers), findsOneWidget);
+    expect(find.text('/ шт'), findsNothing);
   });
 
   // the reason the field exists: a Универсальный shop is a hundred tiles, and scrolling all of them

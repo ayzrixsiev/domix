@@ -917,15 +917,6 @@ class AppLocalizations {
   /// on a product with no price yet - the whole to-do list right after a shop is created
   String get priceNotSet => isRu ? 'Цена не указана' : "Narx ko'rsatilmagan";
 
-  // a shop owner looking at another shop: the tile's word, then the card's and the home screen's reason
-  String get priceHidden => isRu ? 'Цена скрыта' : 'Narx yashirin';
-  String get pricesHiddenForSellers => isRu
-      ? 'Цены других магазинов видят только покупатели'
-      : "Boshqa do'konlar narxlarini faqat xaridorlar ko'radi";
-  String get rankingHiddenForSellers => isRu
-      ? 'Сравнение магазинов по ценам видят только покупатели'
-      : "Do'konlarning narxlar bo'yicha taqqoslanishini faqat xaridorlar ko'radi";
-
   /// counts the basket rows only, because that is the count with a consequence attached
   String pricedProgressLabel(int priced, int total) => isRu
       ? 'Цены указаны: $priced из $total'

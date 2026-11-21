@@ -438,20 +438,9 @@ class _PriceLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // grey, not the orange prompt below: nothing here is the reader's to do
-    if (product.priceHidden) {
-      return Text(
-        strings.priceHidden,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: AppColors.textFaint,
-          fontSize: 12,
-          height: 1.5,
-          fontWeight: FontWeight.w600,
-        ),
-      );
-    }
+    // **blank, never a word saying so**: the founders' call is that a seller cannot tell anything is
+    // withheld, and the orange prompt below would read as the other shop being unpriced
+    if (product.priceHidden) return const SizedBox.shrink();
 
     if (!product.hasPrice) {
       return Text(

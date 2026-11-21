@@ -202,11 +202,9 @@ void main() {
     expect(find.text(strings.noShopsYet), findsNothing);
   });
 
-  // a seller is sent no ranking. fifteen open places would tell them nobody is ranked and invite a
-  // price, so the section says why it is empty instead
-  testWidgets('a seller sees why the ranking is missing, not open places', (
-    tester,
-  ) async {
+  // a seller is sent no ranking and must not learn that anything is withheld: no section, no note,
+  // and no fifteen open places that would read as nobody being ranked
+  testWidgets('a seller gets no ranking section at all', (tester) async {
     final strings = AppLocalizations(AppLanguage.ru);
     await _pumpHome(
       tester,
@@ -219,8 +217,7 @@ void main() {
       ),
     );
 
-    expect(find.text(strings.bestOffersTitle), findsOneWidget);
-    expect(find.text(strings.rankingHiddenForSellers), findsOneWidget);
+    expect(find.text(strings.bestOffersTitle), findsNothing);
     expect(find.byType(EmptyShopRow), findsNothing);
   });
 
