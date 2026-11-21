@@ -84,7 +84,7 @@ func main() {
 
 	// **public buckets are floors against a flood, not fine control**: a whole carrier sits behind one
 	// address. the real bound is publicCache, Home.SearchSlots and the code budgets.
-	publicLimiter := ratelimit.New(50, 200, 10*time.Minute)
+	publicLimiter := ratelimit.New(50, 200, 10*time.Minute).Keyed(byCaller)
 	loginLimiter := ratelimit.New(5, 60, 10*time.Minute)
 	searchLimiter := ratelimit.New(3, 30, 10*time.Minute)
 
@@ -184,6 +184,7 @@ func main() {
 	searchSlots := make(chan struct{}, max(1, int(dbPool.Config().MaxConns)*2/5))
 	homeEndpoints := &endpoints.Home{
 		Queries:     queries,
+		JWTSecret:   jwtSecret,
 		URLs:        imageURLs,
 		Cache:       publicReads,
 		SearchSlots: searchSlots,

@@ -60,7 +60,8 @@ Detail and reasoning live in the `backend` skill.
 - Sign-in sessions (`internal/auth/session.go`) and pending codes live in RAM, never in Postgres.
 - A shared contact signs in only when `contact.user_id == from.id`; anything else is a forwarded card.
 - Signed-in requests are rate-limited by account id, never by address.
-- A cached public read must never depend on who is asking.
+- A cached public read must never depend on which account is asking: at most one copy per audience (buyers, sellers).
+- A shop owner never sees another shop's prices or index (map labels, home, the shop card); search, categories and favourites still show single prices. The server strips them, not the app.
 - `products.image_path` is a relative path, never a url. Write files, then point the row, then unlink the old ones.
 - One size is one product row and one card. Never fold sizes.
 - `products.in_basket` defaults TRUE on purpose; `product_templates.in_basket` defaults FALSE.

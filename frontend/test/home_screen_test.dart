@@ -202,6 +202,48 @@ void main() {
     expect(find.text(strings.noShopsYet), findsNothing);
   });
 
+  // a seller is sent no ranking. fifteen open places would tell them nobody is ranked and invite a
+  // price, so the section says why it is empty instead
+  testWidgets('a seller sees why the ranking is missing, not open places', (
+    tester,
+  ) async {
+    final strings = AppLocalizations(AppLanguage.ru);
+    await _pumpHome(
+      tester,
+      _FakeHomeRepository(
+        content: const HomeContent(
+          vipShops: [],
+          bestOffers: [],
+          indexHidden: true,
+        ),
+      ),
+    );
+
+    expect(find.text(strings.bestOffersTitle), findsOneWidget);
+    expect(find.text(strings.rankingHiddenForSellers), findsOneWidget);
+    expect(find.byType(EmptyShopRow), findsNothing);
+  });
+
+  // signing in as a shop owner changes what the server answers, and the home tab is kept alive by
+  // the shell - nothing would ask again. a change mid-load is followed by one more load.
+  testWidgets('a change of account re-reads home, even mid-load', (
+    tester,
+  ) async {
+    final repo = _FakeHomeRepository(content: _content());
+    final controller = await _pumpHome(tester, repo);
+    expect(repo.fetchCount, 1);
+
+    controller.handleViewerChanged();
+    await tester.pumpAndSettle();
+    expect(repo.fetchCount, 2);
+
+    final load = controller.loadHome(force: true);
+    controller.handleViewerChanged();
+    await load;
+    await tester.pumpAndSettle();
+    expect(repo.fetchCount, 4);
+  });
+
   // ─────────────────────────── the carousel's geometry ───────────────────────────
   //
   // **One card fills the page now, so nothing on screen peeks.** The strip used to show a sliver of

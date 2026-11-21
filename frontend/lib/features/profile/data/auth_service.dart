@@ -136,6 +136,20 @@ class AuthService {
 
   Future<String?> getToken() async => await _storage.read(key: _jwtKey);
 
+  /// The token on a public read (the map, home, a shop and its catalogue), where it only decides
+  /// whether the server answers as to a seller. Never a 401 and never a sign-out: an unreadable store
+  /// reads as a guest, which is what the server would make of no token anyway.
+  Future<Map<String, String>> viewerHeaders() async {
+    try {
+      final token = await getToken();
+      if (token == null || token.isEmpty) return const {};
+      return {'Authorization': 'Bearer $token'};
+    } catch (e) {
+      debugPrint('viewerHeaders: storage unreadable, reading as a guest: $e');
+      return const {};
+    }
+  }
+
   /// The stored session, or null when there is none. **Throws when storage cannot be read**, which is
   /// not the same answer as null: an unreadable store still holds the token, and treating it as empty
   /// signs the user out for nothing. Retried first, because the Keystore can fail for a moment at launch.

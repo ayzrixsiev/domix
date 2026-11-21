@@ -114,7 +114,8 @@ address to itself. Every bucket is declared together in `main.go`.
   queued behind a failed rebuild take its result instead of each trying again, or a database that hangs
   holds the twentieth of them a hundred seconds and the stale copy reaches nobody in time. `geo`'s cache
   has the same rule, where each retry would also spend budget.
-- **Nothing a cached read answers may depend on who is asking.** This is why favourites are fetched by
+- **Nothing a cached read answers may depend on which account is asking** — at most on its audience, below.
+  This is why favourites are fetched by
   the app as its own list instead of the server stamping `is_favorite` on every product.
 - **A path serving both a public GET and an authenticated write needs two buckets** — see `browse` in
   `main.go`. `POST /api/shops` seeds a hundred rows; `GET /api/shops` is the map.
@@ -216,6 +217,25 @@ byte-identical to these paths, which is what lets a restored dump and a restored
   the database perfectly consistent. `TestTheUploadsSweepLeavesAStorefrontPhotoAlone` is the pin.
 - The sweeps themselves, and the three rules that keep them off a live photo, are in the `admin-panel`
   skill: they are driven from that page.
+
+## Sellers do not see each other's prices
+
+A founder decision, so owners cannot copy one another: **a signed-in `shop_owner` never sees another
+shop's prices or its index**. `internal/endpoints/audience.go` decides it once per request (`viewerOf`):
+the token's signature, then the role from the database, since a JWT is never trusted for one. Guests,
+customers and admins are `buyers`; a role read that fails answers as to a seller.
+
+- **The map and `/api/home` are cached one copy per audience** (`viewer.cacheKey`), never per account.
+  The seller's copy strips every shop's index, their own included (it is in `/api/shops/mine`), sends
+  `best_offers: []` with `index_hidden: true` (the ranking's order alone would be the index), and sorts
+  the VIP shops by id because `ListVipShops` orders them on basket price.
+  `TestTheCachedReadsKeepASellersCopyApartFromABuyers` is the pin: one key for both is a silent leak.
+- **`/api/shops/{id}` and `/api/shops/{id}/products` check the shop's owner**: a seller's own shop comes
+  back whole. Another shop's catalogue comes back as its priced rows with `price: null, price_hidden: true`,
+  unpriced rows dropped.
+- **Search, the category drill-down and favourites keep their prices**: one price at a time is a buyer's
+  question. Signing out shows everything; that comes with a public catalogue and is accepted.
+- The app now sends its token on those four reads, so **`publicLimiter` is keyed by caller** like `apiLimiter`.
 
 ## Waybills — the list anybody signed in sends
 

@@ -5,11 +5,17 @@ import 'package:frontend/core/network/api_client.dart';
 import 'package:frontend/features/home/data/category_product.dart';
 import 'package:frontend/features/home/data/home_content.dart';
 import 'package:frontend/features/products/data/product_category.dart';
+import 'package:frontend/features/profile/data/auth_service.dart';
 
-/// Talks to the two public discovery endpoints behind the home screen. No `Authorization` header: the
-/// home screen draws before anyone has logged in. A refusal throws [ApiException] with the status, so
-/// a screen can tell "server busy" from "phone offline" - see [LoadFailure].
+/// Talks to the two public discovery endpoints behind the home screen, which draws before anyone has
+/// logged in. A refusal throws [ApiException] with the status, so a screen can tell "server busy" from
+/// "phone offline" - see [LoadFailure].
 class HomeRepository {
+  HomeRepository({AuthService? authService})
+    : _authService = authService ?? AuthService();
+
+  final AuthService _authService;
+
   /// Mirrors `searchResultsLimit` on the server. **A page shorter than this is the last one**, which
   /// is how the results screen knows whether to offer "Ещё" without asking the api.
   static const int searchPageSize = 100;
@@ -19,7 +25,11 @@ class HomeRepository {
   /// The whole home screen in one request, matching the single `GET /api/home`: all three sections
   /// always render together, so three calls would only buy three chances to half-populate the page.
   Future<HomeContent> fetchHomeContent() async {
-    final response = await apiGet(_homeUri);
+    // the token decides only whether a seller's copy comes back; search and categories need none
+    final response = await apiGet(
+      _homeUri,
+      headers: await _authService.viewerHeaders(),
+    );
 
     if (response.statusCode != 200) {
       throw ApiException(response.statusCode);

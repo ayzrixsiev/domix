@@ -55,6 +55,11 @@ func (r *ShopResponse) setPricing(index, basketPrice pgtype.Int8) {
 	r.PriceDifferencePercent = ptr(pricing.DifferencePercent(index.Int64))
 }
 
+// the shape of a shop that is not in the index, so the app needs no second branch for a seller
+func (r *ShopResponse) hidePricing() {
+	r.BasketPrice, r.PriceTier, r.PriceDifferencePercent = nil, nil, nil
+}
+
 // the INNER JOIN variant: the join guarantees a row, so these arrive as plain int64s.
 func (r *ShopResponse) setRankedPricing(index, basketPrice int64) {
 	r.setPricing(

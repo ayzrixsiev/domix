@@ -102,6 +102,10 @@ type ProductResponse struct {
 	// whether this row counts towards the shop's price comparison. an owner's screen needs it: a row
 	// outside the basket left unpriced costs them nothing, and one inside it costs them the badge.
 	InBasket bool `json:"in_basket"`
+
+	// priced, with the price withheld from a seller looking at another shop. kept apart from a null
+	// Price, which means the owner has not priced the row yet
+	PriceHidden bool `json:"price_hidden,omitempty"`
 }
 
 // **every endpoint that answers with a product goes through here.** the photo fields and the template
@@ -187,7 +191,8 @@ func (p *Products) RouteByID(w http.ResponseWriter, r *http.Request) {
 }
 
 // public: every product in one shop. no pagination - a shop's catalogue is bounded by the template
-// plus maxCustomProducts, so the whole thing is one small response by construction.
+// plus maxCustomProducts, so the whole thing is one small response by construction. a seller opening
+// another shop gets its priced rows with the prices withheld - see viewerOf.
 func (p *Products) ListByShop(w http.ResponseWriter, r *http.Request) {
 	shopID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -208,9 +213,31 @@ func (p *Products) ListByShop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	hidePrices := false
+	if who := viewerOf(ctx, r, p.JWTSecret, p.Queries); who.audience == sellers && len(products) > 0 {
+		ownerID, err := p.Queries.GetShopOwner(ctx, shopID)
+		if err != nil {
+			if callerGone(r) {
+				return
+			}
+			log.Printf("CRITICAL: failed to read the owner of shop %d: %v", shopID, err)
+			writeAPIError(w, http.StatusInternalServerError, "server_error", "failed to load products")
+			return
+		}
+		hidePrices = !who.seesPricesOf(ownerID)
+	}
+
 	response := make([]ProductResponse, 0, len(products))
 	for _, product := range products {
-		response = append(response, productResponse(p.URLs, db.GetProductRow(product)))
+		out := productResponse(p.URLs, db.GetProductRow(product))
+		if hidePrices {
+			// the shop card draws priced rows only, so an unpriced one is never sent to a seller
+			if out.Price == nil {
+				continue
+			}
+			out.Price, out.PriceHidden = nil, true
+		}
+		response = append(response, out)
 	}
 
 	w.WriteHeader(http.StatusOK)

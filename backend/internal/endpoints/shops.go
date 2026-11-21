@@ -105,7 +105,8 @@ func validateShopFieldLengths(name, contactPhone, address string) *accessError {
 	return nil
 }
 
-// public, unauthenticated: get the shop from any listed product by id
+// public: get the shop from any listed product by id. a token, where one is sent, only decides
+// whether the index is shown - see viewerOf
 func (s *Shops) Get(w http.ResponseWriter, r *http.Request) {
 	shopID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -131,14 +132,23 @@ func (s *Shops) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	response := shopFromList(db.ListShopsRow(shop))
+	if !viewerOf(ctx, r, s.JWTSecret, s.Queries).seesPricesOf(shop.UserID) {
+		response.hidePricing()
+	}
+
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(shopFromList(db.ListShopsRow(shop)))
+	json.NewEncoder(w).Encode(response)
 }
 
-// public, unauthenticated: used by the map screen to plot every shop as a pin. answered from
-// publicCache, because every caller gets the same list.
+// public: used by the map screen to plot every shop as a pin. answered from publicCache, one copy per
+// audience. a seller's copy carries no index at all, their own shops included: those are in ListMine.
 func (s *Shops) List(w http.ResponseWriter, r *http.Request) {
-	s.Cache.serve(w, r, "shops", "shops", func(ctx context.Context) (any, error) {
+	ctx, cancel := dbctx.WithTimeout(r.Context())
+	defer cancel()
+	who := viewerOf(ctx, r, s.JWTSecret, s.Queries)
+
+	s.Cache.serve(w, r, who.cacheKey("shops"), "shops", func(ctx context.Context) (any, error) {
 		shops, err := s.Queries.ListShops(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("listing shops: %w", err)
@@ -146,7 +156,11 @@ func (s *Shops) List(w http.ResponseWriter, r *http.Request) {
 
 		response := make([]ShopResponse, 0, len(shops))
 		for _, shop := range shops {
-			response = append(response, shopFromList(shop))
+			out := shopFromList(shop)
+			if who.audience == sellers {
+				out.hidePricing()
+			}
+			response = append(response, out)
 		}
 		return response, nil
 	})

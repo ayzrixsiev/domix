@@ -46,6 +46,8 @@ void main() async {
   final favoritesController = FavoritesController();
   final productsController = ProductsController();
   final waybillsController = WaybillsController();
+  // built here rather than lazily so a sign-in can reach it; nothing is fetched until the home screen asks
+  final homeController = HomeController();
   // what the end of a session has to reach. callbacks rather than imports in either direction, and
   // main() is the one place allowed to know about both: the shops, because deleting an account
   // cascades them away server-side under a map holding a stale snapshot; and the saved products,
@@ -53,6 +55,14 @@ void main() async {
   // what a new session has to fetch: the saved products, which the hearts on every grid are painted
   // from. unawaited - nothing on screen waits for it, and the heart fills when it lands.
   authController.onSessionStarted = () => unawaited(favoritesController.load());
+
+  // a shop owner is answered without other shops' prices and index, so everything read under the last
+  // account is read again: home and the map now, a shop's catalogue on its next open
+  authController.onViewerChanged = () {
+    homeController.handleViewerChanged();
+    storesController.handleViewerChanged();
+    productsController.markAllStale();
+  };
 
   authController.onSessionEnded = (accountDeleted) {
     storesController.handleSessionEnded(accountDeleted);
@@ -66,9 +76,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => LanguageProvider()),
         // built lazily - nothing here needs loading before first paint
         ChangeNotifierProvider(create: (_) => CityController()),
-        // same: the home screen fetches from initState, so building it lazily keeps a cold start off
-        // the network until the first frame is already on screen
-        ChangeNotifierProvider(create: (_) => HomeController()),
+        ChangeNotifierProvider.value(value: homeController),
         ChangeNotifierProvider.value(value: authController), // make all
         ChangeNotifierProvider.value(value: storesController),
         ChangeNotifierProvider.value(

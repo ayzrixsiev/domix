@@ -21,7 +21,10 @@ class StoresRepository {
   // fetch every shop - public data, no login required, used to plot pins on the map. a refusal throws
   // ApiException with the status, so the map can tell a busy server from an offline phone
   Future<List<Shop>> fetchStores() async {
-    final response = await apiGet(_shopsUri);
+    final response = await apiGet(
+      _shopsUri,
+      headers: await _authService.viewerHeaders(),
+    );
 
     if (response.statusCode != 200) {
       throw ApiException(response.statusCode);
@@ -37,7 +40,10 @@ class StoresRepository {
   /// rather than throwing**: "this shop was deleted while you were reading about its cement" is not a
   /// failure the reader can retry out of, and the screen says a different sentence for it.
   Future<Shop?> fetchShop(int shopId) async {
-    final response = await apiGet(_shopUri(shopId));
+    final response = await apiGet(
+      _shopUri(shopId),
+      headers: await _authService.viewerHeaders(),
+    );
 
     if (response.statusCode == 404) return null;
     if (response.statusCode != 200) {

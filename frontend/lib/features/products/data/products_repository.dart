@@ -31,7 +31,10 @@ class ProductsRepository {
   /// customer can open without logging in. a refusal is an [ApiException] like every other read, so
   /// the grid can tell a busy server from an offline phone.
   Future<List<Product>> fetchShopProducts(int shopId) async {
-    final response = await apiGet(_shopProductsUri(shopId));
+    final response = await apiGet(
+      _shopProductsUri(shopId),
+      headers: await _authService.viewerHeaders(),
+    );
 
     if (response.statusCode != 200) {
       throw ApiException(response.statusCode);

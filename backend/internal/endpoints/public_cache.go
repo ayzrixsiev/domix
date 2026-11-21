@@ -11,10 +11,10 @@ import (
 	"domix/backend/internal/dbctx"
 )
 
-// publicCache holds the answer to a read whose bytes are the same for everybody.
+// publicCache holds the answer to a read whose bytes are the same for everybody of one audience.
 //
-// **the home screen, the map and a category listing do not depend on who is asking**, and they are what
-// a crowd opens at once: without this, a thousand people opening the app is five thousand queries
+// **the home screen, the map and a category listing never depend on which account is asking** - only,
+// for the first two, on whether it is a seller (viewer.cacheKey) - and they are what a crowd opens at once: without this, a thousand people opening the app is five thousand queries
 // against a pool of ten. with it there is no per-caller cost left to meter, which is what lets the
 // per-address limit in front of those routes be a floor rather than fine control.
 //
@@ -114,8 +114,8 @@ func (c *publicCache) entryFor(key string) *cachedAnswer {
 
 	entry, known := c.entries[key]
 	if !known {
-		// the key space is fixed - two endpoints and the twelve product categories, all validated
-		// before they reach here - so this map never needs sweeping
+		// the key space is fixed - two endpoints in two audiences and the twelve product categories,
+		// all validated before they reach here - so this map never needs sweeping
 		entry = &cachedAnswer{}
 		c.entries[key] = entry
 	}

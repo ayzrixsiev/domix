@@ -1,10 +1,12 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:frontend/core/constants/app_colors.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/network/api_client.dart';
+import 'package:frontend/core/widgets/app_form.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
 import 'package:frontend/core/widgets/primary_action_button.dart';
 import 'package:frontend/features/home/data/home_content.dart';
@@ -269,10 +271,16 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 12),
             Padding(
               padding: _gutter,
-              child: BestOffersList(
-                groups: home.bestOffers,
-                onShopTap: _openShop,
-              ),
+              // a seller is sent no ranking: its order alone would be the index
+              child: home.indexHidden
+                  ? AppNoteLine(
+                      strings.rankingHiddenForSellers,
+                      icon: LucideIcons.eye_off,
+                    )
+                  : BestOffersList(
+                      groups: home.bestOffers,
+                      onShopTap: _openShop,
+                    ),
             ),
 
             SizedBox(height: widget.bottomPadding),

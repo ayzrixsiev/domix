@@ -66,6 +66,13 @@ class AuthController extends ChangeNotifier {
   /// fresh sign-in. The mirror of [onSessionEnded], and wired the same way in `main()`.
   void Function()? onSessionStarted;
 
+  /// Called when what the server shows this phone may change: a sign-in, a sign-out, a new role. A shop
+  /// owner sees no other shop's prices or index, so the map, home and cached catalogues are re-read.
+  void Function()? onViewerChanged;
+
+  // the role the server last gave, null for a guest. what [onViewerChanged] compares against
+  String? _role;
+
   // cold boot: read hardware storage to restore user state with no network round trip
   Future<void> checkExistingLogin() async {
     final StoredSession? stored;
@@ -146,6 +153,10 @@ class AuthController extends ChangeNotifier {
     // only on the edge: this also runs on every profile refresh, and re-fetching what belongs to a
     // session that never ended would be a request per rename
     if (wasGuest) onSessionStarted?.call();
+    if (_role != role) {
+      _role = role;
+      onViewerChanged?.call();
+    }
     notifyListeners();
   }
 
@@ -229,6 +240,10 @@ class AuthController extends ChangeNotifier {
       debugPrint('could not clear the stored session: $e');
     }
     _profileState = const ProfileViewState.guest();
+    if (_role != null) {
+      _role = null;
+      onViewerChanged?.call();
+    }
     // fired before notifyListeners, so whatever rebuilds below already sees the cleared shop lists -
     // the other order paints one frame of the old owner's shops onto the guest screen
     onSessionEnded?.call(accountDeleted);

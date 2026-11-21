@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:frontend/core/network/api_client.dart';
 import '../../data/stores_repository.dart';
@@ -19,6 +21,9 @@ class StoresController extends ChangeNotifier {
   /// push channel**, so the only honest question the map can ask is "how old is this" - see
   /// [isStoresStale].
   DateTime? _storesFetchedAt;
+
+  // bumped when the account changes, so a load that left under the last one is followed by another
+  int _viewer = 0;
 
   // only the current owner's own shops, for the management list
   List<Shop> _myShops = [];
@@ -78,6 +83,7 @@ class StoresController extends ChangeNotifier {
 
     _isLoading = true;
     notifyListeners();
+    final asked = _viewer;
 
     try {
       _stores = await _repo.fetchStores();
@@ -92,6 +98,17 @@ class StoresController extends ChangeNotifier {
 
     _isLoading = false;
     notifyListeners();
+
+    if (asked != _viewer) await loadStores();
+  }
+
+  /// Signed in, signed out or became a shop owner: a seller's map carries no price labels. Re-fetched
+  /// at once rather than on the next tab switch, since signing in from a shop sheet lands back on the
+  /// map itself.
+  void handleViewerChanged() {
+    _viewer++;
+    _storesFetchedAt = null;
+    if (_stores.isNotEmpty && !_isLoading) unawaited(loadStores());
   }
 
   /// Re-fetches the map's shop list, but only if what we hold is no longer trustworthy - called every

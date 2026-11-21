@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import 'package:frontend/core/network/api_client.dart';
@@ -18,6 +20,10 @@ class HomeController extends ChangeNotifier {
   List<HomeShopPreview> _vipShops = const [];
   List<CategoryOffers> _bestOffers = const [];
   Map<ShopCategory, int> _templateSizes = const {};
+  bool _indexHidden = false;
+
+  // bumped when the account changes, so a load that left under the last one is followed by another
+  int _viewer = 0;
 
   bool _isLoading = false;
   LoadFailure? _failure;
@@ -34,6 +40,9 @@ class HomeController extends ChangeNotifier {
   /// the way a price does
   Map<ShopCategory, int> get templateSizes => _templateSizes;
 
+  /// whether the server answered as to a seller - see [HomeContent.indexHidden]
+  bool get indexHidden => _indexHidden;
+
   bool get isLoading => _isLoading;
 
   /// **the kind, not a message** - the screen owns the sentence, and the exception is a debugPrint
@@ -49,12 +58,14 @@ class HomeController extends ChangeNotifier {
 
     _isLoading = true;
     notifyListeners();
+    final asked = _viewer;
 
     try {
       final content = await _repo.fetchHomeContent();
       _vipShops = content.vipShops;
       _bestOffers = content.bestOffers;
       _templateSizes = content.templateSizes;
+      _indexHidden = content.indexHidden;
       _failure = null;
     } catch (e) {
       // the sections are emptied as well: leaving the last successful load under a failure banner shows
@@ -70,6 +81,15 @@ class HomeController extends ChangeNotifier {
     _isLoading = false;
     _hasLoaded = true;
     notifyListeners();
+
+    if (asked != _viewer) await loadHome(force: true);
+  }
+
+  /// Signed in, signed out or became a shop owner: the server's answer depends on which. Wired in
+  /// `main()`; a screen that has never loaded loads with the new token anyway.
+  void handleViewerChanged() {
+    _viewer++;
+    if (_hasLoaded) unawaited(loadHome(force: true));
   }
 
   /// The products behind one category tile, cheapest first. Not cached and not stored on the

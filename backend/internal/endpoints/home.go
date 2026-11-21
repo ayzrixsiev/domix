@@ -1,12 +1,14 @@
 package endpoints
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -19,9 +21,12 @@ import (
 
 // everything behind the home screen - VIP Магазины, Популярные категории, Лучшие предложения - plus
 // the drill-down a category tile opens. all of it public: the home screen is drawn before anyone has
-// logged in, which is why this struct carries no JWTSecret.
+// logged in.
 type Home struct {
 	Queries *db.Queries
+
+	// read only to tell a seller from a buyer on GET /api/home - see viewerOf
+	JWTSecret string
 
 	// how a stored path becomes a fetchable address. zero value = this api's own /images/
 	URLs imagestore.URLs
@@ -83,6 +88,10 @@ type HomeResponse struct {
 	// how many products a new shop of each category is seeded with. the same for everybody, so it
 	// rides in the cached read; the "add shop" form shows it before the shop exists.
 	TemplateSizes map[string]int `json:"template_sizes"`
+
+	// the seller's copy: no comparison on any shop and no ranking, whose order alone would be the
+	// index. the app says why the section is empty instead of drawing fifteen open slots
+	IndexHidden bool `json:"index_hidden"`
 }
 
 // one tab of "Лучшие предложения". only categories with ranked shops are sent: the app draws one
@@ -95,11 +104,31 @@ type CategoryOffersResponse struct {
 // "Популярные категории" is deliberately not in this payload: the twelve tiles are a fixed list the
 // app already holds (features/products/data/product_category.dart). tapping one fetches its products.
 
-// GET /api/home - the same bytes for everybody, so it is answered from publicCache
+// GET /api/home - the same bytes for everybody of one audience, so it is answered from publicCache
 func (h *Home) Get(w http.ResponseWriter, r *http.Request) {
-	h.Cache.serve(w, r, "home", "home content", func(ctx context.Context) (any, error) {
-		return h.homeContent(ctx)
+	ctx, cancel := dbctx.WithTimeout(r.Context())
+	defer cancel()
+	who := viewerOf(ctx, r, h.JWTSecret, h.Queries)
+
+	h.Cache.serve(w, r, who.cacheKey("home"), "home content", func(ctx context.Context) (any, error) {
+		content, err := h.homeContent(ctx)
+		if err != nil || who.audience == buyers {
+			return content, err
+		}
+		return withoutIndex(content), nil
 	})
+}
+
+func withoutIndex(content HomeResponse) HomeResponse {
+	for i := range content.VipShops {
+		content.VipShops[i].hidePricing()
+	}
+	// ListVipShops orders on basket price, which would rank the placements without a single number
+	slices.SortFunc(content.VipShops, func(a, b ShopResponse) int { return cmp.Compare(a.ID, b.ID) })
+
+	content.BestOffers = []CategoryOffersResponse{}
+	content.IndexHidden = true
+	return content
 }
 
 func (h *Home) homeContent(ctx context.Context) (HomeResponse, error) {

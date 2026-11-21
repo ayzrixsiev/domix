@@ -22,6 +22,7 @@ class Product {
     this.inBasket = false,
     this.specs = '',
     this.section,
+    this.priceHidden = false,
   });
 
   final int id;
@@ -91,6 +92,10 @@ class Product {
   /// the chip this row sits under in its shop, or null - see [ProductSection]
   final ProductSection? section;
 
+  /// Priced, with the price withheld by the server: a shop owner looking at another shop. [price] is
+  /// null then, and that does **not** mean "not priced yet", which is what [hasPrice] answers.
+  final bool priceHidden;
+
   bool get hasPrice => price != null;
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -127,6 +132,7 @@ class Product {
           json['in_basket'] as bool? ?? (json['is_template'] as bool? ?? false),
       specs: json['specs'] as String? ?? '',
       section: ProductSection.tryFromCode(json['section'] as String? ?? ''),
+      priceHidden: json['price_hidden'] as bool? ?? false,
     );
   }
 
@@ -168,6 +174,7 @@ class Product {
       inBasket: inBasket,
       specs: specs,
       section: section,
+      priceHidden: priceHidden,
     );
   }
 }

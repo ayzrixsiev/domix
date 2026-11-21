@@ -10,6 +10,7 @@ import 'package:frontend/core/constants/app_theme.dart';
 import 'package:frontend/core/localization/app_localizations.dart';
 import 'package:frontend/core/localization/language_provider.dart';
 import 'package:frontend/core/network/api_client.dart';
+import 'package:frontend/core/widgets/app_form.dart';
 import 'package:frontend/core/widgets/empty_state_view.dart';
 import 'package:frontend/core/widgets/price_tier_badge.dart';
 import 'package:frontend/core/widgets/primary_action_button.dart';
@@ -373,10 +374,10 @@ class _ShopCardViewState extends State<ShopCardView> {
   }
 
   // priced rows only: an unpriced row answers no question for a customer, and a fresh shop would bury
-  // the handful that are priced under a hundred that are not
+  // the handful that are priced under a hundred that are not. a hidden price is a priced row.
   List<Product> _pricedProducts(ProductsController controller) => [
     for (final product in controller.productsFor(widget.shop.id))
-      if (product.hasPrice) product,
+      if (product.hasPrice || product.priceHidden) product,
   ];
 
   // name and description - the size lives in the description now. not the unit: "шт" would match
@@ -439,6 +440,17 @@ class _ShopCardViewState extends State<ShopCardView> {
             child: _ProductsHeading(count: priced.length, strings: strings),
           ),
         ),
+        // the server withholds every price of the shop or none, so one row answers for the grid
+        if (priced.any((product) => product.priceHidden))
+          SliverPadding(
+            padding: gutter.add(const EdgeInsets.only(top: 12)),
+            sliver: SliverToBoxAdapter(
+              child: AppNoteLine(
+                strings.pricesHiddenForSellers,
+                icon: LucideIcons.eye_off,
+              ),
+            ),
+          ),
         // the field and the sections are two separate questions - a short catalogue can still be
         // split into sections, and then the bar is the «Категории» button on its own
         if (priced.length >= _searchThreshold || sections.length > 1)

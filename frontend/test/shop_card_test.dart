@@ -298,6 +298,41 @@ void main() {
     expect(find.byType(ProductTile), findsOneWidget);
   });
 
+  // a shop owner opening another shop: the server sends its priced rows with no price. they are
+  // still the catalogue, so they draw - and a null price must not read as «Цена не указана»
+  testWidgets('a hidden price is a priced row, with no amount and a reason', (
+    tester,
+  ) async {
+    final strings = AppLocalizations(AppLanguage.ru);
+    await _pumpHome(
+      tester,
+      content: _content(vip: [_shop(id: 1, name: 'Стройбаза', isVip: true)]),
+      products: const [
+        Product(
+          id: 10,
+          shopId: 1,
+          name: 'Цемент М400',
+          category: 'tools',
+          unit: 'шт',
+          price: null,
+          priceHidden: true,
+          availability: ProductAvailability.inStock,
+          isTemplate: true,
+          nameEditable: false,
+        ),
+      ],
+    );
+
+    await tester.tap(find.text('Стройбаза').hitTestable().first);
+    await tester.pumpAndSettle();
+    await _scrollToCatalogue(tester);
+
+    expect(find.text('Цемент М400'), findsOneWidget);
+    expect(find.text(strings.priceHidden), findsOneWidget);
+    expect(find.text(strings.priceNotSet), findsNothing);
+    expect(find.text(strings.pricesHiddenForSellers), findsOneWidget);
+  });
+
   // the reason the field exists: a Универсальный shop is a hundred tiles, and scrolling all of them
   // to find one is not a way to find anything. it filters what is already on the phone - the whole
   // catalogue came in the one request this screen makes - so there is no request behind a keystroke.

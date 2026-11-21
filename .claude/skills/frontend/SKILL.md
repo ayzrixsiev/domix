@@ -175,6 +175,14 @@ the end of the grid; a spent allowance greys it out and says so on it. `products
 `templatePricingProgressFor` counts **basket rows only** (`inBasket`), or an owner in the comparison is
 told they are one price short of it.
 
+**A shop owner sees no other shop's prices or index** (backend skill). The server decides; the app
+only obeys: `Product.priceHidden` draws «Цена скрыта» on the tile and counts as a priced row on the
+card, with one `AppNoteLine` above the grid, and `HomeContent.indexHidden` replaces «Лучшие
+предложения» with a note. The map, home, a shop and its catalogue go out with `AuthService.viewerHeaders`.
+**`AuthController.onViewerChanged` fires on sign-in, sign-out and a role change**, and `main()` re-reads
+home and the map at once and marks every cached catalogue stale: the shell keeps those tabs alive, so
+nothing else would ask again.
+
 ## The map
 
 Rotation-locked and tilt-locked, so pins and price labels stay upright — a pin drawn flat on a tilted
