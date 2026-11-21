@@ -36,6 +36,8 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Камера нужна, чтобы сфотографировать товар для вашего магазина или список для Корзины.</string>
 	<!-- **the last sentence must stay true**: the App Store privacy labels answer location "not collected" -->
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Domix показывает, где вы на карте, чтобы найти магазины рядом. Координаты остаются на телефоне.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Domix показывает, где вы на карте, чтобы найти магазины рядом. Координаты остаются на телефоне.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
